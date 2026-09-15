@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import type { HeadlessBrowser } from "@remotion/renderer";
+import type { VideoConfig } from "remotion";
 import { runLocal } from "./auto-process.js";
 import {
   browserPath,
@@ -185,15 +186,24 @@ export async function renderRemotionGraphic(
       height: options.height,
       duration: options.duration,
     };
-    const composition = await renderer.selectComposition({
-      serveUrl,
+    // This fixed template has no asynchronous metadata. Passing its known
+    // configuration also avoids opening a second page/server just to select
+    // it, whose startup can race cancellation in Remotion 4.x.
+    const composition: VideoConfig = {
       id: "EditorialIdea",
-      inputProps,
-      puppeteerInstance: browser,
-      browserExecutable: chromePath,
-      logLevel: "error",
-      timeoutInMilliseconds: 20_000,
-    });
+      width: options.width,
+      height: options.height,
+      fps: 30,
+      durationInFrames: Math.round(options.duration * 30),
+      props: inputProps,
+      defaultProps: {},
+      defaultCodec: null,
+      defaultOutName: null,
+      defaultVideoImageFormat: null,
+      defaultPixelFormat: null,
+      defaultProResProfile: null,
+      defaultSampleRate: null,
+    };
     signal.throwIfAborted();
     await renderer.renderMedia({
       composition,
