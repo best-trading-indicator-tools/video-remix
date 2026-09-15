@@ -12,6 +12,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import type { RemixSettings } from "../shared/types.js";
+import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
 
@@ -537,7 +538,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     throw new Error("This aspect ratio exceeds the output size limit. Choose Source resolution or a standard video format.");
   const supportingVisuals = options.supportingVisuals ?? [];
   if (
-    supportingVisuals.length > 3 ||
+    supportingVisuals.length > MAX_BROLL_COUNT ||
     supportingVisuals.some(
       (visual) =>
         !Number.isFinite(visual.start) ||
@@ -551,7 +552,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     )
   )
     throw new Error(
-      "Supporting visuals need valid times within the edited video (maximum 3)",
+      `Supporting visuals need valid times within the edited video (maximum ${MAX_BROLL_COUNT})`,
     );
   const temporary: string[] = [];
   try {

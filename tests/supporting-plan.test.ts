@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   planSupportingVisuals,
+  prepareSupportingVisuals,
   removeGraphicCalloutOverlaps,
 } from "../server/supporting-plan.js";
 import {
@@ -10,6 +11,7 @@ import {
   type RenderJob,
   type Transcript,
 } from "../shared/types.js";
+import type { StoredBroll, StoredJob, StoredSource } from "../server/store.js";
 
 const asset = (id: string, name: string, tags: string[] = []): BrollAsset => ({
   id,
@@ -46,6 +48,49 @@ const transcript: Transcript = {
     { start: 13, end: 16, text: "Follow the mountain trail.", words: [] },
   ],
 };
+
+test("a requested B-roll count replaces duration caps and keeps trying later matching moments", () => {
+  const spoken: Transcript = { language: "en", duration: 30, segments: Array.from({ length: 6 }, (_, index) => ({
+    start: 4 + index * 4, end: 6 + index * 4, text: `topic${index} visible activity`, words: [],
+  })) };
+  const assets = spoken.segments.map((_, index) => asset(`clip-${index}`, `topic${index}.mp4`));
+  for (const count of [1, 4, 6, 10]) {
+    const result = planSupportingVisuals({ transcript: spoken, duration: 30, sourceName: "talk.mp4", assets, mode: "library", brollCount: count });
+    assert.equal(result.length, Math.min(count, 6), `Try to fill ${count} distinct placements on the same 30-second edit`);
+    assert.equal(new Set(result.map(shot => shot.assetId)).size, result.length);
+    assert.ok(result.reduce((sum, shot) => sum + shot.end - shot.start, 0) <= 18 + 1e-8);
+    assert.ok(result.every((shot, i) => shot.start >= 3.5 && shot.end <= 29.65 && (!i || shot.start >= result[i - 1]!.end + 0.6 - 1e-8)));
+  }
+  const later = planSupportingVisuals({ transcript: spoken, duration: 30, sourceName: "talk.mp4", assets: assets.slice(2), mode: "library", brollCount: 4 });
+  assert.equal(later.length, 4, "Unmatched early speech cannot stop the search for later placements");
+  assert.equal(later[0]!.start, 12);
+});
+
+test("AI backup matches fill later slots while collisions and irrelevant clips remain excluded", () => {
+  const spoken: Transcript = { language: "en", duration: 30, segments: [4, 5, 10, 16, 22, 26].map((start, i) => ({ start, end: start + 2, text: `Idea ${i}`, words: [] })) };
+  const assets = spoken.segments.map((_, i) => asset(`clip-${i}`, `unrelated-name-${i}.mp4`));
+  const result = planSupportingVisuals({ transcript: spoken, duration: 30, sourceName: "talk.mp4", assets, mode: "library", brollCount: 4,
+    aiMatches: assets.map((item, momentIndex) => ({ momentIndex, assetId: item.id, sourceStart: 0, reason: "Verified visual connection." })) });
+  assert.deepEqual(result.map(shot => shot.start), [4, 10, 16, 22]);
+  assert.deepEqual(planSupportingVisuals({ transcript: spoken, duration: 30, sourceName: "talk.mp4", assets, mode: "library", brollCount: 10, aiMatches: [] }), []);
+});
+
+test("a final motion rejection tries an alternative before reporting the achieved count", async () => {
+  const assets: StoredBroll[] = ["a-still", "b-moving", "c-moving"].map(id => ({ ...asset(id, "sunset sea coast.mp4"),
+    filePath: `/tmp/${id}.mp4`, thumbnailPath: "", stock: { providerId: `pixabay:${id}`, rendition: "https://cdn.pixabay.com/video/test.mp4", contentHash: id, retrievedAt: "", licenseUrl: "https://pixabay.com/service/license-summary/" } }));
+  const source = { id: "source", name: "talk.mp4", width: 1280, height: 720, fps: 30, hasAudio: true, duration: 30 } as StoredSource;
+  const job = { id: "test", auto: { aspect: "9:16", targetDuration: 30, narration: false, supportingVisuals: "library", brollCount: 2 }, settings: { ...DEFAULT_SETTINGS, aspect: "9:16" },
+    summary: { title: "Talk", sourceDuration: 30, outputDuration: 30, changes: [], usedAI: false, narration: false, transcriptAvailable: true } } as StoredJob;
+  const inspected: string[] = [];
+  const result = await prepareSupportingVisuals({ source, job, assets, workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {},
+    transcript: { language: "en", duration: 30, segments: [4, 12, 20].map(start => ({ start, end: start + 2, text: "sunset sea coast", words: [] })) },
+    inspect: async (clip) => { inspected.push(clip.filePath); return clip.filePath.includes("still") ? [] : [{ sourceStart: 0, duration: 3, motion: 1, cropRetention: 1 }]; } });
+  assert.equal(result.length, 2);
+  assert.deepEqual(job.supportingVisuals?.map(shot => shot.assetId), ["b-moving", "c-moving"]);
+  assert.ok(inspected.some(file => file.includes("still")) && inspected.some(file => file.includes("c-moving")));
+  assert.ok(job.notes?.some(note => note.includes("2 of 2 shots added")));
+  assert.ok(!job.summary!.changes.some(change => change.includes("3 B-roll")));
+});
 
 test("supporting footage matches actual spoken moments using descriptive names or tags", () => {
   const result = planSupportingVisuals({

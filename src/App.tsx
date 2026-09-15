@@ -41,8 +41,10 @@ import {
 } from "lucide-react";
 import {
   DEFAULT_AUTO_OPTIONS,
+  DEFAULT_BROLL_COUNT,
   DEFAULT_SETTINGS,
   MAX_AUTO_VERSIONS,
+  MAX_BROLL_COUNT,
   randomizeSettings,
   type AutoCapabilities,
   type AutoOptions,
@@ -93,6 +95,13 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         ? options!.supportingVisuals
         : "off",
       brollMatching: options?.brollMatching === "ai" ? "ai" : "tags",
+      brollCount:
+        typeof options?.brollCount === "number" &&
+        Number.isInteger(options.brollCount) &&
+        options.brollCount >= 1 &&
+        options.brollCount <= MAX_BROLL_COUNT
+          ? options.brollCount
+          : DEFAULT_BROLL_COUNT,
       stockVideoType:
         options?.stockVideoType === "animation" ? "animation" : "all",
       brollIds: Array.isArray(options?.brollIds)

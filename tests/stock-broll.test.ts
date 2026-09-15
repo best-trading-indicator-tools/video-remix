@@ -223,9 +223,9 @@ test("stock work is bounded, preserves completed matches after failure, and prop
       }) as typeof fetch,
     };
     const result = await findStockBroll(options);
-    assert.equal(searches, 3);
-    assert.equal(downloads, 3);
-    assert.equal(result.assets.length, 3);
+    assert.equal(searches, 6, "Default four shots search two backup ideas as well");
+    assert.equal(downloads, 6);
+    assert.equal(result.assets.length, 6);
     let attempted = 0;
     const partial = await findStockBroll({
       ...options,

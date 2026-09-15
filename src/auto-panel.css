@@ -225,7 +225,8 @@
   border-color: var(--line);
 }
 
-.auto-panel.panel .broll-matching {
+.auto-panel.panel .broll-matching,
+.auto-panel.panel .broll-count {
   margin-top: 18px;
 }
 

@@ -6,7 +6,8 @@ import { config, paths } from "./config.js";
 import { probeMedia } from "./engine.js";
 import type { StoredBroll } from "./store.js";
 import { brollTokens } from "./broll-text.js";
-import { planStockSearch, type SearchMoment } from "./broll-search.js";
+import { brollSearchBudget, planStockSearch, type SearchMoment } from "./broll-search.js";
+import { DEFAULT_BROLL_COUNT } from "../shared/types.js";
 import { inspectBrollWindows } from "./broll-motion.js";
 
 export const stockBrollConfigured = () =>
@@ -205,6 +206,7 @@ export async function findStockBroll({
   probe = probeMedia,
   matching = "tags",
   targetAspect = 9 / 16,
+  targetCount = DEFAULT_BROLL_COUNT,
   inspect = inspectBrollWindows,
 }: {
   moments: SearchMoment[];
@@ -218,11 +220,13 @@ export async function findStockBroll({
   probe?: typeof probeMedia;
   matching?: "tags" | "ai";
   targetAspect?: number;
+  targetCount?: number;
   inspect?: typeof inspectBrollWindows;
 }): Promise<{ assets: StoredBroll[]; notes: string[] }> {
   signal.throwIfAborted();
   const assets: StoredBroll[] = [];
   const notes: string[] = [];
+  const budget = brollSearchBudget(targetCount);
   if (!Number.isFinite(targetAspect) || targetAspect < 0.1 || targetAspect > 10)
     throw new Error("Invalid stock target aspect ratio");
   if (!stockBrollConfigured())
@@ -232,20 +236,20 @@ export async function findStockBroll({
         "Stock B-roll needs PIXABAY_API_KEY on the server. Original footage was kept.",
       ],
     };
-  // At most three ideas, with a primary and one alternative query per AI idea.
-  // Download/inspect at most three clips per idea (nine total), including failed
-  // candidates. There is no background crawling, pagination, or library preload.
+  // Requested shots plus two spare ideas, with at most two queries and three
+  // downloaded/inspected candidates per idea. Failed candidates consume budget.
+  // At the largest request this is 12 ideas / 36 clips, without pagination.
   const usable = moments
     .map((moment) => ({ text: moment.text, words: brollTokens(moment.text) }))
     .filter((moment) => moment.words.length);
   const lexical = Array.from(
-    { length: Math.min(3, usable.length) },
+    { length: Math.min(budget.briefLimit, usable.length) },
     (_, index) =>
-      usable[Math.floor((index * usable.length) / Math.min(3, usable.length))]!,
+      usable[Math.floor((index * usable.length) / Math.min(budget.briefLimit, usable.length))]!,
   );
   onPhase(matching === "ai" ? "Understanding spoken ideas for stock search" : "Finding stock B-roll");
   const semantic = matching === "ai"
-    ? await planStockSearch({ moments, language, signal, cacheDir, fetcher })
+    ? await planStockSearch({ moments, language, targetCount, signal, cacheDir, fetcher })
     : undefined;
   if (semantic) notes.push(...semantic.notes);
   const selected = semantic ? semantic.briefs.map(brief => ({
@@ -257,9 +261,11 @@ export async function findStockBroll({
     alternateQueries: [] as string[], reason: undefined, visual: undefined, momentIndex: undefined }));
   const queries = new Map<string, StockHit[]>();
   const used = new Set<number>();
+  let downloads = 0;
   let searchUnavailable = false;
   for (const moment of selected) {
     signal.throwIfAborted();
+    if (downloads >= budget.downloadLimit) break;
     const pool = new Map<number, { hit: StockHit; query: string }>();
     for (const query of [moment.query, ...moment.alternateQueries]) {
       if (searchUnavailable) break;
@@ -312,9 +318,11 @@ export async function findStockBroll({
       return b.score - a.score ||
         (prefersFilm ? Number(b.hit.type === "film") - Number(a.hit.type === "film") : 0) ||
         fit(b.file) - fit(a.file);
-    }).slice(0, semantic ? 3 : 1);
+    }).slice(0, 3);
     for (const { hit, file, query } of chosen) {
+      if (downloads >= budget.downloadLimit) break;
       used.add(hit.id);
+      downloads++;
       const id = randomUUID();
       const filePath = path.join(workDir, `stock-${id}.mp4`);
       try {

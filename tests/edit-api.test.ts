@@ -407,12 +407,19 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       });
       assert.equal(conflict.status, 400);
       assert.equal((await jobs()).length, count);
+      for (const bad of [{ brollCount: 6 }, { refreshBroll: true, brollCount: 0 }, { refreshBroll: true, brollCount: 11 }, { refreshBroll: true, brollCount: 2.5 }]) {
+        assert.equal((await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: before.revision, ...bad })).status, 400);
+      }
+      assert.equal((await jobs()).length, count);
       const captions = [{ id: "saved-speech", start: 4, end: 6.5, text: "Sunset sea waves." }];
-      const response = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: before.revision, refreshBroll: true, captions });
+      const response = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: before.revision, refreshBroll: true, brollCount: 6, captions });
       assert.equal(response.status, 201, await response.clone().text());
       const queued = await response.json() as RenderJob;
       assertPublic(queued);
       const refreshed = await completed(queued.id);
+      assert.equal(refreshed.auto?.brollCount, 6);
+      assert.ok(refreshed.notes?.some(note => note.includes("1 of 6 shots added")));
+      assert.equal((await jobs()).find(job => job.id === parent.id)?.auto?.brollCount, undefined, "Target changes only the new revision");
       const after = await planOf(refreshed.id);
       assert.equal((await jobs()).length, count + 1);
       assert.deepEqual(after.cuts, before.cuts);
@@ -439,6 +446,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       const textOnly = await request(`/api/jobs/${refreshed.id}/revisions`, "POST", { revision: after.revision, hookText: "A saved seaside moment" });
       assert.equal(textOnly.status, 201);
       const textJob = await completed((await textOnly.json() as RenderJob).id);
+      assert.equal(textJob.auto?.brollCount, 6, "Text corrections preserve the saved target");
       const textPlan = await planOf(textJob.id);
       assert.deepEqual(textPlan.visuals, after.visuals);
       assert.equal(textPlan.audioMediaId, after.audioMediaId);

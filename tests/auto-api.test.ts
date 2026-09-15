@@ -222,6 +222,8 @@ test(
           (await post("/api/auto/jobs", { sourceIds, variants })).status,
           400,
         );
+      for (const brollCount of [0, 11, 2.5, "6"])
+        assert.equal((await post("/api/auto/jobs", { sourceIds, options: { brollCount } })).status, 400);
       for (const [body, status] of [
         [
           { items: [{ sourceId: sourceIds[0] }, { sourceId: randomUUID() }] },
@@ -481,6 +483,7 @@ test(
               targetDuration: 45,
               narration: true,
               supportingVisuals: "graphics",
+              brollCount: 2,
             },
           },
           {
@@ -492,6 +495,7 @@ test(
               narration: false,
               supportingVisuals: "library",
               brollMatching: "tags",
+              brollCount: 8,
               brollIds: [assets[0]!.id, assets[0]!.id],
             },
           },
@@ -516,6 +520,7 @@ test(
         targetDuration: 45,
         narration: true,
         supportingVisuals: "graphics",
+        brollCount: 2,
         brollIds: [],
       });
       for (const job of mixed.jobs.slice(1))
@@ -525,6 +530,7 @@ test(
           narration: false,
           supportingVisuals: "library",
           brollMatching: "tags",
+          brollCount: 8,
           brollIds: [assets[0]!.id],
         });
       const mixedFinished = (

@@ -217,13 +217,25 @@ test("strict changes reject stale revisions, paths, invalid media, overlaps and 
     { ...plan.visuals[0]!, end: 6.1, locked: false },
   ]) assert.throws(() => apply({ visuals: [visual] }));
   const many = makePlan();
-  many.visuals = Array.from({ length: 4 }, (_, index) => ({ ...many.visuals[0]!, id: `shot-${index}`, start: index * 2, end: index * 2 + 1, enabled: false }));
-  assert.throws(() => applyEditPlanChanges(many, { revision: 3, visuals: many.visuals.map(visual => ({ ...visual, enabled: true })) }), /at most three/);
+  many.visuals = Array.from({ length: 11 }, (_, index) => ({ ...many.visuals[0]!, id: `shot-${index}`, start: index * 0.8, end: index * 0.8 + 0.5, enabled: false }));
+  assert.throws(() => applyEditPlanChanges(many, { revision: 3, visuals: many.visuals.map(visual => ({ ...visual, enabled: true })) }), /at most 10/);
   const overlapping = makePlan();
   overlapping.visuals.push({ ...overlapping.visuals[0]!, id: "shot-overlap", enabled: false });
   assert.throws(() => applyEditPlanChanges(overlapping, { revision: 3, visuals: overlapping.visuals.map(visual => ({ ...visual, enabled: true })) }), /cannot overlap/);
   assert.throws(() => apply({ hookText: "x".repeat(121) }));
   assert.throws(() => apply({ hookText: "Unsafe\u0000text" }));
+});
+
+test("caption revisions preserve ten locked shots and refresh targets are strictly bounded", () => {
+  const plan = makePlan();
+  plan.visuals = Array.from({ length: 10 }, (_, index) => ({ ...plan.visuals[0]!, id: `shot-${index}`, start: index * 0.9, end: index * 0.9 + 0.5 }));
+  const next = applyEditPlanChanges(plan, { revision: 3, captions: plan.captions.map(cue => ({ ...cue, text: "Corrected text." })) });
+  assert.deepEqual(next.visuals, plan.visuals);
+  assert.equal(next.visuals.length, 10);
+  assert.equal(next.revision, 4);
+  for (const brollCount of [0, 11, 2.5, "5", NaN]) assert.equal(editPlanChangesSchema.safeParse({ revision: 3, refreshBroll: true, brollCount }).success, false);
+  assert.throws(() => applyEditPlanChanges(plan, { revision: 3, brollCount: 5 }), /new stock search/);
+  assert.deepEqual(applyEditPlanChanges(plan, { revision: 3, refreshBroll: true, brollCount: 10 }).visuals, plan.visuals);
 });
 
 test("locked narration keeps its audio timeline and rejects edits that change total duration", () => {

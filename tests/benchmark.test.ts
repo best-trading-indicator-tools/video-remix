@@ -96,19 +96,23 @@ test("benchmark refuses artifact symlinks and invalid arguments before replacing
   const original = path.join(directory, "original.mp4");
   await writeFile(original, "Private original");
   await symlink(original, path.join(output, "benchmark-motion-portrait.mp4"));
-  await assert.rejects(exec(process.execPath, ["--import", "tsx", runner, "--output", output], { cwd: root, timeout: 10_000 }),
+  // No TS loader: preflight must reject the path before loading media modules.
+  // This allows OS process startup under concurrent media tests. On macOS the
+  // dynamic loader can delay Node before any JS runs; rejection has no timing SLA.
+  const startupTimeout = 30_000;
+  await assert.rejects(exec(process.execPath, [runner, "--output", output], { cwd: root, timeout: startupTimeout }),
     (error: unknown) => {
-      const failure = error as { code: number; stdout: string };
-      assert.equal(failure.code, 1);
+      const failure = error as { code: number; stdout: string; stderr?: string; signal?: string; killed?: boolean };
+      assert.equal(failure.code, 1, JSON.stringify({ code: failure.code, signal: failure.signal, killed: failure.killed, stdout: failure.stdout, stderr: failure.stderr }));
       assert.match(JSON.parse(failure.stdout).message, /non-regular benchmark artifact/u);
       return true;
     });
   assert.equal(await readFile(original, "utf8"), "Private original");
   assert.deepEqual(await readdir(output), ["benchmark-motion-portrait.mp4"]);
-  await assert.rejects(exec(process.execPath, ["--import", "tsx", runner, "--output"], { cwd: root, timeout: 10_000 }),
+  await assert.rejects(exec(process.execPath, [runner, "--output"], { cwd: root, timeout: startupTimeout }),
     (error: unknown) => {
-      const failure = error as { code: number; stdout: string };
-      assert.equal(failure.code, 1);
+      const failure = error as { code: number; stdout: string; stderr?: string; signal?: string; killed?: boolean };
+      assert.equal(failure.code, 1, JSON.stringify({ code: failure.code, signal: failure.signal, killed: failure.killed, stdout: failure.stdout, stderr: failure.stderr }));
       assert.match(JSON.parse(failure.stdout).message, /incomplete argument/u);
       return true;
     });

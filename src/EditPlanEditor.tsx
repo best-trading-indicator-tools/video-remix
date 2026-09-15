@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
+import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
 import PromptEditor, { type PromptProposal } from "./PromptEditor";
 import "./edit-plan.css";
@@ -126,12 +127,15 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   onClose: () => void;
   onCreated: (job: RenderJob) => void;
 }) {
+  const savedBrollCount = job.auto?.brollCount ?? DEFAULT_BROLL_COUNT;
   const [plan, setPlan] = useState<EditPlan | null>(null);
   const [draft, setDraft] = useState<EditPlan | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [refreshBroll, setRefreshBroll] = useState(false);
+  const [brollCount, setBrollCount] = useState(savedBrollCount);
+  const [brollCountInput, setBrollCountInput] = useState(String(savedBrollCount));
   const [promptAnchor, setPromptAnchor] = useState<PromptDraftAnchor | null>(null);
   const [promptUndo, setPromptUndo] = useState<PromptUndo | null>(null);
   const [reload, setReload] = useState(0);
@@ -150,6 +154,11 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const closeRef = useRef(onClose);
   closeRef.current = onClose;
   savingRef.current = saving;
+
+  useEffect(() => {
+    setBrollCount(savedBrollCount);
+    setBrollCountInput(String(savedBrollCount));
+  }, [job.id, savedBrollCount]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -236,6 +245,13 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const activeCaption = draft?.captions.find((cue) => cue.start <= previewOutputTime && cue.end > previewOutputTime);
   const captionStyle = draft?.settings.captionStyle || DEFAULT_CAPTION_STYLE;
   const focalPoint = draft?.settings.focalPoint || CENTER;
+  const commitBrollCount = () => {
+    const parsed = Number(brollCountInput);
+    const count = brollCountInput.trim() && Number.isFinite(parsed)
+      ? Math.max(1, Math.min(MAX_BROLL_COUNT, Math.floor(parsed))) : brollCount;
+    setBrollCount(count);
+    setBrollCountInput(String(count));
+  };
   const updateFraming = (patch: Partial<RemixSettings>) => {
     setDraft((value) => value && ({ ...value, settings: { ...value.settings, ...patch } }));
     setPreviewMode("framing");
@@ -279,6 +295,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     if (!plan || !draft || (!changed && !searchAgain) || savingRef.current) return;
     setError("");
     const changes = collectDraftChanges(plan, draft, searchAgain, promptAnchor);
+    if (searchAgain) changes.brollCount = brollCount;
     try { validateDraftChanges(plan, draft, changes); }
     catch (reason) { setError((reason as Error).message); return; }
     updateCorrectionClock.current();
@@ -416,9 +433,23 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
                 {job.auto?.supportingVisuals === "stock" && <div className="edit-broll-refresh">
                   <div><strong>Try another B-roll search</strong><p>Search for new stock shots and render this video. Your current caption, cut and framing edits are included; narration stays saved.</p></div>
-                  <button type="button" className="secondary-button" disabled={saving || explicitVisualChanges} onClick={(event) => {
-                    if (event.currentTarget.form?.reportValidity()) void submit(true);
-                  }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
+                  <div className="edit-broll-refresh-controls">
+                    <label className="edit-plan-field">B-roll shots to aim for
+                      <input type="number" inputMode="numeric" min={1} max={MAX_BROLL_COUNT} step={1} required
+                        disabled={saving || explicitVisualChanges} value={brollCountInput} aria-describedby="edit-broll-count-note"
+                        onChange={(event) => {
+                          setBrollCountInput(event.target.value);
+                          const count = event.target.valueAsNumber;
+                          if (Number.isInteger(count) && count >= 1 && count <= MAX_BROLL_COUNT) setBrollCount(count);
+                        }}
+                        onBlur={commitBrollCount}
+                        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} />
+                    </label>
+                    <button type="button" className="secondary-button" disabled={saving || explicitVisualChanges} onClick={(event) => {
+                      if (event.currentTarget.form?.reportValidity()) void submit(true);
+                    }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
+                  </div>
+                  <p id="edit-broll-count-note">Aim for 1–{MAX_BROLL_COUNT} relevant moving shots. You may get fewer if suitable matches aren't available. Higher counts take longer.</p>
                   {explicitVisualChanges && <p className="edit-plan-note">Render or reset your shot changes first.</p>}
                 </div>}
                 <fieldset disabled={saving || cutTimingsChanged}>
@@ -465,8 +496,8 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
             </div>
           </div>
           <footer className="edit-plan-footer">
-            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A new B-roll search will run with this revision.</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
-            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || !changed} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
+            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A new B-roll search will aim for {brollCount} shots with this revision.</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
+            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
         </form> : <div className="edit-plan-loading"><p className="edit-plan-error" role="alert">{error || "This edit is unavailable."}</p><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}

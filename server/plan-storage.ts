@@ -31,12 +31,15 @@ export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual
   if (!visuals.length) {
     if (plan.visuals.some(visual => visual.enabled)) {
       job.notes = (job.notes || []).flatMap(note => {
+        if (note.startsWith("B-roll target:")) return [];
         const ending = /\s*Original footage was kept(?: for that moment)?\.$/u;
         if (ending.test(note) && /B-roll|stock/iu.test(note) &&
           /^(?:No (?:suitable|relevant|suitably timed)|AI found no|None of the \d+ inspected)/u.test(note)) return [];
         return [note.replace(ending, "")];
       });
       job.notes.push("The new search found no suitable replacement. Your saved supporting shots were kept.");
+      const kept = plan.visuals.filter(visual => visual.enabled && plan.media.find(media => media.id === visual.mediaId)?.kind === "broll").length;
+      if (kept) job.notes.push(`B-roll search: no new matches; ${kept} saved shot${kept === 1 ? " was" : "s were"} kept.`);
     }
     delete job.brollCandidates;
     return;

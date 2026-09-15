@@ -488,6 +488,24 @@ test("B-roll cutaways follow the edited timeline, preserve source audio, and ret
   }
 });
 
+test("ten supporting shots reach the rendered pixels and preserve the main audio", async () => {
+  const visuals: SupportingVisual[] = Array.from({ length: 10 }, (_, index) => ({
+    path: scenes, start: 0.05 + index * 0.6, end: 0.55 + index * 0.6,
+    sourceStart: 2.1, kind: "broll", label: `Blue shot ${index + 1}`,
+  }));
+  const settings: Partial<RemixSettings> = { segments: Array.from({ length: 3 }, () => ({ start: 0, end: 1 })), speed: 0.5, fps: "30" };
+  const { output, info } = await render("ten-cutaways", settings, { input: scenes, supportingVisuals: visuals });
+  assert.ok(Math.abs(info.duration - 6) < 0.05);
+  for (const [time, channel] of [...visuals.map(shot => [shot.start + 0.2, 2]), [2.38, 0]]) {
+    const pixel = await ffmpeg(["-ss", String(time), "-i", output, "-frames:v", "1", "-vf", "scale=1:1", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"]);
+    assert.ok(pixel[channel!]! > 180 && pixel[1]! < 30, `Expected channel ${channel} at ${time}s, got ${[...pixel]}`);
+  }
+  const sound = await samples(output);
+  const hz = frequency(sound.subarray(Math.round(5.6 * 48000), Math.round(5.8 * 48000)));
+  assert.ok(Math.abs(hz - 440) < 35, `Tenth cutaway keeps original sound: ${hz}`);
+  await assert.rejects(render("too-many-cutaways", settings, { input: scenes, supportingVisuals: [...visuals, visuals[0]!] }), /maximum 10/);
+});
+
 test("cutaways keep replacement narration and subtitles above the supporting picture", async () => {
   const subtitles = path.join(directory, "cutaway-captions.srt");
   await writeFile(

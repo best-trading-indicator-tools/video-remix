@@ -536,6 +536,8 @@ export function createApp() {
     if (!parsed.success) throw new HttpError(400, "Check the edited captions, cut times and footage choices.");
     if (parsed.data.revision !== parent.editPlan.revision)
       throw new HttpError(409, "This edit has changed. Reload the saved plan.");
+    if (parsed.data.brollCount !== undefined && !parsed.data.refreshBroll)
+      throw new HttpError(400, "Choose a B-roll target when requesting a new stock search.");
     if (parsed.data.refreshBroll && parent.auto?.supportingVisuals !== "stock")
       throw new HttpError(400, "New stock searches are available for Auto edits made with stock B-roll.");
     if (parsed.data.refreshBroll && !stockBrollConfigured())
@@ -548,7 +550,8 @@ export function createApp() {
     const id = randomUUID();
     const job: StoredJob = {
       id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
-      variant: parent.variant, parentJobId: parent.id, auto: parent.auto,
+      variant: parent.variant, parentJobId: parent.id,
+      auto: parsed.data.brollCount !== undefined ? { ...parent.auto!, brollCount: parsed.data.brollCount } : parent.auto,
       status: "queued", progress: 0, createdAt: new Date().toISOString(),
       outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
       sourceTranscript: parent.sourceTranscript,

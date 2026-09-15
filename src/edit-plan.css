@@ -134,7 +134,10 @@
   border-radius: 12px;
   background: var(--field, #10151c);
 }
-.edit-broll-refresh > div { flex: 1 1 230px; min-width: 0; }
+.edit-broll-refresh > div { flex: 1 1 100%; min-width: 0; }
+.edit-broll-refresh-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 14px; }
+.edit-broll-refresh-controls .edit-plan-field { flex: 1 1 170px; }
+.edit-broll-refresh-controls .secondary-button { flex: 1 1 190px; min-height: 44px; }
 .edit-broll-refresh strong { color: var(--text, #f4f6fa); font-size: 14px; }
 .edit-broll-refresh p { margin: 6px 0 0; color: var(--subtle, #bac2cf); font-size: 13px; line-height: 1.55; }
 .edit-broll-refresh .secondary-button { white-space: normal; text-align: center; }

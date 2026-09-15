@@ -69,7 +69,7 @@ test("old duplicate B-roll notices collapse while specific failures and unrelate
 // engine, including a source whose opening differs from its analyzed window.
 test(
   "AI B-roll uses observed windows, bounded cloud requests, and local validated caches",
-  { timeout: 60_000 },
+  { timeout: 120_000 },
   async (t) => {
     const directory = await mkdtemp(
       path.join(os.tmpdir(), "video-remix-broll-ai-"),
@@ -696,6 +696,51 @@ test(
       );
 
       await t.test(
+        "an analysis timeout preserves completed observations and gives final matching a fresh bounded request",
+        async () => {
+          const assets = await Promise.all([createAsset(), createAsset()]);
+          const analysisTimeout = new AbortController();
+          const oldTimeout = AbortSignal.timeout;
+          const timerBudgets: number[] = [];
+          let visionCalls = 0;
+          let matchCalls = 0;
+          try {
+            AbortSignal.timeout = (milliseconds: number) => {
+              timerBudgets.push(milliseconds);
+              return milliseconds >= 120_000 ? analysisTimeout.signal : oldTimeout(milliseconds);
+            };
+            globalThis.fetch = async (_input, init) => {
+              const body = requestBody(init);
+              if (!vision(body)) {
+                matchCalls++;
+                assert.equal(init?.signal?.aborted, false, "The expired analysis signal cannot cancel matching");
+                assert.equal(JSON.parse(body.messages[1]!.content).clips.length, 1);
+                return success(mockMatcher(body));
+              }
+              if (++visionCalls === 1) return success(description);
+              // Wait until the first successful description has returned to its
+              // worker; cache rename occurs just before the observation resolves.
+              while (!(await readdir(paths.analysis)).some(name => assets.some(asset => name === `broll-${asset.id}.json`)))
+                await tick();
+              await tick();
+              const aborts = new Promise<Response>((_resolve, reject) => {
+                init?.signal?.addEventListener("abort", () => reject(new DOMException("Analysis budget expired", "AbortError")), { once: true });
+              });
+              analysisTimeout.abort();
+              return aborts;
+            };
+            const result = await matchBrollWithAI(options(assets));
+            assert.equal(visionCalls, 2);
+            assert.equal(matchCalls, 1);
+            assert.equal(result.matches.length, 1);
+            assert.match(result.notes.join(" "), /time limit was reached.*shots already inspected/);
+            assert.equal(timerBudgets.at(-1), 45_000, "Final matching receives its own provider timeout");
+            assert.deepEqual((await readdir(paths.analysis)).filter(name => name.startsWith(".broll-frames")), []);
+          } finally { AbortSignal.timeout = oldTimeout; }
+        },
+      );
+
+      await t.test(
         "cancelling a running provider request propagates cancellation and cleans frame files",
         async () => {
           const asset = await createAsset();
@@ -739,6 +784,47 @@ test(
       );
 
       await t.test(
+        "requested count reaches matching and permits ten shots plus backup moments while reusing visual descriptions",
+        async () => {
+          const assets = await Promise.all(Array.from({ length: 12 }, () => createAsset()));
+          const spacedMoments = Array.from({ length: 12 }, (_, index) => ({
+            start: index * 4 + 4,
+            end: index * 4 + 6.5,
+            text: `A walk through woodland trail number ${index}`,
+          }));
+          let visionCalls = 0;
+          const counts: number[] = [];
+          globalThis.fetch = async (_input, init) => {
+            const body = requestBody(init);
+            if (vision(body)) { visionCalls++; return success(description); }
+            const prompt = JSON.parse(body.messages[1]!.content);
+            counts.push(prompt.targetCount);
+            assert.equal(prompt.moments[2].start, spacedMoments[2]!.start);
+            assert.equal(prompt.moments[2].end, spacedMoments[2]!.end);
+            assert.match(body.messages[0]!.content, /backup matches/i);
+            assert.ok(body.messages[0]!.content.includes(`at least ${prompt.targetCount >= 6 ? 0.6 : 1.2} seconds between shots`),
+              "The requested spacing must match the final timeline scheduler");
+            assert.match(body.messages[0]!.content, /Do not force matches/i);
+            assert.ok(body.max_tokens <= 2200);
+            return success({ matches: prompt.clips.map((clip: { assetId: string }, index: number) => ({
+              momentIndex: index,
+              assetId: clip.assetId,
+              confidence: 0.95,
+              reason: "The visible woodland supports the spoken forest walk.",
+            })) });
+          };
+          const small = await matchBrollWithAI({ ...options(assets), moments: spacedMoments, targetCount: 1 });
+          assert.equal(small.matches.length, 3, "One requested shot retains at most two placement backups");
+          const large = await matchBrollWithAI({ ...options(assets), moments: spacedMoments, targetCount: 10 });
+          assert.equal(large.matches.length, 12, "The old three-match cap must not suppress the requested count");
+          assert.equal(new Set(large.matches.map(match => match.assetId)).size, 12);
+          assert.equal(new Set(large.matches.map(match => match.momentIndex)).size, 12);
+          assert.deepEqual(counts, [1, 10]);
+          assert.equal(visionCalls, 12, "Changing the target count reuses the exact inspected shots");
+        },
+      );
+
+      await t.test(
         "analysis is capped at 20 selected assets and a visible note explains the limit",
         async () => {
           const assets = await Promise.all(
@@ -760,6 +846,21 @@ test(
           );
         },
       );
+
+      await t.test("larger requests expand inspection to at most 36 candidates", async () => {
+        const assets = await Promise.all(Array.from({ length: 37 }, () => createAsset()));
+        let count = 0;
+        globalThis.fetch = async (_input, init) => {
+          assert.ok(vision(requestBody(init)));
+          count++;
+          return success({ ...description, usable: false });
+        };
+        const result = await matchBrollWithAI({ ...options(assets), targetCount: 10 });
+        assert.equal(count, 36);
+        assert.deepEqual(result.matches, []);
+        assert.match(result.notes.join(" "), /first 36 selected/);
+        await assert.rejects(stat(path.join(paths.analysis, `broll-${assets[36]!.id}.json`)), { code: "ENOENT" });
+      });
     } finally {
       paths.analysis = oldAnalysis;
       globalThis.fetch = oldFetch;

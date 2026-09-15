@@ -14,6 +14,8 @@ export interface TimedCallout {
   end: number;
 }
 export const MAX_AUTO_VERSIONS = 10;
+export const DEFAULT_BROLL_COUNT = 4;
+export const MAX_BROLL_COUNT = 10;
 export interface AutoOptions {
   aspect: Aspect;
   targetDuration: 30 | 45 | 60;
@@ -22,6 +24,8 @@ export interface AutoOptions {
   stockVideoType?: "all" | "animation";
   brollIds?: string[];
   brollMatching?: "tags" | "ai";
+  /** Desired cutaways per export; fewer are allowed when no suitable shots fit. */
+  brollCount?: number;
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
@@ -212,6 +216,8 @@ export interface EditPlan {
 export interface EditPlanChanges {
   revision: number;
   refreshBroll?: boolean;
+  /** New stock search target; only supplied with refreshBroll. */
+  brollCount?: number;
   hookText?: string;
   captions?: CaptionCue[];
   cuts?: EditSegment[];

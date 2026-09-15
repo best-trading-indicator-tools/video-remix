@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS } from "../shared/types.js";
+import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
 const n = (min: number, max: number) => z.number().finite().min(min).max(max);
 export const focalPointSchema = z.object({ x: n(0, 1), y: n(0, 1) }).strict();
 export const captionStyleSchema = z.object({ fontSize: n(12, 40), bottomPercent: n(5, 80) }).strict();
@@ -101,6 +101,7 @@ export const autoOptionsSchema = z
       .optional(),
     brollIds: z.array(z.string().uuid()).max(100).optional(),
     brollMatching: z.enum(["tags", "ai"]).optional(),
+    brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
     stockVideoType: z.enum(["all", "animation"]).optional(),
   })
   .strict()

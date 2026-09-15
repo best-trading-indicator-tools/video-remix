@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CaptionCue, EditPlan, EditPlanChanges, EditSegment, Transcript } from "../shared/types.js";
+import { MAX_BROLL_COUNT } from "../shared/types.js";
 import { captionsSrt, cutsDuration, retimeTranscript } from "./auto-plan.js";
 import { focalPointSchema, captionStyleSchema } from "./schema.js";
 
@@ -28,6 +29,7 @@ const visualSchema = z.object({
 export const editPlanChangesSchema = z.object({
   revision: z.number().int().nonnegative(),
   refreshBroll: z.boolean().optional(),
+  brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   hookText: safeText(120, true).optional(),
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: z.array(cutSchema).min(1).max(60).optional(),
@@ -118,8 +120,9 @@ function mappedIntervals(interval: EditSegment, oldCuts: EditSegment[], newCuts:
   let offset = 0;
   for (const cut of newCuts) {
     if (pieces[0]!.start >= cut.start - epsilon && pieces[0]!.start < cut.end - 1e-9) {
-      const start = Math.max(0, offset + (pieces[0]!.start - cut.start) / speed);
-      const proposed = { start, end: start + interval.end - interval.start };
+      const mappedStart = Math.max(0, offset + (pieces[0]!.start - cut.start) / speed);
+      const start = Math.abs(mappedStart - interval.start) < 1e-9 ? interval.start : mappedStart;
+      const proposed = { start, end: interval.end + (start - interval.start) };
       const proposedPieces = sourcePieces(proposed, newCuts, speed);
       if (proposed.end <= duration + epsilon && proposedPieces.length === pieces.length &&
         proposedPieces.every((piece, index) => Math.abs(piece.start - pieces[index]!.start) <= epsilon && Math.abs(piece.end - pieces[index]!.end) <= epsilon))
@@ -166,6 +169,8 @@ function retimedCaptions(plan: EditPlan, cuts: EditSegment[], sourceTranscript?:
 /** Apply one review revision without generating speech, choosing clips, or mutating the saved result. */
 export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sourceTranscript?: Transcript): EditPlan {
   const changes = editPlanChangesSchema.parse(input);
+  if (changes.brollCount !== undefined && !changes.refreshBroll)
+    throw new Error("Choose a B-roll target when requesting a new stock search.");
   if (changes.refreshBroll && changes.visuals !== undefined)
     throw new Error("Render your manual footage changes separately before searching for new B-roll.");
   if (changes.revision !== plan.revision) throw new Error("This edit changed since you opened it. Reload the latest revision before saving.");
@@ -220,7 +225,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
       throw new Error("Supporting shot timing exceeds the saved clip's duration");
   }
   const enabled = next.visuals.filter(visual => visual.enabled);
-  if (enabled.length > 3) throw new Error("An edit can contain at most three enabled supporting shots");
+  if (enabled.length > MAX_BROLL_COUNT) throw new Error(`An edit can contain at most ${MAX_BROLL_COUNT} enabled supporting shots`);
   noOverlap(enabled, "Supporting shots");
   validateCaptions(next.captions, duration);
   next.cuts = structuredClone(cuts);

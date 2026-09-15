@@ -101,7 +101,7 @@ test("semantic stock searches use context, bounded provider work, and validated 
       assert.equal(result.briefs[0]!.query, "person working late laptop");
     });
 
-    await t.test("long edits send at most 40 moments across the timeline and accept at most three searches", async () => {
+    await t.test("long edits send at most 40 moments and budget requested searches plus two backup ideas", async () => {
       let requests = 0;
       const longMoments = Array.from({ length: 80 }, (_, index) => ({
         text: `Moment ${index} ${"word ".repeat(120)}`,
@@ -110,30 +110,58 @@ test("semantic stock searches use context, bounded provider work, and validated 
       const result = await planStockSearch({
         ...options("bounded"),
         moments: longMoments,
+        targetCount: 10,
         fetcher: async (_input, init) => {
           requests++;
           const prompt = JSON.parse(bodyOf(init).messages[1]!.content);
+          assert.equal(prompt.targetCount, 10);
+          assert.equal(prompt.briefLimit, 12);
+          assert.ok(bodyOf(init).max_tokens <= 3000);
           assert.equal(prompt.moments.length, 40);
           assert.ok(prompt.moments.some((moment: { momentIndex: number }) => moment.momentIndex >= 75));
           for (const moment of prompt.moments) {
             assert.ok(moment.text.length <= 500);
             assert.ok(moment.context.length <= 1500);
           }
-          return complete({ briefs: [
-            brief(prompt.moments[0].momentIndex),
-            brief(prompt.moments[20].momentIndex, "person walking forest trail"),
-            brief(prompt.moments[39].momentIndex, "train arriving at station"),
-          ] });
+          return complete({ briefs: Array.from({ length: 12 }, (_, index) =>
+            brief(prompt.moments[index * 3].momentIndex, `woodland walking route ${index}`)) });
         },
       });
       assert.equal(requests, 1);
-      assert.equal(result.briefs.length, 3);
+      assert.equal(result.briefs.length, 12);
       const excessive = await planStockSearch({
         ...options("excessive"),
+        targetCount: 1,
         fetcher: async () => complete({ briefs: [brief(), brief(), brief(), brief()] }),
       });
       assert.deepEqual(excessive.briefs, []);
       assert.match(excessive.notes.join(" "), /Original footage was kept/);
+    });
+
+    await t.test("changing the requested count replans ideas and preserves timestamp context without repeating cached work", async () => {
+      const calls: number[] = [];
+      const args = {
+        ...options("count-cache"),
+        moments: Array.from({ length: 12 }, (_, index) => ({
+          text: `A visible woodland trail number ${index}`, start: index * 3, end: index * 3 + 2,
+        })),
+        fetcher: (async (_input, init) => {
+          const body = bodyOf(init);
+          const prompt = JSON.parse(body.messages[1]!.content);
+          calls.push(prompt.targetCount);
+          assert.match(body.messages[0]!.content, /backup moments/i);
+          assert.equal(prompt.moments[3].start, 9);
+          assert.equal(prompt.moments[3].end, 11);
+          return complete({ briefs: Array.from({ length: prompt.briefLimit }, (_, index) =>
+            brief(index, `woodland walking trail ${index}`)) });
+        }) as typeof fetch,
+      };
+      assert.equal((await planStockSearch({ ...args, targetCount: 1 })).briefs.length, 3);
+      assert.equal((await planStockSearch({ ...args, targetCount: 10 })).briefs.length, 12);
+      assert.equal((await planStockSearch({ ...args, targetCount: 10 })).briefs.length, 12);
+      assert.deepEqual(calls, [1, 10]);
+      await assert.rejects(planStockSearch({ ...args, targetCount: 11 }));
+      assert.deepEqual(calls, [1, 10], "Invalid count cannot trigger provider work");
     });
 
     await t.test("malformed, unsafe, unknown, weakly structured and duplicate choices cannot force a search", async () => {

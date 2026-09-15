@@ -182,6 +182,46 @@ test("semantic stock selection shortlists suitable moving portrait shots without
       for (const asset of result.assets) await rm(asset.filePath);
     });
 
+    await t.test("ten requested shots search twelve ideas with a hard 36-candidate budget and keep later moving alternatives", async () => {
+      let searches = 0;
+      let downloads = 0;
+      let inspections = 0;
+      const result = await findStockBroll({
+        ...makeOptions("ten-shots"),
+        targetCount: 10,
+        moments: Array.from({ length: 12 }, (_, index) => ({ text: `Spoken woodland trail ${index}` })),
+        fetcher: async (input, init) => {
+          const url = new URL(String(input));
+          if (url.hostname === "api.deepseek.com") {
+            const prompt = JSON.parse(JSON.parse(String(init?.body)).messages[1].content);
+            assert.equal(prompt.targetCount, 10);
+            assert.equal(prompt.briefLimit, 12);
+            return complete(Array.from({ length: 12 }, (_, index) => ({
+              ...brief(index, `woodland walking trail ${index}`), alternateQueries: [`forest path ${index}`],
+            })));
+          }
+          if (url.hostname === "pixabay.com") {
+            searches++;
+            return Response.json({ hits: Array.from({ length: 12 }, (_, index) => hit(searches * 20 + index)) });
+          }
+          downloads++;
+          return new Response(new Uint8Array([50, 0, 0, 0]));
+        },
+        inspect: async () => {
+          inspections++;
+          return inspections <= 6 ? [] : [viable];
+        },
+      });
+      assert.equal(searches, 24);
+      assert.equal(downloads, 36);
+      assert.equal(inspections, 36);
+      assert.equal(result.assets.length, 30, "Failed early ideas do not prevent inspection of later backups");
+      assert.deepEqual([...new Set(result.assets.map(asset => asset.selection!.momentIndex))],
+        Array.from({ length: 10 }, (_, index) => index + 2));
+      assert.equal(new Set(result.assets.map(asset => asset.stock!.providerId)).size, 30);
+      for (const asset of result.assets) await rm(asset.filePath);
+    });
+
     await t.test("relevance outranks portrait shape and real footage wins equally relevant animation", async () => {
       const downloads: number[] = [];
       const result = await findStockBroll({

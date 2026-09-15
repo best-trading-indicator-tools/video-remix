@@ -3,12 +3,6 @@ import { lstat, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "no
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { DEFAULT_SETTINGS } from "../shared/types.ts";
-import { textLayoutIssues } from "../shared/framing.ts";
-import { runLocal } from "../server/auto-process.ts";
-import { inspectBrollWindows } from "../server/broll-motion.ts";
-import { probeMedia, renderVideo } from "../server/engine.ts";
-import { inspectExport } from "../server/quality.ts";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const exec = promisify(execFile);
@@ -44,6 +38,14 @@ try {
         throw new Error("Refusing to replace a non-regular benchmark artifact: " + name);
     } catch (error) { if (error.code !== "ENOENT") throw error; }
   }
+  // Reject unsafe destinations and incomplete arguments before loading the
+  // TypeScript/media graph. These preflight failures need only plain Node and
+  // must not wait for the renderer's loader or initialize any media tooling.
+  const [{ DEFAULT_SETTINGS }, { textLayoutIssues }, { runLocal },
+    { inspectBrollWindows }, { probeMedia, renderVideo }, { inspectExport }] = await Promise.all([
+    import("../shared/types.ts"), import("../shared/framing.ts"), import("../server/auto-process.ts"),
+    import("../server/broll-motion.ts"), import("../server/engine.ts"), import("../server/quality.ts"),
+  ]);
   staging = await mkdtemp(path.join(outputDirectory, ".benchmark-"));
   const file = name => path.join(staging, "benchmark-" + name + ".mp4");
   const tone = "sine=frequency=440:sample_rate=48000";

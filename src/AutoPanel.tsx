@@ -14,7 +14,7 @@ import type {
   AutoOptions,
   VideoSource,
 } from "../shared/types";
-import { MAX_AUTO_VERSIONS } from "../shared/types";
+import { DEFAULT_BROLL_COUNT, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types";
 import BrollPanel from "./BrollPanel";
 import "./auto-panel.css";
 
@@ -60,6 +60,9 @@ export default function AutoPanel({
   maxFileSize?: number;
 }) {
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
+  const brollCount = options.brollCount ?? DEFAULT_BROLL_COUNT;
+  const [brollCountInput, setBrollCountInput] = useState(String(brollCount));
+  useEffect(() => setBrollCountInput(String(brollCount)), [brollCount, selectedId]);
   const [versionInput, setVersionInput] = useState(String(variants));
   useEffect(() => setVersionInput(String(variants)), [variants, selectedId]);
   const commitVersions = () => {
@@ -68,6 +71,13 @@ export default function AutoPanel({
       ? Math.max(1, Math.min(MAX_AUTO_VERSIONS, Math.floor(parsed))) : variants;
     setVersionInput(String(count));
     onVariantsChange(count);
+  };
+  const commitBrollCount = () => {
+    const parsed = Number(brollCountInput);
+    const count = brollCountInput.trim() && Number.isFinite(parsed)
+      ? Math.max(1, Math.min(MAX_BROLL_COUNT, Math.floor(parsed))) : brollCount;
+    setBrollCountInput(String(count));
+    onChange({ ...options, brollCount: count });
   };
   return (
     <aside className="auto-panel panel">
@@ -326,6 +336,33 @@ export default function AutoPanel({
                 options.supportingVisuals === "library" ||
                 options.supportingVisuals === "both") && (
                 <>
+                  <div className="broll-count">
+                    <label className="auto-output-field">
+                      B-roll shots to aim for
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={MAX_BROLL_COUNT}
+                        step={1}
+                        value={brollCountInput}
+                        aria-describedby="auto-broll-count-note"
+                        onChange={(event) => {
+                          setBrollCountInput(event.target.value);
+                          const count = event.target.valueAsNumber;
+                          if (Number.isInteger(count) && count >= 1 && count <= MAX_BROLL_COUNT)
+                            onChange({ ...options, brollCount: count });
+                        }}
+                        onBlur={commitBrollCount}
+                        onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+                      />
+                    </label>
+                    <p id="auto-broll-count-note" className="auto-preferences-note">
+                      Aim for 1–{MAX_BROLL_COUNT} relevant moving shots per video.
+                      You may get fewer if suitable matches aren't available.
+                      Higher counts take longer.
+                    </p>
+                  </div>
                   <div className="broll-matching">
                     <label htmlFor="broll-matching">Match B-roll using</label>
                     <select
