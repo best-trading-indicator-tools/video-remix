@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { z } from "zod";
 import type { EditPlan, EditPlanChanges, PromptEditResponse, Transcript } from "../shared/types.js";
+import { hasStockVisuals } from "../shared/visual-sources.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { publicEditPlan } from "./plan-storage.js";
 import { isActive, isRunning } from "./queue.js";
@@ -96,7 +97,7 @@ export function installPromptEditRoutes(app: Express) {
       } catch (error) {
         throw new PromptEditError(400, error instanceof Error ? error.message : "Check your current draft before describing another edit.");
       }
-      const canRefreshBroll = parent.auto?.supportingVisuals === "stock" && stockBrollConfigured() &&
+      const canRefreshBroll = !!parent.auto && hasStockVisuals(parent.auto) && stockBrollConfigured() &&
         (parent.auto.brollMatching !== "ai" || brollAIConfigured());
       const proposal = await proposePromptEdit({ plan: effective, prompt, signal: controller.signal,
         sourceTranscript: parent.sourceTranscript, canRefreshBroll });

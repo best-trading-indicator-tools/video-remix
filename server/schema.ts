@@ -100,6 +100,8 @@ export const autoOptionsSchema = z
     supportingVisuals: z
       .enum(["off", "stock", "library", "graphics", "both"])
       .optional(),
+    visualSources: z.array(z.enum(["pixabay", "hyperframes", "remotion", "library"]))
+      .max(4).refine(sources => new Set(sources).size === sources.length, "Choose each visual source once").optional(),
     brollIds: z.array(z.string().uuid()).max(100).optional(),
     brollMatching: z.enum(["tags", "ai"]).optional(),
     brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),

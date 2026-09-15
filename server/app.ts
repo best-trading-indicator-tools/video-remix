@@ -26,6 +26,7 @@ import {
 } from "./store.js";
 import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
 import { DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
+import { getVisualSources, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
 import { stockBrollConfigured } from "./stock-broll.js";
@@ -289,13 +290,11 @@ export function createApp() {
           404,
           "A source video has expired or been removed. Upload it again.",
         );
-      const usesLibrary =
-        options.supportingVisuals === "library" ||
-        options.supportingVisuals === "both";
+      const usesLibrary = hasLibraryVisuals(options);
       const brollIds = usesLibrary
         ? [...new Set(options.brollIds ?? state.broll.map((asset) => asset.id))]
         : [];
-      if (usesLibrary && !brollIds.length)
+      if (usesLibrary && !brollIds.length && getVisualSources(options).length === 1)
         throw new HttpError(
           400,
           "Add and select a B-roll clip, or choose animated cards instead.",
@@ -550,7 +549,7 @@ export function createApp() {
       throw new HttpError(409, "This edit has changed. Reload the saved plan.");
     if (parsed.data.brollCount !== undefined && !parsed.data.refreshBroll)
       throw new HttpError(400, "Choose a B-roll target when requesting a new stock search.");
-    if (parsed.data.refreshBroll && parent.auto?.supportingVisuals !== "stock")
+    if (parsed.data.refreshBroll && (!parent.auto || !hasStockVisuals(parent.auto)))
       throw new HttpError(400, "New stock searches are available for Auto edits made with stock B-roll.");
     if (parsed.data.refreshBroll && !stockBrollConfigured())
       throw new HttpError(400, "Add a Pixabay API key in your local environment before finding B-roll again.");

@@ -263,6 +263,24 @@ test(
           {
             items: [
               { sourceId: sourceIds[0] },
+              { sourceId: sourceIds[1], options: { visualSources: ["library"], brollIds: [] } },
+            ],
+          },
+          400,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
+              { sourceId: sourceIds[1], options: { visualSources: ["library", "remotion"], brollIds: [randomUUID()] } },
+            ],
+          },
+          404,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
               {
                 sourceId: sourceIds[1],
                 options: {
@@ -487,6 +505,8 @@ test(
               targetDuration: 45,
               narration: true,
               supportingVisuals: "graphics",
+              visualSources: ["hyperframes", "library"],
+              brollIds: [],
               brollCount: 2,
             },
           },
@@ -497,7 +517,8 @@ test(
               aspect: "16:9",
               targetDuration: 60,
               narration: false,
-              supportingVisuals: "library",
+              supportingVisuals: "off",
+              visualSources: ["library"],
               brollMatching: "tags",
               brollCount: 8,
               brollIds: [assets[0]!.id, assets[0]!.id],
@@ -524,6 +545,7 @@ test(
         targetDuration: 45,
         narration: true,
         supportingVisuals: "graphics",
+        visualSources: ["hyperframes", "library"],
         brollCount: 2,
         brollIds: [],
       });
@@ -532,7 +554,8 @@ test(
           aspect: "16:9",
           targetDuration: 60,
           narration: false,
-          supportingVisuals: "library",
+          supportingVisuals: "off",
+          visualSources: ["library"],
           brollMatching: "tags",
           brollCount: 8,
           brollIds: [assets[0]!.id],

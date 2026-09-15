@@ -25,7 +25,15 @@ export function transcriptFromPlan(job: StoredJob): Transcript | undefined {
   })) };
 }
 
-/** Replace only supporting footage after every new asset has been retained. */
+/** A stock search must not regenerate or remove saved animation/library choices. */
+export function preservedVisualsOnStockRefresh(plan: EditPlan) {
+  return plan.visuals.filter(visual => {
+    const media = plan.media.find(item => item.id === visual.mediaId);
+    return media?.kind === "graphic" || media?.visualSource === "library";
+  });
+}
+
+/** Replace only stock footage after every new asset has been retained. */
 export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual[], signal: AbortSignal) {
   const plan = job.editPlan!;
   if (!visuals.length) {
@@ -65,20 +73,22 @@ export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual
   try {
     for (const asset of job.brollCandidates || [])
       await snapshot(asset.filePath, { name: asset.name, kind: "broll", duration: asset.duration,
-        assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock });
+        assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock,
+        visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock ? "pixabay" : "library") });
+    const preserved = preservedVisualsOnStockRefresh(plan);
     const next: EditPlan["visuals"] = [];
     for (const visual of visuals) {
       const detail = job.supportingVisuals?.find(item => item.start === visual.start && item.name === visual.label);
       const { probeMedia } = await import("./engine.js");
       const metadata = await probeMedia(visual.path);
       const mediaId = await snapshot(visual.path, { name: visual.label, kind: visual.kind, duration: metadata.duration,
-        assetId: detail?.assetId, attribution: detail?.attribution, selection: detail?.selection, stock: detail?.stock });
+        assetId: detail?.assetId, attribution: detail?.attribution, selection: detail?.selection, stock: detail?.stock, visualSource: detail?.visualSource ?? visual.visualSource });
       next.push({ id: randomUUID(), mediaId, start: visual.start, end: visual.end,
         sourceStart: visual.sourceStart ?? 0, enabled: true, locked: true, reason: detail?.reason, focalPoint: visual.focalPoint });
     }
     signal.throwIfAborted();
     if (job.corrections) job.corrections.brollChanges = Math.max(plan.visuals.filter(item => item.enabled).length, next.length);
-    job.editPlan = { ...plan, visuals: next, media };
+    job.editPlan = { ...plan, visuals: [...preserved, ...next].sort((a, b) => a.start - b.start), media };
     job.planFiles = files;
   } catch (error) {
     await Promise.all(retained.map(file => rm(file, { force: true })));
@@ -134,7 +144,8 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
     // Keep the bounded stock shortlist available for replacement in the editor.
     for (const asset of job.brollCandidates || [])
       await snapshot(asset.filePath, { name: asset.name, kind: "broll", duration: asset.duration,
-        assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock });
+        assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock,
+        visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock ? "pixabay" : "library") });
     const plannedVisuals: EditPlan["visuals"] = [];
     for (const visual of visuals) {
       const detail = job.supportingVisuals?.find(item => item.start === visual.start && item.name === visual.label);
@@ -144,7 +155,7 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
       const metadata = await probeMedia(visual.path);
       const mediaId = await snapshot(visual.path, { name: visual.label, kind: visual.kind,
         duration: metadata.duration, assetId: detail?.assetId, attribution: detail?.attribution,
-        selection: detail?.selection, stock: detail?.stock });
+        selection: detail?.selection, stock: detail?.stock, visualSource: detail?.visualSource ?? visual.visualSource });
       plannedVisuals.push({ id: randomUUID(), mediaId, start: visual.start, end: visual.end,
         sourceStart: visual.sourceStart ?? 0, enabled: true, locked: true, reason: detail?.reason, focalPoint: visual.focalPoint });
     }
@@ -198,13 +209,13 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
   const supportingVisuals: SupportingVisual[] = plan.visuals.filter(item => item.enabled).map(item => {
     const media = plan.media.find(media => media.id === item.mediaId)!;
     return { path: planMediaPath(job, item.mediaId), start: item.start, end: item.end,
-      sourceStart: item.sourceStart, kind: media.kind as "broll" | "graphic", label: media.name, focalPoint: item.focalPoint };
+      sourceStart: item.sourceStart, kind: media.kind as "broll" | "graphic", label: media.name, focalPoint: item.focalPoint, visualSource: media.visualSource };
   });
   job.supportingVisuals = plan.visuals.filter(item => item.enabled).map(item => {
     const media = plan.media.find(media => media.id === item.mediaId)!;
     return { name: media.name, kind: media.kind as "broll" | "graphic", start: item.start, end: item.end,
       sourceStart: item.sourceStart, assetId: media.assetId, attribution: media.attribution,
-      selection: media.selection, stock: media.stock, reason: item.reason };
+      selection: media.selection, stock: media.stock, reason: item.reason, visualSource: media.visualSource };
   });
   if (job.summary) {
     const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays/iu.test(change));

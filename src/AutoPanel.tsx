@@ -5,16 +5,22 @@ import {
   Clapperboard,
   Copy,
   Expand,
+  Film,
+  FolderOpen,
+  Layers3,
   LoaderCircle,
   Scissors,
+  Shapes,
   Sparkles,
 } from "lucide-react";
 import type {
   AutoCapabilities,
   AutoOptions,
   VideoSource,
+  VisualSource,
 } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types";
+import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import "./auto-panel.css";
 
@@ -62,6 +68,22 @@ export default function AutoPanel({
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
   const keepOriginalCaptions = options.captions === "keep";
   const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions;
+  const visualSources = getVisualSources(options);
+  const stockSelected = hasStockVisuals(options);
+  const librarySelected = hasLibraryVisuals(options);
+  const graphicsSelected = hasGraphicVisuals(options);
+  const visualChoices: { id: VisualSource; description: string; icon: typeof Film; available: boolean; setup: string }[] = [
+    { id: "pixabay", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockBroll, setup: "Add a Pixabay API key to enable stock search." },
+    { id: "hyperframes", description: "Animated cards", icon: Layers3, available: !!capabilities?.motionGraphics, setup: "HyperFrames renderer is unavailable on this engine." },
+    { id: "remotion", description: "Animated cards", icon: Shapes, available: !!capabilities?.remotionGraphics, setup: "Remotion renderer is unavailable on this engine." },
+    { id: "library", description: "Your uploaded clips", icon: FolderOpen, available: true, setup: "" },
+  ];
+  const toggleVisualSource = (source: VisualSource, enabled: boolean) => onChange({
+    ...options,
+    visualSources: enabled ? [...visualSources, source] : visualSources.filter((item) => item !== source),
+    ...(source === "pixabay" && enabled && !options.brollMatching && capabilities?.brollAI
+      ? { brollMatching: "ai" as const } : {}),
+  });
   const brollCount = options.brollCount ?? DEFAULT_BROLL_COUNT;
   const [brollCountInput, setBrollCountInput] = useState(String(brollCount));
   useEffect(() => setBrollCountInput(String(brollCount)), [brollCount, selectedId]);
@@ -123,7 +145,7 @@ export default function AutoPanel({
           )}
           {sources.length > 1 && (
             <small>
-              Includes B-roll and version count. Also applies to new imports.
+              Includes visual sources and version count. Also applies to new imports.
             </small>
           )}
           {libraryBusy && (
@@ -268,40 +290,28 @@ export default function AutoPanel({
               />
             </label>
             <div className="supporting-visuals">
-              <label htmlFor="supporting-visuals">
-                Supporting visuals
-              </label>
-              <select
-                id="supporting-visuals"
-                value={options.supportingVisuals || "off"}
-                onChange={(event) =>
-                  onChange({
-                    ...options,
-                    supportingVisuals: event.target
-                      .value as AutoOptions["supportingVisuals"],
-                    ...(event.target.value === "stock" && !options.brollMatching && capabilities?.brollAI
-                      ? { brollMatching: "ai" as const } : {}),
-                  })
-                }
-              >
-                <option value="off">Original footage only</option>
-                <option value="stock">Stock B-roll · Pixabay</option>
-                <option value="library">My B-roll videos</option>
-                <option
-                  value="graphics"
-                  disabled={!capabilities?.motionGraphics}
-                >
-                  Animated cards
-                </option>
-                <option value="both" disabled={!capabilities?.motionGraphics}>
-                  B-roll + animated cards
-                </option>
-              </select>
-              <p className="auto-preferences-note">
-                Optional cutaways at relevant moments. Your main audio continues
-                underneath.
-              </p>
-              {options.supportingVisuals === "stock" && (
+              <fieldset className="auto-visual-sources" disabled={libraryBusy} aria-describedby="auto-visual-sources-note">
+                <legend>Supporting visuals</legend>
+                <p id="auto-visual-sources-note" className="auto-preferences-note">Choose any combination. Leave all off to keep only your footage.</p>
+                <div className="auto-visual-options">
+                  {visualChoices.map(({ id, description, icon: Icon, available, setup }) => {
+                    const checked = visualSources.includes(id);
+                    return <label className={`auto-visual-choice ${checked ? "is-selected" : ""} ${!available ? "is-unavailable" : ""}`} key={id}>
+                      <input type="checkbox" aria-label={`${VISUAL_SOURCE_LABELS[id]} ${id === "pixabay" ? "stock footage" : id === "library" ? "uploaded clips" : "animated cards"}`}
+                        checked={checked} disabled={!available && !checked}
+                        onChange={(event) => toggleVisualSource(id, event.target.checked)} />
+                      <span className="auto-visual-icon" aria-hidden="true"><Icon size={18} /></span>
+                      <span className="auto-visual-copy"><strong>{VISUAL_SOURCE_LABELS[id]}</strong><span>{description}</span>
+                        {!available && <small>{capabilities === null ? "Checking availability…" : setup}{checked && " You can remove this selection."}</small>}
+                      </span>
+                    </label>;
+                  })}
+                </div>
+                {visualSources.length > 0 ? <button type="button" className="auto-visual-clear" onClick={() => onChange({ ...options, visualSources: [] })}>Use original footage only</button>
+                  : <p className="auto-visual-empty">Original footage only. No supporting shots will be added.</p>}
+              </fieldset>
+              {graphicsSelected && <p className="auto-preferences-note">Animated cards use text and shapes to illustrate key points from the speech. Your main audio continues underneath.</p>}
+              {stockSelected && (
                 <div className="broll-matching">
                   <label htmlFor="stock-video-type">Stock video style</label>
                   <select
@@ -343,34 +353,15 @@ export default function AutoPanel({
                       >
                         Pixabay API key
                       </a>{" "}
-                      configured on the server. Until then, exports keep your
-                      original footage.
+                      configured on the server. Until then, Pixabay shots are skipped.
                     </p>
                   )}
                 </div>
               )}
-              {(options.supportingVisuals === "graphics" ||
-                options.supportingVisuals === "both") && (
-                <p className="auto-preferences-note">
-                  Animated text cards turn key points from your video's speech
-                  into supporting visuals.
-                </p>
-              )}
-              {!capabilities?.motionGraphics &&
-                (options.supportingVisuals === "graphics" ||
-                  options.supportingVisuals === "both") && (
-                  <p className="auto-preferences-note">
-                    Animated cards are unavailable on this engine. Your uploaded
-                    B-roll can still be used.
-                  </p>
-                )}
-              {(options.supportingVisuals === "stock" ||
-                options.supportingVisuals === "library" ||
-                options.supportingVisuals === "both") && (
-                <>
+              {visualSources.length > 0 && (
                   <div className="broll-count">
                     <label className="auto-output-field">
-                      B-roll shots to aim for
+                      Supporting shots to aim for
                       <input
                         type="number"
                         inputMode="numeric"
@@ -390,11 +381,14 @@ export default function AutoPanel({
                       />
                     </label>
                     <p id="auto-broll-count-note" className="auto-preferences-note">
-                      Aim for 1–{MAX_BROLL_COUNT} relevant moving shots per video.
-                      You may get fewer if suitable matches aren't available.
-                      Higher counts take longer.
+                      Aim for 1–{MAX_BROLL_COUNT} shots in total. We'll try every selected source when the edit has room.
+                      You may get fewer suitable shots. Higher targets take longer.
                     </p>
+                    {brollCount < visualSources.length && <p className="auto-preferences-note" role="status">The target is smaller than your source selection. Not every source can appear in this edit.</p>}
                   </div>
+              )}
+              {(stockSelected || librarySelected) && (
+                <>
                   <div className="broll-matching">
                     <label htmlFor="broll-matching">Match B-roll using</label>
                     <select
@@ -408,9 +402,8 @@ export default function AutoPanel({
                       }
                     >
                       <option value="tags">
-                        {options.supportingVisuals === "stock"
-                          ? "Spoken keywords & stock tags"
-                          : "Filename & tags · local"}
+                        {stockSelected && librarySelected ? "Spoken keywords, filenames & tags"
+                          : stockSelected ? "Spoken keywords & stock tags" : "Filename & tags · local"}
                       </option>
                       <option value="ai" disabled={!capabilities?.brollAI}>
                         Meaning &amp; visual matching · DeepSeek
@@ -420,27 +413,27 @@ export default function AutoPanel({
                       <p className="auto-preferences-note">
                         Sends sampled B-roll frames and transcript excerpts to
                         DeepSeek.{" "}
-                        {options.supportingVisuals === "stock"
+                        {stockSelected
                           ? "Uses surrounding speech to find relevant shots. Previous inspections are reused."
                           : "Checks selected clips for a relevant match. Previous inspections are reused."}
                       </p>
                     ) : (
                       <p className="auto-preferences-note">
-                        {options.supportingVisuals === "stock"
-                          ? "Matches the spoken words to stock clip tags."
-                          : "Matches words from the transcript to clip filenames and tags."}{" "}
+                        {stockSelected && librarySelected ? "Matches the spoken words to stock tags and uploaded clip names."
+                          : stockSelected ? "Matches the spoken words to stock clip tags."
+                            : "Matches words from the transcript to clip filenames and tags."}{" "}
                         Clips without a match are skipped.
                       </p>
                     )}
                     {!capabilities?.brollAI && (
                       <p className="auto-preferences-note">
                         {options.brollMatching === "ai"
-                          ? "AI matching is unavailable. Original footage will be kept until a key is configured."
+                          ? "AI matching needs a DeepSeek key on the server. Other selected visual sources can still be used."
                           : "Add a DeepSeek API key on the server to enable AI matching."}
                       </p>
                     )}
                   </div>
-                  {options.supportingVisuals !== "stock" && (
+                  {librarySelected && (
                     <BrollPanel
                       key={selectedId || "new-imports"}
                       selectedIds={options.brollIds || []}
@@ -452,6 +445,7 @@ export default function AutoPanel({
                       maxFileSize={maxFileSize}
                     />
                   )}
+                  {librarySelected && !options.brollIds?.length && visualSources.length > 1 && <p className="auto-preferences-note">No uploaded clips selected. The other visual sources can still be used.</p>}
                 </>
               )}
             </div>
@@ -461,7 +455,7 @@ export default function AutoPanel({
           <Scissors size={16} />
           <p>
             {capabilities?.transcription
-              ? "Auto selects an excerpt and adds captions. You can refine the cut, text, and visuals after rendering."
+              ? "Auto selects an excerpt and follows your caption preferences. You can refine the cut, text, and visuals after rendering."
               : "Auto selects and reframes footage. You can refine the cut and visuals after rendering."}
           </p>
         </div>

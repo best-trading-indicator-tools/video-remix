@@ -2,7 +2,7 @@ import { access, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
-import type { FocalPoint } from "../shared/types.js";
+import type { FocalPoint, VisualSource } from "../shared/types.js";
 
 /** Local, preselected media on the final edited timeline. Sound is never used. */
 export interface SupportingVisual {
@@ -13,6 +13,7 @@ export interface SupportingVisual {
   focalPoint?: FocalPoint;
   label: string;
   kind: "broll" | "graphic";
+  visualSource?: VisualSource;
 }
 
 export interface GraphicOptions {
@@ -40,7 +41,7 @@ function escapeHtml(text: string): string {
   );
 }
 
-function validateGraphic(
+export function validateGraphic(
   options: Pick<
     GraphicOptions,
     "text" | "caption" | "width" | "height" | "duration"
@@ -145,7 +146,7 @@ p{margin:0;color:#b5c8bf;font-size:${Math.round(short * 0.04)}px;line-height:1.4
 <div class="progress"></div></div></body></html>`;
 }
 
-async function browserPath(): Promise<string | undefined> {
+export async function browserPath(): Promise<string | undefined> {
   const puppeteer = await import("puppeteer");
   const candidates = [
     process.env.PRODUCER_HEADLESS_SHELL_PATH,

@@ -63,10 +63,12 @@ import ImportPanel from "./ImportPanel";
 import LongFormPanel from "./LongFormPanel";
 import ManualPromptEditor from "./ManualPromptEditor";
 import { compactBrollNotes } from "../shared/broll-notes";
+import { getVisualSources, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
 type AutoPreset = { options: AutoOptions; variants: number };
+const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
 function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
   const options = value?.options;
   return {
@@ -88,6 +90,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
+      visualSources: getVisualSources(options),
       supportingVisuals: [
         "off",
         "stock",
@@ -119,6 +122,8 @@ function sameAutoPreset(first: AutoPreset, second: AutoPreset): boolean {
       ...first,
       options: {
         ...first.options,
+        supportingVisuals: undefined,
+        visualSources: getVisualSources(first.options),
         brollIds: [...(first.options.brollIds || [])].sort(),
       },
     }) ===
@@ -126,6 +131,8 @@ function sameAutoPreset(first: AutoPreset, second: AutoPreset): boolean {
       ...second,
       options: {
         ...second.options,
+        supportingVisuals: undefined,
+        visualSources: getVisualSources(second.options),
         brollIds: [...(second.options.brollIds || [])].sort(),
       },
     })
@@ -802,7 +809,7 @@ export default function App() {
                 return {
                   sourceId: source.id,
                   variants: preset.variants,
-                  options: preset.options,
+                  options: { ...preset.options, visualSources: getVisualSources(preset.options) },
                 };
               }),
             }),
@@ -972,7 +979,7 @@ export default function App() {
       ? autoTargets.filter((source) => {
           const options = (autoById[source.id] || defaultAuto).options;
           return (
-            ["library", "both"].includes(options.supportingVisuals || "off") &&
+            hasLibraryVisuals(options) && getVisualSources(options).length === 1 &&
             !options.brollIds?.length
           );
         })
@@ -1261,6 +1268,9 @@ export default function App() {
                                 max
                               </span>
                             )}
+                            {mode === "auto" && <span className="source-visual-sources" title={visualSourceSummary((autoById[source.id] || defaultAuto).options)}>
+                              {visualSourceSummary((autoById[source.id] || defaultAuto).options)}
+                            </span>}
                           </div>
                         </button>
                         <IconButton
@@ -1286,9 +1296,7 @@ export default function App() {
                     {autoPresets.some(
                       (preset) =>
                         preset.options.brollMatching === "ai" &&
-                        ["stock", "library", "both"].includes(
-                          preset.options.supportingVisuals || "off",
-                        ),
+                        (hasStockVisuals(preset.options) || hasLibraryVisuals(preset.options)),
                     ) ? (
                       <>
                         Videos render on your machine.
@@ -2256,6 +2264,7 @@ export default function App() {
                       : ""}
                     Up to {exportCount} exports total
                   </span>
+                  {uniformAuto && <span>{visualSourceSummary(autoOptions)}{getVisualSources(autoOptions).length > 0 ? ` · ${autoOptions.brollCount ?? DEFAULT_BROLL_COUNT} supporting shots target` : ""}</span>}
                 </div>
               )}
               <div className="render-cta">
@@ -2310,7 +2319,7 @@ export default function App() {
                 </button>
                 <span className="render-fineprint">
                   {noBrollSelected
-                    ? `Choose B-roll for ${missingBrollSources.length} video${missingBrollSources.length === 1 ? "" : "s"}, or turn supporting visuals off.`
+                    ? `Choose uploaded B-roll for ${missingBrollSources.length} video${missingBrollSources.length === 1 ? "" : "s"}, or deselect My B-roll.`
                     : brollBusy
                       ? "Preparing your supporting clips…"
                       : "MP4 export · H.264 · Ready to share"}

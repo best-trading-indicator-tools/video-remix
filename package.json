@@ -8,22 +8,26 @@
   },
   "scripts": {
     "dev": "concurrently -k -n api,web \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
-    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json",
-    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
+    "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && npm run build:remotion",
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.remotion.json",
     "start": "node dist-server/server/index.js",
     "test": "tsx --test --test-concurrency=2 tests/*.test.ts",
     "benchmark": "node --import tsx scripts/benchmark.mjs",
     "setup:auto": "node scripts/setup-auto.mjs",
-    "setup:visuals": "puppeteer browsers install chrome"
+    "setup:visuals": "puppeteer browsers install chrome",
+    "build:remotion": "node scripts/build-remotion.mjs"
   },
   "dependencies": {
     "@hyperframes/producer": "0.8.40",
+    "@remotion/bundler": "4.0.525",
+    "@remotion/renderer": "4.0.525",
     "archiver": "^8.0.0",
     "express": "^5.2.1",
     "lucide-react": "^1.46.0",
     "multer": "^2.4.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "remotion": "4.0.525",
     "zod": "^4.6.5"
   },
   "devDependencies": {

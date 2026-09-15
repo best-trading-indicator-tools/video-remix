@@ -6,7 +6,9 @@ import { AutoSkipError, prepareAutoRemix, protectFinalAutoCaptions } from "./aut
 import { prepareSupportingVisuals } from "./supporting-plan.js";
 import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
-import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan } from "./plan-storage.js";
+import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan, preservedVisualsOnStockRefresh } from "./plan-storage.js";
+import { DEFAULT_BROLL_COUNT } from "../shared/types.js";
+import { getVisualSources, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
 import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
 import { historyThumbnailPath, retainHistoryThumbnail, type HistoryThumbnail } from "./history-thumbnails.js";
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
@@ -95,11 +97,27 @@ async function run(job: StoredJob, controller: AbortController) {
     if (job.editPlan) {
       if (job.refreshBroll) {
         job.settings = structuredClone(job.editPlan.settings);
-        const visuals = await prepareSupportingVisuals({ source, job, transcript: transcriptFromPlan(job), assets: [],
+        const occupied = preservedVisualsOnStockRefresh(job.editPlan).filter(item => item.enabled);
+        const options = job.auto;
+        const requested = Math.max(0, (options?.brollCount ?? DEFAULT_BROLL_COUNT) - occupied.length);
+        // Reuse saved graphics/library shots. Only the remaining stock slots
+        // are searched, without mutating the persisted visual preferences.
+        const visuals = requested ? await prepareSupportingVisuals({ source, job,
+          options: { ...options!, visualSources: ["pixabay"], brollCount: requested },
+          transcript: transcriptFromPlan(job), assets: [], occupied,
           workDir, signal: controller.signal, onPhase: (phase, progress) => {
             job.phase = phase; job.progress = Math.max(job.progress, progress);
-          } });
-        await refreshPlanBroll(job, visuals, controller.signal);
+          } }) : [];
+        if (!requested) (job.notes ??= []).push("Saved animations and library shots already fill the shot target. Increase the target to add stock shots.");
+        if (requested) await refreshPlanBroll(job, visuals, controller.signal);
+        const keptShots = job.editPlan.visuals.filter(item => item.enabled);
+        job.notes = (job.notes || []).filter(note => !/^(?:B-roll target:|Supporting visual target:|Visual mix —)/u.test(note));
+        job.notes.push(`Supporting visual target: ${keptShots.length} of ${options?.brollCount ?? DEFAULT_BROLL_COUNT} shots added or retained.`);
+        const selected = getVisualSources(options);
+        if (selected.length > 1) job.notes.push(`Visual mix — ${selected.map(source => {
+          const count = keptShots.filter(shot => job.editPlan!.media.find(media => media.id === shot.mediaId)?.visualSource === source).length;
+          return `${VISUAL_SOURCE_LABELS[source]}: ${count}`;
+        }).join(" · ")}.`);
         delete job.refreshBroll;
         await saveStore();
       }

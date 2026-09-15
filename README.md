@@ -159,23 +159,26 @@ they do not measure creator acceptance or rendered-video quality. See the
 
 ## Optional B-roll and animated cards
 
-Use **Output preferences → Supporting visuals** in Auto mode:
+Use **Output preferences → Supporting visuals** in Auto mode. Each source has its own checkbox: choose **Pixabay only**, **HyperFrames only**, **Remotion only**, or any combination. Leave all unchecked to keep only the source footage. Selections and the combined shot target are saved per source video and can be applied to the whole batch.
 
-- **Off** keeps the edit focused on the source footage.
-- **Stock B-roll · Pixabay** finds existing moving videos from a free stock library, with no uploads required. Choose any stock video (the default) or animation-only results. Add `PIXABAY_API_KEY` to the backend environment to enable search; get a free key from the [Pixabay API page](https://pixabay.com/api/docs/). With local matching, keywords from spoken moments across the edit are sent to Pixabay, with search effort based on your requested shot count; silent videos use their descriptive filename. AI matching uses DeepSeek to turn spoken ideas and neighboring context into concrete English visual searches, then checks the visible relevance of a small shortlist. All downloaded stock is checked locally for sustained motion in the output crop. No B-roll videos are generated.
-- **My B-roll** inserts short supporting shots from a reusable library. Upload your own or licensed video clips once and select the clips available for each source. The default local matching uses filenames/tags and the actual spoken phrases; silent sources can match their descriptive source filename. Optional AI visual matching is described below. The original edit's audio keeps playing underneath.
-- **Animated cards** uses [HyperFrames](https://github.com/heygen-com/hyperframes/) locally to turn short phrases from the speech into animated text cards. These are authored graphics, not generated photographic footage. Captions remain above the supporting visuals.
-- **Both** allows either type where relevant. B-roll follows your requested count; animated cards keep their separate timing limits. Unmatched clips and unsuitable card placements are skipped.
+- **Pixabay** finds existing moving stock footage. Choose any stock video or animation-only stock results. Set `PIXABAY_API_KEY` in the backend environment to enable search; get a key from the [Pixabay API page](https://pixabay.com/api/docs/). Optional DeepSeek matching turns spoken ideas and neighboring context into concrete visual searches and checks the visible relevance of a shortlist. Stock is checked locally for sustained motion in the output crop.
+- **HyperFrames** uses the local [HyperFrames renderer](https://github.com/heygen-com/hyperframes/) for dark animated text cards, with entrance motion and moving accents.
+- **Remotion** uses the local [Remotion renderer](https://www.remotion.dev/docs/renderer) for light editorial text cards, with animated typography and cobalt accents.
+- **My B-roll** inserts relevant clips from your uploaded library. Select your own or licensed videos for each source; the original audio continues underneath.
 
-No HyperFrames or Remotion API key is required for this local implementation. HyperFrames supplies the graphic renderer; the B-roll library supplies actual footage. No paid stock search, cloud rendering, or generative-video service is called. HyperFrames's hosted MCP is a separate HeyGen service requiring account authorization and credits.
+HyperFrames and Remotion are animation/rendering tools, not stock libraries. Here they animate short phrases already present in the speech using fixed, authored templates; they do not invent photographic footage, facts or diagrams. Speech captions remain above the supporting visuals. Mixed selections take turns, giving underrepresented sources priority. If one source has no suitable shot or its renderer is unavailable, other selected sources can still fill the target. Unselected sources are never substituted. Very short edits or a target smaller than the number of selected sources may not include every source.
 
-`npm ci` installs the pinned HyperFrames renderer and its Chromium browser. If browser installation was skipped, run `npm run setup:visuals` once. Alternatively set `PRODUCER_HEADLESS_SHELL_PATH` to an installed Chromium executable. Generated cards use local fonts and run without external network requests. The app reports a fallback if a requested card cannot be rendered.
+Neither local animation renderer needs an API key. No cloud render or generative-video service is called. [Remotion's 4.x license](https://github.com/remotion-dev/remotion/blob/v4.0.525/LICENSE.md) permits free use for individuals, nonprofits and companies with up to three employees; other commercial organizations need its company license. HyperFrames's hosted MCP is a separate service and is not used here.
+
+`npm ci` installs the pinned renderers and Chromium. If browser installation was skipped, run `npm run setup:visuals` once, or set `PRODUCER_HEADLESS_SHELL_PATH` to an installed Chromium executable. Cards use local fonts without external asset requests. `npm run build` also bundles the fixed Remotion composition for production; the Docker image includes it. Development builds that composition once per API process. Unavailable renderers and failed cards are reported in export notes.
+
+Each saved card records its renderer. **Edit this result** previews the actual saved animation, identifies HyperFrames or Remotion, and lets you disable it or adjust its timing. Caption-only revisions reuse those exact MP4 files.
 
 Uploaded B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses `MAX_FILE_SIZE_MB` for its per-file upload limit. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
 
-Stock B-roll is **off by default**, as are all supporting visuals. **B-roll shots to aim for** accepts **1–10**, defaults to **4**, and is saved separately for each source. This is a best-effort target: the planner tries additional ideas and candidates when a shot fails, then reports how many actually fit. Higher targets increase search and AI work. Good matches remain required; the tool does not fill the quota with unrelated or static stock.
+Supporting visuals are **off by default**. **Supporting shots to aim for** accepts **1–10**, defaults to **4**, and is a combined target across your selected sources. This is a best-effort target: the planner tries additional ideas and candidates when a shot fails, then reports how many actually fit. Higher targets increase search and AI work. Good matches remain required; the tool does not fill the quota with unrelated or static stock.
 
-Cutaways last 1.5–3.6 seconds, with shorter windows for denser targets, at least 0.6 seconds between shots, an opening left on the speaker, and at most 60% total B-roll coverage. Timing or available speech may prevent the requested count. Main audio and captions continue. Graphics retain their separate three-card/30% limits.
+Cutaways last 1.5–3.6 seconds, with shorter windows for denser targets, at least 0.6 seconds between shots, an opening left on the speaker, and at most 60% total supporting-visual coverage. Timing or available speech may prevent the requested count. Main audio and captions continue.
 
 Search considers the requested count plus up to two backup ideas. Local matching makes at most 12 searches per export; AI matching makes at most 24. Both inspect up to three candidates per idea, with at most 36 download/inspection attempts including rejected clips. Search responses are cached for 24 hours. Downloads are capped at 40 MiB per clip (or the configured upload limit if smaller) and retained with the saved edit plan until its export expires. Stock credits link to each creator's source page in Exports and are included in the batch ZIP's `export-settings.json`.
 
@@ -213,10 +216,10 @@ stock provider again. Source-cut changes retime retained captions and supporting
 shots; clipped phrases are dropped for review. Narrated edits keep their audio
 duration. Make cut changes separately from caption/shot timing corrections.
 
-For stock edits, set **B-roll shots to aim for**, then use **Find B-roll again & render**
+For edits containing Pixabay, set the combined supporting-shot target, then use **Find B-roll again & render**
 to search the saved speech and create one new export. Changing this target affects
 only the new revision; caption-only corrections keep the saved count and footage. It includes your current hook, caption, cut
-and framing changes while keeping saved narration. The original export remains
+and framing changes while keeping saved narration, animations and uploaded library shots. Their occupied intervals remain reserved; only the remaining slots are searched for new stock. The original export remains
 available. If no suitable replacement is found, existing supporting shots stay
 in place. Render or reset manual shot changes before requesting a new search.
 
@@ -401,7 +404,7 @@ This is a private tool with **no user authentication**. Keep the default loopbac
 
 ## Docker
 
-The image includes Node.js, FFmpeg, Chromium for HyperFrames cards, fonts, Python, and the isolated transcription dependencies. It runs the production app as a non-root user. Models are downloaded into the persistent data volume after the image is built.
+The image includes Node.js, FFmpeg, Chromium for HyperFrames and Remotion cards, fonts, Python, and the isolated transcription dependencies. It runs the production app as a non-root user. Models are downloaded into the persistent data volume after the image is built.
 
 ```sh
 docker build -t remix-studio .

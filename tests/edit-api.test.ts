@@ -60,7 +60,9 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
     for (const stream of [server.stdout, server.stderr]) stream?.on("data", (chunk) => {
       processLog = (processLog + chunk.toString()).slice(-16000);
     });
-    const deadline = Date.now() + 12000;
+    // Cold TS module loading competes with real browser/FFmpeg renders in the
+    // full suite; retain a bound without failing healthy, slower CI workers.
+    const deadline = Date.now() + 30000;
     while (Date.now() < deadline) {
       try {
         const response = await fetch(`${base}/api/health`, {
@@ -366,8 +368,24 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       const statePath = path.join(dataDirectory, "state.json");
       const saved = JSON.parse(await readFile(statePath, "utf8"));
       const parent = saved.jobs.find((item: RenderJob) => item.id === narrationParent.id);
-      parent.auto.supportingVisuals = "stock";
+      parent.auto.supportingVisuals = "library";
+      parent.auto.visualSources = ["pixabay", "remotion"];
       parent.auto.brollMatching = "ai";
+      for (const media of parent.editPlan.media) if (media.kind === "broll") media.visualSource = "pixabay";
+      // Seed a retained animated-card artifact. A stock refresh must reuse its
+      // exact bytes and saved placement without invoking its renderer again.
+      const cardId = randomUUID(), cardName = `${cardId}.mp4`;
+      const cardPath = path.join(dataDirectory, "plans", parent.id, cardName);
+      await exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+        "-f", "lavfi", "-i", "color=c=0x152028:s=320x180:r=24:d=2",
+        "-vf", "drawtext=text='Saved animated title':fontsize=18:fontcolor=white:x=20+20*t:y=75",
+        "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", cardPath]);
+      const cardBytes = await readFile(cardPath);
+      parent.editPlan.media.push({ id: cardId, kind: "graphic", name: "Saved Remotion title", duration: 2, visualSource: "remotion" });
+      const cardPlacement = { id: randomUUID(), mediaId: cardId, start: 8, end: 9, sourceStart: 0,
+        enabled: true, locked: true, reason: "Retained spoken emphasis" };
+      parent.editPlan.visuals.push(cardPlacement);
+      parent.planFiles[cardId] = cardName;
       // The rewritten narration has a different subject from the source.
       // Search must use its saved/corrected caption timeline.
       parent.sourceTranscript = { language: "en", duration: 12, segments: [
@@ -426,7 +444,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assertPublic(queued);
       const refreshed = await completed(queued.id);
       assert.equal(refreshed.auto?.brollCount, 6);
-      assert.ok(refreshed.notes?.some(note => note.includes("1 of 6 shots added")));
+      assert.ok(refreshed.notes?.some(note => note.includes("2 of 6 shots added or retained")), "Report the combined total of one new stock shot and one retained card");
       assert.equal((await jobs()).find(job => job.id === parent.id)?.auto?.brollCount, undefined, "Target changes only the new revision");
       const after = await planOf(refreshed.id);
       assert.equal((await jobs()).length, count + 1);
@@ -435,10 +453,17 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.equal(after.audioMediaId, before.audioMediaId);
       assert.equal(after.narration, true);
       assert.deepEqual(after.settings, before.settings);
-      assert.equal(after.visuals.length, 1, JSON.stringify(refreshed.notes));
-      assert.equal(after.visuals[0]!.start, 4);
-      assert.equal(after.visuals[0]!.locked, true);
-      const shot = after.media.find(item => item.id === after.visuals[0]!.mediaId)!;
+      assert.equal(after.visuals.length, 2, JSON.stringify(refreshed.notes));
+      assert.deepEqual(after.visuals.find(item => item.mediaId === cardId), cardPlacement);
+      const keptCard = after.media.find(item => item.id === cardId)!;
+      assert.equal(keptCard.visualSource, "remotion");
+      assert.equal(keptCard.name, "Saved Remotion title");
+      assert.equal(digest(await download(keptCard.url!)), digest(cardBytes));
+      assert.equal(refreshed.supportingVisuals?.find(item => item.kind === "graphic")?.visualSource, "remotion");
+      const stockPlacement = after.visuals.find(item => item.mediaId !== cardId)!;
+      assert.equal(stockPlacement.start, 4);
+      assert.equal(stockPlacement.locked, true);
+      const shot = after.media.find(item => item.id === stockPlacement.mediaId)!;
       assert.equal(shot.stock?.providerId, "pixabay:456123");
       assert.equal(digest(await download(shot.url!)), digest(sourceBytes));
       assert.deepEqual(await planOf(parent.id), before, "Refresh preserves its parent plan and snapshots");

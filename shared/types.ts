@@ -18,6 +18,7 @@ export interface TimedCallout {
 export const MAX_AUTO_VERSIONS = 10;
 export const DEFAULT_BROLL_COUNT = 4;
 export const MAX_BROLL_COUNT = 10;
+export type VisualSource = "pixabay" | "hyperframes" | "remotion" | "library";
 export interface AutoOptions {
   aspect: Aspect;
   targetDuration: 30 | 45 | 60;
@@ -25,6 +26,8 @@ export interface AutoOptions {
   /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
   captions?: "auto" | "add" | "keep";
   supportingVisuals?: "off" | "stock" | "library" | "graphics" | "both";
+  /** Independent sources to mix. An empty list keeps the original footage. */
+  visualSources?: VisualSource[];
   stockVideoType?: "all" | "animation";
   brollIds?: string[];
   brollMatching?: "tags" | "ai";
@@ -73,6 +76,7 @@ export interface AutoCapabilities {
   intelligenceModel?: string;
   narration: boolean;
   motionGraphics?: boolean;
+  remotionGraphics?: boolean;
   brollAI?: boolean;
   brollAIModel?: string;
   stockBroll?: boolean;
@@ -188,6 +192,7 @@ export interface EditPlanMedia {
   id: string;
   name: string;
   kind: "broll" | "graphic" | "audio";
+  visualSource?: VisualSource;
   duration: number;
   url?: string;
   assetId?: string;
@@ -350,6 +355,7 @@ export interface RenderJob {
   captionUrl?: string;
   supportingVisuals?: {
     kind: "broll" | "graphic";
+    visualSource?: VisualSource;
     name: string;
     start: number;
     end: number;

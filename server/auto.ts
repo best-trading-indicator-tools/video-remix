@@ -34,6 +34,7 @@ import {
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
 import { completedAutoSiblings, footageOverlap, type EditorialPlan } from "./diversity.js";
 import { graphicsAvailable } from "./visuals.js";
+import { remotionAvailable } from "./remotion-visuals.js";
 import { brollAIConfigured } from "./broll-ai.js";
 
 import { stockBrollConfigured } from "./stock-broll.js";
@@ -43,12 +44,13 @@ import { editorialModel } from "./editorial-provider.js";
 import { inspectSourceCaptions, type SourceCaptionInspection } from "./source-captions.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
-  const [transcription, intelligence, voice, motionGraphics] =
+  const [transcription, intelligence, voice, motionGraphics, remotionGraphics] =
     await Promise.all([
       transcriptionAvailable(),
       intelligenceAvailable(),
       narrationAvailable(),
       graphicsAvailable(),
+      remotionAvailable(),
     ]);
   return {
     transcription,
@@ -57,6 +59,7 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
     intelligenceModel: editorialModel(),
     narration: transcription && intelligence && voice,
     motionGraphics,
+    remotionGraphics,
     brollAI: brollAIConfigured(),
     stockBroll: stockBrollConfigured(),
     brollAIModel: process.env.DEEPSEEK_MODEL || "deepseek-flash",

@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, Lock
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
+import { hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
 import "./edit-plan.css";
@@ -439,10 +440,10 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <details open className="edit-plan-section">
                 <summary>B-roll & supporting visuals <span>{draft.visuals.length}</span></summary>
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
-                {job.auto?.supportingVisuals === "stock" && <div className="edit-broll-refresh">
-                  <div><strong>Try another B-roll search</strong><p>Search for new stock shots and render this video. Your current caption, cut and framing edits are included; narration stays saved.</p></div>
+                {hasStockVisuals(job.auto) && <div className="edit-broll-refresh">
+                  <div><strong>Try another B-roll search</strong><p>Search for new Pixabay shots and render this video. Saved animations and uploaded B-roll stay in place. Your caption, cut and framing edits are included; narration stays saved.</p></div>
                   <div className="edit-broll-refresh-controls">
-                    <label className="edit-plan-field">B-roll shots to aim for
+                    <label className="edit-plan-field">Supporting shots to aim for
                       <input type="number" inputMode="numeric" min={1} max={MAX_BROLL_COUNT} step={1} required
                         disabled={saving || explicitVisualChanges} value={brollCountInput} aria-describedby="edit-broll-count-note"
                         onChange={(event) => {
@@ -457,7 +458,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                       if (event.currentTarget.form?.reportValidity()) void submit(true);
                     }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
                   </div>
-                  <p id="edit-broll-count-note">Aim for 1–{MAX_BROLL_COUNT} relevant moving shots. You may get fewer if suitable matches aren't available. Higher counts take longer.</p>
+                  <p id="edit-broll-count-note">Aim for 1–{MAX_BROLL_COUNT} supporting shots in total, including saved animations and uploaded B-roll. New Pixabay shots fill the remaining places when suitable matches are available.</p>
                   {explicitVisualChanges && <p className="edit-plan-note">Render or reset your shot changes first.</p>}
                 </div>}
                 <fieldset disabled={saving || cutTimingsChanged}>
@@ -475,6 +476,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                         <label className="edit-plan-check"><input type="checkbox" checked={visual.enabled} onChange={(event) => updateVisual(visual.id, { enabled: event.target.checked })} />Include shot</label>
                       </div>
                       {media?.url && <FootagePreview key={`${media.id}:${previewStart}:${previewEnd}`} url={media.url} label={`Preview shot ${index + 1}`} start={previewStart} end={previewEnd} aspect={previewAspect} focalPoint={visual.focalPoint || CENTER} height={230} />}
+                      {media?.kind === "graphic" && media.visualSource && <p className="edit-plan-note">{VISUAL_SOURCE_LABELS[media.visualSource]} · Animated card</p>}
                       <button type="button" className="secondary-button edit-plan-lock" disabled={!visual.enabled} aria-pressed={visual.locked} onClick={() => updateVisual(visual.id, { locked: !visual.locked })}>
                         {visual.locked ? <LockKeyhole size={14} /> : <LockKeyholeOpen size={14} />}{visual.locked ? "Unlock shot to edit" : "Lock this shot"}
                       </button>
@@ -504,7 +506,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
             </div>
           </div>
           <footer className="edit-plan-footer">
-            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A new B-roll search will aim for {brollCount} shots with this revision.</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
+            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will aim for {brollCount} total supporting shots, keeping saved animations and uploaded B-roll.</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
             <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
