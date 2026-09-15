@@ -121,6 +121,14 @@ test("stock filters unrelated, non-animation, unsafe and oversized results; skip
       ["unrelated", clip(1, "pasta, kitchen"), "all", 0],
       ["film", clip(), "animation", 0],
       ["animation", clip(1, "mountain", "animation"), "animation", 1],
+      ["unavailable-rendition", {
+        ...clip(),
+        videos: { ...clip().videos, large: { url: "", width: 0, height: 0, size: 0 } },
+      }, "all", 1],
+      ["malformed-rendition", {
+        ...clip(),
+        videos: { ...clip().videos, large: { url: null, width: "unknown", height: 0, size: 0 } },
+      }, "all", 1],
       [
         "unsafe",
         clip(1, "mountain", "film", "https://127.0.0.1/video/private.mp4"),

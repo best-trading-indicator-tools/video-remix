@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
@@ -202,11 +202,14 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     ...value, visuals: value.visuals.map((visual) => visual.id === id ? { ...visual, ...changes } : visual),
   }));
 
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    if (!plan || !draft || !changed || savingRef.current) return;
+  const submit = async (refreshBroll = false) => {
+    if (!plan || !draft || (!changed && !refreshBroll) || savingRef.current) return;
     setError("");
     const changes: EditPlanChanges = { revision: plan.revision };
+    if (refreshBroll) {
+      if (visualsChanged) { setError("Render or reset your manual shot changes before searching for new B-roll."); return; }
+      changes.refreshBroll = true;
+    }
     if (framingChanged) changes.framing = framingChanges;
     if (hookChanged) changes.hookText = draft.settings.hookText;
     if (cutsChanged) {
@@ -258,7 +261,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
         <button type="button" className="icon-button" aria-label="Close result editor" onClick={onClose} disabled={saving}><X size={20} /></button>
       </header>
       {loading ? <div className="edit-plan-loading" role="status"><LoaderCircle className="spin" size={22} /> Loading your edit…</div> :
-        plan && draft ? <form onSubmit={(event) => void submit(event)}>
+        plan && draft ? <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="edit-plan-body">
             <aside className="edit-plan-playback">
               <div className="edit-preview-tabs" aria-label="Preview view">
@@ -364,6 +367,13 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <details open className="edit-plan-section">
                 <summary>B-roll & supporting visuals <span>{draft.visuals.length}</span></summary>
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
+                {job.auto?.supportingVisuals === "stock" && <div className="edit-broll-refresh">
+                  <div><strong>Try another B-roll search</strong><p>Search for new stock shots and render this video. Your current caption, cut and framing edits are included; narration stays saved.</p></div>
+                  <button type="button" className="secondary-button" disabled={saving || visualsChanged} onClick={(event) => {
+                    if (event.currentTarget.form?.reportValidity()) void submit(true);
+                  }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
+                  {visualsChanged && <p className="edit-plan-note">Render or reset your manual shot changes first.</p>}
+                </div>}
                 <fieldset disabled={saving || cutTimingsChanged}>
                   <legend className="visually-hidden">Supporting visual corrections</legend>
                   {!draft.visuals.length && <p className="edit-plan-empty">This export has no supporting visual placements.</p>}

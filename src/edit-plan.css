@@ -122,3 +122,18 @@
   .edit-plan-times, .edit-plan-modal .edit-focal-controls { grid-template-columns: minmax(0, 1fr); }
   .edit-plan-heading, .edit-plan-body, .edit-plan-footer { padding-left: 14px; padding-right: 14px; }
 }
+.edit-broll-refresh {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin: 14px 0 20px;
+  padding: 18px;
+  border: 1px solid var(--line, #343e4d);
+  border-radius: 12px;
+  background: var(--field, #10151c);
+}
+.edit-broll-refresh > div { flex: 1 1 230px; min-width: 0; }
+.edit-broll-refresh strong { color: var(--text, #f4f6fa); font-size: 14px; }
+.edit-broll-refresh p { margin: 6px 0 0; color: var(--subtle, #bac2cf); font-size: 13px; line-height: 1.55; }
+.edit-broll-refresh .secondary-button { white-space: normal; text-align: center; }

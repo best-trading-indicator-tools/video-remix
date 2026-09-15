@@ -158,6 +158,8 @@ export interface BrollAsset extends VideoSource {
     cropRetention: number;
     query?: string;
     reason?: string;
+    visual?: string;
+    momentIndex?: number;
   };
   stock?: {
     providerId: string;
@@ -209,6 +211,7 @@ export interface EditPlan {
 }
 export interface EditPlanChanges {
   revision: number;
+  refreshBroll?: boolean;
   hookText?: string;
   captions?: CaptionCue[];
   cuts?: EditSegment[];

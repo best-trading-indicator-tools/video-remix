@@ -41,19 +41,19 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
   const assertPublic = (value: unknown) => {
     const serialized = JSON.stringify(value);
     assert.ok(!serialized.includes(directory), "Public plans cannot contain workspace paths");
-    for (const field of ["filePath", "outputPath", "captionPath", "thumbnailPath", "apiKey"])
+    for (const field of ["filePath", "outputPath", "captionPath", "thumbnailPath", "apiKey", "refreshBroll"])
       assert.ok(!serialized.includes(`"${field}"`), `Public plans cannot expose ${field}`);
   };
-  const start = async () => {
+  const start = async (mockStock = false) => {
     processLog = "";
-    server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
+    server = spawn(process.execPath, [...(mockStock ? ["--import", path.join(directory, "mock-stock.mjs")] : []), "--import", "tsx", "server/index.ts"], {
       cwd: process.cwd(),
       env: {
         ...process.env,
         PORT: String(port), HOST: "127.0.0.1", DATA_DIR: dataDirectory,
         RENDER_CONCURRENCY: "1", AUTO_LOCAL_AI: "false",
         WHISPER_CACHE_DIR: path.join(directory, "model-not-installed"),
-        DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: "", MAX_FILES: "4", MAX_FILE_SIZE_MB: "3",
+        DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: mockStock ? "isolated-test-key" : "", MAX_FILES: "4", MAX_FILE_SIZE_MB: "3",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -172,6 +172,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
         ["caption path", { revision: plan.revision, captions: [{ id: randomUUID(), start: 1, end: 2, text: "Caption", path: "/etc/passwd" }] }],
         ["invalid framing", { revision: plan.revision, framing: { focalPoint: { x: 1.2, y: 0 } } }],
         ["locked crop", { revision: plan.revision, visuals: [{ ...placement, focalPoint: { x: 0, y: 0 } }] }],
+        ["library refresh", { revision: plan.revision, refreshBroll: true }],
       ] as const) {
         const rejected = await request(`/api/jobs/${original.id}/revisions`, "POST", changes);
         assert.ok([400, 404, 409].includes(rejected.status), `${name}: HTTP ${rejected.status} ${await rejected.clone().text()}`);
@@ -350,6 +351,128 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       const frequency = crossings * 8000 / (samples.length / 2);
       assert.ok(Math.abs(frequency - 880) < 20,
         `The saved 880 Hz narration must replace the 440 Hz source: measured ${frequency.toFixed(1)} Hz`);
+    });
+
+    await t.test("explicit stock refresh changes only one saved edit and caption-only revisions never repeat the search", async () => {
+      await stop();
+      const statePath = path.join(dataDirectory, "state.json");
+      const saved = JSON.parse(await readFile(statePath, "utf8"));
+      const parent = saved.jobs.find((item: RenderJob) => item.id === narrationParent.id);
+      parent.auto.supportingVisuals = "stock";
+      parent.auto.brollMatching = "ai";
+      // The rewritten narration has a different subject from the source.
+      // Search must use its saved/corrected caption timeline.
+      parent.sourceTranscript = { language: "en", duration: 12, segments: [
+        { start: 4, end: 7, text: "Mountain snow hiking.", words: [] },
+      ] };
+      parent.editPlan.captions = [{ id: "saved-speech", start: 4, end: 6.5, text: "Sunset sea coast." }];
+      await writeFile(statePath, JSON.stringify(saved));
+      await start();
+      const noKey = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: parent.editPlan.revision, refreshBroll: true });
+      assert.equal(noKey.status, 400);
+      assert.match(await noKey.text(), /Pixabay/u);
+      await stop();
+      const requestLog = path.join(directory, "stock-requests.jsonl");
+      const emptyFlag = path.join(directory, "empty-stock");
+      const sourceBytes = await readFile(sourcePath);
+      await writeFile(path.join(directory, "mock-stock.mjs"), `
+        import { readFile, appendFile, access } from 'node:fs/promises';
+        globalThis.fetch = async (input) => {
+          const url = String(input);
+          if (url.startsWith('https://pixabay.com/api/videos/')) {
+            await appendFile(${JSON.stringify(requestLog)}, JSON.stringify(url) + '\\n');
+            const empty = await access(${JSON.stringify(emptyFlag)}).then(() => true, () => false);
+            return Response.json({ hits: empty ? [] : [{ id: 456123, pageURL: 'https://pixabay.com/videos/id-456123/',
+              type: 'film', tags: 'sunset, sea, waves, coast', duration: 12, user: 'Test creator', videos: {
+                medium: { url: 'https://cdn.pixabay.com/video/2026/01/01/456123_test.mp4', width: 320, height: 180, size: ${sourceBytes.length} }
+              } }] });
+          }
+          if (url.startsWith('https://cdn.pixabay.com/')) return new Response(await readFile(${JSON.stringify(sourcePath)}), { headers: { 'content-type': 'video/mp4' } });
+          throw new Error('Unexpected external request in isolated refresh test');
+        };
+      `);
+      await start(true);
+      const noAIKey = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: parent.editPlan.revision, refreshBroll: true });
+      assert.equal(noAIKey.status, 400);
+      assert.match(await noAIKey.text(), /DeepSeek/u);
+      await stop();
+      const tagged = JSON.parse(await readFile(statePath, "utf8"));
+      tagged.jobs.find((item: RenderJob) => item.id === parent.id).auto.brollMatching = "tags";
+      await writeFile(statePath, JSON.stringify(tagged));
+      await start(true);
+      const before = await planOf(parent.id);
+      const count = (await jobs()).length;
+      const conflict = await request(`/api/jobs/${parent.id}/revisions`, "POST", {
+        revision: before.revision, refreshBroll: true, visuals: [],
+      });
+      assert.equal(conflict.status, 400);
+      assert.equal((await jobs()).length, count);
+      const captions = [{ id: "saved-speech", start: 4, end: 6.5, text: "Sunset sea waves." }];
+      const response = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: before.revision, refreshBroll: true, captions });
+      assert.equal(response.status, 201, await response.clone().text());
+      const queued = await response.json() as RenderJob;
+      assertPublic(queued);
+      const refreshed = await completed(queued.id);
+      const after = await planOf(refreshed.id);
+      assert.equal((await jobs()).length, count + 1);
+      assert.deepEqual(after.cuts, before.cuts);
+      assert.deepEqual(after.captions, captions);
+      assert.equal(after.audioMediaId, before.audioMediaId);
+      assert.equal(after.narration, true);
+      assert.deepEqual(after.settings, before.settings);
+      assert.equal(after.visuals.length, 1, JSON.stringify(refreshed.notes));
+      assert.equal(after.visuals[0]!.start, 4);
+      assert.equal(after.visuals[0]!.locked, true);
+      const shot = after.media.find(item => item.id === after.visuals[0]!.mediaId)!;
+      assert.equal(shot.stock?.providerId, "pixabay:456123");
+      assert.equal(digest(await download(shot.url!)), digest(sourceBytes));
+      assert.deepEqual(await planOf(parent.id), before, "Refresh preserves its parent plan and snapshots");
+      assert.equal(digest(await download(original.downloadUrl!)), digest(originalBytes));
+      const requests = await readFile(requestLog, "utf8");
+      assert.match(requests, /sunset/iu);
+      assert.doesNotMatch(requests, /mountain|snow|hiking/iu);
+      const persisted = JSON.parse(await readFile(statePath, "utf8"));
+      assert.equal(persisted.jobs.find((item: RenderJob) => item.id === refreshed.id).refreshBroll, undefined);
+      await stop();
+      await start(true);
+      assert.deepEqual(await planOf(refreshed.id), after);
+      const textOnly = await request(`/api/jobs/${refreshed.id}/revisions`, "POST", { revision: after.revision, hookText: "A saved seaside moment" });
+      assert.equal(textOnly.status, 201);
+      const textJob = await completed((await textOnly.json() as RenderJob).id);
+      const textPlan = await planOf(textJob.id);
+      assert.deepEqual(textPlan.visuals, after.visuals);
+      assert.equal(textPlan.audioMediaId, after.audioMediaId);
+      assert.equal(await readFile(requestLog, "utf8"), requests, "Caption/hook corrections never invoke a stock provider");
+      // A failed fresh query retains the previous working shot.
+      await writeFile(emptyFlag, "");
+      const noMatch = await request(`/api/jobs/${textJob.id}/revisions`, "POST", {
+        revision: textPlan.revision, refreshBroll: true,
+        captions: [{ id: "saved-speech", start: 4, end: 6.5, text: "Desert dunes wind." }],
+      });
+      assert.equal(noMatch.status, 201);
+      const noMatchJob = await completed((await noMatch.json() as RenderJob).id);
+      assert.deepEqual((await planOf(noMatchJob.id)).visuals, textPlan.visuals);
+      assert.ok(noMatchJob.notes?.some(note => note.includes("saved supporting shots were kept")));
+      assert.ok(!noMatchJob.notes?.some(note => note.includes("Original footage was kept")), "A kept stock shot must not be described as original source footage");
+
+      const { transcriptFromPlan } = await import("../server/plan-storage.js");
+      const fallback = structuredClone(parent);
+      fallback.editPlan.captions = [];
+      assert.equal(transcriptFromPlan(fallback), undefined, "Original speech cannot stand in for uncaptained rewritten narration");
+      fallback.editPlan.narration = false;
+      fallback.editPlan.cuts = [{ start: 4, end: 8 }];
+      fallback.editPlan.settings.speed = 2;
+      fallback.editPlan.outputDuration = 2;
+      fallback.sourceTranscript.segments = [{ start: 4.5, end: 6, text: "Mountain snow hiking.", words: [
+        { start: 4.5, end: 5, word: "Mountain", probability: 1 },
+        { start: 5, end: 5.5, word: "snow", probability: 1 },
+        { start: 5.5, end: 6, word: "hiking.", probability: 1 },
+      ] }];
+      const retimed = transcriptFromPlan(fallback)!;
+      assert.equal(retimed.duration, 2);
+      assert.equal(retimed.segments[0]!.start, 0.25);
+      assert.equal(retimed.segments[0]!.end, 1);
+      assert.equal(retimed.segments[0]!.words[1]!.start, 0.5);
     });
   } finally {
     await stop();

@@ -28,6 +28,7 @@ export interface StoredAttachment extends Attachment {
   createdAt: string;
 }
 export interface StoredJob extends RenderJob {
+  refreshBroll?: boolean;
   outputPath: string;
   captionPath?: string;
   editPlan?: EditPlan;
@@ -129,7 +130,7 @@ export function publicSource(source: StoredSource): VideoSource {
 export function publicJob(job: StoredJob): RenderJob {
   const { outputPath: _outputPath, captionPath: _captionPath,
     editPlan: _editPlan, planFiles: _planFiles, sourceTranscript: _transcript,
-    brollCandidates: _candidates, ...value } = job;
+    brollCandidates: _candidates, refreshBroll: _refreshBroll, ...value } = job;
   return { ...value, ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
 }
 export function publicBroll(asset: StoredBroll): BrollAsset {

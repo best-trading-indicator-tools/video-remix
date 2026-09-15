@@ -12,6 +12,7 @@ import { matchBrollWithAI } from "./broll-ai.js";
 import { brollTokens as tokens } from "./broll-text.js";
 import { findStockBroll } from "./stock-broll.js";
 import { inspectBrollWindows } from "./broll-motion.js";
+import { compactBrollNotes } from "../shared/broll-notes.js";
 
 interface Moment {
   start: number;
@@ -403,5 +404,6 @@ export async function prepareSupportingVisuals({
         : "No suitable spoken phrase was available for an animated card. Original footage was kept.",
     );
   job.supportingVisuals = details;
+  if (job.notes) job.notes = compactBrollNotes(job.notes);
   return result;
 }

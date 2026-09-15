@@ -17,6 +17,7 @@ import { brollAIConfigured, matchBrollWithAI } from "../server/broll-ai.js";
 import { runLocal } from "../server/auto-process.js";
 import { paths } from "../server/config.js";
 import type { StoredBroll } from "../server/store.js";
+import { compactBrollNotes } from "../shared/broll-notes.js";
 
 const success = (content: unknown) =>
   new Response(
@@ -53,6 +54,15 @@ const vision = (body: Body) => Array.isArray(body.messages[1]?.content);
 const requestBody = (init: RequestInit | undefined) =>
   JSON.parse(String(init?.body)) as Body;
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+test("old duplicate B-roll notices collapse while specific failures and unrelated notes survive", () => {
+  const generic = "No suitable AI B-roll match fit this edit. Original footage was kept.";
+  assert.deepEqual(compactBrollNotes([
+    "AI found no sufficiently relevant B-roll match. Original footage was kept.", generic,
+  ]), ["No relevant B-roll was found for this edit. Original footage was kept."]);
+  const detailed = "None of the 4 inspected B-roll shots clearly supported the spoken context. Original footage was kept.";
+  assert.deepEqual(compactBrollNotes([detailed, generic, "Original narration was saved."]), [detailed, "Original narration was saved."]);
+});
 
 // Mock only the paid provider. Frame extraction and cache files use the real
 // engine, including a source whose opening differs from its analyzed window.
@@ -139,6 +149,9 @@ test(
         "synonyms match visible content and exported start uses the analyzed window, not the opening",
         async () => {
           const asset = await createAsset();
+          asset.selection = { sourceStart: 4.2, duration: 3.6, targetAspect: 16 / 9,
+            motion: 1, cropRetention: 1, momentIndex: 0, visual: "A woodland trail",
+            reason: "Illustrates the surrounding forest discussed by the speaker" };
           const bodies: Body[] = [];
           globalThis.fetch = async (input, init) => {
             assert.equal(input, "https://api.deepseek.com/chat/completions");
@@ -197,6 +210,11 @@ test(
             const prompt = JSON.parse(body.messages[1]!.content);
             assert.match(prompt.clips[0].description, /woodland/);
             assert.match(prompt.moments[0].text, /forest/);
+            assert.deepEqual(prompt.clips[0].searchIntent, {
+              momentIndex: 0, visual: asset.selection!.visual, reason: asset.selection!.reason,
+            });
+            assert.equal(prompt.clips[0].description, description.description,
+              "Search intent cannot replace the observed visual evidence");
             return success(mockMatcher(body));
           };
           const first = await matchBrollWithAI(options([asset]));

@@ -6,6 +6,82 @@ import { paths } from "./config.js";
 import { captionCuesSrt, parseCaptionCues } from "./edit-plan.js";
 import type { StoredJob, StoredSource } from "./store.js";
 import type { SupportingVisual } from "./visuals.js";
+import { retimeTranscript } from "./auto-plan.js";
+
+/** Search the saved export's speech timeline, including caption corrections. */
+export function transcriptFromPlan(job: StoredJob): Transcript | undefined {
+  const plan = job.editPlan!;
+  if (plan.captions.length) return {
+    language: job.sourceTranscript?.language || "auto", duration: plan.outputDuration,
+    segments: plan.captions.map(cue => ({ start: cue.start, end: cue.end, text: cue.text, words: [] })),
+  };
+  // Original speech does not describe a rewritten narration track.
+  if (plan.narration || !job.sourceTranscript) return undefined;
+  const transcript = retimeTranscript(job.sourceTranscript, plan.cuts);
+  const speed = plan.settings.speed;
+  return { ...transcript, duration: plan.outputDuration, segments: transcript.segments.map(segment => ({
+    ...segment, start: segment.start / speed, end: segment.end / speed,
+    words: segment.words.map(word => ({ ...word, start: word.start / speed, end: word.end / speed })),
+  })) };
+}
+
+/** Replace only supporting footage after every new asset has been retained. */
+export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual[], signal: AbortSignal) {
+  const plan = job.editPlan!;
+  if (!visuals.length) {
+    if (plan.visuals.some(visual => visual.enabled)) {
+      job.notes = (job.notes || []).flatMap(note => {
+        const ending = /\s*Original footage was kept(?: for that moment)?\.$/u;
+        if (ending.test(note) && /B-roll|stock/iu.test(note) &&
+          /^(?:No (?:suitable|relevant|suitably timed)|AI found no|None of the \d+ inspected)/u.test(note)) return [];
+        return [note.replace(ending, "")];
+      });
+      job.notes.push("The new search found no suitable replacement. Your saved supporting shots were kept.");
+    }
+    delete job.brollCandidates;
+    return;
+  }
+  const directory = path.join(paths.plans, job.id);
+  const media = [...plan.media];
+  const files = { ...job.planFiles };
+  const retained: string[] = [];
+  const byPath = new Map<string, string>();
+  const snapshot = async (filePath: string, entry: Omit<EditPlanMedia, "id">) => {
+    const previous = byPath.get(filePath);
+    if (previous) return previous;
+    signal.throwIfAborted();
+    const id = randomUUID(), filename = `${id}.mp4`;
+    const destination = path.join(directory, filename);
+    retained.push(destination);
+    await retainFile(filePath, destination);
+    files[id] = filename;
+    media.push({ ...entry, id });
+    byPath.set(filePath, id);
+    return id;
+  };
+  try {
+    for (const asset of job.brollCandidates || [])
+      await snapshot(asset.filePath, { name: asset.name, kind: "broll", duration: asset.duration,
+        assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock });
+    const next: EditPlan["visuals"] = [];
+    for (const visual of visuals) {
+      const detail = job.supportingVisuals?.find(item => item.start === visual.start && item.name === visual.label);
+      const { probeMedia } = await import("./engine.js");
+      const metadata = await probeMedia(visual.path);
+      const mediaId = await snapshot(visual.path, { name: visual.label, kind: visual.kind, duration: metadata.duration,
+        assetId: detail?.assetId, attribution: detail?.attribution, selection: detail?.selection, stock: detail?.stock });
+      next.push({ id: randomUUID(), mediaId, start: visual.start, end: visual.end,
+        sourceStart: visual.sourceStart ?? 0, enabled: true, locked: true, reason: detail?.reason, focalPoint: visual.focalPoint });
+    }
+    signal.throwIfAborted();
+    if (job.corrections) job.corrections.brollChanges = Math.max(plan.visuals.filter(item => item.enabled).length, next.length);
+    job.editPlan = { ...plan, visuals: next, media };
+    job.planFiles = files;
+  } catch (error) {
+    await Promise.all(retained.map(file => rm(file, { force: true })));
+    throw error;
+  } finally { delete job.brollCandidates; }
+}
 
 export function planMediaPath(job: StoredJob, mediaId: string): string {
   const file = job.planFiles?.[mediaId];

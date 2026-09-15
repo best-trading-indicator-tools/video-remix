@@ -27,6 +27,7 @@ const visualSchema = z.object({
 
 export const editPlanChangesSchema = z.object({
   revision: z.number().int().nonnegative(),
+  refreshBroll: z.boolean().optional(),
   hookText: safeText(120, true).optional(),
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: z.array(cutSchema).min(1).max(60).optional(),
@@ -165,6 +166,8 @@ function retimedCaptions(plan: EditPlan, cuts: EditSegment[], sourceTranscript?:
 /** Apply one review revision without generating speech, choosing clips, or mutating the saved result. */
 export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sourceTranscript?: Transcript): EditPlan {
   const changes = editPlanChangesSchema.parse(input);
+  if (changes.refreshBroll && changes.visuals !== undefined)
+    throw new Error("Render your manual footage changes separately before searching for new B-roll.");
   if (changes.revision !== plan.revision) throw new Error("This edit changed since you opened it. Reload the latest revision before saving.");
   if (!Number.isFinite(plan.settings.speed) || plan.settings.speed <= 0) throw new Error("The saved edit has an invalid playback speed");
   const next = structuredClone(plan);

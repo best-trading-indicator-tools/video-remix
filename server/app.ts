@@ -28,6 +28,8 @@ import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
 import { DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
+import { stockBrollConfigured } from "./stock-broll.js";
+import { brollAIConfigured } from "./broll-ai.js";
 import { fingerprintFile, publicationChangesSchema } from "./history.js";
 import { correctionRecord, measurementsCsv, measurementsSchema, measurementSummary } from "./measurements.js";
 import { installManualPreviewRoutes } from "./manual-preview.js";
@@ -532,6 +534,12 @@ export function createApp() {
     if (!parsed.success) throw new HttpError(400, "Check the edited captions, cut times and footage choices.");
     if (parsed.data.revision !== parent.editPlan.revision)
       throw new HttpError(409, "This edit has changed. Reload the saved plan.");
+    if (parsed.data.refreshBroll && parent.auto?.supportingVisuals !== "stock")
+      throw new HttpError(400, "New stock searches are available for Auto edits made with stock B-roll.");
+    if (parsed.data.refreshBroll && !stockBrollConfigured())
+      throw new HttpError(400, "Add a Pixabay API key in your local environment before finding B-roll again.");
+    if (parsed.data.refreshBroll && parent.auto?.brollMatching === "ai" && !brollAIConfigured())
+      throw new HttpError(400, "Add a DeepSeek API key in your local environment before finding AI B-roll again.");
     let plan;
     try { plan = applyEditPlanChanges(parent.editPlan, parsed.data, parent.sourceTranscript); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid edit changes."); }
@@ -541,7 +549,11 @@ export function createApp() {
       variant: parent.variant, parentJobId: parent.id, auto: parent.auto,
       status: "queued", progress: 0, createdAt: new Date().toISOString(),
       outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
-      sourceTranscript: parent.sourceTranscript, notes: ["Saved footage and narration choices were kept. This revision renders only this video."],
+      sourceTranscript: parent.sourceTranscript,
+      ...(parsed.data.refreshBroll ? { refreshBroll: true } : {}),
+      notes: [parsed.data.refreshBroll
+        ? "A new stock search was requested for this video. Its saved cuts, captions and narration are used."
+        : "Saved footage and narration choices were kept. This revision renders only this video."],
       corrections: { ...correctionRecord(parent.editPlan, plan, parsed.data.correctionSeconds),
         ...(!parsed.data.captions ? { captionCorrections: 0 } : {}),
         ...(!parsed.data.visuals ? { brollChanges: 0 } : {}) },

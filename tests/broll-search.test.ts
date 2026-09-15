@@ -65,6 +65,8 @@ test("semantic stock searches use context, bounded provider work, and validated 
           assert.match(body.messages[0]!.content, /neighboring context/i);
           assert.match(body.messages[0]!.content, /untrusted data/i);
           assert.match(body.messages[0]!.content, /English stock search/i);
+          assert.match(body.messages[0]!.content, /alternateQueries/i);
+          assert.match(body.messages[0]!.content, /truthful contextual illustration/i);
           const prompt = JSON.parse(body.messages[1]!.content);
           assert.equal(prompt.language, "en");
           assert.equal(prompt.moments[1].text, moments[1]!.text);
@@ -140,6 +142,8 @@ test("semantic stock searches use context, bounded provider work, and validated 
         { briefs: [{ ...brief(), query: "https://example.com/private" }] },
         { briefs: [{ ...brief(), reason: "Open /etc/passwd" }] },
         { briefs: [{ ...brief(), sourceStart: 9000 }] },
+        { briefs: [{ ...brief(), alternateQueries: ["https://example.com/private"] }] },
+        { briefs: [{ ...brief(), alternateQueries: ["office computer", "working laptop"] }] },
         { briefs: [brief(999)] },
       ];
       for (const [index, reply] of replies.entries()) {
@@ -165,6 +169,20 @@ test("semantic stock searches use context, bounded provider work, and validated 
         fetcher: async () => complete({ briefs: [brief(), brief(), brief(2, "PERSON WORKING LATE LAPTOP")] }),
       });
       assert.deepEqual(duplicates.briefs, [brief()]);
+    });
+
+    await t.test("one semantic alternative remains tied to its visual brief and duplicate query text is removed", async () => {
+      const planned = { ...brief(), alternateQueries: ["office computer"] };
+      const result = await planStockSearch({
+        ...options("alternative"),
+        fetcher: async () => complete({ briefs: [planned] }),
+      });
+      assert.deepEqual(result.briefs, [planned]);
+      const duplicate = await planStockSearch({
+        ...options("alternative-duplicate"),
+        fetcher: async () => complete({ briefs: [{ ...brief(), alternateQueries: ["PERSON  WORKING LATE LAPTOP"] }] }),
+      });
+      assert.deepEqual(duplicate.briefs, [{ ...brief(), alternateQueries: [] }]);
     });
 
     await t.test("empty plans are valid reusable results and cached files omit credentials", async () => {

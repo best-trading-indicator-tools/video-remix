@@ -6,7 +6,7 @@ import { AutoSkipError, prepareAutoRemix } from "./auto.js";
 import { prepareSupportingVisuals } from "./supporting-plan.js";
 import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
-import { captureEditPlan, renderInputsFromPlan } from "./plan-storage.js";
+import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan } from "./plan-storage.js";
 import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
@@ -85,6 +85,16 @@ async function run(job: StoredJob, controller: AbortController) {
     let subtitlePath = subtitle?.filePath;
     let supportingVisuals: SupportingVisual[] = [];
     if (job.editPlan) {
+      if (job.refreshBroll) {
+        job.settings = structuredClone(job.editPlan.settings);
+        const visuals = await prepareSupportingVisuals({ source, job, transcript: transcriptFromPlan(job), assets: [],
+          workDir, signal: controller.signal, onPhase: (phase, progress) => {
+            job.phase = phase; job.progress = Math.max(job.progress, progress);
+          } });
+        await refreshPlanBroll(job, visuals, controller.signal);
+        delete job.refreshBroll;
+        await saveStore();
+      }
       job.phase = "Rendering your saved edit";
       const saved = await renderInputsFromPlan(job, workDir);
       audioPath = saved.audioPath;

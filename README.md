@@ -45,15 +45,15 @@ No HyperFrames or Remotion API key is required for this local implementation. Hy
 
 Uploaded B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses `MAX_FILE_SIZE_MB` for its per-file upload limit. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
 
-Stock B-roll is **off by default**, as are all supporting visuals. When enabled, the edit uses at most three cutaways, each at most 3.6 seconds, with no more than 30% of the short covered. Main audio and captions continue. A missing key, unavailable service, or lack of a relevant match keeps the original picture. The app makes at most three stock searches per export, with up to three downloads for local matching or six for AI matching; search responses are cached for 24 hours. Downloads are capped at 40 MiB per clip (or the configured upload limit if smaller) and retained with the saved edit plan until its export expires. Stock credits link to each creator's source page in Exports and are included in the batch ZIP's `export-settings.json`.
+Stock B-roll is **off by default**, as are all supporting visuals. When enabled, the edit uses at most three cutaways, each at most 3.6 seconds, with no more than 30% of the short covered. Main audio and captions continue. A missing key, unavailable service, or lack of a relevant match keeps the original picture. Local matching makes at most three stock searches and downloads per export. AI matching makes at most six searches and nine download/inspection attempts, including rejected clips; search responses are cached for 24 hours. Downloads are capped at 40 MiB per clip (or the configured upload limit if smaller) and retained with the saved edit plan until its export expires. Stock credits link to each creator's source page in Exports and are included in the batch ZIP's `export-settings.json`.
 
 ### Optional AI B-roll matching
 
 Choose **AI visual matching** when the local server has `DEEPSEEK_API_KEY` configured. This uses [DeepSeek Flash's image understanding](https://api-docs.deepseek.com/guides/vision/) to match the visible content of your B-roll to the edited speech. The default model ID is `deepseek-flash`; `DEEPSEEK_MODEL` can override it with a compatible vision model.
 
-1. For stock, prepare up to three semantic search briefs in one bounded text request. Compare up to two candidates per search. Inspect up to five short windows locally for actual motion, reject static/black footage, and prefer footage that fits the output aspect ratio. The vision model sees three frames from the selected output crop. Uploaded library clips retain their short midpoint inspection, up to 20 clips per edit.
+1. For stock, prepare up to three semantic search briefs in one bounded text request. Each brief can include one simpler alternative query. Rank up to 12 search results per query by relevance before portrait suitability, merge duplicate assets, and inspect up to three candidates per spoken idea. Inspect up to five short windows locally for actual motion and reject static/black footage. The vision model sees three frames from the selected output crop. Uploaded library clips retain their short midpoint inspection, up to 20 clips per edit.
 2. Ask the vision model what is visible and cache the descriptions locally. Stock descriptions are reused across jobs using provider identity, the downloaded content hash, interval, crop and model. Semantic briefs are cached by transcript context and text model. Set `DEEPSEEK_TEXT_MODEL` to override the text model independently.
-3. Match transcript phrases to those descriptions by meaning. For example, "take a break outdoors" can match footage of a person walking in a park even if its filename is `IMG_4821.mp4`.
+3. Match transcript phrases to those descriptions by meaning, keeping the search brief separate from the observed visual evidence. For example, "take a break outdoors" can match footage of a person walking in a park even if its filename is `IMG_4821.mp4`. Relevant illustrative shots are allowed; search intent alone cannot establish what a clip shows.
 4. Insert only suitable matches, using the inspected window at the corresponding point in the final speech. Recheck motion in the exact final stock interval after trimming. Cutaways last at most 3.6 seconds, with spacing and total screen-time limits. The main narration continues; captions stay visible. Export notes explain why each AI-selected shot was used.
 
 AI matching is optional and makes paid requests to DeepSeek. It sends sampled **B-roll frames** and **transcript excerpts** to that service; source audio and full video files are not uploaded. Rendering, transcription, and animated cards remain local. Without a usable transcript or a suitable match, or when the API is unavailable, the original picture is kept. An AI rejection never forces a weaker keyword match.
@@ -80,6 +80,12 @@ version. It reuses saved narration and footage without calling the planners or
 stock provider again. Source-cut changes retime retained captions and supporting
 shots; clipped phrases are dropped for review. Narrated edits keep their audio
 duration. Make cut changes separately from caption/shot timing corrections.
+
+For stock edits, **Find B-roll again & render** searches again for the saved
+speech and creates one new export. It includes your current hook, caption, cut
+and framing changes while keeping saved narration. The original export remains
+available. If no suitable replacement is found, existing supporting shots stay
+in place. Render or reset manual shot changes before requesting a new search.
 
 Auto can render the current video, checked videos, or all videos. Saved plans and
 their media snapshots follow the export retention period; keep the source video

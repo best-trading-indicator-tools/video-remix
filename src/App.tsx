@@ -58,6 +58,7 @@ import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
 import LongFormPanel from "./LongFormPanel";
+import { compactBrollNotes } from "../shared/broll-notes";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualCropPosition } from "../shared/manual";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
@@ -2501,7 +2502,7 @@ export default function App() {
                               )}
                               {!!job.notes?.length && (
                                 <ul className="job-notes">
-                                  {job.notes.map((note, index) => (
+                                  {compactBrollNotes(job.notes).map((note, index) => (
                                     <li key={index}>{note}</li>
                                   ))}
                                 </ul>

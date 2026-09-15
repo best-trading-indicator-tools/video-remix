@@ -24,7 +24,13 @@ const hitSchema = z.object({
   tags: z.string().max(2000),
   duration: z.number().min(1.5).max(86400),
   user: z.string().max(200),
-  videos: z.record(z.string(), rendition),
+  // Pixabay can include unavailable renditions with zero dimensions. One bad
+  // rendition must not discard an asset that also has a valid, safe video.
+  videos: z.record(z.string(), z.unknown()).transform(videos =>
+    Object.fromEntries(Object.entries(videos).flatMap(([name, video]) => {
+      const parsed = rendition.safeParse(video);
+      return parsed.success ? [[name, parsed.data]] : [];
+    }))),
 });
 type StockHit = z.infer<typeof hitSchema>;
 const responseSchema = z.object({ hits: z.array(z.unknown()).max(200) });
@@ -86,7 +92,7 @@ async function searchStock(
     q: query,
     video_type: type,
     lang: language,
-    per_page: "6",
+    per_page: "12",
     safesearch: "true",
   });
   const cacheKey = createHash("sha256").update(params.toString()).digest("hex");
@@ -226,8 +232,9 @@ export async function findStockBroll({
         "Stock B-roll needs PIXABAY_API_KEY on the server. Original footage was kept.",
       ],
     };
-  // Spread a maximum of three queries across the edited speech, with no
-  // background crawling, pagination, or bulk preloading of the stock library.
+  // At most three ideas, with a primary and one alternative query per AI idea.
+  // Download/inspect at most three clips per idea (nine total), including failed
+  // candidates. There is no background crawling, pagination, or library preload.
   const usable = moments
     .map((moment) => ({ text: moment.text, words: brollTokens(moment.text) }))
     .filter((moment) => moment.words.length);
@@ -243,44 +250,49 @@ export async function findStockBroll({
   if (semantic) notes.push(...semantic.notes);
   const selected = semantic ? semantic.briefs.map(brief => ({
     text: moments[brief.momentIndex]!.text,
-    words: brollTokens(brief.query), query: brief.query, reason: brief.reason,
-  })) : lexical.map(moment => ({ ...moment, query: moment.words.slice(0, 3).join(" ").slice(0, 100), reason: undefined }));
-  const queries = new Set<string>();
+    words: brollTokens([brief.query, ...(brief.alternateQueries || [])].join(" ")),
+    query: brief.query, alternateQueries: brief.alternateQueries || [],
+    reason: brief.reason, visual: brief.visual, momentIndex: brief.momentIndex,
+  })) : lexical.map(moment => ({ ...moment, query: moment.words.slice(0, 3).join(" ").slice(0, 100),
+    alternateQueries: [] as string[], reason: undefined, visual: undefined, momentIndex: undefined }));
+  const queries = new Map<string, StockHit[]>();
   const used = new Set<number>();
+  let searchUnavailable = false;
   for (const moment of selected) {
     signal.throwIfAborted();
-    const query = moment.query;
-    if (queries.has(query)) continue;
-    queries.add(query);
-    onPhase("Finding existing B-roll on Pixabay");
-    let hits: StockHit[];
-    try {
-      hits = await searchStock(
-        query,
-        type,
-        semantic ? "en" : supportedLanguages.has(language) ? language : "en",
-        signal,
-        fetcher,
-        cacheDir,
-      );
-    } catch {
-      signal.throwIfAborted();
-      notes.push(
-        "Pixabay search was unavailable. The edit continues with any clips already matched.",
-      );
-      break;
+    const pool = new Map<number, { hit: StockHit; query: string }>();
+    for (const query of [moment.query, ...moment.alternateQueries]) {
+      if (searchUnavailable) break;
+      const identity = query.toLowerCase().replace(/\s+/gu, " ");
+      let hits = queries.get(identity);
+      if (!hits) {
+        onPhase("Finding existing B-roll on Pixabay");
+        try {
+          hits = await searchStock(query, type,
+            semantic ? "en" : supportedLanguages.has(language) ? language : "en",
+            signal, fetcher, cacheDir);
+          queries.set(identity, hits);
+        } catch {
+          signal.throwIfAborted();
+          notes.push("Pixabay search was unavailable. The edit continues with any clips already matched.");
+          searchUnavailable = true;
+          break;
+        }
+      }
+      for (const hit of hits) if (!pool.has(hit.id)) pool.set(hit.id, { hit, query });
     }
-    const ranked = hits
-      .filter((hit) => !used.has(hit.id))
-      .map((hit) => ({
-        hit,
+    const prefersFilm = type === "all" &&
+      !/\b(animation|animated|cartoon|3d|diagram)\b/iu.test(`${moment.query} ${moment.visual || ""}`);
+    const ranked = [...pool.values()]
+      .filter(({ hit }) => !used.has(hit.id))
+      .map(({ hit, query }) => ({
+        hit, query,
         score: brollTokens(hit.tags).filter((word) =>
           moment.words.includes(word),
         ).length,
       }))
-      .filter((candidate) => semantic || candidate.score > 0)
-      .sort((a, b) => b.score - a.score);
-    const chosen = ranked.flatMap(({ hit }) => {
+      .filter((candidate) => semantic || candidate.score > 0);
+    const chosen = ranked.flatMap(({ hit, query, score }) => {
       const file = Object.values(hit.videos)
         .filter(
           (video) =>
@@ -294,64 +306,68 @@ export async function findStockBroll({
           const fit = (v: typeof a) => Math.min(v.width / v.height / targetAspect, targetAspect / (v.width / v.height));
           return fit(b) - fit(a) || b.width * b.height - a.width * a.height;
         })[0];
-      return file ? [{ hit, file }] : [];
+      return file ? [{ hit, file, query, score }] : [];
     }).sort((a, b) => {
       const fit = (v: typeof a.file) => Math.min(v.width / v.height / targetAspect, targetAspect / (v.width / v.height));
-      return fit(b.file) - fit(a.file);
-    }).slice(0, semantic ? 2 : 1);
-    for (const { hit, file } of chosen) {
-    used.add(hit.id);
-    const id = randomUUID();
-    const filePath = path.join(workDir, `stock-${id}.mp4`);
-    try {
-      onPhase("Preparing matched stock B-roll");
-      const { size, contentHash } = await downloadStock(file.url, filePath, signal, fetcher);
-      const media = await probe(filePath);
-      signal.throwIfAborted();
-      if (media.duration < 1.5 || media.duration > 86400)
-        throw new Error("Unsuitable stock duration");
-      onPhase("Checking stock motion and framing");
-      const windows = await inspect({ ...media, filePath }, targetAspect, signal);
-      const window = windows[0];
-      if (!window) {
+      return b.score - a.score ||
+        (prefersFilm ? Number(b.hit.type === "film") - Number(a.hit.type === "film") : 0) ||
+        fit(b.file) - fit(a.file);
+    }).slice(0, semantic ? 3 : 1);
+    for (const { hit, file, query } of chosen) {
+      used.add(hit.id);
+      const id = randomUUID();
+      const filePath = path.join(workDir, `stock-${id}.mp4`);
+      try {
+        onPhase("Preparing matched stock B-roll");
+        const { size, contentHash } = await downloadStock(file.url, filePath, signal, fetcher);
+        const media = await probe(filePath);
+        signal.throwIfAborted();
+        if (media.duration < 1.5 || media.duration > 86400)
+          throw new Error("Unsuitable stock duration");
+        onPhase("Checking stock motion and framing");
+        const windows = await inspect({ ...media, filePath }, targetAspect, signal);
+        const window = windows[0];
+        if (!window) {
+          await rm(filePath, { force: true });
+          notes.push("A stock clip had no suitable moving shot in the output crop and was omitted.");
+          continue;
+        }
+        assets.push({
+          id,
+          name: `${hit.tags.slice(0, 140)} · Pixabay ${hit.id}.mp4`,
+          tags: hit.tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean)
+            .slice(0, 12),
+          ...media,
+          size,
+          createdAt: new Date().toISOString(),
+          filePath,
+          thumbnailPath: "",
+          thumbnailUrl: "",
+          url: "",
+          selection: { sourceStart: window.sourceStart, duration: window.duration,
+            targetAspect, motion: window.motion, cropRetention: window.cropRetention,
+            query, ...(moment.reason ? { reason: moment.reason } : {}),
+            ...(moment.visual ? { visual: moment.visual, momentIndex: moment.momentIndex } : {}) },
+          stock: { providerId: `pixabay:${hit.id}`, rendition: file.url, contentHash,
+            retrievedAt: new Date().toISOString(), licenseUrl: "https://pixabay.com/service/license-summary/" },
+          attribution: {
+            provider: "Pixabay",
+            creator: hit.user,
+            url: hit.pageURL,
+          },
+        });
+      } catch {
         await rm(filePath, { force: true });
-        notes.push("A stock clip had no suitable moving shot in the output crop and was omitted.");
-        continue;
+        signal.throwIfAborted();
+        notes.push(
+          "A stock clip could not be prepared. Original footage was kept for that moment.",
+        );
       }
-      assets.push({
-        id,
-        name: `${hit.tags.slice(0, 140)} · Pixabay ${hit.id}.mp4`,
-        tags: hit.tags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean)
-          .slice(0, 12),
-        ...media,
-        size,
-        createdAt: new Date().toISOString(),
-        filePath,
-        thumbnailPath: "",
-        thumbnailUrl: "",
-        url: "",
-        selection: { sourceStart: window.sourceStart, duration: window.duration,
-          targetAspect, motion: window.motion, cropRetention: window.cropRetention,
-          query, ...(moment.reason ? { reason: moment.reason } : {}) },
-        stock: { providerId: `pixabay:${hit.id}`, rendition: file.url, contentHash,
-          retrievedAt: new Date().toISOString(), licenseUrl: "https://pixabay.com/service/license-summary/" },
-        attribution: {
-          provider: "Pixabay",
-          creator: hit.user,
-          url: hit.pageURL,
-        },
-      });
-    } catch {
-      await rm(filePath, { force: true });
-      signal.throwIfAborted();
-      notes.push(
-        "A stock clip could not be prepared. Original footage was kept for that moment.",
-      );
     }
-    }
+    if (searchUnavailable) break;
   }
   return { assets, notes: [...new Set(notes)] };
 }
