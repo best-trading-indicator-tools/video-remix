@@ -95,6 +95,8 @@ export interface RemixSettings {
   segments?: EditSegment[];
   callouts?: TimedCallout[];
   normalizeAudio?: boolean;
+  /** Mild local denoising and sharpening, without a cloud service. */
+  qualityCleanup?: boolean;
   autoMotion?: boolean;
   focalPoint?: FocalPoint;
   captionStyle?: CaptionStyle;
@@ -189,6 +191,8 @@ export interface EditPlanVisual {
 }
 export interface EditPlan {
   version: 1;
+  /** Older plans treated numeric resolutions as caps; migrated/new plans use exact output sizes. */
+  resolutionSizing?: "exact";
   revision: number;
   sourceId: string;
   sourceDuration: number;

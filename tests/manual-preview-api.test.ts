@@ -193,7 +193,7 @@ test("manual preview API renders the actual edit without creating exports and ma
       const moving = await preview({ autoMotion: true });
       const movingPath = await downloaded(moving);
       const fullPath = path.join(directory, "complete-camera-move.mp4");
-      await renderVideo({ input: fixture, output: fullPath, settings: { ...DEFAULT_SETTINGS, autoMotion: true, resolution: "720" },
+      await renderVideo({ input: fixture, output: fullPath, settings: { ...DEFAULT_SETTINGS, autoMotion: true, resolution: "source" },
         source: await probeMedia(fixture), workDir: path.join(directory, "motion-work"),
         signal: new AbortController().signal, onProgress: () => {} });
       const frame = async (file: string) => (await exec("ffmpeg", ["-v", "error", "-ss", "3.25", "-i", file,

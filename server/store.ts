@@ -11,6 +11,7 @@ import type {
 } from "../shared/types.js";
 import { config, paths } from "./config.js";
 import { fingerprintFile, historyEntry, upsertHistory } from "./history.js";
+import { migrateLegacyPlanResolutions } from "./plan-migrations.js";
 export interface StoredSource extends VideoSource {
   filePath: string;
   thumbnailPath: string;
@@ -89,6 +90,7 @@ export async function initStore() {
         { cause: error },
       );
   }
+  await migrateLegacyPlanResolutions(state.sources, state.jobs);
   // Migrate still-available exports before retention cleanup removes their files.
   for (const source of state.sources) {
     const completed = state.jobs.filter(job => job.sourceId === source.id && job.status === "completed");

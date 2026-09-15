@@ -56,6 +56,7 @@ import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
+import LongFormPanel from "./LongFormPanel";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualCropPosition } from "../shared/manual";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
@@ -275,7 +276,7 @@ function Section({
 }
 
 export default function App() {
-  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [mode, setMode] = useState<"auto" | "manual" | "shorts">("auto");
   const [autoById, setAutoById] = useState<Record<string, AutoPreset>>(() =>
     Object.fromEntries(
       Object.entries(
@@ -912,7 +913,7 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
-  const manualDefaults = { ...DEFAULT_SETTINGS, normalizeAudio: false, autoMotion: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+  const manualDefaults = { ...DEFAULT_SETTINGS, normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length;
@@ -1020,6 +1021,8 @@ export default function App() {
                     <>
                       Good footage. <span>A sharper story.</span>
                     </>
+                  ) : mode === "shorts" ? (
+                    <>Long stories. <span>Great short clips.</span></>
                   ) : (
                     <>
                       Make your next <span>great cut.</span>
@@ -1038,6 +1041,7 @@ export default function App() {
               {view === "studio"
                 ? mode === "auto"
                   ? "Find a focused excerpt, shape the edit, and refine every detail before your next post."
+                  : mode === "shorts" ? "Choose precise moments from your long videos, join sequences, and export each short in Full HD."
                   : "Shape the frame, dial in your look, and make every version your own."
                 : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
                 : "Your renders, all together. Download a single cut or the whole collection."}
@@ -1097,6 +1101,7 @@ export default function App() {
                   <SlidersHorizontal size={13} />
                   Manual
                 </button>
+                <button aria-pressed={mode === "shorts"} className={mode === "shorts" ? "active" : ""} onClick={() => setMode("shorts")}><Scissors size={13} />Short clips</button>
               </div>
               {mode === "manual" && (
                 <div className="toolbar-actions">
@@ -1127,7 +1132,7 @@ export default function App() {
               )}
             </div>
             <div
-              className={`studio-grid ${mode === "auto" ? "auto-studio" : tab === "all" ? "manual-all-controls" : ""}`}
+              className={`studio-grid ${mode === "auto" ? "auto-studio" : mode === "shorts" ? "shorts-studio" : tab === "all" ? "manual-all-controls" : ""}`}
             >
               <aside className="source-panel panel">
                 <div className="panel-heading">
@@ -1269,6 +1274,11 @@ export default function App() {
                 </div>
               </aside>
 
+              <LongFormPanel active={view === "studio" && mode === "shorts"} sources={sources} selectedSource={selected} engineReady={engineReady} onSelectSource={setSelectedId} onNotice={notify} onQueued={(added) => {
+                setJobs(current => [...added, ...current.filter(job => !added.some(item => item.id === job.id))]);
+                setView("exports");
+              }} />
+              {mode !== "shorts" && <>
               <section className="preview-panel panel">
                 <div className="panel-heading">
                   <h2>
@@ -1677,6 +1687,7 @@ export default function App() {
                             value={settings.mirror}
                             onChange={(mirror) => updateSettings({ mirror })}
                           />
+                          <Toggle label="Clean up video" value={settings.qualityCleanup ?? false} onChange={(qualityCleanup) => updateSettings({ qualityCleanup })} detail="Free cleanup on your computer: reduce noise and sharpen lightly." />
                           <Toggle label="Gentle push-in" value={settings.autoMotion ?? false} onChange={(autoMotion) => updateSettings({ autoMotion })} detail="Slow camera movement. With blur fit, the background moves." />
                           <details className="manual-subsection">
                             <summary>Subject position</summary>
@@ -2109,9 +2120,10 @@ export default function App() {
                   </div>
                 </aside>
               )}
+              </>}
             </div>
 
-            <section
+            {mode !== "shorts" && <section
               className={`render-bar ${mode === "auto" ? "auto-render-bar" : ""}`}
             >
               <div className="render-info">
@@ -2259,7 +2271,7 @@ export default function App() {
                       : "MP4 export · H.264 · Ready to share"}
                 </span>
               </div>
-            </section>
+            </section>}
         </div>
         {view === "history" ? (
           <HistoryPanel source={historySource} refreshKey={completed.map((job) => job.id).sort().join("|")} onClearSource={() => setHistorySource(null)} onBack={() => setView("studio")} />

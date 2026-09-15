@@ -37,6 +37,7 @@ import { graphicsAvailable } from "./visuals.js";
 import { brollAIConfigured } from "./broll-ai.js";
 
 import { stockBrollConfigured } from "./stock-broll.js";
+import { geometry } from "./engine.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   const [transcription, intelligence, voice, motionGraphics] =
@@ -376,6 +377,11 @@ export async function prepareAutoRemix({
       ? alignCallouts(callouts, captionTranscript, duration)
       : [],
   };
+  // Keep native detail for small Auto sources. Explicit export presets in the
+  // timestamp/manual editor produce their requested pixel dimensions.
+  const native = geometry(source, { ...settings, resolution: "source" });
+  if (Math.min(source.width, source.height) < 1080 && Math.min(native.width, native.height) < 1080)
+    settings.resolution = "source";
   if (hook) changes.push(usedAI ? "Rewritten hook" : "Spoken hook");
   if (settings.callouts?.length) changes.push("Key-point overlays");
   let subtitlePath: string | undefined;

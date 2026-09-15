@@ -108,7 +108,23 @@ Changing settings hides an outdated sample and cancels a preview still in progre
 
 Replacement audio loops when shorter than the rendered video and is trimmed when longer. It keeps its own playback speed; source audio follows the video's trim and speed while preserving pitch. Uploaded SRT files must be timed to the final exported video.
 
-Time shift moves a selected trim window earlier or later within the source; it has no effect when the whole source is selected. Resolution presets cap the shorter image edge without upscaling native footage. Frame blending has a memory limit, so its smoothing window can shorten on large or high-frame-rate exports.
+Time shift moves a selected trim window earlier or later within the source; it has no effect when the whole source is selected. Explicit **720p / 1080p** presets set the output's shorter edge, including upscaling when necessary; **Source** keeps native sizing. Frame blending has a memory limit, so its smoothing window can shorten on large or high-frame-rate exports.
+
+## Long video to short clips
+
+Choose **Short clips**, select an imported recording, and create a named short. Add one or more start/end intervals on the original video's clock. Intervals play in the order shown, so one short can join an opening, an example, and an ending from different parts of the same recording. Create more shorts from any imported source and render the current short, checked shorts, or the whole collection.
+
+Timestamps accept seconds, `MM:SS.mmm`, or `HH:MM:SS.mmm`. Mark points from playback, adjust them by typing, and reorder or remove intervals before exporting. Invalid or out-of-bounds timestamps block rendering. Drafts are saved in this browser; rendered exports remain in the shared local workspace and History. Each short uses one source recording; different sources can be included in the same export batch.
+
+The default portrait export is **1080 × 1920**, including from a 1920 × 1080 landscape recording. Use framing controls to crop around the subject or keep the full picture with background fill. A portrait crop uses only part of a landscape frame: an HD output canvas does not recover missing original detail. Five-second rendered samples use up to 720p for faster review; full exports use the selected resolution. If a browser cannot play the original codec, source timestamps and rendered samples remain usable.
+
+### Free cleanup and optional paid restoration
+
+**Clean up video** applies mild local noise reduction and sharpening before resizing. It uses FFmpeg on your computer and has no API charge. It can improve noisy footage; it cannot reconstruct detail that was never captured. Compare a rendered sample before enabling it on every clip.
+
+Paid AI restoration is a separate, optional future integration. For a first provider trial, [Topaz Precision through fal](https://fal.ai/models/topaz/upscale/video/precision) offers source-focused upscaling and noise/compression controls. As checked September 15, 2026, fal lists a one-minute 1080p/30 fps example at **$0.80**, with actual cost depending on output dimensions, duration, frame rate, and model. [SeedVR2 on fal](https://fal.ai/models/fal-ai/seedvr/upscale/video) is an alternative at **$0.001 per output megapixel-frame** (about **$3.73** for 60 seconds of 1080p at 30 fps). Confirm live pricing before adding a paid workflow.
+
+For a future cloud integration, extract the chosen short intervals locally, enhance those clips, and add captions afterward. This avoids uploading full long recordings and keeps restoration work limited to footage you intend to export. No fal key or paid restoration call is required for the current local workflow.
 
 ## Run locally
 

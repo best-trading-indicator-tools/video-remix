@@ -357,7 +357,7 @@ function validateSettings(settings: RemixSettings): void {
       ))
   )
     throw new Error("Callouts need valid text and start/end times");
-  for (const key of ["normalizeAudio", "autoMotion"] as const) {
+  for (const key of ["normalizeAudio", "autoMotion", "qualityCleanup"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean")
       throw new Error(`Invalid ${key} setting`);
   }
@@ -408,6 +408,13 @@ export function geometry(
     settings.aspect === "original"
       ? width / height
       : ratio(settings.aspect, ":");
+  if (settings.resolution !== "source") {
+    const edge = Number(settings.resolution);
+    // Set the requested edge directly. Scaling an intermediate crop can land
+    // just below720/1080 through floating-point error before even rounding.
+    return target >= 1 ? { width: even(edge * target), height: edge }
+      : { width: edge, height: even(edge / target) };
+  }
   if (settings.fit === "contain" || settings.fit === "blur") {
     if (width / height > target) height = width / target;
     else width = height * target;
@@ -415,11 +422,7 @@ export function geometry(
     if (width / height > target) width = height * target;
     else height = width / target;
   }
-  const cap =
-    settings.resolution === "source"
-      ? 1
-      : Math.min(1, Number(settings.resolution) / Math.min(width, height));
-  return { width: even(width * cap), height: even(height * cap) };
+  return { width: even(width), height: even(height) };
 }
 
 
@@ -530,6 +533,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
   const duration = clipLength / s.speed;
   const fps = s.fps === "source" ? source.fps : Number(s.fps);
   const { width, height } = geometry(source, s);
+  if (width > 16384 || height > 16384)
+    throw new Error("This aspect ratio exceeds the output size limit. Choose Source resolution or a standard video format.");
   const supportingVisuals = options.supportingVisuals ?? [];
   if (
     supportingVisuals.length > 3 ||
@@ -573,6 +578,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       // Work in display pixels so anamorphic and autorotated inputs export correctly.
       `scale=${even(source.width)}:${even(source.height)}:flags=bicubic`,
       "setsar=1",
+      // Clean the selected source pixels before scaling; no external service.
+      ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),
     ];
     const focalX = focalExpression(s, "x");
     const focalY = focalExpression(s, "y");
@@ -596,12 +603,12 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       );
     else if (s.fit === "contain")
       filters.push(
-        `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2`,
+        `scale=${width}:${height}:flags=lanczos:force_original_aspect_ratio=decrease:force_divisible_by=2`,
         `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`,
       );
     else
       filters.push(
-        `scale=${width}:${height}`,
+        `scale=${width}:${height}:flags=lanczos`,
       );
     filters.push("setsar=1", `fps=${decimal(fps)}`, "format=yuv420p");
     if (s.autoMotion && s.fit !== "blur") filters.push(motion);

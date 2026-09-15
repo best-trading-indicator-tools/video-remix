@@ -1,5 +1,11 @@
 .import-panel { min-width: 0; }
-.import-panel .dropzone { width: 100%; }
+.source-panel .import-panel { padding: 0 12px; }
+.source-panel .import-panel .dropzone { width: 100%; min-width: 0; margin: 14px 0 0; }
+.source-panel .import-panel .dropzone > strong,
+.source-panel .import-panel .dropzone > small,
+.source-panel .import-panel .dropzone > span:not(.upload-icon) { max-width: 100%; overflow-wrap: break-word; }
+.source-panel .import-panel .dropzone small br { display: initial; }
+@media (max-width: 680px) { .source-panel .import-panel .dropzone { margin-top: 12px; } }
 .import-link-button { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 42px; padding: 9px 10px; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 12px; font-weight: 600; }
 .import-link-button:hover, .import-resume:hover { background: var(--surface-hover); }
 .import-local { padding: 14px; margin-bottom: 16px; border: 1px solid var(--line); background: var(--field); border-radius: 10px; }

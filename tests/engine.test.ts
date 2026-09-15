@@ -250,7 +250,7 @@ test("renders every visual control, arbitrary hook text, and burned subtitles wi
   );
   assert.deepEqual(
     [info.width, info.height, info.fps, info.hasAudio],
-    [144, 180, 30, true],
+    [720, 900, 30, true],
   );
   assert.ok(
     Math.abs(info.duration - 1) < 0.06,
@@ -258,7 +258,7 @@ test("renders every visual control, arbitrary hook text, and burned subtitles wi
   );
 });
 
-test("preserves silent inputs, supports explicit mute, and does not upscale for a resolution cap", async () => {
+test("explicit 1080p exports retain silence, while source size remains available", async () => {
   const silent = await render(
     "silent",
     { resolution: "1080" },
@@ -266,7 +266,7 @@ test("preserves silent inputs, supports explicit mute, and does not upscale for 
   );
   assert.deepEqual(
     [silent.info.width, silent.info.height, silent.info.hasAudio],
-    [180, 320, false],
+    [1080, 1920, false],
   );
   const muted = await render("muted", { muted: true, speed: 2, aspect: "1:1" });
   assert.deepEqual(

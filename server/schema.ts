@@ -65,6 +65,7 @@ export const settingsSchema = z
       .max(5)
       .optional(),
     normalizeAudio: z.boolean().optional(),
+    qualityCleanup: z.boolean().optional(),
     autoMotion: z.boolean().optional(),
     focalPoint: focalPointSchema.optional(),
     captionStyle: captionStyleSchema.optional(),
@@ -74,7 +75,8 @@ export const batchSchema = z
   .object({
     items: z
       .array(
-        z.object({ sourceId: z.string().uuid(), settings: settingsSchema }),
+        z.object({ sourceId: z.string().uuid(), settings: settingsSchema,
+          title: z.string().trim().min(1).max(100).refine(value => !/[\u0000-\u001f\u007f]/u.test(value), "Use a title without control characters").optional() }),
       )
       .min(1)
       .max(100),

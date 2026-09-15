@@ -625,17 +625,22 @@ export function createApp() {
     const jobs: StoredJob[] = items.flatMap((item) =>
       Array.from({ length: variants }, (_, index) => {
         const id = randomUUID();
+        const source = state.sources.find(source => source.id === item.sourceId)!;
+        const settings = randomize ? randomizeSettings(item.settings) : { ...item.settings };
         return {
           id,
           batchId,
           sourceId: item.sourceId,
-          sourceName: state.sources.find(
-            (source) => source.id === item.sourceId,
-          )!.name,
+          sourceName: source.name,
           variant: index + 1,
-          settings: randomize
-            ? randomizeSettings(item.settings)
-            : { ...item.settings },
+          settings,
+          ...(item.title ? { summary: {
+            title: item.title, changes: ["Timestamp selections", ...(settings.qualityCleanup ? ["Local noise cleanup and sharpening"] : [])],
+            sourceDuration: source.duration,
+            outputDuration: (settings.segments?.reduce((total, cut) => total + cut.end - cut.start, 0) ??
+              ((settings.trimEnd ?? source.duration) - settings.trimStart)) / settings.speed,
+            transcriptAvailable: false, usedAI: false, narration: false,
+          } } : {}),
           status: "queued" as const,
           progress: 0,
           createdAt: new Date().toISOString(),
@@ -833,10 +838,10 @@ export function createApp() {
   return app;
 }
 function outputName(job: StoredJob) {
+  const namedShort = !job.auto && job.summary?.title;
   const stem =
-    path
-      .parse(job.sourceName)
-      .name.replace(/[^\p{L}\p{N} _.-]/gu, "")
+    (namedShort || path.parse(job.sourceName).name)
+      .replace(/[^\p{L}\p{N} _.-]/gu, "")
       .slice(0, 100) || "video";
-  return `${stem}-remix-${job.variant}.mp4`;
+  return `${stem}-remix-${job.variant}${namedShort ? `-${job.id.slice(0, 8)}` : ""}.mp4`;
 }

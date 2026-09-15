@@ -73,7 +73,7 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
       { name: "Saved narration", kind: "audio", duration: job.summary!.outputDuration }) : undefined;
     const captions = subtitlePath ? parseCaptionCues(await readFile(subtitlePath, "utf8")) : [];
     signal.throwIfAborted();
-    job.editPlan = { version: 1, revision: 1, sourceId: source.id,
+    job.editPlan = { version: 1, resolutionSizing: "exact", revision: 1, sourceId: source.id,
       sourceDuration: source.duration, outputDuration: job.summary!.outputDuration,
       createdAt: new Date().toISOString(), settings: structuredClone(job.settings),
       cuts: structuredClone(job.settings.segments || [{ start: job.settings.trimStart, end: job.settings.trimEnd ?? source.duration }]),

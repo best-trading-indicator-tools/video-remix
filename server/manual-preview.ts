@@ -26,7 +26,7 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
   if (settings.hookText.includes("\0") || settings.callouts?.some(cue => cue.text.includes("\0")))
     throw new PreviewError(400, "Text cannot contain null characters.");
   const preview: RemixSettings = {
-    ...settings, resolution: "720",
+    ...settings, resolution: "source",
     fps: settings.fps === "source" && source.fps > 60 ? "60" : settings.fps,
   };
   const maximumLength = PREVIEW_SECONDS * settings.speed;
@@ -63,7 +63,7 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
   // Limit unusual panoramic source formats as well as ordinary 720p exports.
   // The renderer scales display pixels first, so this preserves crop positions.
   const output = geometry(source, preview);
-  const scale = Math.min(1, 1280 / Math.max(output.width, output.height));
+  const scale = Math.min(1, 720 / Math.min(output.width, output.height), 1280 / Math.max(output.width, output.height));
   const previewSource = scale === 1 ? source : {
     ...source,
     width: Math.max(2, Math.floor(source.width * scale / 2) * 2),
