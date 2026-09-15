@@ -21,6 +21,7 @@ import {
   Expand,
   Film,
   FolderDown,
+  History,
   Layers3,
   LoaderCircle,
   MonitorPlay,
@@ -52,6 +53,8 @@ import {
   type VideoSource,
 } from "../shared/types";
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
+import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
+import HistoryPanel from "./HistoryPanel";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
 type AutoPreset = { options: AutoOptions; variants: number };
@@ -74,12 +77,18 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         ? options!.targetDuration
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
-      supportingVisuals: ["off", "library", "graphics", "both"].includes(
-        options?.supportingVisuals || "",
-      )
+      supportingVisuals: [
+        "off",
+        "stock",
+        "library",
+        "graphics",
+        "both",
+      ].includes(options?.supportingVisuals || "")
         ? options!.supportingVisuals
         : "off",
       brollMatching: options?.brollMatching === "ai" ? "ai" : "tags",
+      stockVideoType:
+        options?.stockVideoType === "animation" ? "animation" : "all",
       brollIds: Array.isArray(options?.brollIds)
         ? [...new Set(options.brollIds.filter((id) => typeof id === "string"))]
         : [],
@@ -372,7 +381,8 @@ export default function App() {
   const [brollBusy, setBrollBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [view, setView] = useState<"studio" | "exports">("studio");
+  const [view, setView] = useState<"studio" | "exports" | "history">("studio");
+  const [historySource, setHistorySource] = useState<VideoSource | null>(null);
   const [tab, setTab] = useState<"essentials" | "color" | "advanced">(
     "essentials",
   );
@@ -386,9 +396,12 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
+  const [editingJob, setEditingJob] = useState<RenderJob | null>(null);
   const [original, setOriginal] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [renderScope, setRenderScope] = useState<"all" | "selected">("all");
+  const [autoRenderScope, setAutoRenderScope] = useState<"all" | "current" | "selected">("all");
+  const [autoSelectedIds, setAutoSelectedIds] = useState<string[]>([]);
   const videoInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
@@ -396,6 +409,8 @@ export default function App() {
   const fileDragDepth = useRef(0);
   const selected =
     sources.find((source) => source.id === selectedId) || sources[0];
+  const autoTargets = autoRenderScope === "current" ? (selected ? [selected] : []) :
+    autoRenderScope === "selected" ? sources.filter((source) => autoSelectedIds.includes(source.id)) : sources;
   const settings = selected
     ? settingsById[selected.id] || defaultSettings
     : defaultSettings;
@@ -799,6 +814,7 @@ export default function App() {
     try {
       await api(`/api/sources/${source.id}`, { method: "DELETE" });
       setSources((current) => current.filter((item) => item.id !== source.id));
+      setAutoSelectedIds((current) => current.filter((id) => id !== source.id));
       if (selected?.id === source.id) setSelectedId(null);
       setSettingsById((current) => {
         const next = { ...current };
@@ -852,7 +868,7 @@ export default function App() {
 
   const startRender = async () => {
     if (mode === "auto") {
-      if (!sources.length) return;
+      if (!autoTargets.length) return;
       setStarting(true);
       try {
         const result = await api<{ jobs: RenderJob[]; batchId: string }>(
@@ -861,7 +877,7 @@ export default function App() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              items: sources.map((source) => {
+              items: autoTargets.map((source) => {
                 const preset = autoById[source.id] || defaultAuto;
                 return {
                   sourceId: source.id,
@@ -880,7 +896,7 @@ export default function App() {
         ]);
         setView("exports");
         notify(
-          `${sources.length} video${sources.length === 1 ? "" : "s"} queued for automatic editing. Follow each cut below.`,
+          `${autoTargets.length} video${autoTargets.length === 1 ? "" : "s"} queued for automatic editing. Follow each cut below.`,
           "success",
         );
       } catch (error) {
@@ -1011,13 +1027,13 @@ export default function App() {
       : settings.aspect.replace(":", " / ");
   const exportCount =
     mode === "auto"
-      ? autoPresets.reduce((total, preset) => total + preset.variants, 0)
+      ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
       : (renderScope === "selected" && selected ? 1 : sources.length) *
         variants;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
   const missingBrollSources =
     mode === "auto"
-      ? sources.filter((source) => {
+      ? autoTargets.filter((source) => {
           const options = (autoById[source.id] || defaultAuto).options;
           return (
             ["library", "both"].includes(options.supportingVisuals || "off") &&
@@ -1065,6 +1081,9 @@ export default function App() {
               </span>
             )}
           </button>
+          <button className={`history-nav-button ${view === "history" ? "active" : ""}`} aria-label="History" title="History" onClick={() => { setHistorySource(null); setView("history"); }}>
+            <History size={15} />History
+          </button>
         </nav>
         <div className="header-right">
           <span className={`engine-status ${engineReady ? "" : "offline"}`}>
@@ -1106,6 +1125,8 @@ export default function App() {
                     </>
                   )}
                 </>
+              ) : view === "history" ? (
+                <>Remember your <span>earlier edits.</span></>
               ) : (
                 <>
                   Ready for your <span>next post.</span>
@@ -1117,6 +1138,7 @@ export default function App() {
                 ? mode === "auto"
                   ? "Upload your videos. One click finds the story, makes the cuts, and prepares every remix."
                   : "Fresh edits, new formats, endless creative possibilities. All in one batch."
+                : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>
           </div>
@@ -1316,6 +1338,13 @@ export default function App() {
                         className={`source-item ${selected?.id === source.id ? "selected" : ""}`}
                         key={source.id}
                       >
+                        {mode === "auto" && <label className="auto-source-check" title={`Include ${source.name} in selected videos`}>
+                          <input type="checkbox" aria-label={`Select ${source.name} for Auto rendering`} checked={autoSelectedIds.includes(source.id)} disabled={starting || brollBusy}
+                            onChange={(event) => {
+                              setAutoSelectedIds((current) => event.target.checked ? [...current, source.id] : current.filter((id) => id !== source.id));
+                              setAutoRenderScope("selected");
+                            }} />
+                        </label>}
                         <button
                           className="source-select"
                           onClick={() => {
@@ -1374,6 +1403,9 @@ export default function App() {
                     ))
                   )}
                 </div>
+                {mode === "auto" && selected && (selected.previousExports || 0) > 0 && <button className="source-history-notice" onClick={() => { setHistorySource(selected); setView("history"); }}>
+                  <strong>{selected.name}</strong>Previously exported {selected.previousExports} {selected.previousExports === 1 ? "edit" : "edits"} · See History
+                </button>}
                 <div className="source-footer">
                   <span className="privacy-icon">
                     <Check size={12} />
@@ -1382,7 +1414,7 @@ export default function App() {
                     {autoPresets.some(
                       (preset) =>
                         preset.options.brollMatching === "ai" &&
-                        ["library", "both"].includes(
+                        ["stock", "library", "both"].includes(
                           preset.options.supportingVisuals || "off",
                         ),
                     ) ? (
@@ -2298,15 +2330,21 @@ export default function App() {
                     {uniformAuto
                       ? `Up to ${autoOptions.targetDuration}s · `
                       : ""}
-                    Up to {exportCount || selectedAuto.variants}{" "}
-                    {(exportCount || selectedAuto.variants) === 1
-                      ? "export"
-                      : "exports"}{" "}
-                    total
+                    Up to {exportCount} exports total
                   </span>
                 </div>
               )}
               <div className="render-cta">
+                {mode === "auto" && <>
+                  <label className="auto-render-scope">Render
+                    <select aria-label="Auto videos to render" value={autoRenderScope} disabled={starting} onChange={(event) => setAutoRenderScope(event.target.value as "all" | "current" | "selected")}>
+                      <option value="current">This video</option>
+                      <option value="selected">Selected videos ({sources.filter((source) => autoSelectedIds.includes(source.id)).length})</option>
+                      <option value="all">All videos ({sources.length})</option>
+                    </select>
+                  </label>
+                  {autoRenderScope === "selected" && !autoTargets.length && <p className="auto-selection-hint">Check videos in the source list to include them.</p>}
+                </>}
                 {mode === "manual" && sources.length > 1 && (
                   <select
                     aria-label="Videos to render"
@@ -2323,6 +2361,7 @@ export default function App() {
                   className="primary-button"
                   disabled={
                     !sources.length ||
+                    (mode === "auto" && !autoTargets.length) ||
                     starting ||
                     !engineReady ||
                     attachmentBusy !== null ||
@@ -2340,7 +2379,7 @@ export default function App() {
                     {starting
                       ? "Preparing exports…"
                       : mode === "auto"
-                        ? `Auto remix ${sources.length || ""} video${sources.length === 1 ? "" : "s"}`
+                        ? `Auto remix ${autoTargets.length} video${autoTargets.length === 1 ? "" : "s"}`
                         : `Create ${exportCount || ""} ${exportCount === 1 ? "remix" : "remixes"}`}
                   </span>
                   <ArrowRight size={17} />
@@ -2355,6 +2394,8 @@ export default function App() {
               </div>
             </section>
           </>
+        ) : view === "history" ? (
+          <HistoryPanel source={historySource} refreshKey={completed.map((job) => job.id).sort().join("|")} onClearSource={() => setHistorySource(null)} onBack={() => setView("studio")} />
         ) : (
           <section className="exports-panel panel">
             <div className="exports-heading">
@@ -2487,6 +2528,7 @@ export default function App() {
                                   {job.summary?.title || job.sourceName}
                                 </strong>
                                 <span>V{job.variant}</span>
+                                {job.parentJobId && <span>Revision {job.revision ?? 1}</span>}
                                 {job.auto && (
                                   <span className="job-auto-tag">
                                     <Sparkles size={9} />
@@ -2551,6 +2593,32 @@ export default function App() {
                                     ) && <span>New narration</span>}
                                 </div>
                               )}
+                              <QualityReportSummary report={job.qualityReport} compact />
+                              {job.supportingVisuals?.some(
+                                (visual) => visual.attribution,
+                              ) && (
+                                <ul
+                                  className="job-notes stock-credits"
+                                  aria-label="Stock video credits"
+                                >
+                                  {job.supportingVisuals
+                                    .filter((visual) => visual.attribution)
+                                    .map((visual, index) => (
+                                      <li key={index}>
+                                        {visual.start.toFixed(1)}–
+                                        {visual.end.toFixed(1)}s: Video by{" "}
+                                        {visual.attribution!.creator} on{" "}
+                                        <a
+                                          href={visual.attribution!.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                        >
+                                          {visual.attribution!.provider}
+                                        </a>
+                                      </li>
+                                    ))}
+                                </ul>
+                              )}
                               {!!job.notes?.length && (
                                 <ul className="job-notes">
                                   {job.notes.map((note, index) => (
@@ -2569,11 +2637,11 @@ export default function App() {
                                 <p className="job-error">{job.error}</p>
                               )}
                             </div>
-                            <div className="job-status">
+                            <div className={`job-status ${job.qualityReport?.status === "review" ? "quality-review" : ""}`}>
                               {job.status === "completed" ? (
                                 <>
                                   <Check size={12} />
-                                  Ready
+                                  {job.qualityReport?.status === "review" ? "Review" : "Ready"}
                                 </>
                               ) : job.status === "processing" ? (
                                 <>
@@ -2588,6 +2656,9 @@ export default function App() {
                             <div className="job-actions">
                               {job.status === "completed" && job.downloadUrl ? (
                                 <>
+                                  {job.auto && job.editable && <button className="secondary-button job-edit-button" onClick={() => setEditingJob(job)}>
+                                    <Scissors size={13} />Edit this result
+                                  </button>}
                                   {job.captionUrl && (
                                     <a
                                       className="caption-download"
@@ -2685,6 +2756,12 @@ export default function App() {
           </div>
         ))}
       </div>
+      {editingJob && <EditPlanEditor job={editingJob} onClose={() => setEditingJob(null)} onCreated={(created) => {
+        setJobs((current) => [created, ...current.filter((job) => job.id !== created.id)]);
+        setEditingJob(null);
+        setView("exports");
+        notify("Your corrected revision is queued. The previous export is still available.", "success");
+      }} />}
       {previewJob && (
         <div className="modal-backdrop" onClick={() => setPreviewJob(null)}>
           <section
@@ -2716,6 +2793,7 @@ export default function App() {
               playsInline
               autoPlay
             />
+            <QualityReportSummary report={previewJob.qualityReport} />
             {previewJob.summary && (
               <div className="export-auto-summary">
                 <h3>What changed</h3>
@@ -2736,6 +2814,13 @@ export default function App() {
             )}
             <div className="export-preview-footer">
               <span>Final render, with all edits applied.</span>
+              {previewJob.auto && previewJob.editable && <button className="secondary-button" onClick={() => {
+                const job = previewJob;
+                setPreviewJob(null);
+                // Let the preview restore focus and page scrolling before the
+                // editor establishes its own dialog focus and scroll boundary.
+                window.setTimeout(() => setEditingJob(job), 0);
+              }}><Scissors size={14} />Edit this result</button>}
               {previewJob.captionUrl && (
                 <a
                   className="secondary-button"
@@ -2820,17 +2905,10 @@ export default function App() {
             <div className="guide-note">
               <h3>A couple of good things to know</h3>
               <p>
-                Each video keeps its own Auto preferences. Select a video to
-                change its format, length, narration or maximum versions. Apply
-                to all copies that full preset to your batch and new imports.
-              </p>
-              <p>
-                B-roll is optional and off by default. Upload your own or
-                licensed clips, then choose matching by filenames and tags or
-                optional DeepSeek AI. AI matching sends sampled frames and
-                transcript excerpts to DeepSeek. Relevant clips briefly cover
-                the picture while the main audio continues. Animated text cards
-                are a separate option.
+                B-roll is optional and off by default. Choose Stock B-roll to
+                find existing videos on Pixabay, or upload your own library. A
+                few short cutaways match the spoken content while your main
+                audio continues. Animated text cards are a separate option.
               </p>
               <p>
                 Want full control? Switch to Manual for your own trim, framing,

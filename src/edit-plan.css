@@ -1,0 +1,107 @@
+.edit-plan-backdrop { z-index: 95; }
+.edit-plan-modal { width: 1060px; max-width: 100%; max-height: calc(100dvh - 40px); overflow: auto; border: 1px solid #594234; border-radius: 15px; background: #19191d; box-shadow: 0 24px 80px #0009; color: #e9e9ec; }
+.edit-plan-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 22px 26px; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 3; background: #19191d; }
+.edit-plan-heading h2 { margin: 7px 0; font-size: 22px; }
+.edit-plan-heading p { color: var(--subtle); font-size: 12px; overflow-wrap: anywhere; }
+.edit-plan-body { display: grid; grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr); gap: 26px; padding: 24px 26px; }
+.edit-plan-playback { align-self: start; position: sticky; top: 127px; }
+.edit-plan-playback video { display: block; width: 100%; max-height: 50dvh; background: #0b0b0e; border-radius: 9px; }
+.edit-plan-playback h3 { font-size: 13px; margin-top: 15px; }
+.edit-plan-playback p, .edit-plan-note, .edit-plan-empty { font-size: 12px; line-height: 1.65; color: #aaa1a8; margin-top: 8px; }
+.edit-plan-fields { min-width: 0; }
+.edit-plan-modal fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.edit-plan-modal legend { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.edit-plan-modal fieldset:disabled input, .edit-plan-modal fieldset:disabled select, .edit-plan-modal fieldset:disabled textarea { opacity: .55; }
+.edit-plan-field { display: flex; flex-direction: column; gap: 7px; font-size: 11px; color: #bbb0b8; min-width: 0; }
+.edit-plan-field textarea, .edit-plan-field input, .edit-plan-field select { width: 100%; min-width: 0; border: 1px solid #464047; border-radius: 6px; background: #111215; color: #eee7eb; padding: 9px 10px; font-size: 13px; line-height: 1.45; }
+.edit-plan-field textarea { resize: vertical; min-height: 60px; }
+.edit-plan-times { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.edit-plan-three-times { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.edit-plan-section { padding-top: 19px; margin-top: 22px; border-top: 1px solid var(--line); }
+.edit-plan-section summary { cursor: pointer; font-size: 14px; font-weight: 600; padding: 4px 0 9px; }
+.edit-plan-section summary span { margin-left: 8px; color: var(--subtle); font-size: 11px; font-weight: 400; }
+.edit-plan-caption, .edit-plan-cut { margin-top: 14px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; background: #1e1f23; }
+.edit-plan-cut > strong { font-size: 12px; }
+.edit-plan-remove-caption, .edit-plan-add-caption { margin-top: 12px; }
+.edit-plan-visual { margin-top: 17px; padding: 15px; border: 1px solid #45392f; border-radius: 9px; background: #201e1e; }
+.edit-plan-visual.is-removed { border-style: dashed; background: #191a1e; }
+.edit-plan-visual-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.edit-plan-visual-heading h3 { font-size: 13px; display: flex; align-items: center; gap: 7px; }
+.edit-plan-check { display: flex; align-items: center; gap: 6px; font-size: 11px; }
+.edit-plan-check input, .auto-source-check input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+.edit-plan-visual video { display: block; width: 100%; max-height: 230px; object-fit: cover; object-position: center; border-radius: 6px; background: #08090b; margin-bottom: 13px; }
+.edit-plan-lock { margin-bottom: 15px; min-height: 36px; }
+.edit-plan-credit { font-size: 11px; color: #b9aca0; line-height: 1.6; margin-top: 9px; }
+.edit-plan-credit a { text-decoration: underline; text-underline-offset: 3px; }
+.edit-plan-footer { position: sticky; bottom: 0; z-index: 3; background: #19191df7; padding: 17px 26px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; }
+.edit-plan-footer > div:first-child { flex: 1 1 200px; }
+.edit-plan-footer p { font-size: 11px; line-height: 1.5; color: #bbb0b8; }
+.edit-plan-footer .edit-plan-error, .edit-plan-error { color: #ffb3a9; }
+.edit-plan-error { font-size: 12px; line-height: 1.6; margin-top: 8px; }
+.edit-plan-buttons { display: flex; flex-wrap: wrap; gap: 10px; }
+.edit-plan-buttons button { min-height: 42px; }
+.edit-plan-loading { min-height: 180px; padding: 30px; display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 14px; }
+.auto-source-check { display: flex; align-items: center; justify-content: center; padding: 6px; flex-shrink: 0; }
+.auto-studio .source-item .source-select { padding-left: 2px; }
+.auto-render-scope { display: flex; align-items: center; gap: 8px; font-size: 11px; color: #c5b5be; }
+.auto-render-scope select { min-width: 0; max-width: 240px; border: 1px solid #493746; border-radius: 6px; padding: 8px; background: #221d24; color: #ead9e2; }
+.auto-selection-hint { font-size: 10px; color: #b5a7b0; margin-top: 5px; }
+.job-edit-button { font-size: 10px; white-space: nowrap; }
+.edit-preview-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid #443b43; border-radius: 7px; background: #121316; margin-bottom: 13px; }
+.edit-preview-tabs button { flex: 1; font-size: 11px; padding: 9px; border-radius: 4px; background: transparent; color: #ae9ca9; }
+.edit-preview-tabs button[aria-pressed="true"] { background: #3a2c25; color: #edc4a2; }
+.edit-preview-cut { margin-bottom: 13px; }
+.edit-framing-picture { position: relative; overflow: hidden; border-radius: 8px; background: #07080a; margin-bottom: 14px; }
+.edit-framing-picture > video.edit-framing-video, .edit-framing-picture > video.edit-framing-blur { display: block; position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; border-radius: 0; margin: 0; background: transparent; }
+.edit-framing-picture > video.edit-framing-blur { object-fit: cover; filter: blur(15px) brightness(.7); transform: scale(1.06); pointer-events: none; }
+.edit-framing-caption { position: absolute; z-index: 1; left: 5%; right: 5%; text-align: center; color: #fff; font-family: Arial, sans-serif; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; text-shadow: 1px 1px 2px #000, -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000; pointer-events: none; }
+.edit-framing-hook, .edit-framing-callout { position: absolute; left: 7%; right: 7%; z-index: 1; text-align: center; color: #fff; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; text-shadow: 1px 1px 3px #000; pointer-events: none; }
+.edit-framing-hook { top: 8%; }
+.edit-framing-callout { top: 24%; }
+.edit-platform-guide { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.edit-platform-guide span { position: absolute; display: flex; justify-content: center; align-items: center; text-align: center; padding: 4px; background: #cd835133; border: 1px dashed #ffc69b99; color: #ffe0c9; text-shadow: 0 1px 2px #000; font-size: 8px; }
+.edit-platform-guide .guide-top { top: 0; left: 0; right: 0; height: 9%; }
+.edit-platform-guide .guide-right { right: 0; top: 25%; writing-mode: vertical-rl; }
+.edit-platform-guide .guide-bottom { left: 0; right: 0; bottom: 0; }
+.edit-guide-field { margin-top: 12px; }
+.edit-guide-adjustments { margin-top: 12px; border: 1px solid #473b32; padding: 10px; border-radius: 7px; }
+.edit-framing-section { margin: 0 0 25px; padding-top: 0; border-top: 0; border-bottom: 1px solid var(--line); padding-bottom: 22px; }
+.edit-plan-modal .edit-focal-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #3c353b; }
+.edit-plan-modal .edit-focal-controls legend { font-size: 11px; color: #c9b5c2; margin-bottom: 0; padding-right: 8px; font-weight: 500; }
+.edit-framing-slider { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin-top: 14px; }
+.edit-framing-slider > span { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 11px; color: #bcaab7; }
+.edit-framing-slider output { color: #e6c5ac; font-size: 11px; font-variant-numeric: tabular-nums; }
+.edit-framing-slider input { width: 100%; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.edit-framing-slider small { display: flex; justify-content: space-between; gap: 10px; color: #998792; font-size: 9px; }
+.edit-cut-heading { display: flex; justify-content: space-between; align-items: center; gap: 9px; font-size: 12px; }
+.edit-cut-heading .secondary-button { font-size: 10px; min-height: 33px; }
+.edit-custom-crop { margin-top: 17px; }
+.edit-layout-issues { margin-top: 15px; border: 1px solid #71513b; background: #36271f; color: #e7c1a6; border-radius: 7px; padding: 12px; }
+.edit-layout-issues strong { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.edit-layout-issues ul { margin: 8px 0 0; padding-left: 17px; font-size: 11px; line-height: 1.7; }
+.quality-report { border: 1px solid #4f5d47; border-radius: 7px; padding: 11px 13px; background: #252d23; margin-top: 14px; color: #bdd0b6; }
+.quality-report.review { border-color: #76533b; background: #35291f; color: #e7c1a0; }
+.quality-report summary { cursor: pointer; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 11px; }
+.quality-report summary strong { font-weight: 550; }
+.quality-report summary span { font-size: 10px; opacity: .85; }
+.quality-report ul { font-size: 11px; line-height: 1.7; padding-left: 17px; margin: 9px 0 0; }
+.quality-report p { font-size: 10px; line-height: 1.6; margin-top: 8px; color: inherit; }
+.quality-report.compact { padding: 8px 10px; max-width: 520px; }
+.job-status.quality-review { color: #e5b38b; }
+@media (max-width: 680px) {
+  .edit-plan-modal { max-height: calc(100dvh - 24px); }
+  .edit-plan-heading { padding: 16px; }
+  .edit-plan-heading h2 { font-size: 19px; }
+  .edit-plan-body { display: block; padding: 16px; }
+  .edit-plan-playback { position: static; margin-bottom: 24px; }
+  .edit-plan-playback video { max-height: 36dvh; }
+  .edit-plan-footer { padding: 14px 16px; }
+  .edit-plan-buttons { width: 100%; }
+  .edit-plan-buttons button { flex: 1; min-width: 0; font-size: 11px; }
+  .edit-plan-three-times { grid-template-columns: 1fr 1fr; }
+  .edit-plan-visual { padding: 12px; }
+  .edit-plan-field input, .edit-plan-field textarea, .edit-plan-field select { font-size: 16px; }
+  .auto-source-check { min-width: 32px; min-height: 44px; padding: 6px; }
+  .auto-render-scope { width: 100%; }
+  .auto-render-scope select { flex: 1; max-width: none; min-height: 44px; }
+}

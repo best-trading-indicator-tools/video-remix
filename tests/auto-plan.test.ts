@@ -24,6 +24,7 @@ import {
   type EditorialPlan,
 } from "../server/diversity.js";
 import { AutoSkipError, prepareAutoRemix } from "../server/auto.js";
+import { autoSourceBusy } from "../server/queue.js";
 
 function speech(start: number, words: string[], step = 0.4): TranscriptSegment {
   return {
@@ -453,6 +454,45 @@ test("short spoken and silent sources produce no duplicate candidate after a com
       error instanceof AutoSkipError &&
       /already has a finished edit/u.test(error.message),
   );
+});
+
+test("a small earlier excerpt does not reserve the whole short source in another batch", async () => {
+  const input = transcript([speech(1, ["A", "fresh", "complete", "story."])], 20);
+  const partialHistory = [{ cuts: [{ start: 12, end: 14 }], text: "An unrelated partial excerpt" }];
+  assert.ok(buildCandidates(input, 20, 45, 0, partialHistory).length > 0);
+  assert.deepEqual(sceneCuts([], 20, 45, 0, partialHistory), [{ start: 0, end: 20 }]);
+  const source = {
+    id: "source-a", name: "source.mp4", size: 1, duration: 20,
+    width: 1920, height: 1080, fps: 30, hasAudio: true,
+    createdAt: "2026-01-01T00:00:00Z", thumbnailUrl: "", url: "",
+    filePath: "/nonexistent-source", thumbnailPath: "/nonexistent-thumbnail",
+  };
+  const enteredPlanning = new Error("The historical excerpt allows normal planning");
+  await assert.rejects(prepareAutoRemix({
+    source, job: { ...autoJob(), outputPath: "/nonexistent-output" },
+    previous: [], historyPlans: partialHistory, workDir: "/nonexistent-work",
+    signal: new AbortController().signal,
+    onPhase: () => { throw enteredPlanning; },
+  }), error => error === enteredPlanning);
+  await assert.rejects(prepareAutoRemix({
+    source, job: { ...autoJob(), outputPath: "/nonexistent-output" },
+    previous: [], historyPlans: [{ cuts: [{ start: 0, end: 16 }] }], workDir: "/nonexistent-work",
+    signal: new AbortController().signal,
+    onPhase: () => assert.fail("An existing export covering 80% of this short source should be rejected before analysis"),
+  }), error => error instanceof AutoSkipError && /already has a finished edit/u.test(error.message));
+});
+
+test("unidentified legacy Auto sources cannot race identical content before fingerprints resolve", () => {
+  const queued = autoJob({ id: "queued", sourceId: "source-b", status: "queued" });
+  const running = autoJob({ id: "running", sourceId: "source-a", status: "processing" });
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a" }, { id: "source-b" }]), true);
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a", fingerprint: "same" }, { id: "source-b" }]), true);
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a" }, { id: "source-b", fingerprint: "same" }]), true);
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a", fingerprint: "same" }, { id: "source-b", fingerprint: "same" }]), true);
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a", fingerprint: "first" }, { id: "source-b", fingerprint: "second" }]), false);
+  assert.equal(autoSourceBusy(queued, [{ ...running, status: "completed" }], [{ id: "source-a" }, { id: "source-b" }]), false);
+  assert.equal(autoSourceBusy(queued, [{ ...running, auto: undefined }], [{ id: "source-a" }, { id: "source-b" }]), false);
+  assert.equal(autoSourceBusy({ ...queued, auto: undefined }, [running], [{ id: "source-a" }, { id: "source-b" }]), false);
 });
 
 test("completed spoken cuts are removed before model selection while fresh long-video ideas remain", () => {

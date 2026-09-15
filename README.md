@@ -25,6 +25,7 @@ Use your own footage or footage you have permission to repurpose. Review the res
 Open **Adjust output → Supporting visuals** in Auto mode:
 
 - **Off** keeps the edit focused on the source footage.
+- **Stock B-roll · Pixabay** finds existing moving videos from a free stock library, with no uploads required. Choose any stock video (the default) or animation-only results. Add `PIXABAY_API_KEY` to the backend environment to enable search; get a free key from the [Pixabay API page](https://pixabay.com/api/docs/). With local matching, keywords from up to three moments in the edited speech are sent to Pixabay; silent videos use their descriptive filename. AI matching uses DeepSeek to turn spoken ideas and neighboring context into concrete English visual searches, then checks the visible relevance of a small shortlist. All downloaded stock is checked locally for sustained motion in the output crop. No B-roll videos are generated.
 - **My B-roll** inserts short supporting shots from a reusable library. Upload your own or licensed video clips once and select the clips available for each source. The default local matching uses filenames/tags and the actual spoken phrases; silent sources can match their descriptive source filename. Optional AI visual matching is described below. The original edit's audio keeps playing underneath.
 - **Animated cards** uses [HyperFrames](https://github.com/heygen-com/hyperframes/) locally to turn short phrases from the speech into animated text cards. These are authored graphics, not generated photographic footage. Captions remain above the supporting visuals.
 - **Both** allows either type where relevant. Supporting visuals are limited to a few short moments; unmatched clips and unsuitable card placements are skipped.
@@ -33,27 +34,48 @@ No HyperFrames or Remotion API key is required for this local implementation. Hy
 
 `npm ci` installs the pinned HyperFrames renderer and its Chromium browser. If browser installation was skipped, run `npm run setup:visuals` once. Alternatively set `PRODUCER_HEADLESS_SHELL_PATH` to an installed Chromium executable. Generated cards use local fonts and run without external network requests. The app reports a fallback if a requested card cannot be rendered.
 
-B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses the same per-file upload limit as sources. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
+Uploaded B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses the same per-file upload limit as sources. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
+
+Stock B-roll is **off by default**, as are all supporting visuals. When enabled, the edit uses at most three cutaways, each at most 3.6 seconds, with no more than 30% of the short covered. Main audio and captions continue. A missing key, unavailable service, or lack of a relevant match keeps the original picture. The app makes at most three stock searches per export, with up to three downloads for local matching or six for AI matching; search responses are cached for 24 hours. Downloads are capped at 40 MiB per clip (or the configured upload limit if smaller) and retained with the saved edit plan until its export expires. Stock credits link to each creator's source page in Exports and are included in the batch ZIP's `export-settings.json`.
 
 ### Optional AI B-roll matching
 
 Choose **AI visual matching** when the local server has `DEEPSEEK_API_KEY` configured. This uses [DeepSeek Flash's image understanding](https://api-docs.deepseek.com/guides/vision/) to match the visible content of your B-roll to the edited speech. The default model ID is `deepseek-flash`; `DEEPSEEK_MODEL` can override it with a compatible vision model.
 
-1. Extract three small frames from one short window near the middle of each selected B-roll clip, up to 20 clips per edit. These samples describe that specific window, not every scene in a long video.
-2. Ask the vision model what is visible and cache the descriptions locally. Later edits reuse the cached descriptions.
+1. For stock, prepare up to three semantic search briefs in one bounded text request. Compare up to two candidates per search. Inspect up to five short windows locally for actual motion, reject static/black footage, and prefer footage that fits the output aspect ratio. The vision model sees three frames from the selected output crop. Uploaded library clips retain their short midpoint inspection, up to 20 clips per edit.
+2. Ask the vision model what is visible and cache the descriptions locally. Stock descriptions are reused across jobs using provider identity, the downloaded content hash, interval, crop and model. Semantic briefs are cached by transcript context and text model. Set `DEEPSEEK_TEXT_MODEL` to override the text model independently.
 3. Match transcript phrases to those descriptions by meaning. For example, "take a break outdoors" can match footage of a person walking in a park even if its filename is `IMG_4821.mp4`.
-4. Insert only suitable matches, using the inspected window at the corresponding point in the final speech. Cutaways last at most 3.6 seconds, with spacing and total screen-time limits. The main narration continues; captions stay visible. Export notes explain why each AI-selected shot was used.
+4. Insert only suitable matches, using the inspected window at the corresponding point in the final speech. Recheck motion in the exact final stock interval after trimming. Cutaways last at most 3.6 seconds, with spacing and total screen-time limits. The main narration continues; captions stay visible. Export notes explain why each AI-selected shot was used.
 
 AI matching is optional and makes paid requests to DeepSeek. It sends sampled **B-roll frames** and **transcript excerpts** to that service; source audio and full video files are not uploaded. Rendering, transcription, and animated cards remain local. Without a usable transcript or a suitable match, or when the API is unavailable, the original picture is kept. An AI rejection never forces a weaker keyword match.
 
-Set the key in the backend environment, then restart the app. Keep it out of frontend variables and Git. For a private `.env` file, Node can load it when starting the production build:
+Set the key in your private `.env` file in the project root, then restart the app. Both development and production load it automatically. Keep it out of frontend variables and Git:
 
 ```sh
 npm run build
-node --env-file=.env dist-server/server/index.js
+npm start
 ```
 
-Plain `npm run dev` and `npm start` do not automatically read `.env`; they use exported shell variables. An ordinary DeepSeek API key is required; a coding subscription is not used. Costs depend on sampled images and tokens, with current rates on [DeepSeek's pricing page](https://api-docs.deepseek.com/quick_start/pricing/). The app limits requests and reuses inspections to reduce cost. Model output is a relevance suggestion, not a guarantee of editorial quality or platform acceptance.
+`npm run dev` and `npm start` load `.env` automatically. Explicit shell variables take precedence. An ordinary DeepSeek API key is required; a coding subscription is not used. Costs depend on sampled images and tokens, with current rates on [DeepSeek's pricing page](https://api-docs.deepseek.com/quick_start/pricing/). The app limits requests and reuses inspections to reduce cost. Model output is a relevance suggestion, not a guarantee of editorial quality or platform acceptance.
+
+## Correct an Auto result
+
+New Auto exports save a versioned edit plan. Choose **Edit this result** to change
+the opening hook, correct or add timed captions, adjust source cut boundaries,
+or disable/replace a supporting shot from the saved choices. B-roll is locked
+initially; unlock a shot to change its footage or timing. Each shot has a moving
+preview of its selected interval and keeps its source credits.
+
+**Render this revision** creates one corrected export and preserves the previous
+version. It reuses saved narration and footage without calling the planners or
+stock provider again. Source-cut changes retime retained captions and supporting
+shots; clipped phrases are dropped for review. Narrated edits keep their audio
+duration. Make cut changes separately from caption/shot timing corrections.
+
+Auto can render the current video, checked videos, or all videos. Saved plans and
+their media snapshots follow the export retention period; keep the source video
+available to make further revisions. Older exports created before this feature
+need a new Auto edit to gain a saved plan.
 
 ## Manual editing
 
@@ -134,7 +156,7 @@ With local transcription and Ollama ready, **macOS** Auto edits can optionally r
 
 ## Configuration
 
-Set environment variables when starting the backend. See [.env.example](.env.example) for a template; the app does **not** automatically load that file.
+Put your settings and API keys in a private `.env` file in the project root. The backend loads it automatically with `npm run dev` and `npm start`; explicit shell variables take precedence. `.env` is ignored by Git. See [.env.example](.env.example) for the available settings.
 
 | Variable             | Default                  | Purpose                                                              |
 | -------------------- | ------------------------ | -------------------------------------------------------------------- |
@@ -150,6 +172,7 @@ Set environment variables when starting the backend. See [.env.example](.env.exa
 | `AUTO_LOCAL_AI`      | `true`                   | Set exactly `false` to disable optional Ollama planning.             |
 | `OLLAMA_URL`         | `http://127.0.0.1:11434` | Ollama service address; keep local for private processing.           |
 | `OLLAMA_MODEL`       | `llama3.2`               | Installed Ollama model used for planning and writing.                |
+| `PIXABAY_API_KEY`    | Unset                    | Optional free stock video search; only used for Stock B-roll.        |
 
 For example:
 
@@ -226,3 +249,59 @@ The frontend uses React, TypeScript, and Vite. The Express API validates uploads
 - **Text or subtitles fail:** check your FFmpeg build includes `drawtext` and `subtitles`, and install a system font. The Docker image includes these dependencies.
 - **Slow exports:** reduce resolution, frame rate, or render concurrency. Encoding speed depends on clip duration, effects, and available CPU.
 - **Uploads rejected:** check the per-file size and batch limits in your configuration.
+
+### Export history
+
+History records completed exports independently of temporary video files: source
+content fingerprint, original source excerpts, saved title, B-roll IDs and intervals,
+and publication notes. Reimporting identical bytes under a new filename or batch
+reveals earlier exports and Auto avoids repeating them. Explicit edits of a saved
+result remain available as revisions. A different encoding is a different fingerprint.
+Available older exports are migrated when the server starts; sources already removed
+before this feature cannot be reconstructed. Deleting a batch or automatic media
+expiry keeps the history. Publication dates and links are local records of posts you
+have already published; the app does not post them.
+
+### Framing and export review
+
+Open **Edit this result** to set the focal point of each source cut or unlocked
+B-roll shot, choose crop/contain/blur framing, and adjust caption size and distance
+from the bottom. Focal points describe positions in the original picture (0 is the
+left/top, 1 is the right/bottom). They stay fixed for the shot; automatic subject
+tracking is not part of this control. Framing-only edits preserve caption timing.
+
+The editor's Instagram/TikTok interface guides are adjustable preview aids, not
+baked overlays. Device and platform interfaces vary. Text overlap estimates help
+identify captions, hooks, or callouts that need moving; inspect the rendered result
+for exact font layout and subject framing.
+
+After rendering, local checks inspect expected duration, dimensions, audio, black
+sections and freezes. Suspected issues keep the export downloadable and mark it
+**Needs review** with details. Intentional stills or silence can require human review.
+Long-video checks sample bounded windows and say so; a passed technical check does
+not assess editorial quality or platform eligibility.
+
+### Measure and compare edits
+
+In **History**, record whether the opening and ending work, how many B-roll shots
+were accepted, caption corrections, and correction time. Use the same benchmark
+case and a distinct editorial approach label when comparing versions. New editor
+revisions record changed caption/shot counts and active correction time; manual
+review values can replace those measurements when you have a more accurate count.
+Unknown values stay blank and are excluded from averages.
+
+Add dated Instagram or TikTok observations for views, average watch time,
+completion, saves, shares and actual platform notices. Each export tracks one post
+per platform; later observations update the same post. Summaries use the latest
+observation per platform for each export, preventing repeated snapshots of the
+same post from adding their cumulative views together. Platform results are also
+reported separately. Watch time and completion
+are weighted only where positive view counts are available. These comparisons are
+observations, not evidence that an editing choice caused better distribution.
+
+Download the measurement data as JSON or CSV. Review data remains with export
+history after media cleanup. Run `npm run benchmark` for reproducible local media
+diagnostics and read [the benchmark guide](benchmarks/README.md) to evaluate owned
+or licensed speech examples with the same review rubric. Synthetic technical
+fixtures do not substitute for reviewing real speech, stock relevance, or actual
+post performance.

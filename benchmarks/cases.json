@@ -1,0 +1,162 @@
+{
+  "version": 1,
+  "purpose": "Repeatable local diagnostics plus separate human review of real, owned or licensed speech clips.",
+  "syntheticLimit": "Generated patterns and tones test technical behavior only. They do not validate speech recognition, semantic B-roll relevance, editorial quality, or platform treatment.",
+  "automatedCases": [
+    {
+      "id": "tech-motion-portrait",
+      "files": ["benchmark-motion-portrait.mp4"],
+      "description": "Moving portrait test pattern with an audible tone.",
+      "expected": "Motion inspection finds an interval with full portrait crop retention; export checks pass."
+    },
+    {
+      "id": "tech-static-mp4",
+      "files": ["benchmark-static-image.mp4"],
+      "description": "A real MP4 containing a repeated still image and audible tone.",
+      "expected": "Motion inspection rejects every interval; export checks flag frozen footage."
+    },
+    {
+      "id": "tech-late-motion",
+      "files": ["benchmark-late-motion.mp4"],
+      "description": "Eight seconds of still footage followed by four seconds of motion.",
+      "expected": "The selected interval starts at or after eight seconds; the exact opening interval is rejected."
+    },
+    {
+      "id": "tech-crop-action",
+      "files": ["benchmark-cropped-motion.mp4"],
+      "description": "Landscape motion at the edges with a static gray center.",
+      "expected": "A centered 9:16 crop is rejected for lacking movement; a 16:9 crop retains movement."
+    },
+    {
+      "id": "tech-audio-missing",
+      "files": ["benchmark-missing-audio.mp4"],
+      "description": "Moving picture without an audio track, evaluated against an edit that expects sound.",
+      "expected": "Export checks require review for missing audio."
+    },
+    {
+      "id": "tech-audio-quiet",
+      "files": ["benchmark-quiet-audio.mp4"],
+      "description": "Moving picture with a present but nearly silent audio track.",
+      "expected": "Export checks require review for nearly silent audio."
+    },
+    {
+      "id": "tech-black-frames",
+      "files": ["benchmark-black-frames.mp4"],
+      "description": "Black video with an audible tone.",
+      "expected": "Export checks flag black frames even if a graphic was planned for the interval."
+    },
+    {
+      "id": "tech-subject-framing",
+      "files": ["benchmark-framing-source.mp4", "benchmark-framing-result.mp4"],
+      "description": "Red left, blue center and green right subjects; reordered cuts play at twice the speed.",
+      "expected": "The first portrait shot retains red, the second retains green, and duration is two seconds."
+    },
+    {
+      "id": "tech-text-layout",
+      "files": ["benchmark-text-overlap.mp4", "benchmark-caption.srt"],
+      "description": "A rendered hook with deliberately raised captions, plus a safe placement control.",
+      "expected": "The overlap produces a timed collision warning; the safe control has no warning. Font shaping and platform overlays still need a preview."
+    }
+  ],
+  "humanCases": [
+    {
+      "id": "editorial-work-shutdown",
+      "status": "requires-owned-or-licensed-recording",
+      "language": "en",
+      "suggestedSourceFile": "owned/editorial-work-shutdown.mp4",
+      "audience": "People who keep checking work messages after hours",
+      "topic": "An end-of-day routine",
+      "intendedTakeaway": "Writing down the next action before closing the laptop can make it easier to leave work for the evening.",
+      "authoredSpeech": {
+        "before": "My workday ended at six, but I kept checking messages all evening.",
+        "focus": "I couldn't switch off after work.",
+        "after": "I now write down the first task for tomorrow, then close the laptop. This routine helped me stop reopening it during dinner."
+      },
+      "stockPair": {
+        "suggestedFile": "owned/stock-working-late-laptop.mp4",
+        "tags": ["person", "working late", "laptop", "desk"],
+        "visualIntent": "Person working late at a laptop, then closing the laptop or writing a short task list.",
+        "acceptableQueries": ["person working late laptop", "closing laptop evening", "writing task list desk"],
+        "reject": ["light switch", "electric power switch", "unrelated office skyline", "still image encoded as MP4"],
+        "portraitRequirement": "The hands and laptop action remain visible after the selected crop.",
+        "provenanceRequired": ["provider or owner", "asset ID where available", "creator", "source URL where available", "license or permission", "selected interval"]
+      },
+      "humanChecks": [
+        "The visual depicts finishing work rather than a literal electrical switch.",
+        "The opening identifies work messages or the evening routine without requiring an earlier sentence.",
+        "The edit delivers one personal example and ends with the complete practical takeaway.",
+        "The speaker's personal experience is not rewritten as a proven benefit for everyone."
+      ]
+    },
+    {
+      "id": "editorial-context-comparison",
+      "status": "requires-owned-or-licensed-recording",
+      "language": "fr",
+      "suggestedSourceFile": "owned/editorial-context-comparison.mp4",
+      "audience": "People comparing paper and phone task lists",
+      "topic": "A practical comparison of two task-list methods",
+      "intendedTakeaway": "Paper helped this speaker avoid notifications; a phone list was easier to carry.",
+      "authoredSpeech": {
+        "before": "J'ai comparé une liste de tâches sur mon téléphone et une liste sur papier pendant une semaine.",
+        "focus": "Avec celle-ci, je ne me laissais plus distraire par les notifications.",
+        "after": "Je parle de la liste sur papier. Le téléphone était plus pratique en déplacement, mais le carnet m'aidait à rester concentré à mon bureau."
+      },
+      "stockPair": {
+        "suggestedFile": "owned/stock-writing-paper-task-list.mp4",
+        "tags": ["person", "writing", "paper", "task list", "notebook"],
+        "visualIntent": "A hand writing a task list in a paper notebook; a distinct phone-list shot can illustrate the comparison.",
+        "acceptableQueries": ["writing task list paper notebook", "phone task list hand"],
+        "reject": ["generic phone scrolling used to illustrate the paper-list benefit", "unreadable action after crop"],
+        "portraitRequirement": "Keep the writing hand and notebook in the portrait frame.",
+        "provenanceRequired": ["provider or owner", "asset ID where available", "creator", "source URL where available", "license or permission", "selected interval"]
+      },
+      "humanChecks": [
+        "Neighboring sentences resolve celle-ci to the paper list.",
+        "English stock queries describe visible action despite French speech.",
+        "The opening names both compared methods instead of starting with an unexplained pronoun.",
+        "The ending preserves the phone's practical benefit as well as the notebook's benefit.",
+        "Captions preserve the spoken French meaning and the speaker's qualification."
+      ]
+    },
+    {
+      "id": "editorial-attributed-evidence",
+      "status": "requires-owned-or-licensed-recording",
+      "language": "en",
+      "suggestedSourceFile": "owned/editorial-attributed-evidence.mp4",
+      "audience": "Creators evaluating a simple workspace demonstration",
+      "topic": "Explaining another creator's cable-labeling example",
+      "intendedTakeaway": "Labels helped identify cables in one demonstration; distinguish that observation from a universal claim.",
+      "authoredSpeech": {
+        "before": "In this example I am discussing my collaborator Alex's cable-labeling demonstration, used with their permission.",
+        "focus": "Alex labeled the two charger cables before putting them back behind the desk. They then picked the requested cable without unplugging the other one.",
+        "after": "My takeaway is to label cables before routing them. This is one demonstration, not a measured time-saving study. Alex made the original demonstration; I added the comparison with my own unlabeled setup."
+      },
+      "stockPair": {
+        "suggestedFile": "owned/stock-labeling-desk-cables.mp4",
+        "tags": ["hands", "labeling", "cables", "desk"],
+        "visualIntent": "Hands placing a label on a cable, identified as illustrative footage if it is not the original demonstration.",
+        "acceptableQueries": ["hands labeling cables desk", "organizing desk cables"],
+        "reject": ["stock footage presented as the actual cited demonstration", "fabricated research chart", "unsupported before-and-after claim"],
+        "portraitRequirement": "The label and the cable receiving it remain visible.",
+        "provenanceRequired": ["provider or owner", "asset ID where available", "creator", "source URL where available", "license or permission", "selected interval"]
+      },
+      "humanChecks": [
+        "Use this authored scenario after recording a real demonstration with permission; replace Alex with the actual credited creator.",
+        "The selected excerpt contains the observed example and the speaker's own explanation.",
+        "The ending retains the limitation that this is one demonstration.",
+        "Original creator/source credit remains visible or audible in the export and recorded in source notes.",
+        "Illustrative stock footage is not represented as evidence from the original demonstration."
+      ]
+    }
+  ],
+  "reviewRubric": {
+    "brollAcceptance": "Count accepted shots over all proposed shots; also record no-match moments and incorrect no-match decisions.",
+    "captionCorrections": "Count caption cues changed after the first proposal; note recurring names, numbers, language and timing errors.",
+    "opening": "pass: a new viewer can identify the subject and claim; needs-work: important context or a pronoun is unexplained; not-reviewed: no judgment yet.",
+    "ending": "pass: the idea and necessary qualifications finish completely; needs-work: the conclusion is clipped or changes the source's meaning; not-reviewed: no judgment yet.",
+    "attribution": "Identify the actual creator/source and permission; preserve attribution and distinguish source evidence from illustrative stock.",
+    "distinctIdea": "Write one sentence describing this version's useful example, analysis, comparison or demonstration; a new headline alone does not supply a new idea.",
+    "correctionTime": "Time active corrections from first preview until acceptance, in minutes; exclude unattended rendering time.",
+    "postPublication": "If posted, record the actual platform, measurement date, watch time, completion, saves, shares and exact platform notices. Compare similar audience, duration and observation periods; leave unavailable metrics blank."
+  }
+}

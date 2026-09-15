@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
+  copyFile,
   mkdtemp,
   readFile,
   readdir,
   rm,
   stat,
+  utimes,
   writeFile,
 } from "node:fs/promises";
 import os from "node:os";
@@ -239,6 +241,188 @@ test(
             "A model change invalidates the description cache",
           );
           delete process.env.DEEPSEEK_MODEL;
+        },
+      );
+
+      await t.test(
+        "stock descriptions survive new download IDs and mtimes but changed windows, crops, and content are reinspected",
+        async () => {
+          const asset: StoredBroll = {
+            ...await createAsset(),
+            selection: {
+              sourceStart: 0.2,
+              duration: 3.6,
+              targetAspect: 9 / 16,
+              motion: 0.8,
+              cropRetention: 0.3164,
+            },
+            stock: {
+              providerId: "pixabay:cached-stock-1",
+              rendition: "medium",
+              contentHash: createHash("sha256").update(await readFile(source)).digest("hex"),
+              retrievedAt: "2026-09-01T00:00:00Z",
+              licenseUrl: "https://pixabay.com/service/license-summary/",
+            },
+          };
+          let visionCalls = 0;
+          globalThis.fetch = async (_input, init) => {
+            const body = requestBody(init);
+            assert.ok(!JSON.stringify(body).includes(directory), "No local paths sent to provider");
+            if (vision(body)) {
+              visionCalls++;
+              return success(description);
+            }
+            return success(mockMatcher(body));
+          };
+          const first = await matchBrollWithAI(options([asset]));
+          assert.equal(first.matches[0]?.assetId, asset.id);
+          assert.equal(first.matches[0]?.sourceStart, 0.2);
+          assert.equal(visionCalls, 1);
+
+          const downloadedAgain = path.join(directory, "new download.mp4");
+          await copyFile(source, downloadedAgain);
+          const originalMtime = (await stat(source)).mtimeMs;
+          await utimes(downloadedAgain, new Date(), new Date(originalMtime + 60_000));
+          assert.notEqual((await stat(downloadedAgain)).mtimeMs, originalMtime);
+          const next: StoredBroll = {
+            ...asset,
+            id: randomUUID(),
+            name: "another-download.mp4",
+            filePath: downloadedAgain,
+            stock: { ...asset.stock!, retrievedAt: "2026-09-02T00:00:00Z" },
+          };
+          const reused = await matchBrollWithAI(options([next]));
+          assert.equal(visionCalls, 1, "Same stock bytes, rendition, and window reuse the paid description");
+          assert.equal(reused.matches[0]?.assetId, next.id, "Cached observations bind to the current asset ID");
+          assert.equal(reused.matches[0]?.sourceStart, 0.2);
+
+          for (const [label, changed] of [
+            ["interval start", { ...next, selection: { ...next.selection!, sourceStart: 4.2 } }],
+            ["interval duration", { ...next, selection: { ...next.selection!, duration: 2.4 } }],
+            ["crop", { ...next, selection: { ...next.selection!, targetAspect: 1 } }],
+            ["content hash", { ...next, stock: { ...next.stock!, contentHash: "f".repeat(64) } }],
+            ["rendition", { ...next, stock: { ...next.stock!, rendition: "large" } }],
+          ] as const) {
+            const before = visionCalls;
+            const result = await matchBrollWithAI(options([changed]));
+            assert.equal(result.matches.length, 1, label);
+            assert.equal(visionCalls, before + 1, `Changed ${label} must inspect new frames`);
+            assert.ok(!JSON.stringify(result).includes(directory));
+          }
+          const caches = (await readdir(paths.analysis)).filter((name) => name.startsWith("broll-stock-"));
+          assert.equal(caches.length, 6, "One stable cache entry for each distinct inspected stock window");
+          for (const filename of caches) {
+            const cached = await readFile(path.join(paths.analysis, filename), "utf8");
+            assert.ok(!cached.includes(directory));
+            assert.ok(!cached.includes("test-provider-key"));
+            assert.ok(!cached.includes("data:image"));
+          }
+        },
+      );
+
+      await t.test(
+        "stock vision sees the selected interval and centered portrait crop rather than the source midpoint or side content",
+        async () => {
+          const filePath = path.join(directory, "stock with side borders.mp4");
+          await runLocal("ffmpeg", [
+            "-v", "error", "-y", "-i", source,
+            "-vf", "drawbox=x=0:y=0:w=50:h=90:color=yellow:t=fill,drawbox=x=110:y=0:w=50:h=90:color=yellow:t=fill",
+            "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", filePath,
+          ]);
+          const asset: StoredBroll = {
+            ...await createAsset(), filePath, size: (await stat(filePath)).size,
+            selection: {
+              sourceStart: 0.2, duration: 3.6, targetAspect: 9 / 16,
+              motion: 0.8, cropRetention: 0.3164,
+            },
+            stock: {
+              providerId: "pixabay:framed-stock-2", rendition: "medium",
+              contentHash: createHash("sha256").update(await readFile(filePath)).digest("hex"),
+              retrievedAt: "2026-09-01T00:00:00Z",
+              licenseUrl: "https://pixabay.com/service/license-summary/",
+            },
+          };
+          let checkedImages = 0;
+          globalThis.fetch = async (_input, init) => {
+            const body = requestBody(init);
+            assert.ok(!JSON.stringify(body).includes(directory));
+            if (!vision(body)) return success(mockMatcher(body));
+            const images = body.messages[1]!.content.filter((part: any) => part.type === "image_url");
+            assert.equal(images.length, 3);
+            for (const [index, image] of images.entries()) {
+              const imagePath = path.join(directory, `stock-check-${index}.jpg`);
+              const rgbPath = path.join(directory, `stock-check-${index}.rgb`);
+              await writeFile(imagePath, Buffer.from(image.image_url.url.split(",")[1], "base64"));
+              const probe = await runLocal("ffprobe", [
+                "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height",
+                "-of", "json", imagePath,
+              ]);
+              const dimensions = JSON.parse(probe.stdout).streams[0];
+              assert.ok(Math.abs(dimensions.width / dimensions.height - 9 / 16) < 0.015);
+              await runLocal("ffmpeg", [
+                "-v", "error", "-y", "-i", imagePath,
+                "-frames:v", "1", "-vf", "scale=1:1",
+                "-f", "rawvideo", "-pix_fmt", "rgb24", rgbPath,
+              ]);
+              const pixel = await readFile(rgbPath);
+              assert.ok(
+                pixel[2]! > 200 && pixel[0]! < 20 && pixel[1]! < 20,
+                "Every inspected frame must show the blue selected opening; yellow sides and green midpoint are excluded",
+              );
+              checkedImages++;
+            }
+            return success(description);
+          };
+          const result = await matchBrollWithAI(options([asset]));
+          assert.equal(checkedImages, 3);
+          assert.equal(result.matches[0]?.sourceStart, 0.2);
+          assert.equal(result.matches[0]?.assetId, asset.id);
+          assert.ok(!JSON.stringify(result).includes(directory));
+        },
+      );
+
+      await t.test(
+        "long transcripts expose late spoken ideas within the request budget and preserve their original indices",
+        async () => {
+          const asset = await createAsset();
+          const longMoments = Array.from({ length: 80 }, (_, index) => ({
+            start: index * 4,
+            end: index * 4 + 3,
+            text: index === 60 ? "A forest walk can clear your mind." : `Other spoken idea ${index}.`,
+          }));
+          let sentMoments: { momentIndex: number; text: string }[] = [];
+          globalThis.fetch = async (_input, init) => {
+            const body = requestBody(init);
+            if (vision(body)) return success(description);
+            const prompt = JSON.parse(body.messages[1]!.content);
+            sentMoments = prompt.moments;
+            return success({
+              matches: [
+                {
+                  momentIndex: 61,
+                  assetId: asset.id,
+                  confidence: 0.95,
+                  reason: "This unsampled moment must not be accepted.",
+                },
+                {
+                  momentIndex: 60,
+                  assetId: asset.id,
+                  confidence: 0.95,
+                  reason: "The woodland supports the late forest walk idea.",
+                },
+              ],
+            });
+          };
+          const result = await matchBrollWithAI({ ...options([asset]), moments: longMoments });
+          assert.equal(sentMoments.length, 40, "Cloud requests retain the 40-moment budget");
+          assert.equal(sentMoments.find((moment) => moment.momentIndex === 60)?.text, longMoments[60]!.text);
+          assert.ok(!sentMoments.some((moment) => moment.momentIndex === 61));
+          assert.deepEqual(result.matches, [{
+            momentIndex: 60,
+            assetId: asset.id,
+            sourceStart: 4.2,
+            reason: "The woodland supports the late forest walk idea.",
+          }], "A late match keeps its original transcript index rather than its sampled-array position");
         },
       );
 

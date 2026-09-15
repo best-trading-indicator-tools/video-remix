@@ -10,6 +10,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { jsonCompletion } from "./ai-json.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
 import { paths } from "./config.js";
 import type { StoredBroll } from "./store.js";
@@ -60,6 +61,7 @@ export interface BrollAIMoment {
   start: number;
   end: number;
   text: string;
+  context?: string;
 }
 export interface BrollAIMatch {
   momentIndex: number;
@@ -82,76 +84,6 @@ function throwIfAborted(signal: AbortSignal) {
   if (signal.aborted) throw abortError();
 }
 
-/** Only the fixed provider endpoint receives media. Diagnostics never escape. */
-async function jsonCompletion({
-  model,
-  apiKey,
-  messages,
-  signal,
-  maxTokens,
-}: {
-  model: string;
-  apiKey: string;
-  messages: unknown[];
-  signal: AbortSignal;
-  maxTokens: number;
-}): Promise<unknown> {
-  throwIfAborted(signal);
-  const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(45_000)]);
-  const response = await fetch("https://api.deepseek.com/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      response_format: { type: "json_object" },
-      thinking: { type: "disabled" },
-      max_tokens: maxTokens,
-    }),
-    signal: requestSignal,
-    redirect: "error",
-  });
-  if (!response.ok) {
-    await response.body?.cancel();
-    throw new Error("Provider request failed");
-  }
-  const reader = response.body?.getReader();
-  if (!reader) throw new Error("Provider response was empty");
-  const chunks: Uint8Array[] = [];
-  let length = 0;
-  try {
-    while (true) {
-      throwIfAborted(requestSignal);
-      const { done, value } = await reader.read();
-      if (done) break;
-      length += value.byteLength;
-      if (length > 64_000) throw new Error("Provider response exceeded limit");
-      chunks.push(value);
-    }
-  } catch (error) {
-    await reader.cancel().catch(() => undefined);
-    throw error;
-  } finally {
-    reader.releaseLock();
-  }
-  const envelope = z
-    .object({
-      choices: z
-        .array(
-          z.object({
-            finish_reason: z.literal("stop"),
-            message: z.object({ content: z.string().min(1).max(20_000) }),
-          }),
-        )
-        .min(1)
-        .max(1),
-    })
-    .parse(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-  return JSON.parse(envelope.choices[0]!.message.content);
-}
 
 async function describeAsset(
   asset: StoredBroll,
@@ -161,15 +93,21 @@ async function describeAsset(
 ): Promise<ObservedAsset> {
   throwIfAborted(signal);
   const info = await stat(asset.filePath);
-  const duration = Math.min(3.6, asset.duration);
-  const sourceStart = Math.max(0, (asset.duration - duration) / 2);
+  const duration = Math.min(3.6, asset.selection?.duration ?? asset.duration);
+  const sourceStart = asset.selection?.sourceStart ?? Math.max(0, (asset.duration - duration) / 2);
+  if (!Number.isFinite(sourceStart) || sourceStart < 0 || !Number.isFinite(duration) || duration < 1.5 ||
+      sourceStart + duration > asset.duration + 0.01) throw new Error("Invalid inspected window");
+  const targetAspect = asset.selection?.targetAspect;
+  if (targetAspect !== undefined && (!Number.isFinite(targetAspect) || targetAspect < 0.1 || targetAspect > 10))
+    throw new Error("Invalid inspected crop");
   const identity = createHash("sha256")
     .update(
       JSON.stringify({
         schema: SCHEMA_VERSION,
         model,
         size: info.size,
-        mtime: info.mtimeMs,
+        ...(asset.stock ? { providerId: asset.stock.providerId, rendition: asset.stock.rendition,
+          contentHash: asset.stock.contentHash, sourceStart, windowDuration: duration, targetAspect } : { mtime: info.mtimeMs }),
         declaredSize: asset.size,
         duration: asset.duration,
         width: asset.width,
@@ -177,7 +115,8 @@ async function describeAsset(
       }),
     )
     .digest("hex");
-  const cachePath = path.join(paths.analysis, `broll-${asset.id}.json`);
+  const cacheId = asset.stock ? `stock-${identity}` : asset.id;
+  const cachePath = path.join(paths.analysis, `broll-${cacheId}.json`);
   const observed = (description: Description): ObservedAsset => ({
     assetId: asset.id,
     sourceStart,
@@ -198,6 +137,8 @@ async function describeAsset(
     /* Missing, stale, or invalid local cache is regenerated. */
   }
   throwIfAborted(signal);
+  // Stock downloads belong to one render's work directory. Share durable
+  // descriptions on disk, but never another job's still-being-decoded file.
   const pendingKey = `${asset.id}:${identity}`;
   let entry = pendingDescriptions.get(pendingKey);
   if (!entry || entry.controller.signal.aborted) {
@@ -229,8 +170,6 @@ async function describeAsset(
               "-loglevel",
               "error",
               "-y",
-              "-threads",
-              "2",
               "-ss",
               String(sourceStart + sampleTimes[index]!),
               ...MEDIA_INPUT_ARGS,
@@ -242,9 +181,7 @@ async function describeAsset(
               "1",
               "-an",
               "-vf",
-              "scale=512:512:force_original_aspect_ratio=decrease",
-              "-filter_threads",
-              "1",
+              `${targetAspect ? `crop=w='min(iw,ih*${targetAspect})':h='min(ih,iw/${targetAspect})',` : ""}scale=512:512:force_original_aspect_ratio=decrease`,
               "-q:v",
               "5",
               destination,
@@ -331,7 +268,7 @@ async function describeAsset(
         }
       }
       if (error) reject(error);
-      else resolve(value!);
+      else resolve({ ...value!, assetId: asset.id });
     };
     const abort = () => finish(abortError());
     signal.addEventListener("abort", abort, { once: true });
@@ -393,14 +330,16 @@ export async function matchBrollWithAI({
       "AI B-roll matching considered the first 20 selected library clips for this edit.",
     );
   const selected = eligible.slice(0, MAX_ASSETS);
+  const sampledMoments = new Set(Array.from({ length: Math.min(MAX_MOMENTS, moments.length) },
+    (_, index) => Math.floor(index * moments.length / Math.min(MAX_MOMENTS, moments.length))));
   const candidates = moments
     .flatMap((moment, momentIndex) =>
-      Number.isFinite(moment.start) &&
+      sampledMoments.has(momentIndex) && Number.isFinite(moment.start) &&
       Number.isFinite(moment.end) &&
       moment.start >= 0 &&
       moment.end - moment.start >= 1.5 &&
       moment.text.trim().length > 0
-        ? [{ momentIndex, text: moment.text.trim().slice(0, 500) }]
+        ? [{ momentIndex, text: moment.text.trim().slice(0, 500), context: moment.context?.slice(0, 1500) }]
         : [],
     )
     .slice(0, MAX_MOMENTS);

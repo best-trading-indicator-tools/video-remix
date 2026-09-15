@@ -269,7 +269,9 @@ export default function AutoPanel({
               />
             </label>
             <div className="supporting-visuals">
-              <label htmlFor="supporting-visuals">Supporting visuals</label>
+              <label htmlFor="supporting-visuals">
+                Supporting visuals · optional
+              </label>
               <select
                 id="supporting-visuals"
                 value={options.supportingVisuals || "off"}
@@ -278,10 +280,13 @@ export default function AutoPanel({
                     ...options,
                     supportingVisuals: event.target
                       .value as AutoOptions["supportingVisuals"],
+                    ...(event.target.value === "stock" && !options.brollMatching && capabilities?.brollAI
+                      ? { brollMatching: "ai" as const } : {}),
                   })
                 }
               >
                 <option value="off">Off</option>
+                <option value="stock">Stock B-roll · Pixabay</option>
                 <option value="library">My B-roll videos</option>
                 <option
                   value="graphics"
@@ -297,6 +302,53 @@ export default function AutoPanel({
                 Add up to three brief cutaways at relevant moments. Your main
                 audio continues underneath.
               </p>
+              {options.supportingVisuals === "stock" && (
+                <div className="broll-matching">
+                  <label htmlFor="stock-video-type">Stock video style</label>
+                  <select
+                    id="stock-video-type"
+                    value={options.stockVideoType || "all"}
+                    onChange={(event) =>
+                      onChange({
+                        ...options,
+                        stockVideoType: event.target.value as
+                          "all" | "animation",
+                      })
+                    }
+                  >
+                    <option value="all">Any moving stock video</option>
+                    <option value="animation">
+                      Animations &amp; motion graphics only
+                    </option>
+                  </select>
+                  <p className="auto-preferences-note">
+                    Finds existing clips from{" "}
+                    <a
+                      href="https://pixabay.com/videos/"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Pixabay
+                    </a>{" "}
+                    using your edited speech. Moving shots are checked in the output crop. Unmatched moments
+                    keep your original picture. No clips to upload.
+                  </p>
+                  {!capabilities?.stockBroll && (
+                    <p className="auto-preferences-note" role="status">
+                      Stock search needs a free{" "}
+                      <a
+                        href="https://pixabay.com/api/docs/"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Pixabay API key
+                      </a>{" "}
+                      configured as PIXABAY_API_KEY on the server. Until then,
+                      exports keep your original footage.
+                    </p>
+                  )}
+                </div>
+              )}
               {(options.supportingVisuals === "graphics" ||
                 options.supportingVisuals === "both") && (
                 <p className="auto-preferences-note">
@@ -312,7 +364,8 @@ export default function AutoPanel({
                     B-roll can still be used.
                   </p>
                 )}
-              {(options.supportingVisuals === "library" ||
+              {(options.supportingVisuals === "stock" ||
+                options.supportingVisuals === "library" ||
                 options.supportingVisuals === "both") && (
                 <>
                   <div className="broll-matching">
@@ -327,21 +380,29 @@ export default function AutoPanel({
                         })
                       }
                     >
-                      <option value="tags">Filename &amp; tags · local</option>
+                      <option value="tags">
+                        {options.supportingVisuals === "stock"
+                          ? "Spoken keywords & stock tags"
+                          : "Filename & tags · local"}
+                      </option>
                       <option value="ai" disabled={!capabilities?.brollAI}>
-                        AI visual matching · DeepSeek
+                        AI meaning &amp; visual matching · DeepSeek
                       </option>
                     </select>
                     {options.brollMatching === "ai" ? (
                       <p className="auto-preferences-note">
                         Sends sampled B-roll frames and transcript excerpts to
-                        DeepSeek. Analyzes up to 20 selected clips per edit;
-                        descriptions are reused.
+                        DeepSeek.{" "}
+                        {options.supportingVisuals === "stock"
+                          ? "Uses neighboring speech to search by meaning, then inspects up to six stock candidates. Descriptions are cached."
+                          : "Analyzes up to 20 selected clips per edit; descriptions are reused."}
                       </p>
                     ) : (
                       <p className="auto-preferences-note">
-                        Matches words from the transcript to clip filenames and
-                        tags. Clips without a match are skipped.
+                        {options.supportingVisuals === "stock"
+                          ? "Matches the spoken words to stock clip tags."
+                          : "Matches words from the transcript to clip filenames and tags."}{" "}
+                        Clips without a match are skipped.
                       </p>
                     )}
                     {!capabilities?.brollAI && (
@@ -352,16 +413,18 @@ export default function AutoPanel({
                       </p>
                     )}
                   </div>
-                  <BrollPanel
-                    key={selectedId || "new-imports"}
-                    selectedIds={options.brollIds || []}
-                    onSelectionChange={onBrollSelectionChange}
-                    onBusyChange={onLibraryBusyChange}
-                    onRemoved={onBrollRemoved}
-                    aiMatching={options.brollMatching === "ai"}
-                    maxFiles={maxFiles}
-                    maxFileSize={maxFileSize}
-                  />
+                  {options.supportingVisuals !== "stock" && (
+                    <BrollPanel
+                      key={selectedId || "new-imports"}
+                      selectedIds={options.brollIds || []}
+                      onSelectionChange={onBrollSelectionChange}
+                      onBusyChange={onLibraryBusyChange}
+                      onRemoved={onBrollRemoved}
+                      aiMatching={options.brollMatching === "ai"}
+                      maxFiles={maxFiles}
+                      maxFileSize={maxFileSize}
+                    />
+                  )}
                 </>
               )}
             </div>

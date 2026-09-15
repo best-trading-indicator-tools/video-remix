@@ -1,7 +1,12 @@
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
+export interface FocalPoint { x: number; y: number }
+export interface CaptionStyle { fontSize: number; bottomPercent: number }
+export interface QualityIssue { code: string; message: string; start?: number; end?: number }
+export interface QualityReport { status: "pass" | "review"; checkedAt: string; scope: "full" | "sampled"; issues: QualityIssue[] }
 export interface EditSegment {
   start: number;
   end: number;
+  focalPoint?: FocalPoint;
 }
 export interface TimedCallout {
   text: string;
@@ -12,7 +17,8 @@ export interface AutoOptions {
   aspect: Aspect;
   targetDuration: 30 | 45 | 60;
   narration: boolean;
-  supportingVisuals?: "off" | "library" | "graphics" | "both";
+  supportingVisuals?: "off" | "stock" | "library" | "graphics" | "both";
+  stockVideoType?: "all" | "animation";
   brollIds?: string[];
   brollMatching?: "tags" | "ai";
 }
@@ -54,6 +60,7 @@ export interface AutoCapabilities {
   motionGraphics?: boolean;
   brollAI?: boolean;
   brollAIModel?: string;
+  stockBroll?: boolean;
   message?: string;
 }
 export interface RemixSettings {
@@ -89,6 +96,8 @@ export interface RemixSettings {
   callouts?: TimedCallout[];
   normalizeAudio?: boolean;
   autoMotion?: boolean;
+  focalPoint?: FocalPoint;
+  captionStyle?: CaptionStyle;
 }
 export const DEFAULT_SETTINGS: RemixSettings = {
   speed: 1,
@@ -132,9 +141,120 @@ export interface VideoSource {
   createdAt: string;
   thumbnailUrl: string;
   url: string;
+  fingerprint?: string;
+  previousExports?: number;
 }
 export interface BrollAsset extends VideoSource {
   tags: string[];
+  attribution?: { provider: "Pixabay"; creator: string; url: string };
+  selection?: {
+    sourceStart: number;
+    duration: number;
+    targetAspect: number;
+    motion: number;
+    cropRetention: number;
+    query?: string;
+    reason?: string;
+  };
+  stock?: {
+    providerId: string;
+    rendition: string;
+    contentHash: string;
+    retrievedAt: string;
+    licenseUrl: string;
+  };
+}
+export interface CaptionCue { id: string; start: number; end: number; text: string }
+export interface EditPlanMedia {
+  id: string;
+  name: string;
+  kind: "broll" | "graphic" | "audio";
+  duration: number;
+  url?: string;
+  assetId?: string;
+  attribution?: BrollAsset["attribution"];
+  selection?: BrollAsset["selection"];
+  stock?: BrollAsset["stock"];
+}
+export interface EditPlanVisual {
+  id: string;
+  mediaId: string;
+  start: number;
+  end: number;
+  sourceStart: number;
+  enabled: boolean;
+  locked: boolean;
+  reason?: string;
+  focalPoint?: FocalPoint;
+}
+export interface EditPlan {
+  version: 1;
+  revision: number;
+  sourceId: string;
+  sourceDuration: number;
+  outputDuration: number;
+  createdAt: string;
+  settings: RemixSettings;
+  cuts: EditSegment[];
+  captions: CaptionCue[];
+  visuals: EditPlanVisual[];
+  media: EditPlanMedia[];
+  audioMediaId?: string;
+  narration: boolean;
+}
+export interface EditPlanChanges {
+  revision: number;
+  hookText?: string;
+  captions?: CaptionCue[];
+  cuts?: EditSegment[];
+  visuals?: EditPlanVisual[];
+  framing?: { fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle };
+  correctionSeconds?: number;
+}
+export interface ExportReview {
+  benchmarkCase?: string;
+  approach?: string;
+  openingClear?: boolean;
+  endingComplete?: boolean;
+  brollReviewed?: number;
+  brollAccepted?: number;
+  captionCorrections?: number;
+  correctionSeconds?: number;
+  notes?: string;
+}
+export interface PostMetrics {
+  platform: "instagram" | "tiktok";
+  measuredAt: string;
+  views?: number;
+  averageWatchSeconds?: number;
+  completionPercent?: number;
+  saves?: number;
+  shares?: number;
+  platformNotice?: string;
+}
+export interface ExportMeasurements {
+  review?: ExportReview;
+  posts?: PostMetrics[];
+}
+export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
+export interface ExportHistoryEntry {
+  id: string;
+  jobId: string;
+  sourceId: string;
+  sourceFingerprint: string;
+  sourceName: string;
+  title: string;
+  cuts: EditSegment[];
+  sourceText: string;
+  outputDuration: number;
+  createdAt: string;
+  revision: number;
+  parentJobId?: string;
+  stockShots: { identity: string; name: string; sourceStart: number; duration: number }[];
+  publications: { platform: "instagram" | "tiktok"; publishedAt: string; url?: string }[];
+  available?: boolean;
+  measurements?: ExportMeasurements;
+  corrections?: CorrectionRecord;
 }
 export interface Attachment {
   id: string;
@@ -142,12 +262,7 @@ export interface Attachment {
   kind: "audio" | "subtitle";
 }
 export type JobStatus =
-  | "queued"
-  | "processing"
-  | "completed"
-  | "failed"
-  | "cancelled"
-  | "skipped";
+  "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
   id: string;
   sourceId: string;
@@ -162,7 +277,12 @@ export interface RenderJob {
   error?: string;
   downloadUrl?: string;
   outputSize?: number;
+  editable?: boolean;
+  revision?: number;
+  parentJobId?: string;
   auto?: AutoOptions;
+  qualityReport?: QualityReport;
+  corrections?: CorrectionRecord;
   phase?: string;
   summary?: {
     title: string;
@@ -181,8 +301,11 @@ export interface RenderJob {
     start: number;
     end: number;
     assetId?: string;
+    attribution?: BrollAsset["attribution"];
     sourceStart?: number;
     reason?: string;
+    selection?: BrollAsset["selection"];
+    stock?: BrollAsset["stock"];
   }[];
 }
 export interface Health {

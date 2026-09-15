@@ -2,6 +2,7 @@ import { access, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import type { FocalPoint } from "../shared/types.js";
 
 /** Local, preselected media on the final edited timeline. Sound is never used. */
 export interface SupportingVisual {
@@ -9,6 +10,7 @@ export interface SupportingVisual {
   start: number;
   end: number;
   sourceStart?: number;
+  focalPoint?: FocalPoint;
   label: string;
   kind: "broll" | "graphic";
 }

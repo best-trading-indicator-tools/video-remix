@@ -9,30 +9,15 @@ import {
 import type { StoredBroll, StoredJob, StoredSource } from "./store.js";
 import { matchBrollWithAI } from "./broll-ai.js";
 
-const ignored = new Set(
-  "a an and are as at be been but by can could do for from had has have how i if in into is it its just like make more my of on one or our out so some than that the their them then there these they this those to too up us use was we were what when where which who will with would you your video clip footage stock broll mp4 mov webm".split(
-    " ",
-  ),
-);
-const tokens = (value: string) => [
-  ...new Set(
-    (
-      value
-        .normalize("NFKC")
-        .toLocaleLowerCase()
-        .match(/[\p{L}\p{N}]+/gu) || []
-    )
-      .filter((word) => word.length > 2 && !ignored.has(word))
-      .map((word) =>
-        word.length > 3 && word.endsWith("s") ? word.slice(0, -1) : word,
-      ),
-  ),
-];
+import { brollTokens as tokens } from "./broll-text.js";
+import { findStockBroll } from "./stock-broll.js";
+import { inspectBrollWindows } from "./broll-motion.js";
 
 interface Moment {
   start: number;
   end: number;
   text: string;
+  context?: string;
 }
 export interface PlannedSupportingVisual extends Moment {
   assetId?: string;
@@ -61,8 +46,10 @@ function moments(
         text: path.parse(sourceName).name,
       },
     ];
-  return transcript.segments.flatMap((segment) => {
+  return transcript.segments.flatMap((segment, segmentIndex) => {
     if (!segment.text.trim()) return [];
+    const context = transcript.segments.slice(Math.max(0, segmentIndex - 1), segmentIndex + 2)
+      .map(item => item.text).join(" ").slice(0, 1500);
     // A supporting shot starts with an actual spoken phrase, never at an
     // unrelated percentage of the running time.
     if (segment.words.length) {
@@ -88,6 +75,7 @@ function moments(
             start,
             end,
             text: selected.map((word) => word.word.trim()).join(" "),
+            context,
           });
         first = last + 1;
       }
@@ -100,7 +88,7 @@ function moments(
       start + 3.6,
     );
     return start >= 3.5 && end - start >= 1.5
-      ? [{ start, end, text: segment.text.trim() }]
+      ? [{ start, end, text: segment.text.trim(), context }]
       : [];
   });
 }
@@ -136,7 +124,7 @@ export function planSupportingVisuals({
       moment.end -
       moment.start <=
       coverageBudget;
-  if (mode === "library" || mode === "both") {
+  if (mode === "stock" || mode === "library" || mode === "both") {
     for (const [momentIndex, moment] of candidates.entries()) {
       if (result.length >= maximum) break;
       const aiMatch = aiMatches?.find(
@@ -159,7 +147,7 @@ export function planSupportingVisuals({
         aiMatches === undefined
           ? ranked[0]?.asset
           : assets.find((item) => item.id === aiMatch?.assetId);
-      const sourceStart = aiMatches === undefined ? 0 : aiMatch?.sourceStart;
+      const sourceStart = aiMatches === undefined ? asset?.selection?.sourceStart ?? 0 : aiMatch?.sourceStart;
       if (
         !asset ||
         used.has(asset.id) ||
@@ -175,12 +163,14 @@ export function planSupportingVisuals({
           moment.end,
           moment.start + asset.duration - sourceStart,
           moment.start + 3.6,
+          moment.start + (asset.selection?.duration ?? 3.6),
         ),
       };
       if (!fits(proposed)) continue;
       result.push({
         ...proposed,
         assetId: asset.id,
+        ...(asset.attribution ? { attribution: asset.attribution } : {}),
         kind: "broll",
         sourceStart,
         ...(aiMatch ? { reason: aiMatch.reason } : {}),
@@ -248,25 +238,46 @@ export async function prepareSupportingVisuals({
   const mode = job.auto?.supportingVisuals || "off";
   if (mode === "off") return [];
   const duration = job.summary!.outputDuration;
+  const dimensions = geometry(source, job.settings);
   const usesAI =
-    (mode === "library" || mode === "both") && job.auto?.brollMatching === "ai";
+    (mode === "stock" || mode === "library" || mode === "both") &&
+    job.auto?.brollMatching === "ai";
   const addNote = (text: string) => {
     job.notes ??= [];
     if (!job.notes.includes(text)) job.notes.push(text);
   };
+  if (mode === "stock") {
+    if (usesAI && !transcript?.segments.length) {
+      addNote("AI stock search needs a speech transcript. Original footage was kept.");
+      job.supportingVisuals = [];
+      return [];
+    }
+    const stock = await findStockBroll({
+      moments: moments(transcript, duration, source.name),
+      type: job.auto?.stockVideoType || "all",
+      language: transcript?.language,
+      matching: usesAI ? "ai" : "tags",
+      targetAspect: dimensions.width / dimensions.height,
+      workDir,
+      signal,
+      onPhase: (phase) => onPhase(phase, 62),
+    });
+    assets = stock.assets;
+    stock.notes.forEach(addNote);
+  }
   let aiMatches: AIMatch[] | undefined;
   if (usesAI) {
     aiMatches = [];
     if (transcript?.segments.length) {
-      const ai = await matchBrollWithAI({
-        assets,
-        moments: moments(transcript, duration, source.name),
-        workDir,
-        signal,
-        onPhase: (phase) => onPhase(phase, 64),
-      });
-      aiMatches = ai.matches;
-      ai.notes.forEach(addNote);
+        const ai = await matchBrollWithAI({
+          assets,
+          moments: moments(transcript, duration, source.name),
+          workDir,
+          signal,
+          onPhase: (phase) => onPhase(phase, 64),
+        });
+        aiMatches = ai.matches;
+        ai.notes.forEach(addNote);
     } else
       addNote(
         "AI B-roll matching needs a speech transcript. Original footage was kept.",
@@ -280,13 +291,21 @@ export async function prepareSupportingVisuals({
     mode,
     aiMatches,
   });
+  if (mode === "stock" || mode === "library" || mode === "both") job.brollCandidates = assets.slice(0, 20);
   const result: SupportingVisual[] = [];
   const details: NonNullable<RenderJob["supportingVisuals"]> = [];
-  const dimensions = geometry(source, job.settings);
   for (const [index, plan] of plans.entries()) {
     signal.throwIfAborted();
     if (plan.kind === "broll") {
       const asset = assets.find((item) => item.id === plan.assetId)!;
+      if (asset.stock) {
+        const checked = await inspectBrollWindows(asset, dimensions.width / dimensions.height, signal,
+          { sourceStart: plan.sourceStart ?? 0, duration: plan.end - plan.start });
+        if (!checked.length) {
+          addNote("A stock shot was omitted because its final trimmed interval had insufficient visible motion.");
+          continue;
+        }
+      }
       result.push({
         path: asset.filePath,
         start: plan.start,
@@ -301,8 +320,11 @@ export async function prepareSupportingVisuals({
         start: plan.start,
         end: plan.end,
         assetId: asset.id,
+        ...(asset.attribution ? { attribution: asset.attribution } : {}),
         sourceStart: plan.sourceStart ?? 0,
         ...(plan.reason ? { reason: plan.reason } : {}),
+        ...(asset.selection ? { selection: asset.selection } : {}),
+        ...(asset.stock ? { stock: asset.stock } : {}),
       });
       if (plan.reason)
         addNote(
@@ -359,11 +381,16 @@ export async function prepareSupportingVisuals({
     job.summary!.changes.push(
       `${cardCount} animated card${cardCount === 1 ? "" : "s"}`,
     );
-  if ((mode === "library" || mode === "both") && !footageCount)
+  if (
+    (mode === "stock" || mode === "library" || mode === "both") &&
+    !footageCount
+  )
     addNote(
       usesAI
         ? "No suitable AI B-roll match fit this edit. Original footage was kept."
-        : "No suitably timed B-roll match was found using the selected clip names and tags. Original footage was kept.",
+        : mode === "stock"
+          ? "No relevant stock B-roll fit this edit. Original footage was kept."
+          : "No suitably timed B-roll match was found using the selected clip names and tags. Original footage was kept.",
     );
   if (
     (mode === "graphics" || mode === "both") &&

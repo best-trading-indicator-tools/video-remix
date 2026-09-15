@@ -68,6 +68,8 @@ test(
         assert.equal(text.includes(`"${field}"`), false);
     };
     const start = async () => {
+      processLog = "";
+      let readinessFailure = "No health request completed";
       server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
         cwd: process.cwd(),
         env: {
@@ -87,35 +89,31 @@ test(
         output?.on("data", (chunk) => {
           processLog = (processLog + chunk.toString()).slice(-16000);
         });
-      let lastFetchError: unknown;
-      for (let attempt = 0; attempt < 100; attempt++) {
+      const deadline = Date.now() + 10_000;
+      while (Date.now() < deadline) {
         try {
-          // Each restart owns a fresh listener at the same address. Readiness
-          // probes should not reuse a pooled socket from the stopped process.
+          // Do not reuse a previous server process's socket across restarts,
+          // and release every response before the next readiness probe.
           const response = await fetch(`${base}/api/health`, {
             headers: { Connection: "close" },
-            signal: AbortSignal.timeout(2000),
+            signal: AbortSignal.timeout(Math.min(1000, deadline - Date.now())),
           });
-          await response.arrayBuffer();
-          if (response.ok) return;
+          const health = await response.json() as { ok?: boolean };
+          if (response.ok && health.ok) return;
+          readinessFailure = `Health returned HTTP ${response.status}, ready ${Boolean(health.ok)}`;
         } catch (error) {
-          lastFetchError = error;
+          readinessFailure = error instanceof Error
+            ? `${error.message}: ${String((error.cause as { code?: string } | undefined)?.code)}`
+            : String(error);
+          /* The listener is still starting. */
         }
-        if (server.exitCode !== null || server.signalCode !== null)
-          throw new Error(
-            `B-roll server exited during startup (pid=${server.pid}, code=${server.exitCode}, signal=${server.signalCode}): ${processLog}`,
-            { cause: lastFetchError },
-          );
-        await sleep(100);
+        if (server.exitCode !== null) throw new Error(processLog);
+        if (Date.now() < deadline) await sleep(Math.min(100, deadline - Date.now()));
       }
-      throw new Error(
-        `B-roll test server did not start (pid=${server.pid}): ${processLog}`,
-        { cause: lastFetchError },
-      );
+      throw new Error(`B-roll test server did not start (${readinessFailure}, pid ${server.pid}): ${processLog}`);
     };
     const stop = async () => {
-      if (!server || server.exitCode !== null || server.signalCode !== null)
-        return;
+      if (!server || server.exitCode !== null) return;
       const child = server;
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => child.kill("SIGKILL"), 7000);

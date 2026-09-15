@@ -26,6 +26,10 @@ import {
 } from "./store.js";
 import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
 import { DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
+import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
+import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
+import { fingerprintFile, publicationChangesSchema } from "./history.js";
+import { correctionRecord, measurementsCsv, measurementsSchema, measurementSummary } from "./measurements.js";
 
 class HttpError extends Error {
   constructor(
@@ -150,6 +154,42 @@ export function createApp() {
   app.get("/api/sources", (_req, res) =>
     res.json({ sources: state.sources.map(publicSource) }),
   );
+  const publicHistory = () => state.history.map(entry => ({ ...entry,
+    available: state.jobs.some(job => job.id === entry.jobId && job.status === "completed"),
+  })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  app.get("/api/history", (_req, res) => res.json({ entries: publicHistory() }));
+  app.get("/api/measurements", (_req, res) => res.json(measurementSummary(state.history)));
+  app.get("/api/measurements/export", (req, res) => {
+    if (req.query.format === "csv") {
+      res.type("text/csv").attachment("remix-measurements.csv").send(measurementsCsv(state.history));
+    } else if (req.query.format === "json" || req.query.format === undefined) {
+      res.type("application/json").attachment("remix-measurements.json").send(JSON.stringify({ version: 1,
+        exportedAt: new Date().toISOString(), ...measurementSummary(state.history), entries: publicHistory() }, null, 2));
+    } else throw new HttpError(400, "Choose JSON or CSV for the measurements export.");
+  });
+  app.patch("/api/history/:id/measurements", async (req, res) => {
+    const entry = state.history.find(item => item.id === req.params.id);
+    if (!entry) throw new HttpError(404, "History entry not found.");
+    const parsed = measurementsSchema.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "Check the review counts, time and platform metrics. Leave unknown values blank.");
+    entry.measurements = parsed.data;
+    await saveStore();
+    res.json(publicHistory().find(item => item.id === entry.id));
+  });
+  app.get("/api/sources/:id/history", (req, res) => {
+    const source = state.sources.find(item => item.id === req.params.id);
+    if (!source) throw new HttpError(404, "Source video not found.");
+    res.json({ entries: publicHistory().filter(entry => entry.sourceFingerprint === source.fingerprint) });
+  });
+  app.patch("/api/history/:id", async (req, res) => {
+    const entry = state.history.find(item => item.id === req.params.id);
+    if (!entry) throw new HttpError(404, "History entry not found.");
+    const parsed = publicationChangesSchema.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "Use a valid publication date and an HTTPS link on the selected platform.");
+    entry.publications = parsed.data.publications;
+    await saveStore();
+    res.json(publicHistory().find(item => item.id === entry.id));
+  });
   app.get("/api/broll", (_req, res) =>
     res.json({ assets: state.broll.map(publicBroll) }),
   );
@@ -331,6 +371,7 @@ export function createApp() {
               id,
               name: nameOf(file.originalname),
               size: file.size,
+              ...(!isBroll ? { fingerprint: await fingerprintFile(file.path) } : {}),
               ...media,
               createdAt: new Date().toISOString(),
               filePath: file.path,
@@ -462,6 +503,55 @@ export function createApp() {
   app.get("/api/jobs", (_req, res) =>
     res.json({ jobs: state.jobs.map(publicJob).reverse() }),
   );
+  app.get("/api/jobs/:id/plan", (req, res) => {
+    const job = state.jobs.find(item => item.id === req.params.id);
+    if (!job?.editPlan) throw new HttpError(404, "This export has no saved editable plan. Create a new Auto edit first.");
+    res.json(publicEditPlan(job));
+  });
+  app.get("/api/jobs/:id/plan/media/:mediaId", (req, res, next) => {
+    const job = state.jobs.find(item => item.id === req.params.id);
+    if (!job?.editPlan?.media.some(item => item.id === req.params.mediaId))
+      throw new HttpError(404, "Saved footage is unavailable.");
+    res.sendFile(planMediaPath(job, req.params.mediaId), error => { if (error) next(error); });
+  });
+  app.post("/api/jobs/:id/revisions", async (req, res) => {
+    const parent = state.jobs.find(item => item.id === req.params.id);
+    if (!parent?.editPlan) throw new HttpError(404, "This export has no saved editable plan.");
+    if (isActive(parent) || isRunning(parent.id)) throw new HttpError(409, "Wait for this export to finish before editing it.");
+    if (!state.sources.some(item => item.id === parent.sourceId))
+      throw new HttpError(404, "The source has expired. Upload it again to make a new edit.");
+    if (state.jobs.filter(isActive).length >= 300) throw new HttpError(429, "Your render queue is full.");
+    const parsed = editPlanChangesSchema.safeParse(req.body);
+    if (!parsed.success) throw new HttpError(400, "Check the edited captions, cut times and footage choices.");
+    if (parsed.data.revision !== parent.editPlan.revision)
+      throw new HttpError(409, "This edit has changed. Reload the saved plan.");
+    let plan;
+    try { plan = applyEditPlanChanges(parent.editPlan, parsed.data, parent.sourceTranscript); }
+    catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid edit changes."); }
+    const id = randomUUID();
+    const job: StoredJob = {
+      id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
+      variant: parent.variant, parentJobId: parent.id, auto: parent.auto,
+      status: "queued", progress: 0, createdAt: new Date().toISOString(),
+      outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
+      sourceTranscript: parent.sourceTranscript, notes: ["Saved footage and narration choices were kept. This revision renders only this video."],
+      corrections: { ...correctionRecord(parent.editPlan, plan, parsed.data.correctionSeconds),
+        ...(!parsed.data.captions ? { captionCorrections: 0 } : {}),
+        ...(!parsed.data.visuals ? { brollChanges: 0 } : {}) },
+      summary: parent.summary ? { ...parent.summary, title: plan.settings.hookText || parent.summary.title,
+        outputDuration: plan.outputDuration, changes: [...parent.summary.changes.filter(change => !change.startsWith("Edited revision")), `Edited revision ${plan.revision}`] } : undefined,
+    };
+    await clonePlanFiles(parent, job);
+    // File preparation may yield while another request removes the parent/source.
+    if (!state.jobs.includes(parent) || !state.sources.some(item => item.id === job.sourceId)) {
+      await rm(path.join(paths.plans, id), { recursive: true, force: true });
+      throw new HttpError(409, "The original edit was removed. Start a new edit.");
+    }
+    state.jobs.push(job);
+    await saveStore();
+    res.status(201).json(publicJob(job));
+    pumpQueue();
+  });
   app.post("/api/jobs", async (req, res) => {
     const parsed = batchSchema.safeParse(req.body);
     if (!parsed.success)
@@ -576,7 +666,7 @@ export function createApp() {
         "The source video is no longer available. Upload it again.",
       );
     if (
-      job.auto?.brollIds?.some(
+      !job.editPlan && job.auto?.brollIds?.some(
         (id) => !state.broll.some((asset) => asset.id === id),
       )
     )
@@ -593,8 +683,10 @@ export function createApp() {
     delete job.downloadUrl;
     delete job.outputSize;
     delete job.phase;
-    delete job.summary;
-    delete job.notes;
+    if (!job.editPlan) {
+      delete job.summary;
+      delete job.notes;
+    }
     delete job.captionPath;
     delete job.captionUrl;
     delete job.supportingVisuals;
@@ -680,6 +772,7 @@ export function createApp() {
       jobs.flatMap((job) => [
         rm(job.outputPath, { force: true }),
         rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+        rm(path.join(paths.plans, job.id), { recursive: true, force: true }),
         ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
       ]),
     );

@@ -1,16 +1,37 @@
 import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
-import { renderVideo } from "./engine.js";
+import { geometry, renderVideo } from "./engine.js";
 import { AutoSkipError, prepareAutoRemix } from "./auto.js";
 import { prepareSupportingVisuals } from "./supporting-plan.js";
 import type { SupportingVisual } from "./visuals.js";
-import { saveStore, state, type StoredJob } from "./store.js";
+import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
+import { captureEditPlan, renderInputsFromPlan } from "./plan-storage.js";
+import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
+import { inspectExport } from "./quality.js";
+import { textLayoutIssues } from "../shared/framing.js";
+import { parseCaptionCues } from "./edit-plan.js";
+import { readFile } from "node:fs/promises";
 const running = new Map<string, AbortController>();
 let stopped = false;
 export const isActive = (job: StoredJob) =>
   job.status === "queued" || job.status === "processing";
 export const isRunning = (jobId: string) => running.has(jobId);
+/** An unidentified legacy source may be a reimport of any running Auto source. */
+export function autoSourceBusy(
+  job: Pick<StoredJob, "id" | "sourceId" | "auto">,
+  jobs: Pick<StoredJob, "id" | "sourceId" | "auto" | "status">[],
+  sources: Pick<StoredSource, "id" | "fingerprint">[],
+): boolean {
+  if (!job.auto) return false;
+  const fingerprints = new Map(sources.map(source => [source.id, source.fingerprint]));
+  const fingerprint = fingerprints.get(job.sourceId);
+  return jobs.some(other => {
+    if (other.id === job.id || other.status !== "processing" || !other.auto) return false;
+    const otherFingerprint = fingerprints.get(other.sourceId);
+    return other.sourceId === job.sourceId || !fingerprint || !otherFingerprint || fingerprint === otherFingerprint;
+  });
+}
 export function pumpQueue() {
   if (stopped) return;
   while (running.size < config.concurrency) {
@@ -18,13 +39,7 @@ export function pumpQueue() {
       (item) =>
         item.status === "queued" &&
         !running.has(item.id) &&
-        (!item.auto ||
-          !state.jobs.some(
-            (other) =>
-              other.status === "processing" &&
-              other.auto &&
-              other.sourceId === item.sourceId,
-          )),
+        !autoSourceBusy(item, state.jobs, state.sources),
     );
     if (!job) break;
     const controller = new AbortController();
@@ -38,6 +53,7 @@ async function run(job: StoredJob, controller: AbortController) {
   let status: "completed" | "failed" | "cancelled" | "skipped" = "failed";
   let errorMessage: string | undefined;
   let outputSize: number | undefined;
+  delete job.qualityReport;
   try {
     await saveStore();
     const source = state.sources.find((item) => item.id === job.sourceId);
@@ -45,6 +61,11 @@ async function run(job: StoredJob, controller: AbortController) {
       throw new Error(
         "The source video is no longer available. Upload it again.",
       );
+    if (!source.fingerprint) {
+      source.fingerprint = await fingerprintFile(source.filePath, controller.signal);
+      // Known, different sources may now use the remaining worker slots.
+      pumpQueue();
+    }
     const audio = state.attachments.find(
       (item) => item.id === job.settings.audioId,
     );
@@ -61,13 +82,20 @@ async function run(job: StoredJob, controller: AbortController) {
     let audioPath = audio?.filePath;
     let subtitlePath = subtitle?.filePath;
     let supportingVisuals: SupportingVisual[] = [];
-    if (job.auto) {
+    if (job.editPlan) {
+      job.phase = "Rendering your saved edit";
+      const saved = await renderInputsFromPlan(job, workDir);
+      audioPath = saved.audioPath;
+      subtitlePath = saved.subtitlePath;
+      supportingVisuals = saved.supportingVisuals;
+    } else if (job.auto) {
       const prepared = await prepareAutoRemix({
         source,
         job,
         workDir,
         signal: controller.signal,
         previous: state.jobs,
+        historyPlans: previousEditorialPlans(state.history, source.fingerprint),
         onPhase: (phase, progress) => {
           job.phase = phase;
           job.progress = Math.max(job.progress, Math.round(progress));
@@ -92,6 +120,9 @@ async function run(job: StoredJob, controller: AbortController) {
           job.progress = Math.max(job.progress, progress);
         },
       });
+      job.phase = "Saving editable cut and footage";
+      await captureEditPlan({ job, source, visuals: supportingVisuals, audioPath, subtitlePath,
+        sourceTranscript: prepared.sourceTranscript, signal: controller.signal });
       job.phase = "Rendering your edit";
       await saveStore();
     }
@@ -113,6 +144,17 @@ async function run(job: StoredJob, controller: AbortController) {
       },
     });
     if (controller.signal.aborted) throw new Error("Cancelled");
+    job.phase = "Checking the rendered video";
+    job.qualityReport = await inspectExport({ output: job.outputPath, source,
+      settings: job.settings, audioPath, supportingVisuals, signal: controller.signal });
+    let captions = job.editPlan?.captions || [];
+    if (!job.editPlan && subtitlePath) {
+      try { captions = parseCaptionCues(await readFile(subtitlePath, "utf8")); }
+      catch { job.qualityReport.issues.push({ code: "caption-check", message: "Caption layout could not be checked. Review the burned captions." }); }
+    }
+    const outputGeometry = geometry(source, job.settings);
+    job.qualityReport.issues.push(...textLayoutIssues({ settings: job.settings, captions }, outputGeometry.width / outputGeometry.height));
+    if (job.qualityReport.issues.length) job.qualityReport.status = "review";
     if (job.auto && subtitlePath) {
       job.captionPath = path.join(paths.outputs, `${job.id}.srt`);
       await copyFile(subtitlePath, job.captionPath);
@@ -152,7 +194,7 @@ async function run(job: StoredJob, controller: AbortController) {
     job.status = status;
     job.phase =
       status === "completed"
-        ? "Ready to preview"
+        ? job.qualityReport?.status === "review" ? "Needs review" : "Ready to preview"
         : status === "skipped"
           ? "Skipped"
           : undefined;
@@ -168,6 +210,9 @@ async function run(job: StoredJob, controller: AbortController) {
       delete job.captionUrl;
     }
     job.finishedAt = new Date().toISOString();
+    const source = state.sources.find(item => item.id === job.sourceId);
+    const entry = source && historyEntry(source, job);
+    if (entry) state.history = upsertHistory(state.history, entry);
     running.delete(job.id);
     await saveStore().catch((error) =>
       console.error("Unable to save render result:", error),
@@ -236,6 +281,7 @@ export async function cleanupExpired() {
     ...jobs.flatMap((job) => [
       rm(job.outputPath, { force: true }),
       rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+      rm(path.join(paths.plans, job.id), { recursive: true, force: true }),
       ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
     ]),
     ...sources.flatMap((source) => [

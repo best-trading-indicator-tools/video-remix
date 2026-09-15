@@ -32,9 +32,11 @@ import {
   alignCallouts,
 } from "./auto-plan.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
-import { completedAutoSiblings, type EditorialPlan } from "./diversity.js";
+import { completedAutoSiblings, footageOverlap, type EditorialPlan } from "./diversity.js";
 import { graphicsAvailable } from "./visuals.js";
 import { brollAIConfigured } from "./broll-ai.js";
+
+import { stockBrollConfigured } from "./stock-broll.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   const [transcription, intelligence, voice, motionGraphics] =
@@ -50,6 +52,7 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
     narration: transcription && intelligence && voice,
     motionGraphics,
     brollAI: brollAIConfigured(),
+    stockBroll: stockBrollConfigured(),
     brollAIModel: process.env.DEEPSEEK_MODEL || "deepseek-flash",
     model: process.env.WHISPER_MODEL || "small",
     ...(!transcription
@@ -140,6 +143,7 @@ interface PreparedAuto {
   summary: NonNullable<RenderJob["summary"]>;
   notes: string[];
   transcript?: Transcript;
+  sourceTranscript?: Transcript;
 }
 
 export class AutoSkipError extends Error {
@@ -153,6 +157,7 @@ export async function prepareAutoRemix({
   signal,
   onPhase,
   previous = [],
+  historyPlans = [],
 }: {
   source: StoredSource;
   job: StoredJob;
@@ -160,6 +165,7 @@ export async function prepareAutoRemix({
   signal: AbortSignal;
   onPhase: (phase: string, progress: number) => void;
   previous?: RenderJob[];
+  historyPlans?: EditorialPlan[];
 }): Promise<PreparedAuto> {
   const options = job.auto!;
   const notes: string[] = [];
@@ -167,9 +173,11 @@ export async function prepareAutoRemix({
   const variant = job.variant - 1;
   const siblings = completedAutoSiblings(job, previous);
   signal.throwIfAborted();
-  if (source.duration <= options.targetDuration && siblings.length)
+  const wholeSource = [{ start: 0, end: source.duration }];
+  if (source.duration <= options.targetDuration && (siblings.length ||
+    historyPlans.some(plan => footageOverlap(wholeSource, plan.cuts) >= 0.8)))
     throw new AutoSkipError(
-      "This short video already has a finished edit in this batch. Another version would repeat the same footage.",
+      "This short video already has a finished edit in your history. Another version would repeat the same footage. Open History to see the matching excerpt.",
     );
   let transcript: Transcript | undefined;
   onPhase("Checking your footage", 2);
@@ -192,7 +200,7 @@ export async function prepareAutoRemix({
       );
   }
   signal.throwIfAborted();
-  const previousPlans: EditorialPlan[] = siblings.map((sibling) => {
+  const previousPlans: EditorialPlan[] = [...historyPlans, ...siblings.map((sibling) => {
     const cuts = sibling.settings.segments || [
       {
         start: sibling.settings.trimStart,
@@ -207,7 +215,7 @@ export async function prepareAutoRemix({
             .join(" ")
         : undefined,
     };
-  });
+  })];
   const candidates = transcript
     ? buildCandidates(
         transcript,
@@ -229,7 +237,7 @@ export async function prepareAutoRemix({
     ).length
   )
     throw new AutoSkipError(
-      "The remaining spoken excerpts repeat edits already finished in this batch. No additional version was created.",
+      "The remaining spoken excerpts repeat earlier exports. Open History to see the matching excerpts. No additional version was created.",
     );
   let cuts: RemixSettings["segments"];
   let captionTranscript: Transcript | undefined;
@@ -326,7 +334,7 @@ export async function prepareAutoRemix({
     );
     if (!cuts.length && previousPlans.length)
       throw new AutoSkipError(
-        "The available scene edits repeat footage already used in this batch. No additional version was created.",
+        "The available scene edits repeat footage already used in earlier exports. Open History to see the matching excerpts. No additional version was created.",
       );
     if (source.duration > options.targetDuration)
       changes.push(
@@ -398,6 +406,7 @@ export async function prepareAutoRemix({
     audioPath,
     notes,
     transcript: captionTranscript,
+    sourceTranscript: transcript,
     summary: {
       title: hook || `${path.parse(source.name).name} — cut ${job.variant}`,
       changes,

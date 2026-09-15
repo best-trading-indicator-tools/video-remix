@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 const n = (min: number, max: number) => z.number().finite().min(min).max(max);
+export const focalPointSchema = z.object({ x: n(0, 1), y: n(0, 1) }).strict();
+export const captionStyleSchema = z.object({ fontSize: n(12, 40), bottomPercent: n(5, 80) }).strict();
 export const settingsSchema = z
   .object({
     speed: n(0.5, 2),
@@ -38,7 +40,7 @@ export const settingsSchema = z
     segments: z
       .array(
         z
-          .object({ start: n(0, 86400), end: n(0, 86400) })
+          .object({ start: n(0, 86400), end: n(0, 86400), focalPoint: focalPointSchema.optional() })
           .refine(
             (value) => value.end > value.start + 0.04,
             "Cut end must follow its start",
@@ -64,6 +66,8 @@ export const settingsSchema = z
       .optional(),
     normalizeAudio: z.boolean().optional(),
     autoMotion: z.boolean().optional(),
+    focalPoint: focalPointSchema.optional(),
+    captionStyle: captionStyleSchema.optional(),
   })
   .strict();
 export const batchSchema = z
@@ -91,10 +95,11 @@ export const autoOptionsSchema = z
       .default(45),
     narration: z.boolean().default(false),
     supportingVisuals: z
-      .enum(["off", "library", "graphics", "both"])
+      .enum(["off", "stock", "library", "graphics", "both"])
       .optional(),
     brollIds: z.array(z.string().uuid()).max(100).optional(),
     brollMatching: z.enum(["tags", "ai"]).optional(),
+    stockVideoType: z.enum(["all", "animation"]).optional(),
   })
   .strict()
   .default({ aspect: "9:16", targetDuration: 45, narration: false });

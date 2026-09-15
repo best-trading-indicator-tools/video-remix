@@ -5,14 +5,21 @@ import type {
   BrollAsset,
   RenderJob,
   VideoSource,
+  EditPlan,
+  Transcript,
+  ExportHistoryEntry,
 } from "../shared/types.js";
 import { config, paths } from "./config.js";
+import { fingerprintFile, historyEntry, upsertHistory } from "./history.js";
 export interface StoredSource extends VideoSource {
   filePath: string;
   thumbnailPath: string;
 }
 export interface StoredBroll extends StoredSource {
   tags: string[];
+  attribution?: BrollAsset["attribution"];
+  selection?: BrollAsset["selection"];
+  stock?: BrollAsset["stock"];
 }
 export interface StoredAttachment extends Attachment {
   filePath: string;
@@ -21,18 +28,24 @@ export interface StoredAttachment extends Attachment {
 export interface StoredJob extends RenderJob {
   outputPath: string;
   captionPath?: string;
+  editPlan?: EditPlan;
+  planFiles?: Record<string, string>;
+  sourceTranscript?: Transcript;
+  brollCandidates?: StoredBroll[];
 }
 interface State {
   sources: StoredSource[];
   attachments: StoredAttachment[];
   jobs: StoredJob[];
   broll: StoredBroll[];
+  history: ExportHistoryEntry[];
 }
 export const state: State = {
   sources: [],
   attachments: [],
   jobs: [],
   broll: [],
+  history: [],
 };
 let writes = Promise.resolve();
 export async function initStore() {
@@ -51,6 +64,7 @@ export async function initStore() {
       throw new Error("Invalid state file");
     Object.assign(state, saved);
     state.broll = Array.isArray(saved.broll) ? saved.broll : [];
+    state.history = Array.isArray(saved.history) ? saved.history : [];
     for (const job of state.jobs)
       if (job.status === "processing") {
         job.status = "failed";
@@ -74,6 +88,19 @@ export async function initStore() {
         { cause: error },
       );
   }
+  // Migrate still-available exports before retention cleanup removes their files.
+  for (const source of state.sources) {
+    const completed = state.jobs.filter(job => job.sourceId === source.id && job.status === "completed");
+    if (!completed.length) continue;
+    if (!source.fingerprint) {
+      try { source.fingerprint = await fingerprintFile(source.filePath); }
+      catch { continue; } // A missing legacy source cannot be identified reliably.
+    }
+    for (const job of completed) {
+      const entry = historyEntry(source, job);
+      if (entry) state.history = upsertHistory(state.history, entry);
+    }
+  }
   await saveStore();
 }
 export function saveStore() {
@@ -93,11 +120,13 @@ export function publicSource(source: StoredSource): VideoSource {
     thumbnailPath: _thumbnailPath,
     ...value
   } = source;
-  return value;
+  return { ...value, ...(source.fingerprint ? { previousExports: state.history.filter(entry => entry.sourceFingerprint === source.fingerprint).length } : {}) };
 }
 export function publicJob(job: StoredJob): RenderJob {
-  const { outputPath: _outputPath, captionPath: _captionPath, ...value } = job;
-  return value;
+  const { outputPath: _outputPath, captionPath: _captionPath,
+    editPlan: _editPlan, planFiles: _planFiles, sourceTranscript: _transcript,
+    brollCandidates: _candidates, ...value } = job;
+  return { ...value, ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
 }
 export function publicBroll(asset: StoredBroll): BrollAsset {
   const {

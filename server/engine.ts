@@ -13,6 +13,7 @@ import {
 import path from "node:path";
 import type { RemixSettings } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
+import { wrapEditorialText as wrapHook } from "../shared/framing.js";
 
 export interface MediaInfo {
   duration: number;
@@ -131,7 +132,7 @@ interface ProbeResult {
   format?: { duration?: string };
 }
 
-async function probe(filePath: string): Promise<ProbeResult> {
+async function probe(filePath: string, signal?: AbortSignal): Promise<ProbeResult> {
   const input = await localFile(filePath);
   const output = await run(
     "ffprobe",
@@ -145,7 +146,7 @@ async function probe(filePath: string): Promise<ProbeResult> {
       "json",
       input,
     ],
-    { timeout: 30_000 },
+    { timeout: 30_000, signal },
   );
   try {
     return JSON.parse(output) as ProbeResult;
@@ -165,8 +166,9 @@ function ratio(value: string | undefined, separator = "/"): number {
     : 0;
 }
 
-export async function probeMedia(filePath: string): Promise<MediaInfo> {
-  const info = await probe(filePath);
+export async function probeMedia(filePath: string, signal?: AbortSignal): Promise<MediaInfo> {
+  signal?.throwIfAborted();
+  const info = await probe(filePath, signal);
   const video = info.streams?.find(
     (stream) =>
       stream.codec_type === "video" && !stream.disposition?.attached_pic,
@@ -358,6 +360,41 @@ function validateSettings(settings: RemixSettings): void {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean")
       throw new Error(`Invalid ${key} setting`);
   }
+  if (!validFocalPoint(settings.focalPoint) || settings.segments?.some(segment => !validFocalPoint(segment.focalPoint)))
+    throw new Error("Focal points must contain x and y coordinates between 0 and 1");
+  const style = settings.captionStyle;
+  if (style !== undefined && (!style || typeof style !== "object" ||
+    !Number.isFinite(style.fontSize) || style.fontSize < 12 || style.fontSize > 40 ||
+    !Number.isFinite(style.bottomPercent) || style.bottomPercent < 5 || style.bottomPercent > 80))
+    throw new Error("Caption style needs a font size from 12 to 40 and a bottom margin from 5 to 80 percent");
+}
+
+function validFocalPoint(value: unknown): boolean {
+  if (value === undefined) return true;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const point = value as { x?: unknown; y?: unknown };
+  return [point.x, point.y].every(coordinate => typeof coordinate === "number" && Number.isFinite(coordinate) && coordinate >= 0 && coordinate <= 1);
+}
+
+/** Crop coordinates use the final edited clock, including reordered/repeated cuts. */
+function focalExpression(settings: RemixSettings, axis: "x" | "y"): string {
+  const fallback = settings.focalPoint?.[axis] ?? 0.5;
+  if (!settings.segments?.length) return decimal(fallback);
+  let offset = 0;
+  const choices = settings.segments.map(segment => {
+    offset += (segment.end - segment.start) / settings.speed;
+    return { end: offset, value: segment.focalPoint?.[axis] ?? fallback };
+  });
+  let expression = decimal(choices.at(-1)!.value);
+  for (let index = choices.length - 2; index >= 0; index--) {
+    const choice = choices[index]!;
+    expression = `if(lt(t,${decimal(choice.end)}),${decimal(choice.value)},${expression})`;
+  }
+  return expression;
+}
+
+function focalCrop(cropWidth: string, cropHeight: string, x: string, y: string): string {
+  return `crop=w='${cropWidth}':h='${cropHeight}':x='max(0,min(iw-ow,iw*(${x})-ow/2))':y='max(0,min(ih-oh,ih*(${y})-oh/2))'`;
 }
 
 export function geometry(
@@ -384,30 +421,6 @@ export function geometry(
   return { width: even(width * cap), height: even(height * cap) };
 }
 
-function wrapHook(text: string, columns: number): string {
-  return text
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => {
-      const output: string[] = [];
-      let current = "";
-      for (const word of line.split(/\s+/u)) {
-        if (!word) continue;
-        if (current && Array.from(`${current} ${word}`).length > columns) {
-          output.push(current);
-          current = "";
-        }
-        const letters = Array.from(word);
-        while (letters.length > columns)
-          output.push(letters.splice(0, columns).join(""));
-        if (letters.length)
-          current += `${current ? " " : ""}${letters.join("")}`;
-      }
-      if (current) output.push(current);
-      return output.join("\n");
-    })
-    .join("\n");
-}
 
 async function fontOption(): Promise<string> {
   for (const font of [
@@ -523,7 +536,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         visual.start < 0 ||
         visual.end - visual.start < 0.04 ||
         visual.end > duration + 0.001 ||
-        (visual.sourceStart ?? 0) < 0,
+        (visual.sourceStart ?? 0) < 0 ||
+        !validFocalPoint(visual.focalPoint),
     )
   )
     throw new Error(
@@ -555,10 +569,20 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       `scale=${even(source.width)}:${even(source.height)}:flags=bicubic`,
       "setsar=1",
     ];
-    if (s.zoom !== 1)
-      filters.push(
-        `crop=w='trunc(iw/${s.zoom}/2)*2':h='trunc(ih/${s.zoom}/2)*2'`,
-      );
+    const focalX = focalExpression(s, "x");
+    const focalY = focalExpression(s, "y");
+    if (s.fit === "crop") {
+      const aspect = decimal(width / height);
+      filters.push(focalCrop(
+        `max(2,trunc(min(iw,ih*${aspect})/${s.zoom}/2)*2)`,
+        `max(2,trunc(min(ih,iw/${aspect})/${s.zoom}/2)*2)`,
+        focalX, focalY,
+      ));
+    } else if (s.zoom !== 1) filters.push(focalCrop(
+      `max(2,trunc(iw/${s.zoom}/2)*2)`, `max(2,trunc(ih/${s.zoom}/2)*2)`, focalX, focalY,
+    ));
+    // Points describe subjects in the original source. Mirroring after the
+    // crop keeps that same subject instead of selecting its opposite edge.
     if (s.mirror) filters.push("hflip");
     const motion = `zoompan=z='1+0.04*min(on/${decimal(Math.max(1, duration * fps - 1))},1)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${width}x${height}:fps=${decimal(fps)}`;
     if (s.fit === "blur")
@@ -572,8 +596,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       );
     else
       filters.push(
-        `scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2`,
-        `crop=${width}:${height}`,
+        `scale=${width}:${height}`,
       );
     filters.push("setsar=1", `fps=${decimal(fps)}`, "format=yuv420p");
     if (s.autoMotion && s.fit !== "blur") filters.push(motion);
@@ -647,7 +670,10 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "utf8",
       );
       filters.push(
-        `subtitles=filename=${filename}:charenc=UTF-8:force_style='FontName=DejaVu Sans,FontSize=20,PrimaryColour=&H00FFFFFF,OutlineColour=&H00151515,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=24'`,
+        // FFmpeg's SRT-to-ASS decoder uses a 384 x 288 script canvas. ASS
+        // margins are script pixels, so converting here preserves percentages
+        // across source resolutions and portrait/landscape exports.
+        `subtitles=filename=${filename}:charenc=UTF-8:force_style='FontName=DejaVu Sans,FontSize=${decimal(s.captionStyle?.fontSize ?? 20)},PrimaryColour=&H00FFFFFF,OutlineColour=&H00151515,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=${Math.round((s.captionStyle?.bottomPercent ?? (100 / 12)) * 288 / 100)}'`,
       );
     }
     const args = [
@@ -720,8 +746,10 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
           local,
         );
         const inputIndex = index + (replacementAudio ? 2 : 1);
+        const supportingCrop = focalCrop(String(width), String(height),
+          decimal(visual.focalPoint?.x ?? 0.5), decimal(visual.focalPoint?.y ?? 0.5));
         graph.push(
-          `[${inputIndex}:V:0]trim=duration=${decimal(length)},setpts=PTS-STARTPTS+${decimal(visual.start)}/TB,scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${width}:${height},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
+          `[${inputIndex}:V:0]trim=duration=${decimal(length)},setpts=PTS-STARTPTS+${decimal(visual.start)}/TB,scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,${supportingCrop},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
           `[picture${index}][cutaway${index}]overlay=x=0:y=0:eof_action=pass:repeatlast=0:enable='gte(t,${decimal(visual.start)})*lt(t,${decimal(visual.end)})'[picture${index + 1}]`,
         );
       }

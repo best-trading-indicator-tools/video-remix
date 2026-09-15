@@ -442,10 +442,38 @@ test(
       });
       assert.equal(brollUpload.status, 201, await brollUpload.clone().text());
       const { assets } = (await brollUpload.json()) as { assets: BrollAsset[] };
+      // This section checks per-source settings on real completed renders.
+      // Already exported short sources now correctly skip across batches, so
+      // use distinct footage instead of bypassing the durable-history rules.
+      const mixedForm = new FormData();
+      for (const [input, filename] of [
+        [silent, "Fresh silent landscape.mp4"],
+        [tone, "Fresh tone without speech.mp4"],
+      ] as const) {
+        const fresh = path.join(directory, filename);
+        await exec("ffmpeg", [
+          "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+          "-i", input, "-vf", "hflip", "-c:v", "libx264",
+          "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "copy", fresh,
+        ]);
+        mixedForm.append("videos", new Blob([await readFile(fresh)]), filename);
+      }
+      const mixedUpload = await fetch(`${base}/api/sources`, {
+        method: "POST", body: mixedForm,
+      });
+      assert.equal(mixedUpload.status, 201, await mixedUpload.clone().text());
+      const mixedSources = (await mixedUpload.json() as { sources: VideoSource[] }).sources;
+      assert.equal(mixedSources.length, 2);
+      assert.deepEqual(mixedSources.map((source) => source.hasAudio), [false, true]);
+      for (const [index, source] of mixedSources.entries()) {
+        assert.notEqual(source.fingerprint, sources[index]!.fingerprint);
+        assert.equal(source.previousExports, 0);
+      }
+      const mixedSourceIds = mixedSources.map((source) => source.id);
       const mixedResponse = await post("/api/auto/jobs", {
         items: [
           {
-            sourceId: sourceIds[0],
+            sourceId: mixedSourceIds[0],
             variants: 1,
             options: {
               aspect: "1:1",
@@ -455,7 +483,7 @@ test(
             },
           },
           {
-            sourceId: sourceIds[1],
+            sourceId: mixedSourceIds[1],
             variants: 3,
             options: {
               aspect: "16:9",
@@ -534,7 +562,7 @@ test(
         const { width, height } = JSON.parse(stdout).streams[0];
         assert.deepEqual(
           [width, height],
-          job.sourceId === sourceIds[0] ? [320, 320] : [320, 180],
+          job.sourceId === mixedSourceIds[0] ? [320, 320] : [320, 180],
           "Each source renders with its own frame format",
         );
         assert.deepEqual(

@@ -1,4 +1,11 @@
 import path from "node:path";
+// Load local secrets for both development and production. Explicit shell
+// variables take precedence; a fresh clone can still run without an .env file.
+try {
+  process.loadEnvFile();
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
 const numberEnv = (key: string, fallback: number, min: number, max: number) => {
   const value =
     process.env[key] === undefined ? fallback : Number(process.env[key]);
@@ -25,4 +32,5 @@ export const paths = {
   outputs: path.join(config.dataDir, "outputs"),
   work: path.join(config.dataDir, "work"),
   analysis: path.join(config.dataDir, "analysis"),
+  plans: path.join(config.dataDir, "plans"),
 };
