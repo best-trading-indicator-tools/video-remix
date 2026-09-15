@@ -83,24 +83,58 @@ export const normalizedSettings = (input: unknown) =>
     ...DEFAULT_SETTINGS,
     ...(typeof input === "object" && input ? input : {}),
   });
-export const autoBatchSchema = z
+export const autoOptionsSchema = z
   .object({
-    sourceIds: z.array(z.string().uuid()).min(1).max(100),
-    variants: z.number().int().min(1).max(5).default(1),
-    options: z
-      .object({
-        aspect: z
-          .enum(["original", "9:16", "1:1", "4:5", "16:9"])
-          .default("9:16"),
-        targetDuration: z
-          .union([z.literal(30), z.literal(45), z.literal(60)])
-          .default(45),
-        narration: z.boolean().default(false),
-        supportingVisuals: z
-          .enum(["off", "library", "graphics", "both"])
-          .optional(),
-        brollIds: z.array(z.string().uuid()).max(100).optional(),
-      })
-      .default({ aspect: "9:16", targetDuration: 45, narration: false }),
+    aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
+    targetDuration: z
+      .union([z.literal(30), z.literal(45), z.literal(60)])
+      .default(45),
+    narration: z.boolean().default(false),
+    supportingVisuals: z
+      .enum(["off", "library", "graphics", "both"])
+      .optional(),
+    brollIds: z.array(z.string().uuid()).max(100).optional(),
+    brollMatching: z.enum(["tags", "ai"]).optional(),
+  })
+  .strict()
+  .default({ aspect: "9:16", targetDuration: 45, narration: false });
+const autoVariantsSchema = z.number().int().min(1).max(5).default(1);
+const autoItemsSchema = z
+  .object({
+    items: z
+      .array(
+        z
+          .object({
+            sourceId: z.string().uuid(),
+            variants: autoVariantsSchema,
+            options: autoOptionsSchema,
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100)
+      .refine(
+        (items) =>
+          new Set(items.map((item) => item.sourceId)).size === items.length,
+        "Choose each source video only once in an automatic batch.",
+      ),
   })
   .strict();
+const legacyAutoBatchSchema = z
+  .object({
+    sourceIds: z.array(z.string().uuid()).min(1).max(100),
+    variants: autoVariantsSchema,
+    options: autoOptionsSchema,
+  })
+  .strict()
+  .transform(({ sourceIds, variants, options }) => ({
+    items: [...new Set(sourceIds)].map((sourceId) => ({
+      sourceId,
+      variants,
+      options,
+    })),
+  }));
+export const autoBatchSchema = z.union([
+  autoItemsSchema,
+  legacyAutoBatchSchema,
+]);

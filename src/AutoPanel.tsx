@@ -3,13 +3,18 @@ import {
   Check,
   ChevronDown,
   Clapperboard,
+  Copy,
   Expand,
   LoaderCircle,
   Scissors,
   Sparkles,
   Subtitles,
 } from "lucide-react";
-import type { AutoCapabilities, AutoOptions } from "../shared/types";
+import type {
+  AutoCapabilities,
+  AutoOptions,
+  VideoSource,
+} from "../shared/types";
 import BrollPanel from "./BrollPanel";
 
 export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
@@ -28,6 +33,12 @@ export default function AutoPanel({
   onVariantsChange,
   onBrollSelectionChange,
   onLibraryBusyChange,
+  onBrollRemoved,
+  sources,
+  selectedId,
+  onSourceChange,
+  onApplyAll,
+  libraryBusy,
   maxFiles,
   maxFileSize,
 }: {
@@ -38,6 +49,12 @@ export default function AutoPanel({
   onVariantsChange: (value: number) => void;
   onBrollSelectionChange: (ids: string[]) => void;
   onLibraryBusyChange: (busy: boolean) => void;
+  onBrollRemoved: (id: string) => void;
+  sources: VideoSource[];
+  selectedId?: string;
+  onSourceChange: (id: string) => void;
+  onApplyAll: () => void;
+  libraryBusy: boolean;
   maxFiles?: number;
   maxFileSize?: number;
 }) {
@@ -52,6 +69,48 @@ export default function AutoPanel({
         <span className="auto-badge">AUTO</span>
       </div>
       <div className="auto-panel-body">
+        <div className="auto-scope">
+          <label htmlFor="auto-source">
+            {sources.length
+              ? "Settings for this video"
+              : "Settings for new imports"}
+          </label>
+          {sources.length > 0 && (
+            <select
+              id="auto-source"
+              value={selectedId}
+              disabled={libraryBusy}
+              onChange={(event) => onSourceChange(event.target.value)}
+            >
+              {sources.map((source) => (
+                <option key={source.id} value={source.id}>
+                  {source.name}
+                </option>
+              ))}
+            </select>
+          )}
+          <p>
+            {sources.length
+              ? "Choose a video to adjust its output. Other videos keep their settings."
+              : "Set your starting preferences, then add your footage."}
+          </p>
+          {sources.length > 1 && (
+            <button type="button" disabled={libraryBusy} onClick={onApplyAll}>
+              <Copy size={14} /> Apply to all {sources.length} videos
+            </button>
+          )}
+          {sources.length > 1 && (
+            <small>
+              Copies every Auto setting, including B-roll and maximum versions.
+              Also used for new imports.
+            </small>
+          )}
+          {libraryBusy && (
+            <small role="status">
+              Finish the B-roll update before switching videos.
+            </small>
+          )}
+        </div>
         <div className="auto-promise">
           <span className="auto-promise-icon">
             <Wand />
@@ -119,7 +178,9 @@ export default function AutoPanel({
             <Clapperboard size={14} />
             <span>Up to {options.targetDuration} seconds</span>
             <span className="auto-original-voice">
-              {options.narration ? "New narration" : "Original voice"}
+              {options.narration && capabilities?.narration
+                ? "New narration"
+                : "Original voice"}
             </span>
           </div>
         </div>
@@ -232,6 +293,10 @@ export default function AutoPanel({
                   B-roll + animated cards
                 </option>
               </select>
+              <p className="auto-preferences-note">
+                Add up to three brief cutaways at relevant moments. Your main
+                audio continues underneath.
+              </p>
               {(options.supportingVisuals === "graphics" ||
                 options.supportingVisuals === "both") && (
                 <p className="auto-preferences-note">
@@ -239,21 +304,65 @@ export default function AutoPanel({
                   into supporting visuals. Rendered locally with HyperFrames.
                 </p>
               )}
-              {!capabilities?.motionGraphics && (
-                <p className="auto-preferences-note">
-                  Animated cards are unavailable on this engine. Your uploaded
-                  B-roll can still be used.
-                </p>
-              )}
+              {!capabilities?.motionGraphics &&
+                (options.supportingVisuals === "graphics" ||
+                  options.supportingVisuals === "both") && (
+                  <p className="auto-preferences-note">
+                    Animated cards are unavailable on this engine. Your uploaded
+                    B-roll can still be used.
+                  </p>
+                )}
               {(options.supportingVisuals === "library" ||
                 options.supportingVisuals === "both") && (
-                <BrollPanel
-                  selectedIds={options.brollIds || []}
-                  onSelectionChange={onBrollSelectionChange}
-                  onBusyChange={onLibraryBusyChange}
-                  maxFiles={maxFiles}
-                  maxFileSize={maxFileSize}
-                />
+                <>
+                  <div className="broll-matching">
+                    <label htmlFor="broll-matching">Match B-roll using</label>
+                    <select
+                      id="broll-matching"
+                      value={options.brollMatching || "tags"}
+                      onChange={(event) =>
+                        onChange({
+                          ...options,
+                          brollMatching: event.target.value as "tags" | "ai",
+                        })
+                      }
+                    >
+                      <option value="tags">Filename &amp; tags · local</option>
+                      <option value="ai" disabled={!capabilities?.brollAI}>
+                        AI visual matching · DeepSeek
+                      </option>
+                    </select>
+                    {options.brollMatching === "ai" ? (
+                      <p className="auto-preferences-note">
+                        Sends sampled B-roll frames and transcript excerpts to
+                        DeepSeek. Analyzes up to 20 selected clips per edit;
+                        descriptions are reused.
+                      </p>
+                    ) : (
+                      <p className="auto-preferences-note">
+                        Matches words from the transcript to clip filenames and
+                        tags. Clips without a match are skipped.
+                      </p>
+                    )}
+                    {!capabilities?.brollAI && (
+                      <p className="auto-preferences-note">
+                        {options.brollMatching === "ai"
+                          ? "AI matching is unavailable. Original footage will be kept until a key is configured."
+                          : "AI matching needs DEEPSEEK_API_KEY configured on the server."}
+                      </p>
+                    )}
+                  </div>
+                  <BrollPanel
+                    key={selectedId || "new-imports"}
+                    selectedIds={options.brollIds || []}
+                    onSelectionChange={onBrollSelectionChange}
+                    onBusyChange={onLibraryBusyChange}
+                    onRemoved={onBrollRemoved}
+                    aiMatching={options.brollMatching === "ai"}
+                    maxFiles={maxFiles}
+                    maxFileSize={maxFileSize}
+                  />
+                </>
               )}
             </div>
             <p className="auto-preferences-note">

@@ -118,6 +118,57 @@ test("graphic cards use existing spoken phrases and respect spacing and screen-t
   );
 });
 
+test("AI matches use the inspected source window without requiring filename keywords", () => {
+  const result = planSupportingVisuals({
+    transcript,
+    duration: 24,
+    sourceName: "travel.mp4",
+    mode: "library",
+    assets: [{ ...asset("coast", "IMG_4821.mp4"), duration: 30 }],
+    aiMatches: [
+      {
+        momentIndex: 0,
+        assetId: "coast",
+        sourceStart: 13.2,
+        reason:
+          "The sampled frames show a coastline at dusk, illustrating the spoken sunset.",
+      },
+    ],
+  });
+  assert.equal(result.length, 1);
+  assert.equal(result[0]!.start, 4);
+  assert.equal(result[0]!.sourceStart, 13.2);
+  assert.equal(result[0]!.assetId, "coast");
+  assert.match(result[0]!.reason!, /coastline/);
+  assert.ok(result[0]!.end - result[0]!.start <= 3.6);
+});
+
+test("an AI rejection never falls back to keyword placement, and invalid references cannot create cutaways", () => {
+  const input = {
+    transcript,
+    duration: 24,
+    sourceName: "travel.mp4",
+    mode: "library" as const,
+    assets: [asset("coast", "sunset sea.mp4")],
+  };
+  assert.equal(planSupportingVisuals(input).length, 1);
+  assert.deepEqual(planSupportingVisuals({ ...input, aiMatches: [] }), []);
+  for (const match of [
+    { momentIndex: 0, assetId: "not-selected", sourceStart: 0 },
+    { momentIndex: 100, assetId: "coast", sourceStart: 0 },
+    { momentIndex: 0, assetId: "coast", sourceStart: -1 },
+    { momentIndex: 0, assetId: "coast", sourceStart: 2.9 },
+    { momentIndex: 0, assetId: "coast", sourceStart: Number.NaN },
+  ])
+    assert.deepEqual(
+      planSupportingVisuals({
+        ...input,
+        aiMatches: [{ ...match, reason: "Invalid suggestion" }],
+      }),
+      [],
+    );
+});
+
 test("rendered cards suppress colliding callouts, preserve touching intervals and B-roll overlays, and update the edit summary", () => {
   const job: Pick<RenderJob, "settings" | "summary"> = {
     settings: {

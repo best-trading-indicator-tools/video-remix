@@ -14,12 +14,21 @@ export interface AutoOptions {
   narration: boolean;
   supportingVisuals?: "off" | "library" | "graphics" | "both";
   brollIds?: string[];
+  brollMatching?: "tags" | "ai";
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
   targetDuration: 45,
   narration: false,
 };
+export interface AutoBatchItem {
+  sourceId: string;
+  variants?: number;
+  options?: AutoOptions;
+}
+export type AutoBatchRequest =
+  | { items: AutoBatchItem[] }
+  | { sourceIds: string[]; variants?: number; options?: AutoOptions };
 export interface TranscriptWord {
   start: number;
   end: number;
@@ -43,6 +52,8 @@ export interface AutoCapabilities {
   intelligence: boolean;
   narration: boolean;
   motionGraphics?: boolean;
+  brollAI?: boolean;
+  brollAIModel?: string;
   message?: string;
 }
 export interface RemixSettings {
@@ -170,6 +181,8 @@ export interface RenderJob {
     start: number;
     end: number;
     assetId?: string;
+    sourceStart?: number;
+    reason?: string;
   }[];
 }
 export interface Health {

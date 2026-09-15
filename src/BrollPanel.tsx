@@ -26,12 +26,16 @@ export default function BrollPanel({
   selectedIds,
   onSelectionChange,
   onBusyChange,
+  onRemoved,
+  aiMatching = false,
   maxFiles = 30,
   maxFileSize = 500 * 1024 ** 2,
 }: {
   selectedIds: string[];
   onSelectionChange: (ids: string[]) => void;
   onBusyChange: (busy: boolean) => void;
+  onRemoved: (id: string) => void;
+  aiMatching?: boolean;
   maxFiles?: number;
   maxFileSize?: number;
 }) {
@@ -43,6 +47,7 @@ export default function BrollPanel({
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const uploadInput = useRef<HTMLInputElement>(null);
+  const mountedRef = useRef(true);
   const selectedRef = useRef(selectedIds);
   const changeRef = useRef(onSelectionChange);
   const requestRef = useRef<XMLHttpRequest | null>(null);
@@ -54,6 +59,7 @@ export default function BrollPanel({
     setError("");
     try {
       const data = await request<{ assets: BrollAsset[] }>("/api/broll");
+      if (!mountedRef.current) return;
       setAssets(data.assets);
       const retained = selectedRef.current.filter((id) =>
         data.assets.some((asset) => asset.id === id),
@@ -67,7 +73,11 @@ export default function BrollPanel({
     }
   };
   useEffect(() => {
+    mountedRef.current = true;
     void load();
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
   useEffect(() => {
     onBusyChange(progress !== null || busyId !== null);
@@ -138,6 +148,7 @@ export default function BrollPanel({
           setError(data.error || "Upload failed. Please try again.");
           return;
         }
+        if (!mountedRef.current) return;
         const added = data.assets || [];
         setAssets((current) => [
           ...added,
@@ -196,7 +207,7 @@ export default function BrollPanel({
     try {
       await request(`/api/broll/${asset.id}`, { method: "DELETE" });
       setAssets((current) => current.filter((item) => item.id !== asset.id));
-      changeRef.current(selectedRef.current.filter((id) => id !== asset.id));
+      onRemoved(asset.id);
       setNotice(`${asset.name} removed from the library.`);
     } catch (reason) {
       setError((reason as Error).message);
@@ -223,8 +234,12 @@ export default function BrollPanel({
         </button>
       </div>
       <p className="broll-description">
-        Add video clips you own. Matching uses their filenames and tags; your
-        main video's audio keeps playing.
+        Add clips you own or have licensed.{" "}
+        {aiMatching
+          ? "AI reads sample frames to match what your video says."
+          : "Matching uses their filenames and tags."}{" "}
+        Relevant clips briefly cover the picture while your main video's audio
+        keeps playing.
       </p>
       <input
         ref={uploadInput}
@@ -343,19 +358,20 @@ export default function BrollPanel({
       </div>
       {!loading && !assets.length && !error && (
         <p className="broll-empty">
-          Your library is empty. Add clips, then select the ones this batch can
+          Your library is empty. Add clips, then select the ones this video can
           use.
         </p>
       )}
       {assets.length > 0 && !selectedIds.length && (
         <p className="broll-empty">
-          Select at least one clip to include B-roll in this batch.
+          Select at least one clip to include B-roll in this video.
         </p>
       )}
       {!!selectedIds.length && (
         <p className="broll-footnote">
-          Only relevant clips are used. Add descriptive tags once, such as
-          “coffee, kitchen, pouring”.
+          {aiMatching
+            ? "AI can skip clips that do not support the speech. Tags are optional."
+            : "Only relevant clips are used. Add descriptive tags once, such as “coffee, kitchen, pouring”."}
         </p>
       )}
     </section>

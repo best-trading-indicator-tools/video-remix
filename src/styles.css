@@ -5204,3 +5204,110 @@ body {
 body {
   min-width: 0;
 }
+
+/* Auto preferences belong to the selected source, with one explicit batch copy. */
+.auto-scope {
+  min-width: 0;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--line);
+}
+.auto-scope > label,
+.broll-matching > label {
+  display: block;
+  color: #d8c3cb;
+  font-size: 11px;
+  font-weight: 550;
+  margin-bottom: 9px;
+}
+.auto-scope > select,
+.broll-matching > select {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid #493746;
+  border-radius: 6px;
+  background: #221d24;
+  color: #e3cbd9;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.auto-scope > p,
+.auto-scope > small {
+  display: block;
+  color: #a0929d;
+  font-size: 10px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  margin: 9px 0 0;
+}
+.auto-scope > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  margin-top: 13px;
+  padding: 9px 10px;
+  border: 1px solid #78513b;
+  border-radius: 6px;
+  background: #36271f;
+  color: #e8bb9d;
+  font-size: 11px;
+  touch-action: manipulation;
+}
+.auto-scope > button:hover:not(:disabled) {
+  background: #453024;
+}
+.broll-matching {
+  margin-top: 16px;
+}
+.broll-matching > p {
+  margin-top: 9px;
+}
+.source-info > span:not(.source-number) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  font-size: 8px;
+  color: #8b8790;
+}
+.source-info > .source-auto-preset {
+  color: #b79782 !important;
+}
+@media (min-width: 681px) and (max-width: 980px) {
+  .auto-scope {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    margin: 0;
+  }
+  .auto-promise,
+  .auto-pipeline {
+    grid-row: 2;
+  }
+}
+@media (max-width: 680px) {
+  .auto-scope > label,
+  .broll-matching > label {
+    font-size: 13px;
+  }
+  .auto-scope > select,
+  .broll-matching > select {
+    min-height: 46px;
+    font-size: 16px;
+  }
+  .auto-scope > p,
+  .auto-scope > small {
+    font-size: 12px;
+  }
+  .auto-scope > button {
+    min-height: 46px;
+    font-size: 13px;
+  }
+  .source-info > span:not(.source-number) {
+    font-size: 9px;
+  }
+}

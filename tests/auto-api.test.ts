@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
-import type { RenderJob, VideoSource } from "../shared/types.js";
+import type { BrollAsset, RenderJob, VideoSource } from "../shared/types.js";
 
 const exec = promisify(execFile);
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -43,7 +43,7 @@ function zipNames(buffer: Buffer): string[] {
 }
 
 test(
-  "automatic batch API validates, edits silent/tone footage, retries cancelled jobs, and cleans its artifacts",
+  "automatic batch API validates atomically, preserves per-video edits and legacy batches, retries, and cleans artifacts",
   { timeout: 90000 },
   async () => {
     const directory = await mkdtemp(path.join(tmpdir(), "remix-auto-api-"));
@@ -221,6 +221,79 @@ test(
         (await post("/api/auto/jobs", { sourceIds, variants: 6 })).status,
         400,
       );
+      for (const [body, status] of [
+        [
+          { items: [{ sourceId: sourceIds[0] }, { sourceId: randomUUID() }] },
+          404,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
+              { sourceId: sourceIds[0], variants: 2 },
+            ],
+          },
+          400,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
+              { sourceId: sourceIds[1], variants: 6 },
+            ],
+          },
+          400,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
+              {
+                sourceId: sourceIds[1],
+                options: { supportingVisuals: "library", brollIds: [] },
+              },
+            ],
+          },
+          400,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
+              {
+                sourceId: sourceIds[1],
+                options: {
+                  supportingVisuals: "both",
+                  brollIds: [randomUUID()],
+                },
+              },
+            ],
+          },
+          404,
+        ],
+        [
+          {
+            items: [
+              { sourceId: sourceIds[0] },
+              {
+                sourceId: sourceIds[1],
+                options: { brollMatching: "invented" },
+              },
+            ],
+          },
+          400,
+        ],
+        [{ items: [{ sourceId: sourceIds[0] }], sourceIds }, 400],
+        [{ items: [] }, 400],
+      ] as const) {
+        const invalid = await post("/api/auto/jobs", body);
+        assert.equal(invalid.status, status, await invalid.clone().text());
+        assert.equal(
+          (await jobs()).length,
+          0,
+          "A bad later item must not enqueue an earlier valid source",
+        );
+      }
       assert.equal(
         (await jobs()).length,
         0,
@@ -355,6 +428,145 @@ test(
         await readdir(path.join(dataDirectory, "work")),
         [],
         "Auto preparation and rendering temporary files are removed",
+      );
+
+      const brollForm = new FormData();
+      brollForm.append(
+        "videos",
+        new Blob([await readFile(silent)]),
+        "Support.mp4",
+      );
+      const brollUpload = await fetch(`${base}/api/broll`, {
+        method: "POST",
+        body: brollForm,
+      });
+      assert.equal(brollUpload.status, 201, await brollUpload.clone().text());
+      const { assets } = (await brollUpload.json()) as { assets: BrollAsset[] };
+      const mixedResponse = await post("/api/auto/jobs", {
+        items: [
+          {
+            sourceId: sourceIds[0],
+            variants: 1,
+            options: {
+              aspect: "1:1",
+              targetDuration: 45,
+              narration: true,
+              supportingVisuals: "graphics",
+            },
+          },
+          {
+            sourceId: sourceIds[1],
+            variants: 3,
+            options: {
+              aspect: "16:9",
+              targetDuration: 60,
+              narration: false,
+              supportingVisuals: "library",
+              brollMatching: "tags",
+              brollIds: [assets[0]!.id, assets[0]!.id],
+            },
+          },
+        ],
+      });
+      assert.equal(
+        mixedResponse.status,
+        201,
+        await mixedResponse.clone().text(),
+      );
+      const mixed = (await mixedResponse.json()) as {
+        batchId: string;
+        jobs: RenderJob[];
+      };
+      assert.equal(mixed.jobs.length, 4, "Per-video version limits are summed");
+      assert.deepEqual(
+        mixed.jobs.map((job) => job.variant),
+        [1, 1, 2, 3],
+      );
+      assert.deepEqual(mixed.jobs[0]!.auto, {
+        aspect: "1:1",
+        targetDuration: 45,
+        narration: true,
+        supportingVisuals: "graphics",
+        brollIds: [],
+      });
+      for (const job of mixed.jobs.slice(1))
+        assert.deepEqual(job.auto, {
+          aspect: "16:9",
+          targetDuration: 60,
+          narration: false,
+          supportingVisuals: "library",
+          brollMatching: "tags",
+          brollIds: [assets[0]!.id],
+        });
+      const mixedFinished = (
+        await waitFor((items) =>
+          items
+            .filter((job) => job.batchId === mixed.batchId)
+            .every((job) => ["completed", "skipped"].includes(job.status)),
+        )
+      ).filter((job) => job.batchId === mixed.batchId);
+      assert.equal(
+        mixedFinished.filter((job) => job.status === "completed").length,
+        2,
+      );
+      assert.equal(
+        mixedFinished.filter((job) => job.status === "skipped").length,
+        2,
+      );
+      for (const job of mixedFinished.filter(
+        (item) => item.status === "completed",
+      )) {
+        const output = path.join(directory, `${job.id}.mp4`);
+        const downloaded = await fetch(`${base}${job.downloadUrl}`);
+        assert.equal(downloaded.status, 200);
+        await writeFile(output, Buffer.from(await downloaded.arrayBuffer()));
+        const { stdout } = await exec("ffprobe", [
+          "-v",
+          "error",
+          "-select_streams",
+          "v:0",
+          "-show_entries",
+          "stream=width,height",
+          "-of",
+          "json",
+          output,
+        ]);
+        const { width, height } = JSON.parse(stdout).streams[0];
+        assert.deepEqual(
+          [width, height],
+          job.sourceId === sourceIds[0] ? [320, 320] : [320, 180],
+          "Each source renders with its own frame format",
+        );
+        assert.deepEqual(
+          job.auto,
+          mixed.jobs.find((item) => item.id === job.id)!.auto,
+        );
+      }
+      const brollCache = path.join(
+        dataDirectory,
+        "analysis",
+        `broll-${assets[0]!.id}.json`,
+      );
+      await writeFile(
+        brollCache,
+        JSON.stringify({ syntheticTestMarker: true }),
+      );
+      assert.equal(
+        (
+          await fetch(`${base}/api/broll/${assets[0]!.id}`, {
+            method: "DELETE",
+          })
+        ).status,
+        200,
+      );
+      await assert.rejects(stat(brollCache), { code: "ENOENT" });
+      assert.equal(
+        (
+          await fetch(`${base}/api/batches/${mixed.batchId}`, {
+            method: "DELETE",
+          })
+        ).status,
+        200,
       );
 
       const cache = path.join(

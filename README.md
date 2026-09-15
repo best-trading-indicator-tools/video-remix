@@ -10,6 +10,8 @@ A private video repurposing workspace with **Auto remix** selected by default. I
 
 Optional output preferences let you choose **30, 45, or 60 seconds**, **1–5 versions per video**, and **9:16, square, 4:5, 16:9, or original framing**. These durations are upper limits; shorter sources stay short.
 
+Select a source video to change **only that video's Auto settings**, including format, duration, narration, supporting visuals, selected B-roll clips, and maximum versions. **Apply to all** copies the selected video's complete settings to the other sources and updates the defaults for future imports. One Auto remix click still processes the whole batch, with each video using its own saved settings. Manual settings remain separate.
+
 The version count is a **maximum**. Auto skips an extra version when it would repeat an already completed edit from the same batch. Short sources normally produce one worthwhile cut; a different headline or color treatment does not make an extra version necessary. Skipped jobs explain the reason and do not create duplicate downloads.
 
 With the local speech model ready, Auto transcribes speech, selects a focused excerpt, tightens longer pauses, and prepares an opening hook and timed captions. Automatic framing and audio balancing finish the cut. Optional Ollama planning helps choose the excerpt and write hooks and callouts from the transcript. Callouts are shown when their words match the edited speech; unmatched ideas are omitted. Auto preserves the source's color and does not add arbitrary noise, speed changes, or mirroring.
@@ -23,7 +25,7 @@ Use your own footage or footage you have permission to repurpose. Review the res
 Open **Adjust output → Supporting visuals** in Auto mode:
 
 - **Off** keeps the edit focused on the source footage.
-- **My B-roll** inserts short supporting shots from a reusable library. Upload your own or licensed video clips once, select the clips available for a batch, and give them descriptive filenames or tags. Matching uses those names/tags and the actual spoken phrases; silent sources can match their descriptive source filename. The original edit's audio keeps playing underneath.
+- **My B-roll** inserts short supporting shots from a reusable library. Upload your own or licensed video clips once and select the clips available for each source. The default local matching uses filenames/tags and the actual spoken phrases; silent sources can match their descriptive source filename. Optional AI visual matching is described below. The original edit's audio keeps playing underneath.
 - **Animated cards** uses [HyperFrames](https://github.com/heygen-com/hyperframes/) locally to turn short phrases from the speech into animated text cards. These are authored graphics, not generated photographic footage. Captions remain above the supporting visuals.
 - **Both** allows either type where relevant. Supporting visuals are limited to a few short moments; unmatched clips and unsuitable card placements are skipped.
 
@@ -32,6 +34,26 @@ No HyperFrames or Remotion API key is required for this local implementation. Hy
 `npm ci` installs the pinned HyperFrames renderer and its Chromium browser. If browser installation was skipped, run `npm run setup:visuals` once. Alternatively set `PRODUCER_HEADLESS_SHELL_PATH` to an installed Chromium executable. Generated cards use local fonts and run without external network requests. The app reports a fallback if a requested card cannot be rendered.
 
 B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses the same per-file upload limit as sources. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
+
+### Optional AI B-roll matching
+
+Choose **AI visual matching** when the local server has `DEEPSEEK_API_KEY` configured. This uses [DeepSeek Flash's image understanding](https://api-docs.deepseek.com/guides/vision/) to match the visible content of your B-roll to the edited speech. The default model ID is `deepseek-flash`; `DEEPSEEK_MODEL` can override it with a compatible vision model.
+
+1. Extract three small frames from one short window near the middle of each selected B-roll clip, up to 20 clips per edit. These samples describe that specific window, not every scene in a long video.
+2. Ask the vision model what is visible and cache the descriptions locally. Later edits reuse the cached descriptions.
+3. Match transcript phrases to those descriptions by meaning. For example, "take a break outdoors" can match footage of a person walking in a park even if its filename is `IMG_4821.mp4`.
+4. Insert only suitable matches, using the inspected window at the corresponding point in the final speech. Cutaways last at most 3.6 seconds, with spacing and total screen-time limits. The main narration continues; captions stay visible. Export notes explain why each AI-selected shot was used.
+
+AI matching is optional and makes paid requests to DeepSeek. It sends sampled **B-roll frames** and **transcript excerpts** to that service; source audio and full video files are not uploaded. Rendering, transcription, and animated cards remain local. Without a usable transcript or a suitable match, or when the API is unavailable, the original picture is kept. An AI rejection never forces a weaker keyword match.
+
+Set the key in the backend environment, then restart the app. Keep it out of frontend variables and Git. For a private `.env` file, Node can load it when starting the production build:
+
+```sh
+npm run build
+node --env-file=.env dist-server/server/index.js
+```
+
+Plain `npm run dev` and `npm start` do not automatically read `.env`; they use exported shell variables. An ordinary DeepSeek API key is required; a coding subscription is not used. Costs depend on sampled images and tokens, with current rates on [DeepSeek's pricing page](https://api-docs.deepseek.com/quick_start/pricing/). The app limits requests and reuses inspections to reduce cost. Model output is a relevance suggestion, not a guarantee of editorial quality or platform acceptance.
 
 ## Manual editing
 

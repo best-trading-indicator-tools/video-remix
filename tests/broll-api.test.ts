@@ -87,19 +87,35 @@ test(
         output?.on("data", (chunk) => {
           processLog = (processLog + chunk.toString()).slice(-16000);
         });
+      let lastFetchError: unknown;
       for (let attempt = 0; attempt < 100; attempt++) {
         try {
-          if ((await fetch(`${base}/api/health`)).ok) return;
-        } catch {
-          /* The listener is still starting. */
+          // Each restart owns a fresh listener at the same address. Readiness
+          // probes should not reuse a pooled socket from the stopped process.
+          const response = await fetch(`${base}/api/health`, {
+            headers: { Connection: "close" },
+            signal: AbortSignal.timeout(2000),
+          });
+          await response.arrayBuffer();
+          if (response.ok) return;
+        } catch (error) {
+          lastFetchError = error;
         }
-        if (server.exitCode !== null) throw new Error(processLog);
+        if (server.exitCode !== null || server.signalCode !== null)
+          throw new Error(
+            `B-roll server exited during startup (pid=${server.pid}, code=${server.exitCode}, signal=${server.signalCode}): ${processLog}`,
+            { cause: lastFetchError },
+          );
         await sleep(100);
       }
-      throw new Error(`B-roll test server did not start: ${processLog}`);
+      throw new Error(
+        `B-roll test server did not start (pid=${server.pid}): ${processLog}`,
+        { cause: lastFetchError },
+      );
     };
     const stop = async () => {
-      if (!server || server.exitCode !== null) return;
+      if (!server || server.exitCode !== null || server.signalCode !== null)
+        return;
       const child = server;
       await new Promise<void>((resolve) => {
         const timer = setTimeout(() => child.kill("SIGKILL"), 7000);

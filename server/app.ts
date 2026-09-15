@@ -200,6 +200,7 @@ export function createApp() {
     await Promise.all([
       rm(asset.filePath, { force: true }),
       rm(asset.thumbnailPath, { force: true }),
+      rm(path.join(paths.analysis, `broll-${asset.id}.json`), { force: true }),
     ]);
     res.json({ ok: true });
   });
@@ -216,59 +217,65 @@ export function createApp() {
           .slice(0, 3)
           .join("; ")}`,
       );
-    const { sourceIds, variants, options } = parsed.data;
+    const { items } = parsed.data;
     const available = await binaries;
     if (!available.ffmpeg || !available.ffprobe)
       throw new HttpError(503, "Install FFmpeg and ffprobe before exporting.");
-    const uniqueIds = [...new Set(sourceIds)];
-    const usesLibrary =
-      options.supportingVisuals === "library" ||
-      options.supportingVisuals === "both";
-    const brollIds = usesLibrary
-      ? [...new Set(options.brollIds ?? state.broll.map((asset) => asset.id))]
-      : [];
-    if (usesLibrary && !brollIds.length)
-      throw new HttpError(
-        400,
-        "Add and select a B-roll clip, or choose animated cards instead.",
-      );
-    if (brollIds.some((id) => !state.broll.some((asset) => asset.id === id)))
-      throw new HttpError(
-        404,
-        "A selected B-roll clip was removed. Choose your supporting clips again.",
-      );
-    if (state.jobs.filter(isActive).length + uniqueIds.length * variants > 300)
+    // Resolve every source and library selection before adding any jobs.
+    const preparedItems = items.map(({ sourceId, variants, options }) => {
+      const source = state.sources.find((item) => item.id === sourceId);
+      if (!source)
+        throw new HttpError(
+          404,
+          "A source video has expired or been removed. Upload it again.",
+        );
+      const usesLibrary =
+        options.supportingVisuals === "library" ||
+        options.supportingVisuals === "both";
+      const brollIds = usesLibrary
+        ? [...new Set(options.brollIds ?? state.broll.map((asset) => asset.id))]
+        : [];
+      if (usesLibrary && !brollIds.length)
+        throw new HttpError(
+          400,
+          "Add and select a B-roll clip, or choose animated cards instead.",
+        );
+      if (brollIds.some((id) => !state.broll.some((asset) => asset.id === id)))
+        throw new HttpError(
+          404,
+          "A selected B-roll clip was removed. Choose your supporting clips again.",
+        );
+      return { source, variants, options: { ...options, brollIds } };
+    });
+    const jobCount = preparedItems.reduce(
+      (sum, item) => sum + item.variants,
+      0,
+    );
+    if (state.jobs.filter(isActive).length + jobCount > 300)
       throw new HttpError(
         429,
         "Your render queue is full. Wait for some exports to finish.",
       );
-    const sources = uniqueIds.map((id) =>
-      state.sources.find((source) => source.id === id),
-    );
-    if (sources.some((source) => !source))
-      throw new HttpError(
-        404,
-        "A source video has expired or been removed. Upload it again.",
-      );
     const batchId = randomUUID();
-    const jobs: StoredJob[] = sources.flatMap((source) =>
-      Array.from({ length: variants }, (_, index) => {
-        const id = randomUUID();
-        return {
-          id,
-          batchId,
-          sourceId: source!.id,
-          sourceName: source!.name,
-          variant: index + 1,
-          auto: { ...options, ...(usesLibrary ? { brollIds } : {}) },
-          settings: { ...DEFAULT_SETTINGS },
-          status: "queued",
-          phase: "Waiting to edit",
-          progress: 0,
-          createdAt: new Date().toISOString(),
-          outputPath: path.join(paths.outputs, `${id}.mp4`),
-        };
-      }),
+    const jobs: StoredJob[] = preparedItems.flatMap(
+      ({ source, variants, options }) =>
+        Array.from({ length: variants }, (_, index) => {
+          const id = randomUUID();
+          return {
+            id,
+            batchId,
+            sourceId: source.id,
+            sourceName: source.name,
+            variant: index + 1,
+            auto: { ...options, brollIds: [...options.brollIds] },
+            settings: { ...DEFAULT_SETTINGS },
+            status: "queued",
+            phase: "Waiting to edit",
+            progress: 0,
+            createdAt: new Date().toISOString(),
+            outputPath: path.join(paths.outputs, `${id}.mp4`),
+          };
+        }),
     );
     state.jobs.push(...jobs);
     await saveStore();

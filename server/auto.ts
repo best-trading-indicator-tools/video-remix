@@ -34,6 +34,7 @@ import {
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
 import { completedAutoSiblings, type EditorialPlan } from "./diversity.js";
 import { graphicsAvailable } from "./visuals.js";
+import { brollAIConfigured } from "./broll-ai.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   const [transcription, intelligence, voice, motionGraphics] =
@@ -48,6 +49,8 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
     intelligence,
     narration: transcription && intelligence && voice,
     motionGraphics,
+    brollAI: brollAIConfigured(),
+    brollAIModel: process.env.DEEPSEEK_MODEL || "deepseek-flash",
     model: process.env.WHISPER_MODEL || "small",
     ...(!transcription
       ? {

@@ -54,6 +54,56 @@ import {
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
+type AutoPreset = { options: AutoOptions; variants: number };
+function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
+  const options = value?.options;
+  return {
+    variants: Math.max(
+      1,
+      Math.min(5, Math.floor(Number(value?.variants)) || 1),
+    ),
+    options: {
+      ...DEFAULT_AUTO_OPTIONS,
+      ...options,
+      aspect: ["original", "9:16", "1:1", "4:5", "16:9"].includes(
+        options?.aspect || "",
+      )
+        ? options!.aspect
+        : DEFAULT_AUTO_OPTIONS.aspect,
+      targetDuration: [30, 45, 60].includes(options?.targetDuration || 0)
+        ? options!.targetDuration
+        : DEFAULT_AUTO_OPTIONS.targetDuration,
+      narration: options?.narration === true,
+      supportingVisuals: ["off", "library", "graphics", "both"].includes(
+        options?.supportingVisuals || "",
+      )
+        ? options!.supportingVisuals
+        : "off",
+      brollMatching: options?.brollMatching === "ai" ? "ai" : "tags",
+      brollIds: Array.isArray(options?.brollIds)
+        ? [...new Set(options.brollIds.filter((id) => typeof id === "string"))]
+        : [],
+    },
+  };
+}
+function sameAutoPreset(first: AutoPreset, second: AutoPreset): boolean {
+  return (
+    JSON.stringify({
+      ...first,
+      options: {
+        ...first.options,
+        brollIds: [...(first.options.brollIds || [])].sort(),
+      },
+    }) ===
+    JSON.stringify({
+      ...second,
+      options: {
+        ...second.options,
+        brollIds: [...(second.options.brollIds || [])].sort(),
+      },
+    })
+  );
+}
 type Toast = {
   id: number;
   message: string;
@@ -288,9 +338,19 @@ function Section({
 
 export default function App() {
   const [mode, setMode] = useState<"auto" | "manual">("auto");
-  const [autoOptions, setAutoOptions] = useState<AutoOptions>({
-    ...DEFAULT_AUTO_OPTIONS,
-  });
+  const [autoById, setAutoById] = useState<Record<string, AutoPreset>>(() =>
+    Object.fromEntries(
+      Object.entries(
+        storedObject<Record<string, AutoPreset>>(
+          "remix-auto-video-settings",
+          {},
+        ),
+      ).map(([id, value]) => [id, autoPreset(value)]),
+    ),
+  );
+  const [defaultAuto, setDefaultAuto] = useState<AutoPreset>(() =>
+    autoPreset(storedObject("remix-auto-default-settings", {})),
+  );
   const [autoCapabilities, setAutoCapabilities] =
     useState<AutoCapabilities | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -339,6 +399,16 @@ export default function App() {
   const settings = selected
     ? settingsById[selected.id] || defaultSettings
     : defaultSettings;
+  const selectedAuto = selected
+    ? autoById[selected.id] || defaultAuto
+    : defaultAuto;
+  const autoOptions = selectedAuto.options;
+  const autoPresets = sources.map(
+    (source) => autoById[source.id] || defaultAuto,
+  );
+  const uniformAuto = autoPresets.every((preset) =>
+    sameAutoPreset(preset, selectedAuto),
+  );
   const sourcePreview = mode === "auto" || original;
   const pending = jobs.filter(
     (job) => job.status === "queued" || job.status === "processing",
@@ -367,8 +437,6 @@ export default function App() {
         .then((value) => {
           if (stopped) return;
           setAutoCapabilities(value);
-          if (!value.narration)
-            setAutoOptions((current) => ({ ...current, narration: false }));
         })
         .catch(() => {
           if (!stopped)
@@ -492,6 +560,21 @@ export default function App() {
   }, [settingsById, defaultSettings, attachments]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(
+        "remix-auto-video-settings",
+        JSON.stringify(autoById),
+      );
+      localStorage.setItem(
+        "remix-auto-default-settings",
+        JSON.stringify(defaultAuto),
+      );
+    } catch {
+      /* Per-video editing remains available without browser storage. */
+    }
+  }, [autoById, defaultAuto]);
+
+  useEffect(() => {
     if (!videoRef.current) return;
     videoRef.current.playbackRate = sourcePreview ? 1 : settings.speed;
     videoRef.current.volume = sourcePreview ? 1 : Math.min(1, settings.volume);
@@ -587,6 +670,47 @@ export default function App() {
     );
   };
 
+  const updateAuto = (patch: Partial<AutoPreset>) => {
+    if (selected) {
+      const sourceId = selected.id;
+      setAutoById((current) => ({
+        ...current,
+        [sourceId]: autoPreset({
+          ...(current[sourceId] || defaultAuto),
+          ...patch,
+        }),
+      }));
+    } else setDefaultAuto((current) => autoPreset({ ...current, ...patch }));
+  };
+  const applyAutoAll = () => {
+    setAutoById((current) => ({
+      ...current,
+      ...Object.fromEntries(
+        sources.map((source) => [source.id, autoPreset(selectedAuto)]),
+      ),
+    }));
+    setDefaultAuto(autoPreset(selectedAuto));
+    notify(
+      `Auto settings applied to all ${sources.length} videos and saved for new imports.`,
+      "success",
+    );
+  };
+  const removeBrollSelection = (assetId: string) => {
+    const remove = (preset: AutoPreset) => ({
+      ...preset,
+      options: {
+        ...preset.options,
+        brollIds: preset.options.brollIds?.filter((id) => id !== assetId),
+      },
+    });
+    setAutoById((current) =>
+      Object.fromEntries(
+        Object.entries(current).map(([id, preset]) => [id, remove(preset)]),
+      ),
+    );
+    setDefaultAuto(remove);
+  };
+
   const uploadVideos = (files: File[]) => {
     if (!files.length || uploadProgress !== null) return;
     const maxFiles = health?.maxFiles || 20;
@@ -643,6 +767,12 @@ export default function App() {
           added.map((source) => [source.id, { ...defaultSettings }]),
         ),
       }));
+      setAutoById((current) => ({
+        ...current,
+        ...Object.fromEntries(
+          added.map((source) => [source.id, autoPreset(defaultAuto)]),
+        ),
+      }));
       if (added.length) {
         setSelectedId(added[0].id);
         setView("studio");
@@ -671,6 +801,11 @@ export default function App() {
       setSources((current) => current.filter((item) => item.id !== source.id));
       if (selected?.id === source.id) setSelectedId(null);
       setSettingsById((current) => {
+        const next = { ...current };
+        delete next[source.id];
+        return next;
+      });
+      setAutoById((current) => {
         const next = { ...current };
         delete next[source.id];
         return next;
@@ -726,9 +861,14 @@ export default function App() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              sourceIds: sources.map((source) => source.id),
-              variants,
-              options: autoOptions,
+              items: sources.map((source) => {
+                const preset = autoById[source.id] || defaultAuto;
+                return {
+                  sourceId: source.id,
+                  variants: preset.variants,
+                  options: preset.options,
+                };
+              }),
             }),
           },
         );
@@ -870,14 +1010,22 @@ export default function App() {
         : "9 / 16"
       : settings.aspect.replace(":", " / ");
   const exportCount =
-    (mode === "manual" && renderScope === "selected" && selected
-      ? 1
-      : sources.length) * variants;
+    mode === "auto"
+      ? autoPresets.reduce((total, preset) => total + preset.variants, 0)
+      : (renderScope === "selected" && selected ? 1 : sources.length) *
+        variants;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
-  const noBrollSelected =
-    mode === "auto" &&
-    ["library", "both"].includes(autoOptions.supportingVisuals || "off") &&
-    !autoOptions.brollIds?.length;
+  const missingBrollSources =
+    mode === "auto"
+      ? sources.filter((source) => {
+          const options = (autoById[source.id] || defaultAuto).options;
+          return (
+            ["library", "both"].includes(options.supportingVisuals || "off") &&
+            !options.brollIds?.length
+          );
+        })
+      : [];
+  const noBrollSelected = missingBrollSources.length > 0;
 
   return (
     <div className="app-shell">
@@ -1175,6 +1323,7 @@ export default function App() {
                             setOriginal(false);
                           }}
                           aria-pressed={selected?.id === source.id}
+                          disabled={brollBusy}
                         >
                           <div className="source-thumb">
                             <img src={source.thumbnailUrl} alt="" />
@@ -1191,10 +1340,31 @@ export default function App() {
                               <span>·</span>
                               {formatSize(source.size)}
                             </span>
+                            {mode === "auto" && (
+                              <span className="source-auto-preset">
+                                {(autoById[source.id] || defaultAuto).options
+                                  .aspect === "original"
+                                  ? "Original"
+                                  : (autoById[source.id] || defaultAuto).options
+                                      .aspect}
+                                <span>·</span>
+                                Up to{" "}
+                                {
+                                  (autoById[source.id] || defaultAuto).options
+                                    .targetDuration
+                                }
+                                s<span>·</span>
+                                {
+                                  (autoById[source.id] || defaultAuto).variants
+                                }{" "}
+                                max
+                              </span>
+                            )}
                           </div>
                         </button>
                         <IconButton
                           title={`Remove ${source.name}`}
+                          disabled={brollBusy}
                           onClick={() => void removeSource(source)}
                           className="remove-source"
                         >
@@ -1209,9 +1379,27 @@ export default function App() {
                     <Check size={12} />
                   </span>
                   <span>
-                    Processed on your machine.
-                    <br />
-                    <strong>Your footage stays yours.</strong>
+                    {autoPresets.some(
+                      (preset) =>
+                        preset.options.brollMatching === "ai" &&
+                        ["library", "both"].includes(
+                          preset.options.supportingVisuals || "off",
+                        ),
+                    ) ? (
+                      <>
+                        Videos render on your machine.
+                        <br />
+                        <strong>
+                          AI matching shares sample frames &amp; text.
+                        </strong>
+                      </>
+                    ) : (
+                      <>
+                        Processed on your machine.
+                        <br />
+                        <strong>Your footage stays yours.</strong>
+                      </>
+                    )}
                   </span>
                 </div>
               </aside>
@@ -1397,13 +1585,19 @@ export default function App() {
               {mode === "auto" ? (
                 <AutoPanel
                   options={autoOptions}
-                  onChange={setAutoOptions}
+                  onChange={(options) => updateAuto({ options })}
+                  sources={sources}
+                  selectedId={selected?.id}
+                  onSourceChange={setSelectedId}
+                  onApplyAll={applyAutoAll}
+                  libraryBusy={brollBusy}
                   capabilities={autoCapabilities}
-                  variants={variants}
-                  onVariantsChange={setVariants}
+                  variants={selectedAuto.variants}
+                  onVariantsChange={(variants) => updateAuto({ variants })}
                   onBrollSelectionChange={(ids) =>
-                    setAutoOptions((current) => ({ ...current, brollIds: ids }))
+                    updateAuto({ options: { ...autoOptions, brollIds: ids } })
                   }
+                  onBrollRemoved={removeBrollSelection}
                   onLibraryBusyChange={setBrollBusy}
                   maxFileSize={health?.maxFileSize}
                   maxFiles={health?.maxFiles}
@@ -2096,11 +2290,19 @@ export default function App() {
                 <div className="auto-render-summary">
                   <span>
                     <Check size={12} />
-                    {AUTO_FORMAT_NAMES[autoOptions.aspect]}
+                    {uniformAuto
+                      ? AUTO_FORMAT_NAMES[autoOptions.aspect]
+                      : "Individual video settings"}
                   </span>
                   <span>
-                    Up to {autoOptions.targetDuration}s
-                    {variants > 1 ? ` · up to ${variants} versions each` : ""}
+                    {uniformAuto
+                      ? `Up to ${autoOptions.targetDuration}s · `
+                      : ""}
+                    Up to {exportCount || selectedAuto.variants}{" "}
+                    {(exportCount || selectedAuto.variants) === 1
+                      ? "export"
+                      : "exports"}{" "}
+                    total
                   </span>
                 </div>
               )}
@@ -2145,7 +2347,7 @@ export default function App() {
                 </button>
                 <span className="render-fineprint">
                   {noBrollSelected
-                    ? "Select a B-roll clip, or turn supporting visuals off."
+                    ? `Choose B-roll for ${missingBrollSources.length} video${missingBrollSources.length === 1 ? "" : "s"}, or turn supporting visuals off.`
                     : brollBusy
                       ? "Preparing your supporting clips…"
                       : "MP4 export · H.264 · Ready to share"}
@@ -2618,10 +2820,17 @@ export default function App() {
             <div className="guide-note">
               <h3>A couple of good things to know</h3>
               <p>
-                Supporting visuals are optional. Add your own B-roll videos and
-                descriptive tags, or choose animated text cards based on the
-                spoken content. B-roll stays in your library until you remove
-                it.
+                Each video keeps its own Auto preferences. Select a video to
+                change its format, length, narration or maximum versions. Apply
+                to all copies that full preset to your batch and new imports.
+              </p>
+              <p>
+                B-roll is optional and off by default. Upload your own or
+                licensed clips, then choose matching by filenames and tags or
+                optional DeepSeek AI. AI matching sends sampled frames and
+                transcript excerpts to DeepSeek. Relevant clips briefly cover
+                the picture while the main audio continues. Animated text cards
+                are a separate option.
               </p>
               <p>
                 Want full control? Switch to Manual for your own trim, framing,
