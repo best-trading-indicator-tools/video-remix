@@ -14,6 +14,7 @@ import { fingerprintFile, historyEntry, upsertHistory } from "./history.js";
 export interface StoredSource extends VideoSource {
   filePath: string;
   thumbnailPath: string;
+  fileSignature?: { dev: number; ino: number; size: number; mtimeMs: number };
 }
 export interface StoredBroll extends StoredSource {
   tags: string[];
@@ -118,6 +119,7 @@ export function publicSource(source: StoredSource): VideoSource {
   const {
     filePath: _filePath,
     thumbnailPath: _thumbnailPath,
+    fileSignature: _fileSignature,
     ...value
   } = source;
   return { ...value, ...(source.fingerprint ? { previousExports: state.history.filter(entry => entry.sourceFingerprint === source.fingerprint).length } : {}) };

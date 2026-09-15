@@ -8,6 +8,7 @@ import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
 import { captureEditPlan, renderInputsFromPlan } from "./plan-storage.js";
 import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
+import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
 import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
@@ -61,6 +62,7 @@ async function run(job: StoredJob, controller: AbortController) {
       throw new Error(
         "The source video is no longer available. Upload it again.",
       );
+    await assertLinkedSourceUnchanged(source);
     if (!source.fingerprint) {
       source.fingerprint = await fingerprintFile(source.filePath, controller.signal);
       // Known, different sources may now use the remaining worker slots.
@@ -144,6 +146,7 @@ async function run(job: StoredJob, controller: AbortController) {
       },
     });
     if (controller.signal.aborted) throw new Error("Cancelled");
+    await assertLinkedSourceUnchanged(source);
     job.phase = "Checking the rendered video";
     job.qualityReport = await inspectExport({ output: job.outputPath, source,
       settings: job.settings, audioPath, supportingVisuals, signal: controller.signal });

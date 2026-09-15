@@ -232,6 +232,7 @@ export async function checkBinaries(): Promise<{
 export async function createThumbnail(
   inputPath: string,
   outputPath: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const input = await localFile(inputPath);
   await mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
@@ -267,7 +268,7 @@ export async function createThumbnail(
       "1",
       path.resolve(outputPath),
     ],
-    { timeout: 30_000 },
+    { timeout: 30_000, signal },
   );
 }
 

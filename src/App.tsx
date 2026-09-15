@@ -55,6 +55,7 @@ import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
+import ImportPanel from "./ImportPanel";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualCropPosition } from "../shared/manual";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
@@ -308,7 +309,6 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [brollBusy, setBrollBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState<string | null>(null);
-  const [dragging, setDragging] = useState(false);
   const [view, setView] = useState<"studio" | "exports" | "history">("studio");
   const [historySource, setHistorySource] = useState<VideoSource | null>(null);
   const [tab, setTab] = useState<"essentials" | "color" | "advanced" | "all">(
@@ -340,7 +340,6 @@ export default function App() {
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
-  const fileDragDepth = useRef(0);
   const selected =
     sources.find((source) => source.id === selectedId) || sources[0];
   const autoTargets = autoRenderScope === "current" ? (selected ? [selected] : []) :
@@ -400,6 +399,7 @@ export default function App() {
   };
   useEffect(() => {
     window.scrollTo(0, 0);
+    if (view !== "studio") videoRef.current?.pause();
   }, [view]);
   const notify = useCallback(
     (message: string, kind: Toast["kind"] = "info") => {
@@ -704,88 +704,11 @@ export default function App() {
     setDefaultAuto(remove);
   };
 
-  const uploadVideos = (files: File[]) => {
-    if (!files.length || uploadProgress !== null) return;
-    const maxFiles = health?.maxFiles || 20;
-    if (files.length > maxFiles) {
-      notify(`Upload up to ${maxFiles} videos at a time.`, "error");
-      return;
-    }
-    const oversized = health
-      ? files.find((file) => file.size > health.maxFileSize)
-      : null;
-    if (oversized) {
-      notify(
-        `${oversized.name} exceeds the ${formatSize(health!.maxFileSize)} upload limit.`,
-        "error",
-      );
-      return;
-    }
-    const data = new FormData();
-    files.forEach((file) => data.append("videos", file));
-    setUploadProgress(0);
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", "/api/sources");
-    xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable)
-        setUploadProgress(Math.round((event.loaded / event.total) * 100));
-    };
-    xhr.onload = () => {
-      setUploadProgress(null);
-      let response: {
-        sources?: VideoSource[];
-        errors?: { name: string; error: string }[];
-        error?: string;
-      };
-      try {
-        response = JSON.parse(xhr.responseText);
-      } catch {
-        notify("The server returned an unexpected upload response.", "error");
-        return;
-      }
-      if (xhr.status < 200 || xhr.status >= 300) {
-        notify(response.error || "Upload failed. Please try again.", "error");
-        return;
-      }
-      const added = response.sources || [];
-      setSources((current) => [
-        ...added,
-        ...current.filter(
-          (source) => !added.some((item) => item.id === source.id),
-        ),
-      ]);
-      setSettingsById((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          added.map((source) => [source.id, { ...defaultSettings }]),
-        ),
-      }));
-      setAutoById((current) => ({
-        ...current,
-        ...Object.fromEntries(
-          added.map((source) => [source.id, autoPreset(defaultAuto)]),
-        ),
-      }));
-      if (added.length) {
-        setSelectedId(added[0].id);
-        setView("studio");
-        notify(
-          `${added.length} video${added.length === 1 ? "" : "s"} added to your workspace.`,
-          "success",
-        );
-      }
-      response.errors?.forEach((error) =>
-        notify(`${error.name}: ${error.error}`, "error"),
-      );
-    };
-    xhr.onerror = () => {
-      setUploadProgress(null);
-      notify(
-        "Upload interrupted. Check your connection and try again.",
-        "error",
-      );
-    };
-    xhr.send(data);
+  const importedSources = (added: VideoSource[]) => {
+    setSources(current => [...added, ...current.filter(source => !added.some(item => item.id === source.id))]);
+    setSettingsById(current => ({ ...current, ...Object.fromEntries(added.filter(source => !current[source.id]).map(source => [source.id, { ...defaultSettings }])) }));
+    setAutoById(current => ({ ...current, ...Object.fromEntries(added.filter(source => !current[source.id]).map(source => [source.id, autoPreset(defaultAuto)])) }));
+    if (added.length) setSelectedId(current => current || added[0].id);
   };
 
   const removeSource = async (source: VideoSource) => {
@@ -1144,8 +1067,7 @@ export default function App() {
           </div>
         )}
 
-        {view === "studio" ? (
-          <>
+        <div hidden={view !== "studio"} style={{ display: view === "studio" ? undefined : "none" }}>
             <div className="studio-toolbar">
               <div className="workspace-label">
                 <span className="live-dot" />
@@ -1217,76 +1139,9 @@ export default function App() {
                     {sources.length.toString().padStart(2, "0")}
                   </span>
                 </div>
-                <input
-                  ref={videoInput}
-                  className="visually-hidden"
-                  type="file"
-                  multiple
-                  accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v"
-                  aria-label="Upload videos"
-                  onChange={(event) => {
-                    uploadVideos(Array.from(event.target.files || []));
-                    event.target.value = "";
-                  }}
-                />
-                <button
-                  className={`dropzone ${dragging ? "dragging" : ""} ${uploadProgress !== null ? "uploading" : ""}`}
-                  disabled={uploadProgress !== null || !connected}
-                  onClick={() => videoInput.current?.click()}
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    fileDragDepth.current++;
-                    setDragging(true);
-                  }}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDragLeave={(event) => {
-                    event.preventDefault();
-                    fileDragDepth.current--;
-                    if (!fileDragDepth.current) setDragging(false);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    fileDragDepth.current = 0;
-                    setDragging(false);
-                    uploadVideos(Array.from(event.dataTransfer.files));
-                  }}
-                >
-                  <span className="upload-icon">
-                    {uploadProgress !== null ? (
-                      <LoaderCircle size={22} className="spin" />
-                    ) : (
-                      <Upload size={22} />
-                    )}
-                  </span>
-                  <strong>
-                    {uploadProgress === null
-                      ? "Drop your videos here"
-                      : uploadProgress === 100
-                        ? "Preparing your videos…"
-                        : `Uploading… ${uploadProgress}%`}
-                  </strong>
-                  <span>
-                    {uploadProgress === null ? (
-                      <>
-                        or <em>browse files</em>
-                      </>
-                    ) : (
-                      "Keep this window open"
-                    )}
-                  </span>
-                  {uploadProgress === null ? (
-                    <small>
-                      MP4, MOV, WEBM + more <br />
-                      {health
-                        ? `${formatSize(health.maxFileSize)} per file · up to ${health.maxFiles} at once`
-                        : "Multiple videos welcome"}
-                    </small>
-                  ) : (
-                    <div className="upload-progress">
-                      <span style={{ width: `${uploadProgress}%` }} />
-                    </div>
-                  )}
-                </button>
+                <ImportPanel health={health} connected={connected} inputRef={videoInput}
+                  onImported={importedSources} onBusyChange={busy => setUploadProgress(busy ? 0 : null)}
+                  onError={message => notify(message, "error")} />
                 <div className="source-list">
                   {loading ? (
                     <div className="source-empty">
@@ -2405,10 +2260,10 @@ export default function App() {
                 </span>
               </div>
             </section>
-          </>
-        ) : view === "history" ? (
+        </div>
+        {view === "history" ? (
           <HistoryPanel source={historySource} refreshKey={completed.map((job) => job.id).sort().join("|")} onClearSource={() => setHistorySource(null)} onBack={() => setView("studio")} />
-        ) : (
+        ) : view === "exports" ? (
           <section className="exports-panel panel">
             <div className="exports-heading">
               <div>
@@ -2729,7 +2584,7 @@ export default function App() {
               })
             )}
           </section>
-        )}
+        ) : null}
 
         <footer className="site-footer">
           <span>

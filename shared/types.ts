@@ -313,6 +313,8 @@ export interface Health {
   ffmpeg: boolean;
   ffprobe: boolean;
   maxFileSize: number;
+  maxLargeFileSize: number;
+  importChunkSize: number;
   maxFiles: number;
   concurrency: number;
   retentionHours: number;

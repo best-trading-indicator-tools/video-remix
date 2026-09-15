@@ -2,6 +2,15 @@
 
 A private video repurposing workspace with **Auto remix** selected by default. Import your videos, start the batch, and download fresh edits as MP4s or a ZIP. Editing, speech recognition, and optional language-model planning can all run locally without an API key.
 
+## Import long recordings
+
+- **Browse or drop videos:** source imports accept up to **50 GiB per file** by default, including 10–40 GB recordings. Each file transfers in 8 MiB chunks with confirmed progress. Pause an upload, or select the same unchanged file after reloading to resume it. Imports continue while you open Exports or History; keep the browser tab open during transfer.
+- **Link files on this computer:** paste one absolute video path per line. On Mac, select files in Finder and press **Option + Command + C** to copy their paths. The app reads the originals through managed links, without copying a 40 GB file. Removing or expiring an import removes the link, leaving the original intact. Keep originals at the same path and unchanged until exports finish. In Docker, the paths must be visible inside the container.
+- **Preparation runs in the background:** video metadata, a preview image, and a streaming content fingerprint are prepared with visible progress. Two videos can be analyzed at once. The fingerprint reads the full file to recognize earlier exports, so large originals still take time to prepare.
+- Interrupted uploads and pending analysis survive backend restarts. Unused import sessions expire after 48 hours. Source/export retention starts when the source is ready and follows `RETENTION_HOURS`. Available disk space is checked against unfinished uploads; copied sources and exports still need local storage.
+
+Imports support MP4, MOV, M4V, WebM, MKV, AVI, and MPEG, up to 24 hours long. Browser playback depends on the video codec; FFmpeg supports more formats than browsers. The separate B-roll/legacy multipart limit remains `MAX_FILE_SIZE_MB` (500 MiB by default).
+
 ## Auto workflow
 
 1. **Import your videos.** Drop multiple files into the workspace together.
@@ -34,7 +43,7 @@ No HyperFrames or Remotion API key is required for this local implementation. Hy
 
 `npm ci` installs the pinned HyperFrames renderer and its Chromium browser. If browser installation was skipped, run `npm run setup:visuals` once. Alternatively set `PRODUCER_HEADLESS_SHELL_PATH` to an installed Chromium executable. Generated cards use local fonts and run without external network requests. The app reports a fallback if a requested card cannot be rendered.
 
-Uploaded B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses the same per-file upload limit as sources. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
+Uploaded B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses `MAX_FILE_SIZE_MB` for its per-file upload limit. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
 
 Stock B-roll is **off by default**, as are all supporting visuals. When enabled, the edit uses at most three cutaways, each at most 3.6 seconds, with no more than 30% of the short covered. Main audio and captions continue. A missing key, unavailable service, or lack of a relevant match keeps the original picture. The app makes at most three stock searches per export, with up to three downloads for local matching or six for AI matching; search responses are cached for 24 hours. Downloads are capped at 40 MiB per clip (or the configured upload limit if smaller) and retained with the saved edit plan until its export expires. Stock credits link to each creator's source page in Exports and are included in the batch ZIP's `export-settings.json`.
 
@@ -169,7 +178,8 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `HOST`               | `127.0.0.1`              | Backend listen address.                                              |
 | `PORT`               | `8787`                   | Backend HTTP port.                                                   |
 | `DATA_DIR`           | `data`                   | Writable directory for uploads, attachments, manifests, and renders. |
-| `MAX_FILE_SIZE_MB`   | `500`                    | Maximum size per uploaded file, in MiB; accepts 1–2048.              |
+| `MAX_FILE_SIZE_MB`   | `500`                    | B-roll and legacy multipart limit in MiB; accepts 1–2048.           |
+| `MAX_LARGE_FILE_SIZE_GB` | `50`                 | Resumable and linked source import limit in GiB; accepts 1–1024.     |
 | `MAX_FILES`          | `30`                     | Maximum files in one upload; accepts 1–100.                          |
 | `RENDER_CONCURRENCY` | `2`                      | Simultaneous renders; accepts 1–4.                                   |
 | `RETENTION_HOURS`    | `24`                     | Retention window for finished jobs and source files; accepts 1–720.  |

@@ -31,6 +31,7 @@ import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js
 import { fingerprintFile, publicationChangesSchema } from "./history.js";
 import { correctionRecord, measurementsCsv, measurementsSchema, measurementSummary } from "./measurements.js";
 import { installManualPreviewRoutes } from "./manual-preview.js";
+import { assertLinkedSourceUnchanged, ImportError, installMediaImportRoutes } from "./media-imports.js";
 
 class HttpError extends Error {
   constructor(
@@ -136,6 +137,7 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: "512kb" }));
+  installMediaImportRoutes(app);
   installManualPreviewRoutes(app);
   let binaries = checkBinaries();
   app.get("/api/health", async (_req, res) => {
@@ -148,6 +150,8 @@ export function createApp() {
       ok: tools.ffmpeg && tools.ffprobe,
       ...tools,
       maxFileSize: config.maxFileSize,
+      maxLargeFileSize: config.maxLargeFileSize,
+      importChunkSize: config.importChunkSize,
       maxFiles: config.maxFiles,
       concurrency: config.concurrency,
       retentionHours: config.retentionMs / 3600000,
@@ -422,10 +426,11 @@ export function createApp() {
         .finally(release);
     });
   });
-  app.get("/api/sources/:id/video", (req, res, next) => {
+  app.get("/api/sources/:id/video", async (req, res, next) => {
     const source = state.sources.find((item) => item.id === req.params.id);
     if (!source)
       throw new HttpError(404, "Video not found. It may have expired.");
+    await assertLinkedSourceUnchanged(source);
     res.sendFile(source.filePath, (error) => {
       if (error) next(error);
     });
@@ -809,7 +814,7 @@ export function createApp() {
       return;
     }
     const status =
-      error instanceof HttpError
+      error instanceof HttpError || error instanceof ImportError
         ? error.status
         : error.status === 400
           ? 400

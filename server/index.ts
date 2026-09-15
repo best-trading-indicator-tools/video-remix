@@ -3,7 +3,9 @@ import { config } from "./config.js";
 import { cleanupExpired, pumpQueue, stopQueue } from "./queue.js";
 import { initStore } from "./store.js";
 import { stopIntelligence } from "./intelligence.js";
+import { initMediaImports, stopMediaImports } from "./media-imports.js";
 await initStore();
+await initMediaImports();
 await cleanupExpired();
 const app = createApp();
 const server = app.listen(config.port, config.host, () => {
@@ -32,6 +34,7 @@ async function shutdown() {
   shuttingDown = true;
   clearInterval(cleanup);
   server.close();
+  await stopMediaImports();
   await stopQueue();
   stopIntelligence();
   server.closeAllConnections();

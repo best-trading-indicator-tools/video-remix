@@ -1,0 +1,24 @@
+.import-panel { min-width: 0; }
+.import-panel .dropzone { width: 100%; }
+.import-link-button { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 42px; padding: 9px 10px; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 12px; font-weight: 600; }
+.import-link-button:hover, .import-resume:hover { background: var(--surface-hover); }
+.import-local { padding: 14px; margin-bottom: 16px; border: 1px solid var(--line); background: var(--field); border-radius: 10px; }
+.import-local label { display: block; margin-bottom: 8px; color: var(--text); font-size: 12px; font-weight: 600; }
+.import-local textarea { width: 100%; resize: vertical; min-height: 84px; padding: 9px; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: 7px; font: 12px/1.5 monospace; }
+.import-local p, .import-keep-open { color: var(--subtle); font-size: 12px; line-height: 1.55; margin: 9px 0 12px; }
+.import-local .secondary-button { width: 100%; min-height: 38px; font-size: 12px; }
+.import-list { display: grid; gap: 9px; margin-bottom: 16px; max-height: 430px; overflow-y: auto; }
+.import-item { min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 11px; background: var(--field); }
+.import-item-heading { display: flex; align-items: center; gap: 6px; }
+.import-item-heading strong { min-width: 0; flex: 1; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-size: 12px; color: var(--text); }
+.import-item-heading .icon-button { flex: 0 0 28px; width: 28px; height: 28px; min-height: 28px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--subtle); display: grid; place-items: center; }
+.import-item-status { display: flex; gap: 6px; align-items: center; color: var(--subtle); font-size: 12px; line-height: 1.4; margin: 8px 0; }
+.import-item-status svg { flex-shrink: 0; }
+.import-item.complete .import-item-status { color: var(--green); }
+.import-item progress { display: block; width: 100%; height: 4px; border: 0; border-radius: 6px; background: var(--surface-hover); accent-color: var(--accent); overflow: hidden; }
+.import-item progress::-webkit-progress-bar { background: var(--surface-hover); }
+.import-item progress::-webkit-progress-value { background: var(--accent); }
+.import-item progress::-moz-progress-bar { background: var(--accent); }
+.import-item small { display: block; color: var(--muted); font-size: 11px; margin-top: 7px; }
+.import-resume { display: flex; justify-content: center; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface-raised); border-radius: 6px; color: var(--text); width: 100%; min-height: 32px; margin-top: 10px; font-size: 12px; }
+.import-error { margin: 10px 0; color: #ffc4ba; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }

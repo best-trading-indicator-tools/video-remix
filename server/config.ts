@@ -18,6 +18,8 @@ export const config = {
   host: process.env.HOST || "127.0.0.1",
   dataDir: path.resolve(process.env.DATA_DIR || "data"),
   maxFileSize: numberEnv("MAX_FILE_SIZE_MB", 500, 1, 2048) * 1024 * 1024,
+  maxLargeFileSize: numberEnv("MAX_LARGE_FILE_SIZE_GB", 50, 1, 1024) * 1024 ** 3,
+  importChunkSize: 8 * 1024 * 1024,
   maxFiles: numberEnv("MAX_FILES", 30, 1, 100),
   concurrency: numberEnv("RENDER_CONCURRENCY", 2, 1, 4),
   retentionMs: numberEnv("RETENTION_HOURS", 24, 1, 720) * 3600000,
@@ -33,4 +35,5 @@ export const paths = {
   work: path.join(config.dataDir, "work"),
   analysis: path.join(config.dataDir, "analysis"),
   plans: path.join(config.dataDir, "plans"),
+  imports: path.join(config.dataDir, "imports"),
 };

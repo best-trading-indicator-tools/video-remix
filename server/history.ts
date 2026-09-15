@@ -8,14 +8,17 @@ import type { StoredJob, StoredSource } from "./store.js";
 import { cutsDuration, retimeTranscript } from "./auto-plan.js";
 
 /** Content identity survives a rename/reimport; memory usage stays bounded. */
-export async function fingerprintFile(filePath: string, signal?: AbortSignal): Promise<string> {
+export async function fingerprintFile(filePath: string, signal?: AbortSignal, onBytes?: (bytes: number) => void): Promise<string> {
   signal?.throwIfAborted();
   const hash = createHash("sha256");
   const stream = createReadStream(filePath, { highWaterMark: 1024 * 1024, signal });
+  let bytes = 0;
   try {
     for await (const chunk of stream) {
       signal?.throwIfAborted();
       hash.update(chunk);
+      bytes += chunk.length;
+      onBytes?.(bytes);
     }
     signal?.throwIfAborted();
     return hash.digest("hex");

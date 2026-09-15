@@ -8,6 +8,7 @@ import { config } from "./config.js";
 import { geometry, probeMedia, renderVideo, type MediaInfo } from "./engine.js";
 import { settingsSchema } from "./schema.js";
 import { state } from "./store.js";
+import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
 
 const PREVIEW_SECONDS = 5;
 const TTL_MS = 30 * 60 * 1000;
@@ -127,6 +128,7 @@ export function installManualPreviewRoutes(app: Express) {
     const disconnected = () => { if (!res.writableFinished) controller.abort(); };
     res.once("close", disconnected);
     try {
+      await assertLinkedSourceUnchanged(source);
       const bounded = manualPreviewSettings(settings, source);
       // Attachment IDs are immutable; mtime and size also invalidate cached
       // previews if local media was replaced outside the app.
@@ -157,7 +159,7 @@ export function installManualPreviewRoutes(app: Express) {
       await discard(id).catch(() => undefined);
       if (res.destroyed) return;
       if (timedOut) return res.status(504).json({ error: "The preview took too long. Try a shorter interval or simpler effects." });
-      if (error instanceof PreviewError) return res.status(error.status).json({ error: error.message });
+      if (error instanceof PreviewError || error instanceof ImportError) return res.status(error.status).json({ error: error.message });
       if ((error as NodeJS.ErrnoException).code === "ENOENT")
         return res.status(404).json({ error: "A selected media file is no longer available. Upload it again." });
       console.error("Manual preview failed:", error);
