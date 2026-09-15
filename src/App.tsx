@@ -42,6 +42,7 @@ import {
 import {
   DEFAULT_AUTO_OPTIONS,
   DEFAULT_SETTINGS,
+  MAX_AUTO_VERSIONS,
   randomizeSettings,
   type AutoCapabilities,
   type AutoOptions,
@@ -66,7 +67,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
   return {
     variants: Math.max(
       1,
-      Math.min(5, Math.floor(Number(value?.variants)) || 1),
+      Math.min(MAX_AUTO_VERSIONS, Math.floor(Number(value?.variants)) || 1),
     ),
     options: {
       ...DEFAULT_AUTO_OPTIONS,

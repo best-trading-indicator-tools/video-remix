@@ -37,6 +37,7 @@
 }
 
 .auto-panel.panel select,
+.auto-panel.panel .auto-output-field input[type="number"],
 .auto-panel.panel .broll-tag-editor input {
   width: 100%;
   max-width: 100%;
@@ -415,6 +416,7 @@
   }
 
   .auto-panel.panel select,
+  .auto-panel.panel .auto-output-field input[type="number"],
   .auto-panel.panel .broll-tag-editor input {
     min-height: 46px;
     font-size: 16px;

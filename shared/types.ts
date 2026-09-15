@@ -13,6 +13,7 @@ export interface TimedCallout {
   start: number;
   end: number;
 }
+export const MAX_AUTO_VERSIONS = 10;
 export interface AutoOptions {
   aspect: Aspect;
   targetDuration: 30 | 45 | 60;

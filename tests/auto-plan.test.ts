@@ -3,6 +3,7 @@ import { test } from "node:test";
 import {
   DEFAULT_AUTO_OPTIONS,
   DEFAULT_SETTINGS,
+  MAX_AUTO_VERSIONS,
   type RenderJob,
   type Transcript,
   type TranscriptSegment,
@@ -404,7 +405,7 @@ test("short spoken and silent sources produce no duplicate candidate after a com
   );
   const first = buildCandidates(input, 20, 45, 0)[0]!;
   const prior = [{ cuts: selectSpeechCuts(input, first), text: first.text }];
-  for (let variant = 1; variant < 5; variant++) {
+  for (let variant = 1; variant < MAX_AUTO_VERSIONS; variant++) {
     assert.deepEqual(buildCandidates(input, 20, 45, variant, prior), []);
     assert.deepEqual(
       sceneCuts([4, 8, 12, 16], 20, 45, variant, [
@@ -413,7 +414,7 @@ test("short spoken and silent sources produce no duplicate candidate after a com
       [],
     );
   }
-  // Even a first narration shortened to five seconds must not cause four more
+  // Even a first narration shortened to five seconds must not cause extra
   // versions of the same short source. This exits before any media/AI work.
   const source = {
     id: "source-a",
@@ -540,6 +541,24 @@ test("long silent footage selects a fresh scene plan and stops when only repeats
   ]);
   const almostFull = [{ cuts: [{ start: 0, end: 45 }] }];
   assert.deepEqual(sceneCuts([], 50, 45, 0, almostFull), []);
+});
+
+test("one long scene supports ten distinct cuts and searches all unused positions", () => {
+  const used: EditorialPlan[] = [];
+  for (let variant = 0; variant < 10; variant++) {
+    const cuts = sceneCuts([], 600, 30, variant, used);
+    assert.equal(cuts.length, 1, `Version ${variant + 1} needs a fresh excerpt`);
+    assert.ok(Math.abs(cutsDuration(cuts) - 30) < 1e-8);
+    assert.ok(cuts[0]!.start >= 0 && cuts[0]!.end <= 600);
+    assert.equal(isRepeatedPlan({ cuts }, used), false);
+    assert.ok(used.every(previous => footageOverlap(cuts, previous.cuts) === 0));
+    used.push({ cuts });
+  }
+  assert.equal(new Set(used.map(plan => JSON.stringify(plan.cuts))).size, 10);
+  assert.deepEqual(sceneCuts([], 600, 30, 0, used.slice(0, 9)), used[9]!.cuts,
+    "Earlier exports cannot hide the tenth available position");
+  assert.deepEqual(sceneCuts([], 600, 30, 0, used), [],
+    "Exhausted positions are skipped instead of producing a repeated cut");
 });
 
 test("key-point overlays follow matching edited speech and omit unmatched or overlapping copy", () => {

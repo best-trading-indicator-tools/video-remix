@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   Check,
   ChevronDown,
@@ -13,6 +14,7 @@ import type {
   AutoOptions,
   VideoSource,
 } from "../shared/types";
+import { MAX_AUTO_VERSIONS } from "../shared/types";
 import BrollPanel from "./BrollPanel";
 import "./auto-panel.css";
 
@@ -58,6 +60,15 @@ export default function AutoPanel({
   maxFileSize?: number;
 }) {
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
+  const [versionInput, setVersionInput] = useState(String(variants));
+  useEffect(() => setVersionInput(String(variants)), [variants, selectedId]);
+  const commitVersions = () => {
+    const parsed = Number(versionInput);
+    const count = versionInput.trim() && Number.isFinite(parsed)
+      ? Math.max(1, Math.min(MAX_AUTO_VERSIONS, Math.floor(parsed))) : variants;
+    setVersionInput(String(count));
+    onVariantsChange(count);
+  };
   return (
     <aside className="auto-panel panel">
       <div className="panel-heading">
@@ -173,21 +184,26 @@ export default function AutoPanel({
             </label>
             <label className="auto-output-field">
               Maximum versions
-              <select
-                value={variants}
-                onChange={(event) =>
-                  onVariantsChange(Number(event.target.value))
-                }
-              >
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <option value={value} key={value}>
-                    Up to {value}
-                  </option>
-                ))}
-              </select>
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_AUTO_VERSIONS}
+                step={1}
+                value={versionInput}
+                aria-describedby="auto-version-note"
+                onChange={(event) => {
+                  setVersionInput(event.target.value);
+                  const count = event.target.valueAsNumber;
+                  if (Number.isInteger(count) && count >= 1 && count <= MAX_AUTO_VERSIONS)
+                    onVariantsChange(count);
+                }}
+                onBlur={commitVersions}
+                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+              />
             </label>
-            <p className="auto-preferences-note">
-              Per video. Similar cuts are skipped, so you may get fewer versions.
+            <p id="auto-version-note" className="auto-preferences-note">
+              1–{MAX_AUTO_VERSIONS} per video. Similar cuts are skipped, so you may get fewer versions.
             </p>
             <label
               className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}

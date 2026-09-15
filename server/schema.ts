@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DEFAULT_SETTINGS } from "../shared/types.js";
+import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS } from "../shared/types.js";
 const n = (min: number, max: number) => z.number().finite().min(min).max(max);
 export const focalPointSchema = z.object({ x: n(0, 1), y: n(0, 1) }).strict();
 export const captionStyleSchema = z.object({ fontSize: n(12, 40), bottomPercent: n(5, 80) }).strict();
@@ -105,7 +105,7 @@ export const autoOptionsSchema = z
   })
   .strict()
   .default({ aspect: "9:16", targetDuration: 45, narration: false });
-const autoVariantsSchema = z.number().int().min(1).max(5).default(1);
+const autoVariantsSchema = z.number().int().min(1).max(MAX_AUTO_VERSIONS).default(1);
 const autoItemsSchema = z
   .object({
     items: z

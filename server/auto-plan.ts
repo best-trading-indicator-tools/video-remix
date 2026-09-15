@@ -5,6 +5,7 @@ import type {
   TranscriptWord,
   TimedCallout,
 } from "../shared/types.js";
+import { MAX_AUTO_VERSIONS } from "../shared/types.js";
 import type { Candidate } from "./intelligence.js";
 import { isRepeatedPlan, type EditorialPlan } from "./diversity.js";
 
@@ -468,6 +469,9 @@ function sceneCutsAt(
     ((Math.floor(variant) % scenes.length) + scenes.length) % scenes.length;
   const chosen: EditSegment[] = [];
   let remaining = targetDuration;
+  const windowIndex =
+    ((Math.floor(variant) % MAX_AUTO_VERSIONS) + MAX_AUTO_VERSIONS) %
+    MAX_AUTO_VERSIONS;
   // Pick whole scenes where possible, then use a bounded part of a long one.
   for (const scene of [
     ...scenes.slice(startIndex),
@@ -479,7 +483,7 @@ function sceneCutsAt(
     const start =
       scene.start +
       (room > 0 && scenes.length === 1
-        ? (room * (((Math.floor(variant) % 5) + 5) % 5)) / 4
+        ? (room * windowIndex) / (MAX_AUTO_VERSIONS - 1)
         : 0);
     chosen.push({ start, end: start + length });
     remaining -= length;
@@ -500,7 +504,7 @@ export function sceneCuts(
         (time) => Number.isFinite(time) && time > 0 && time < duration,
       ),
     ).size + 1;
-  const attempts = Math.min(60, sceneCount === 1 ? 5 : sceneCount);
+  const attempts = Math.min(60, sceneCount === 1 ? MAX_AUTO_VERSIONS : sceneCount);
   for (let attempt = 0; attempt < attempts; attempt++) {
     const cuts = sceneCutsAt(
       sceneTimes,

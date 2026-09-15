@@ -217,10 +217,11 @@ test(
         ).status,
         400,
       );
-      assert.equal(
-        (await post("/api/auto/jobs", { sourceIds, variants: 6 })).status,
-        400,
-      );
+      for (const variants of [0, 11, 1.5])
+        assert.equal(
+          (await post("/api/auto/jobs", { sourceIds, variants })).status,
+          400,
+        );
       for (const [body, status] of [
         [
           { items: [{ sourceId: sourceIds[0] }, { sourceId: randomUUID() }] },
@@ -239,7 +240,7 @@ test(
           {
             items: [
               { sourceId: sourceIds[0] },
-              { sourceId: sourceIds[1], variants: 6 },
+              { sourceId: sourceIds[1], variants: 11 },
             ],
           },
           400,
@@ -484,7 +485,7 @@ test(
           },
           {
             sourceId: mixedSourceIds[1],
-            variants: 3,
+            variants: 10,
             options: {
               aspect: "16:9",
               targetDuration: 60,
@@ -505,10 +506,10 @@ test(
         batchId: string;
         jobs: RenderJob[];
       };
-      assert.equal(mixed.jobs.length, 4, "Per-video version limits are summed");
+      assert.equal(mixed.jobs.length, 11, "Per-video limits support ten versions and are summed");
       assert.deepEqual(
         mixed.jobs.map((job) => job.variant),
-        [1, 1, 2, 3],
+        [1, ...Array.from({ length: 10 }, (_, index) => index + 1)],
       );
       assert.deepEqual(mixed.jobs[0]!.auto, {
         aspect: "1:1",
@@ -539,7 +540,7 @@ test(
       );
       assert.equal(
         mixedFinished.filter((job) => job.status === "skipped").length,
-        2,
+        9,
       );
       for (const job of mixedFinished.filter(
         (item) => item.status === "completed",
