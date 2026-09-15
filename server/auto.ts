@@ -245,6 +245,7 @@ export async function prepareAutoRemix({
   let hook = "";
   let callouts: string[] = [];
   let usedAI = false;
+  let hookRewritten = false;
   let narrated = false;
   let audioPath: string | undefined;
   if (transcript && candidates.length) {
@@ -262,14 +263,15 @@ export async function prepareAutoRemix({
     hook = creative?.hook || fallbackHook(captionTranscript);
     callouts = creative?.callouts || [];
     usedAI = !!creative;
+    hookRewritten = creative?.hookRewritten ?? false;
     if (source.duration > options.targetDuration)
       changes.push("Selected a spoken excerpt");
     const removedPauses = candidate.end - candidate.start - cutsDuration(cuts);
     if (removedPauses > 0.3)
       changes.push(`Trimmed ${removedPauses.toFixed(1)}s of pauses`);
-    if (!creative)
+    if (!hookRewritten)
       notes.push(
-        "The hook was taken from the selected speech. Local AI rewriting was unavailable for this version.",
+        "The hook was taken from the selected speech because AI rewriting did not finish for this version.",
       );
     if (options.narration) {
       if (creative?.narration.trim() && (await narrationAvailable())) {
@@ -382,7 +384,7 @@ export async function prepareAutoRemix({
   const native = geometry(source, { ...settings, resolution: "source" });
   if (Math.min(source.width, source.height) < 1080 && Math.min(native.width, native.height) < 1080)
     settings.resolution = "source";
-  if (hook) changes.push(usedAI ? "Rewritten hook" : "Spoken hook");
+  if (hook) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
   if (settings.callouts?.length) changes.push("Key-point overlays");
   let subtitlePath: string | undefined;
   if (captionTranscript) {
