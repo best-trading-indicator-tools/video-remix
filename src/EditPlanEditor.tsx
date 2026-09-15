@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
+import PromptEditor, { type PromptProposal } from "./PromptEditor";
 import "./edit-plan.css";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -14,6 +15,53 @@ const differs = (first: unknown, second: unknown) => JSON.stringify(first) !== J
 const seconds = (value: number) => `${value.toFixed(2)}s`;
 const CENTER: FocalPoint = { x: 0.5, y: 0.5 };
 const DEFAULT_CAPTION_STYLE = { fontSize: 20, bottomPercent: 100 * 24 / 288 };
+
+interface PromptDraftAnchor { plan: EditPlan; changes: EditPlanChanges }
+interface PromptUndo { draft: EditPlan; refreshBroll: boolean; anchor: PromptDraftAnchor | null; appliedIdentity: string }
+const draftIdentity = (draft: EditPlan, refreshBroll: boolean) => JSON.stringify({ draft, refreshBroll });
+
+/** Keep server-retimed media implicit, while preserving later manual corrections. */
+function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: boolean, anchor: PromptDraftAnchor | null): EditPlanChanges {
+  const changes: EditPlanChanges = { revision: plan.revision };
+  if (refreshBroll) changes.refreshBroll = true;
+  if (plan.settings.hookText !== draft.settings.hookText) changes.hookText = draft.settings.hookText;
+  if (differs(plan.cuts, draft.cuts)) changes.cuts = draft.cuts;
+  for (const key of ["captions", "visuals"] as const) {
+    if (anchor && !differs(anchor.plan[key], draft[key])) {
+      if (anchor.changes[key] !== undefined) Object.assign(changes, { [key]: draft[key] });
+    } else if (differs(plan[key], draft[key])) Object.assign(changes, { [key]: draft[key] });
+  }
+  const framing: NonNullable<EditPlanChanges["framing"]> = {};
+  if (plan.settings.fit !== draft.settings.fit) framing.fit = draft.settings.fit;
+  if (differs(plan.settings.focalPoint, draft.settings.focalPoint)) framing.focalPoint = draft.settings.focalPoint;
+  if (differs(plan.settings.captionStyle, draft.settings.captionStyle)) framing.captionStyle = draft.settings.captionStyle;
+  if (Object.keys(framing).length) changes.framing = framing;
+  return changes;
+}
+
+function validateDraftChanges(plan: EditPlan, draft: EditPlan, changes: EditPlanChanges): void {
+  if (changes.refreshBroll && changes.visuals !== undefined) throw new Error("Render or reset your shot changes before searching for new B-roll.");
+  if (changes.cuts) {
+    if (draft.cuts.some((cut) => !Number.isFinite(cut.start) || !Number.isFinite(cut.end) ||
+      cut.start < 0 || cut.end - cut.start < 0.04 - 1e-9 || cut.end > plan.sourceDuration)) {
+      throw new Error("Cut points must stay within the source and end after they start.");
+    }
+    if (plan.narration && Math.abs(draft.cuts.reduce((sum, cut) => sum + cut.end - cut.start, 0) / plan.settings.speed - plan.outputDuration) > 0.001) {
+      throw new Error("Keep the total cut duration unchanged so the footage stays aligned with the saved narration.");
+    }
+  }
+  if (changes.captions?.some((cue) => !cue.text.trim() || !Number.isFinite(cue.start) || !Number.isFinite(cue.end) ||
+    cue.start < 0 || cue.end <= cue.start || cue.end > draft.outputDuration + 0.01)) {
+    throw new Error("Each caption needs text and a valid time within the export.");
+  }
+  if (changes.visuals?.some((visual) => {
+    if (!visual.enabled) return false;
+    const media = draft.media.find((item) => item.id === visual.mediaId);
+    return !media || ![visual.start, visual.end, visual.sourceStart].every(Number.isFinite) ||
+      visual.start < 0 || visual.end <= visual.start || visual.end > draft.outputDuration + 0.01 ||
+      visual.sourceStart < 0 || visual.sourceStart + visual.end - visual.start > media.duration + 0.01;
+  })) throw new Error("Check each B-roll interval: it must fit both the export and the selected clip.");
+}
 
 export function QualityReportSummary({ report, compact = false }: { report?: QualityReport; compact?: boolean }) {
   if (!report) return null;
@@ -83,6 +131,9 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [refreshBroll, setRefreshBroll] = useState(false);
+  const [promptAnchor, setPromptAnchor] = useState<PromptDraftAnchor | null>(null);
+  const [promptUndo, setPromptUndo] = useState<PromptUndo | null>(null);
   const [reload, setReload] = useState(0);
   const [previewMode, setPreviewMode] = useState<"export" | "framing">("export");
   const [previewCut, setPreviewCut] = useState(0);
@@ -92,6 +143,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const [guideRight, setGuideRight] = useState(16);
   const [knownOutputAspect, setKnownOutputAspect] = useState<number | undefined>();
   const dialog = useRef<HTMLElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const savingRef = useRef(false);
   const correctionClock = useRef({ totalMs: 0, lastTick: 0, lastInteraction: 0, visible: false });
   const updateCorrectionClock = useRef<() => void>(() => {});
@@ -105,7 +157,9 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     setError("");
     void request<EditPlan>(`/api/jobs/${job.id}/plan`, { signal: controller.signal })
       .then((value) => {
-        if (!controller.signal.aborted) { setPlan(value); setDraft(structuredClone(value)); }
+        if (!controller.signal.aborted) {
+          setPlan(value); setDraft(structuredClone(value)); setRefreshBroll(false); setPromptAnchor(null); setPromptUndo(null);
+        }
       })
       .catch((reason: Error) => { if (!controller.signal.aborted) setError(reason.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
@@ -170,19 +224,12 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     return () => { window.removeEventListener("keydown", keydown); document.body.style.overflow = overflow; previous?.focus(); };
   }, []);
 
-  const cutsChanged = !!plan && !!draft && differs(plan.cuts, draft.cuts);
-  const cutTimingsChanged = !!plan && !!draft && differs(plan.cuts.map(({ start, end }) => ({ start, end })), draft.cuts.map(({ start, end }) => ({ start, end })));
-  const captionsChanged = !!plan && !!draft && differs(plan.captions, draft.captions);
-  const visualsChanged = !!plan && !!draft && differs(plan.visuals, draft.visuals);
-  const hookChanged = !!plan && !!draft && plan.settings.hookText !== draft.settings.hookText;
-  const framingChanges: NonNullable<EditPlanChanges["framing"]> = {};
-  if (plan && draft) {
-    if (plan.settings.fit !== draft.settings.fit) framingChanges.fit = draft.settings.fit;
-    if (differs(plan.settings.focalPoint, draft.settings.focalPoint)) framingChanges.focalPoint = draft.settings.focalPoint;
-    if (differs(plan.settings.captionStyle, draft.settings.captionStyle)) framingChanges.captionStyle = draft.settings.captionStyle;
-  }
-  const framingChanged = Object.keys(framingChanges).length > 0;
-  const changed = cutsChanged || captionsChanged || visualsChanged || hookChanged || framingChanged;
+  const cutTimingsChanged = !!plan && !!draft && differs((promptAnchor?.plan || plan).cuts.map(({ start, end }) => ({ start, end })), draft.cuts.map(({ start, end }) => ({ start, end })));
+  const draftChanges = plan && draft ? collectDraftChanges(plan, draft, refreshBroll, promptAnchor) : null;
+  const changed = !!draftChanges && Object.keys(draftChanges).length > 1;
+  const draftKey = draft ? draftIdentity(draft, refreshBroll) : "";
+  const timelineCorrectionsChanged = draftChanges?.captions !== undefined || draftChanges?.visuals !== undefined;
+  const explicitVisualChanges = draftChanges?.visuals !== undefined;
   const layoutIssues = draft ? textLayoutIssues(draft, knownOutputAspect) : [];
   const activeCut = draft?.cuts[previewCut] || draft?.cuts[0];
   const previewOutputTime = draft && activeCut ? (draft.cuts.slice(0, previewCut).reduce((sum, cut) => sum + cut.end - cut.start, 0) + Math.max(0, Math.min(previewSourceTime, activeCut.end) - activeCut.start)) / draft.settings.speed : 0;
@@ -202,44 +249,38 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     ...value, visuals: value.visuals.map((visual) => visual.id === id ? { ...visual, ...changes } : visual),
   }));
 
-  const submit = async (refreshBroll = false) => {
-    if (!plan || !draft || (!changed && !refreshBroll) || savingRef.current) return;
+  const suggestEdit = async (prompt: string, signal: AbortSignal): Promise<PromptProposal> => {
+    if (!plan || !draft || savingRef.current) throw new Error("Wait for the current edit to finish loading.");
+    if (!form.current?.reportValidity()) throw new Error("Correct the highlighted field before asking for an edit.");
+    const changes = collectDraftChanges(plan, draft, refreshBroll, promptAnchor);
+    validateDraftChanges(plan, draft, changes);
+    return request<PromptProposal>(`/api/jobs/${job.id}/edit-prompt`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, signal,
+      body: JSON.stringify({ revision: plan.revision, prompt, draft: changes }),
+    });
+  };
+
+  const applyPrompt = (proposal: PromptProposal) => {
+    if (!plan || !draft || savingRef.current || proposal.revision !== plan.revision) return;
+    const next = structuredClone(proposal.plan);
+    next.revision = plan.revision;
+    const nextRefresh = !!proposal.changes.refreshBroll;
+    setPromptUndo({ draft: structuredClone(draft), refreshBroll, anchor: promptAnchor, appliedIdentity: draftIdentity(next, nextRefresh) });
+    setPromptAnchor({ plan: structuredClone(next), changes: structuredClone(proposal.changes) });
+    setDraft(next);
+    setRefreshBroll(nextRefresh);
+    setPreviewCut(0);
+    setPreviewSourceTime(next.cuts[0]?.start || 0);
+    setPreviewMode("framing");
     setError("");
-    const changes: EditPlanChanges = { revision: plan.revision };
-    if (refreshBroll) {
-      if (visualsChanged) { setError("Render or reset your manual shot changes before searching for new B-roll."); return; }
-      changes.refreshBroll = true;
-    }
-    if (framingChanged) changes.framing = framingChanges;
-    if (hookChanged) changes.hookText = draft.settings.hookText;
-    if (cutsChanged) {
-      if (draft.cuts.some((cut, index) => !Number.isFinite(cut.start) || !Number.isFinite(cut.end) ||
-        cut.start < 0 || cut.end - cut.start < 0.04 - 1e-9 || cut.end > plan.sourceDuration ||
-        (index > 0 && cut.start < draft.cuts[index - 1]!.end))) {
-        setError("Cut points must stay within the source, follow each other, and end after they start."); return;
-      }
-      if (plan.narration && Math.abs(draft.cuts.reduce((sum, cut) => sum + cut.end - cut.start, 0) / plan.settings.speed - plan.outputDuration) > 0.001) {
-        setError("Keep the total cut duration unchanged so the footage stays aligned with the saved narration."); return;
-      }
-      changes.cuts = draft.cuts;
-    }
-    if (captionsChanged) {
-      if (draft.captions.some((cue) => !cue.text.trim() || !Number.isFinite(cue.start) || !Number.isFinite(cue.end) ||
-        cue.start < 0 || cue.end <= cue.start || cue.end > plan.outputDuration + 0.01)) {
-        setError("Each caption needs text and a valid time within the export."); return;
-      }
-      changes.captions = draft.captions;
-    }
-    if (visualsChanged) {
-      if (draft.visuals.some((visual) => {
-        if (!visual.enabled) return false;
-        const media = plan.media.find((item) => item.id === visual.mediaId);
-        return !media || ![visual.start, visual.end, visual.sourceStart].every(Number.isFinite) ||
-          visual.start < 0 || visual.end <= visual.start || visual.end > plan.outputDuration + 0.01 ||
-          visual.sourceStart < 0 || visual.sourceStart + visual.end - visual.start > media.duration + 0.01;
-      })) { setError("Check each B-roll interval: it must fit both the export and the selected clip."); return; }
-      changes.visuals = draft.visuals;
-    }
+  };
+
+  const submit = async (searchAgain = refreshBroll) => {
+    if (!plan || !draft || (!changed && !searchAgain) || savingRef.current) return;
+    setError("");
+    const changes = collectDraftChanges(plan, draft, searchAgain, promptAnchor);
+    try { validateDraftChanges(plan, draft, changes); }
+    catch (reason) { setError((reason as Error).message); return; }
     updateCorrectionClock.current();
     changes.correctionSeconds = Math.min(86_400, Math.round(correctionClock.current.totalMs / 1000));
     savingRef.current = true;
@@ -261,7 +302,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
         <button type="button" className="icon-button" aria-label="Close result editor" onClick={onClose} disabled={saving}><X size={20} /></button>
       </header>
       {loading ? <div className="edit-plan-loading" role="status"><LoaderCircle className="spin" size={22} /> Loading your edit…</div> :
-        plan && draft ? <form onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+        plan && draft ? <form ref={form} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="edit-plan-body">
             <aside className="edit-plan-playback">
               <div className="edit-preview-tabs" aria-label="Preview view">
@@ -292,10 +333,16 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 <p className="edit-plan-note">Approximate framing and text preview. Guides appear only here; app controls vary by device. A sample caption appears when no line is active.</p>
               </>}
               <h3>{previewMode === "export" ? "Current export" : "Draft framing"}</h3><p>{previewMode === "export" ? "Review this version as you make corrections. Render to see your updated video." : "Adjust the crop and captions against the source footage. Render your revision to review the final result."}</p>
-              <p>{seconds(plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
+              <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
               <QualityReportSummary report={job.qualityReport} />
             </aside>
             <div className="edit-plan-fields">
+              <PromptEditor contextKey={`${job.id}:${plan.revision}:${draftKey}`} disabled={saving} onSuggest={suggestEdit} onApply={applyPrompt}
+                applied={!!promptUndo} canUndo={!!promptUndo && promptUndo.appliedIdentity === draftKey} onUndo={() => {
+                  if (!promptUndo || promptUndo.appliedIdentity !== draftKey) return;
+                  setDraft(structuredClone(promptUndo.draft)); setRefreshBroll(promptUndo.refreshBroll); setPromptAnchor(promptUndo.anchor); setPromptUndo(null); setError("");
+                  setPreviewCut(0); setPreviewSourceTime(promptUndo.draft.cuts[0]?.start || 0);
+                }} />
               <details open className="edit-plan-section edit-framing-section">
                 <summary>Framing &amp; caption placement</summary>
                 <fieldset disabled={saving}>
@@ -330,13 +377,13 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                     </label>
                     <div className="edit-plan-times">
                       {(["start", "end"] as const).map((edge) => <label className="edit-plan-field" key={edge}>{edge === "start" ? "Start" : "End"} (s)
-                        <input aria-label={`Caption ${index + 1} ${edge} in seconds`} type="number" required min={0} max={plan.outputDuration} step="any" value={Number.isFinite(cue[edge]) ? cue[edge] : ""} onChange={(event) => setDraft({ ...draft, captions: draft.captions.map((item) => item.id === cue.id ? { ...item, [edge]: event.target.valueAsNumber } : item) })} />
+                        <input aria-label={`Caption ${index + 1} ${edge} in seconds`} type="number" required min={0} max={draft.outputDuration} step="any" value={Number.isFinite(cue[edge]) ? cue[edge] : ""} onChange={(event) => setDraft({ ...draft, captions: draft.captions.map((item) => item.id === cue.id ? { ...item, [edge]: event.target.valueAsNumber } : item) })} />
                       </label>)}
                     </div>
                     <button className="secondary-button edit-plan-remove-caption" type="button" aria-label={`Remove caption ${index + 1}`} onClick={() => setDraft({ ...draft, captions: draft.captions.filter((item) => item.id !== cue.id) })}><X size={12} />Remove caption</button>
                   </div>)}
                   <button type="button" className="secondary-button edit-plan-add-caption" onClick={() => {
-                    let start = 0, end = plan.outputDuration;
+                    let start = 0, end = draft.outputDuration;
                     for (const cue of [...draft.captions].sort((first, second) => first.start - second.start)) {
                       if (cue.start - start >= 0.1) { end = cue.start; break; }
                       start = Math.max(start, Number.isFinite(cue.end) ? cue.end : 0);
@@ -350,11 +397,11 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <details className="edit-plan-section">
                 <summary>Cut points <span>{draft.cuts.length}</span></summary>
                 <p className="edit-plan-note">Times refer to your original source ({seconds(plan.sourceDuration)}). {plan.narration ? "Keep the total duration unchanged. Narration and caption timings stay fixed." : "Captions and B-roll are retimed when you change these boundaries."}</p>
-                {(captionsChanged || visualsChanged) && <p className="edit-plan-note">Render your caption or B-roll corrections before changing cut points.</p>}
+                {timelineCorrectionsChanged && <p className="edit-plan-note">Render your caption or B-roll corrections before changing cut points.</p>}
                 <fieldset disabled={saving}>
                   <legend className="visually-hidden">Source cut boundaries</legend>
                   {draft.cuts.map((cut, index) => <div className="edit-plan-cut" key={index}><div className="edit-cut-heading"><strong>Cut {index + 1}</strong><button className="secondary-button" type="button" onClick={() => { setPreviewCut(index); setPreviewMode("framing"); }}>Preview crop</button></div>
-                    <fieldset disabled={captionsChanged || visualsChanged}><legend className="visually-hidden">Cut {index + 1} timing</legend><div className="edit-plan-times">
+                    <fieldset disabled={timelineCorrectionsChanged}><legend className="visually-hidden">Cut {index + 1} timing</legend><div className="edit-plan-times">
                     {(["start", "end"] as const).map((edge) => <label className="edit-plan-field" key={edge}>{edge === "start" ? "Start" : "End"} (s)
                       <input aria-label={`Cut ${index + 1} ${edge} in seconds`} type="number" required min={0} max={plan.sourceDuration} step="any" value={Number.isFinite(cut[edge]) ? cut[edge] : ""} onChange={(event) => setDraft({ ...draft, cuts: draft.cuts.map((item, itemIndex) => itemIndex === index ? { ...item, [edge]: event.target.valueAsNumber } : item) })} />
                     </label>)}
@@ -369,10 +416,10 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
                 {job.auto?.supportingVisuals === "stock" && <div className="edit-broll-refresh">
                   <div><strong>Try another B-roll search</strong><p>Search for new stock shots and render this video. Your current caption, cut and framing edits are included; narration stays saved.</p></div>
-                  <button type="button" className="secondary-button" disabled={saving || visualsChanged} onClick={(event) => {
+                  <button type="button" className="secondary-button" disabled={saving || explicitVisualChanges} onClick={(event) => {
                     if (event.currentTarget.form?.reportValidity()) void submit(true);
                   }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
-                  {visualsChanged && <p className="edit-plan-note">Render or reset your manual shot changes first.</p>}
+                  {explicitVisualChanges && <p className="edit-plan-note">Render or reset your shot changes first.</p>}
                 </div>}
                 <fieldset disabled={saving || cutTimingsChanged}>
                   <legend className="visually-hidden">Supporting visual corrections</legend>
@@ -404,7 +451,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                         </label>
                         <div className="edit-plan-times edit-plan-three-times">
                           {(["start", "end", "sourceStart"] as const).map((edge) => <label className="edit-plan-field" key={edge}>{edge === "sourceStart" ? "Clip in-point" : edge === "start" ? "Export start" : "Export end"} (s)
-                            <input aria-label={`Shot ${index + 1} ${edge} in seconds`} type="number" required min={0} max={edge === "sourceStart" ? media?.duration : plan.outputDuration} step="any" value={Number.isFinite(visual[edge]) ? visual[edge] : ""} onChange={(event) => updateVisual(visual.id, { [edge]: event.target.valueAsNumber })} />
+                            <input aria-label={`Shot ${index + 1} ${edge} in seconds`} type="number" required min={0} max={edge === "sourceStart" ? media?.duration : draft.outputDuration} step="any" value={Number.isFinite(visual[edge]) ? visual[edge] : ""} onChange={(event) => updateVisual(visual.id, { [edge]: event.target.valueAsNumber })} />
                           </label>)}
                         </div>
                         <FocalControls label={`Shot ${index + 1} crop position`} value={visual.focalPoint || CENTER} onChange={(point) => updateVisual(visual.id, { focalPoint: point })} />
@@ -418,8 +465,8 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
             </div>
           </div>
           <footer className="edit-plan-footer">
-            <div><p>A new revision keeps this export available.</p>{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
-            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || !changed} onClick={() => { setDraft(structuredClone(plan)); setError(""); }}><RotateCcw size={14} />Reset changes</button>
+            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A new B-roll search will run with this revision.</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
+            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || !changed} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
         </form> : <div className="edit-plan-loading"><p className="edit-plan-error" role="alert">{error || "This edit is unavailable."}</p><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}

@@ -38,6 +38,7 @@
 .edit-plan-footer { position: sticky; bottom: 0; z-index: 3; background: var(--surface); padding: 18px 28px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .edit-plan-footer > div:first-child { flex: 1 1 200px; }
 .edit-plan-footer p { font-size: 13px; line-height: 1.6; color: var(--subtle); }
+.edit-plan-footer p.edit-plan-pending-search { color: var(--accent); margin-top: 4px; }
 .edit-plan-footer .edit-plan-error, .edit-plan-error { color: #ffb3a9; }
 .edit-plan-error { font-size: 13px; line-height: 1.7; margin-top: 10px; }
 .edit-plan-buttons { display: flex; flex-wrap: wrap; gap: 10px; }

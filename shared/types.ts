@@ -219,6 +219,18 @@ export interface EditPlanChanges {
   framing?: { fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle };
   correctionSeconds?: number;
 }
+export interface PromptEditRequest {
+  revision: number;
+  prompt: string;
+  draft?: EditPlanChanges;
+}
+export interface PromptEditResponse {
+  revision: number;
+  changes: EditPlanChanges;
+  plan: EditPlan;
+  summary: string[];
+  clarification?: string;
+}
 export interface ExportReview {
   benchmarkCase?: string;
   approach?: string;

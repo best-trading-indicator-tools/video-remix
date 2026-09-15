@@ -34,6 +34,7 @@ import { fingerprintFile, publicationChangesSchema } from "./history.js";
 import { correctionRecord, measurementsCsv, measurementsSchema, measurementSummary } from "./measurements.js";
 import { installManualPreviewRoutes } from "./manual-preview.js";
 import { assertLinkedSourceUnchanged, ImportError, installMediaImportRoutes } from "./media-imports.js";
+import { installPromptEditRoutes } from "./prompt-routes.js";
 
 class HttpError extends Error {
   constructor(
@@ -523,6 +524,7 @@ export function createApp() {
       throw new HttpError(404, "Saved footage is unavailable.");
     res.sendFile(planMediaPath(job, req.params.mediaId), error => { if (error) next(error); });
   });
+  installPromptEditRoutes(app);
   app.post("/api/jobs/:id/revisions", async (req, res) => {
     const parent = state.jobs.find(item => item.id === req.params.id);
     if (!parent?.editPlan) throw new HttpError(404, "This export has no saved editable plan.");

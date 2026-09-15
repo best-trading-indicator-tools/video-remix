@@ -92,6 +92,27 @@ their media snapshots follow the export retention period; keep the source video
 available to make further revisions. Older exports created before this feature
 need a new Auto edit to gain a saved plan.
 
+### Edit with a prompt
+
+In **Edit this result**, describe changes such as “remove the B-roll”, “make
+captions smaller and move them up”, or “keep the first 20 seconds”. Choose
+**Suggest edits**, review the proposed values, then **Apply to draft**. The normal
+**Render this revision** button creates the corrected export. **Undo last prompt**
+restores the previous draft; manual controls remain available.
+
+Prompts support hooks, caption corrections/removal, cut sequences, framing,
+existing supporting shots, and another stock search. Output trim times refer to
+the current short; explicitly requested source timestamps refer to the original.
+Saved narration stays locked. Unsupported or ambiguous requests return a short
+clarification without applying partial changes. Suggestions include unsaved edits
+and are discarded if the draft changes while the request is running.
+
+This uses the existing private `DEEPSEEK_API_KEY` and optional
+`DEEPSEEK_TEXT_MODEL`. Each suggestion makes one bounded text request containing
+the instruction, selected speech/captions and editable settings. Original video,
+audio and local file paths are not sent. Proposals do not render, search stock,
+or change saved exports; those actions happen through the existing render flow.
+
 ## Manual editing
 
 Switch to **Manual** for direct control. Its saved settings are separate from Auto edits.
