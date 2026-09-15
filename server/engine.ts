@@ -492,12 +492,16 @@ export interface RenderOptions {
   workDir: string;
   onProgress: (progress: number) => void;
   signal: AbortSignal;
+  /** Preserve full-edit camera movement when rendering only an opening preview. */
+  motionDuration?: number;
 }
 
 /** SRT timings and replacement audio refer to the final output timeline. */
 export async function renderVideo(options: RenderOptions): Promise<void> {
   const { settings: s, source, signal } = options;
   validateSettings(s);
+  if (options.motionDuration !== undefined && (!Number.isFinite(options.motionDuration) || options.motionDuration <= 0))
+    throw new Error("Camera motion duration must be a positive finite number");
   if (signal.aborted) throw abortError();
   const input = await localFile(options.input);
   const output = path.resolve(options.output);
@@ -584,7 +588,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     // Points describe subjects in the original source. Mirroring after the
     // crop keeps that same subject instead of selecting its opposite edge.
     if (s.mirror) filters.push("hflip");
-    const motion = `zoompan=z='1+0.04*min(on/${decimal(Math.max(1, duration * fps - 1))},1)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${width}x${height}:fps=${decimal(fps)}`;
+    const motion = `zoompan=z='1+0.04*min(on/${decimal(Math.max(1, (options.motionDuration ?? duration) * fps - 1))},1)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${width}x${height}:fps=${decimal(fps)}`;
     if (s.fit === "blur")
       filters.push(
         `fps=${decimal(fps)},split=2[blurback][blurfront];[blurback]scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${width}:${height},gblur=sigma=${decimal(Math.max(8, Math.min(40, Math.min(width, height) * 0.045)))}:steps=2,eq=brightness=-0.12${s.autoMotion ? `,${motion}` : ""}[blurfill];[blurfront]scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2[blurpicture];[blurfill][blurpicture]overlay=x=(W-w)/2:y=(H-h)/2:shortest=1`,

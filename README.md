@@ -22,7 +22,7 @@ Use your own footage or footage you have permission to repurpose. Review the res
 
 ## Optional B-roll and animated cards
 
-Open **Adjust output → Supporting visuals** in Auto mode:
+Use **Output preferences → Supporting visuals** in Auto mode:
 
 - **Off** keeps the edit focused on the source footage.
 - **Stock B-roll · Pixabay** finds existing moving videos from a free stock library, with no uploads required. Choose any stock video (the default) or animation-only results. Add `PIXABAY_API_KEY` to the backend environment to enable search; get a free key from the [Pixabay API page](https://pixabay.com/api/docs/). With local matching, keywords from up to three moments in the edited speech are sent to Pixabay; silent videos use their descriptive filename. AI matching uses DeepSeek to turn spoken ideas and neighboring context into concrete English visual searches, then checks the visible relevance of a small shortlist. All downloaded stock is checked locally for sustained motion in the output crop. No B-roll videos are generated.
@@ -83,13 +83,19 @@ Switch to **Manual** for direct control. Its saved settings are separate from Au
 
 - Upload multiple videos together and preview each source.
 - Apply shared settings, then customize individual videos.
+- Open **All controls** for the complete adjustment surface, or use the focused Essentials, Color & feel, and Advanced tabs.
+- Choose from eight color looks. Looks change color and texture while preserving framing, timing, sound and text. Saved editing presets apply the wider edit settings.
+- Type exact slider values and press Enter or leave the field to apply them. Values stay within the supported range; each control has its own reset. Global reset also clears optional framing, motion, caption-style and audio-normalization settings.
 - Change speed, volume, crop, zoom, aspect ratio, color, sharpening, noise, and frame blending; mirror footage and adjust timing.
+- Position the subject inside cropped or zoomed footage, add a gentle push-in, normalize loudness, and adjust the size and placement of uploaded captions.
 - Trim footage, add an opening text hook, burn in an uploaded SRT subtitle file, and replace or mute audio.
 - Export in the source aspect ratio or 9:16, 1:1, 4:5, or 16:9, with framing, resolution, and frame-rate controls.
 - Strip file metadata for privacy. Device impersonation has been removed; legacy device-profile settings are ignored.
 - Generate variants, track render progress, cancel jobs, and download completed videos individually or together.
 
-The Manual browser preview approximates supported visual controls. Auto shows the original source until its finished export is ready. Review the rendered export for accurate timing, audio, subtitles, text, and FFmpeg effects.
+The **Live** preview follows the effective trim and time shift, and approximates framing and basic color. **Render 5s preview** renders the first five edited seconds through FFmpeg, including image effects, camera movement, uploaded captions, hooks and audio. Samples use up to 720p/60 fps and do not create export/history entries. Full exports remain the final check, especially for effects or audio balancing influenced by resolution or content outside the short sample.
+
+Changing settings hides an outdated sample and cancels a preview still in progress. Only one preview renders at a time; requests time out after 60 seconds. Up to 12 samples are cached locally for 30 minutes, and restart discards the cache. Auto shows the original source until its finished export is ready.
 
 Replacement audio loops when shorter than the rendered video and is trimmed when longer. It keeps its own playback speed; source audio follows the video's trim and speed while preserving pitch. Uploaded SRT files must be timed to the final exported video.
 

@@ -30,6 +30,7 @@ import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
 import { fingerprintFile, publicationChangesSchema } from "./history.js";
 import { correctionRecord, measurementsCsv, measurementsSchema, measurementSummary } from "./measurements.js";
+import { installManualPreviewRoutes } from "./manual-preview.js";
 
 class HttpError extends Error {
   constructor(
@@ -135,6 +136,7 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: "512kb" }));
+  installManualPreviewRoutes(app);
   let binaries = checkBinaries();
   app.get("/api/health", async (_req, res) => {
     let tools = await binaries;

@@ -3,7 +3,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type CSSProperties,
   type ReactNode,
 } from "react";
 import {
@@ -55,6 +54,8 @@ import {
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import HistoryPanel from "./HistoryPanel";
+import Slider from "./Slider";
+import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualCropPosition } from "../shared/manual";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
 type AutoPreset = { options: AutoOptions; variants: number };
@@ -118,30 +119,6 @@ type Toast = {
   message: string;
   kind: "success" | "error" | "info";
 };
-const builtinPresets: Preset[] = [
-  { id: "original", name: "Original", settings: DEFAULT_SETTINGS },
-  {
-    id: "clean",
-    name: "Clean & crisp",
-    settings: {
-      ...DEFAULT_SETTINGS,
-      contrast: 1.06,
-      saturation: 1.05,
-      sharpness: 0.45,
-    },
-  },
-  {
-    id: "warm",
-    name: "Warm editorial",
-    settings: {
-      ...DEFAULT_SETTINGS,
-      temperature: 0.15,
-      contrast: 1.04,
-      saturation: 0.94,
-      brightness: 0.01,
-    },
-  },
-];
 const formatSize = (bytes: number) =>
   bytes >= 1024 ** 3
     ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
@@ -214,55 +191,6 @@ function IconButton({
     >
       {children}
     </button>
-  );
-}
-
-function Slider({
-  label,
-  value,
-  min,
-  max,
-  step = 0.01,
-  unit = "",
-  onChange,
-  hint,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step?: number;
-  unit?: string;
-  onChange: (value: number) => void;
-  hint?: string;
-}) {
-  const id = `slider-${label.replaceAll(" ", "-").toLowerCase()}`;
-  const digits = step >= 1 ? 0 : step >= 0.1 ? 1 : 2;
-  return (
-    <div className="slider-field">
-      <div className="field-heading">
-        <label htmlFor={id}>{label}</label>
-        <output htmlFor={id}>
-          {value.toFixed(digits)}
-          {unit}
-        </output>
-      </div>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        style={
-          {
-            "--range-fill": `${((value - min) / (max - min)) * 100}%`,
-          } as CSSProperties
-        }
-      />
-      {hint && <p className="field-hint">{hint}</p>}
-    </div>
   );
 }
 
@@ -383,7 +311,7 @@ export default function App() {
   const [dragging, setDragging] = useState(false);
   const [view, setView] = useState<"studio" | "exports" | "history">("studio");
   const [historySource, setHistorySource] = useState<VideoSource | null>(null);
-  const [tab, setTab] = useState<"essentials" | "color" | "advanced">(
+  const [tab, setTab] = useState<"essentials" | "color" | "advanced" | "all">(
     "essentials",
   );
   const [jobs, setJobs] = useState<RenderJob[]>([]);
@@ -398,6 +326,12 @@ export default function App() {
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
   const [editingJob, setEditingJob] = useState<RenderJob | null>(null);
   const [original, setOriginal] = useState(false);
+  const [renderedPreview, setRenderedPreview] = useState<{ id: string; url: string; duration: number; signature: string } | null>(null);
+  const [showRendered, setShowRendered] = useState(false);
+  const [previewBusy, setPreviewBusy] = useState(false);
+  const [manualPreviewError, setManualPreviewError] = useState("");
+  const [liveOutputTime, setLiveOutputTime] = useState(0);
+  const previewRequest = useRef<AbortController | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const [renderScope, setRenderScope] = useState<"all" | "selected">("all");
   const [autoRenderScope, setAutoRenderScope] = useState<"all" | "current" | "selected">("all");
@@ -425,10 +359,45 @@ export default function App() {
     sameAutoPreset(preset, selectedAuto),
   );
   const sourcePreview = mode === "auto" || original;
+  const previewSignature = JSON.stringify({ sourceId: selected?.id, settings });
+  const previewCurrent = renderedPreview?.signature === previewSignature;
+  const usingRendered = mode === "manual" && !original && showRendered && previewCurrent;
+  const liveInterval = selected && (settings.trimEnd === null || settings.trimEnd <= selected.duration)
+    ? manualPreviewInterval(settings, selected.duration) : null;
   const pending = jobs.filter(
     (job) => job.status === "queued" || job.status === "processing",
   );
   const completed = jobs.filter((job) => job.status === "completed");
+  useEffect(() => {
+    previewRequest.current?.abort();
+    previewRequest.current = null;
+    setPreviewBusy(false);
+    setManualPreviewError("");
+    return () => { previewRequest.current?.abort(); };
+  }, [previewSignature, mode, view]);
+
+  const renderManualPreview = async () => {
+    if (!selected || previewRequest.current) return;
+    const controller = new AbortController();
+    previewRequest.current = controller;
+    setPreviewBusy(true);
+    setManualPreviewError("");
+    try {
+      const result = await api<{ id: string; url: string; duration: number }>("/api/previews", {
+        method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({ sourceId: selected.id, settings }),
+      });
+      if (!controller.signal.aborted) {
+        setRenderedPreview({ ...result, signature: previewSignature });
+        setOriginal(false);
+        setShowRendered(true);
+      }
+    } catch (error) {
+      if (!controller.signal.aborted) setManualPreviewError(error instanceof Error ? error.message : "Preview failed. Please try again.");
+    } finally {
+      if (previewRequest.current === controller) { previewRequest.current = null; setPreviewBusy(false); }
+    }
+  };
   useEffect(() => {
     window.scrollTo(0, 0);
   }, [view]);
@@ -591,16 +560,23 @@ export default function App() {
 
   useEffect(() => {
     if (!videoRef.current) return;
-    videoRef.current.playbackRate = sourcePreview ? 1 : settings.speed;
-    videoRef.current.volume = sourcePreview ? 1 : Math.min(1, settings.volume);
-    videoRef.current.muted = !sourcePreview && settings.muted;
+    videoRef.current.playbackRate = sourcePreview || usingRendered ? 1 : settings.speed;
+    videoRef.current.volume = sourcePreview || usingRendered ? 1 : Math.min(1, settings.volume);
+    videoRef.current.muted = !sourcePreview && !usingRendered && settings.muted;
   }, [
     settings.speed,
     settings.volume,
     settings.muted,
     sourcePreview,
+    usingRendered,
     selected?.id,
   ]);
+
+  useEffect(() => {
+    if (!videoRef.current || usingRendered || sourcePreview || !liveInterval) return;
+    videoRef.current.currentTime = liveInterval.start;
+    setLiveOutputTime(0);
+  }, [liveInterval?.start, liveInterval?.end, usingRendered, sourcePreview, selected?.id]);
 
   useEffect(() => {
     try {
@@ -657,8 +633,10 @@ export default function App() {
       }));
     else setDefaultSettings((current) => ({ ...current, ...patch }));
   };
-  const replaceSettings = (value: RemixSettings) =>
-    updateSettings({ ...value });
+  const replaceSettings = (value: RemixSettings) => {
+    if (selected) setSettingsById((current) => ({ ...current, [selected.id]: { ...DEFAULT_SETTINGS, ...value } }));
+    else setDefaultSettings({ ...DEFAULT_SETTINGS, ...value });
+  };
   const applyAll = () => {
     setSettingsById((current) =>
       Object.fromEntries(
@@ -1011,11 +989,11 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
-  const edited = Object.keys(DEFAULT_SETTINGS).some(
-    (key) =>
-      settings[key as keyof RemixSettings] !==
-      DEFAULT_SETTINGS[key as keyof RemixSettings],
-  );
+  const manualDefaults = { ...DEFAULT_SETTINGS, normalizeAudio: false, autoMotion: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+  const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
+    JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
+  ).length;
+  const edited = adjustedCount > 0;
   const previewFilter = sourcePreview
     ? "none"
     : `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`;
@@ -1227,7 +1205,7 @@ export default function App() {
               )}
             </div>
             <div
-              className={`studio-grid ${mode === "auto" ? "auto-studio" : ""}`}
+              className={`studio-grid ${mode === "auto" ? "auto-studio" : tab === "all" ? "manual-all-controls" : ""}`}
             >
               <aside className="source-panel panel">
                 <div className="panel-heading">
@@ -1446,10 +1424,10 @@ export default function App() {
                     <div className="preview-switch">
                       <button
                         disabled={!selected}
-                        className={!original ? "active" : ""}
-                        onClick={() => setOriginal(false)}
+                        className={!original && !usingRendered ? "active" : ""}
+                        onClick={() => { setOriginal(false); setShowRendered(false); }}
                       >
-                        Edited
+                        Live
                       </button>
                       <button
                         disabled={!selected}
@@ -1458,6 +1436,7 @@ export default function App() {
                       >
                         Original
                       </button>
+                      {previewCurrent && <button className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>Rendered</button>}
                     </div>
                   )}
                 </div>
@@ -1466,7 +1445,7 @@ export default function App() {
                     <>
                       <div className="preview-label">
                         <span />
-                        {sourcePreview ? "ORIGINAL FOOTAGE" : "LIVE PREVIEW"}
+                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : "LIVE PREVIEW"}
                       </div>
                       <div
                         className="video-frame"
@@ -1477,36 +1456,60 @@ export default function App() {
                         }}
                       >
                         <video
-                          key={selected.id}
+                          key={usingRendered ? renderedPreview!.id : selected.id}
                           ref={videoRef}
-                          src={selected.url}
-                          poster={selected.thumbnailUrl}
+                          src={usingRendered ? renderedPreview!.url : selected.url}
+                          poster={usingRendered ? undefined : selected.thumbnailUrl}
                           controls
                           playsInline
                           preload="metadata"
                           onLoadedMetadata={() => {
                             if (videoRef.current) {
-                              videoRef.current.playbackRate = sourcePreview
+                              videoRef.current.playbackRate = sourcePreview || usingRendered
                                 ? 1
                                 : settings.speed;
-                              videoRef.current.currentTime = sourcePreview
+                              videoRef.current.volume = sourcePreview || usingRendered ? 1 : Math.min(1, settings.volume);
+                              videoRef.current.muted = !sourcePreview && !usingRendered && settings.muted;
+                              videoRef.current.currentTime = sourcePreview || usingRendered
                                 ? 0
-                                : settings.trimStart;
+                                : liveInterval?.start ?? 0;
                             }
                           }}
+                          onPlay={(event) => {
+                            if (!sourcePreview && !usingRendered && liveInterval && event.currentTarget.currentTime >= liveInterval.end - 0.04)
+                              event.currentTarget.currentTime = liveInterval.start;
+                          }}
+                          onSeeking={(event) => {
+                            if (!sourcePreview && !usingRendered && liveInterval) {
+                              const video = event.currentTarget;
+                              if (video.currentTime < liveInterval.start) video.currentTime = liveInterval.start;
+                              if (video.currentTime > liveInterval.end) video.currentTime = liveInterval.end;
+                            }
+                          }}
+                          onTimeUpdate={(event) => {
+                            if (!sourcePreview && !usingRendered && liveInterval) {
+                              const video = event.currentTarget;
+                              setLiveOutputTime(Math.max(0, video.currentTime - liveInterval.start) / settings.speed);
+                              if (video.currentTime >= liveInterval.end - 0.025 && !video.paused) { video.pause(); video.currentTime = liveInterval.end; }
+                            }
+                          }}
+                          onError={() => {
+                            if (usingRendered) { setShowRendered(false); setRenderedPreview(null); setManualPreviewError("This preview is no longer available. Render a fresh sample."); }
+                          }}
                           style={{
-                            objectFit: sourcePreview
+                            objectFit: sourcePreview || usingRendered
                               ? "contain"
                               : settings.fit === "crop"
                                 ? "cover"
                                 : "contain",
-                            filter: previewFilter,
-                            transform: sourcePreview
+                            objectPosition: sourcePreview || usingRendered || settings.fit !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, settings.aspect === "original" ? selected.width / selected.height : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]), settings.focalPoint ?? { x: 0.5, y: 0.5 }),
+                            filter: usingRendered ? "none" : previewFilter,
+                            transform: sourcePreview || usingRendered
                               ? "none"
                               : `scale(${settings.mirror ? -settings.zoom : settings.zoom}, ${settings.zoom})`,
                           }}
                         />
-                        {!sourcePreview && settings.hookText && (
+                        {!sourcePreview && !usingRendered && settings.hookText && liveOutputTime < settings.hookDuration && (
                           <div className="hook-preview">
                             {settings.hookText}
                           </div>
@@ -1586,9 +1589,17 @@ export default function App() {
                         <span>
                           {mode === "auto"
                             ? "Your original source. The finished remix will be ready to preview in Exports."
-                            : "Approximate preview. Audio, captions and advanced effects appear in your export."}
+                            : usingRendered ? "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
+                            : "Live framing and basic color. Render a short sample to see every effect, text and audio."}
                         </span>
                       </div>
+                      {mode === "manual" && <>
+                        <div className="manual-preview-actions">
+                          <p>{previewBusy ? "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of this edit` : "Review the first five seconds before exporting."}</p>
+                          {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || !liveInterval} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />Render 5s preview</button>}
+                        </div>
+                        {manualPreviewError && <p className="manual-preview-error" role="alert">{manualPreviewError}</p>}
+                      </>}
                     </>
                   ) : (
                     <>
@@ -1645,7 +1656,7 @@ export default function App() {
                       {edited ? (
                         <>
                           <span />
-                          Edited
+                          {adjustedCount} adjusted
                         </>
                       ) : (
                         "Original"
@@ -1657,7 +1668,7 @@ export default function App() {
                     role="tablist"
                     aria-label="Editing controls"
                   >
-                    {(["essentials", "color", "advanced"] as const).map(
+                    {(["essentials", "color", "advanced", "all"] as const).map(
                       (value) => (
                         <button
                           key={value}
@@ -1667,13 +1678,13 @@ export default function App() {
                           aria-selected={tab === value}
                           aria-controls="settings-content"
                           className={tab === value ? "active" : ""}
-                          onClick={() => setTab(value)}
+                          onClick={() => { setTab(value); if (value === "all" || tab === "all") requestAnimationFrame(() => document.getElementById("settings-content")?.parentElement?.scrollIntoView({ block: "start" })); }}
                         >
                           {value === "essentials"
                             ? "Essentials"
                             : value === "color"
                               ? "Color & feel"
-                              : "Advanced"}
+                              : value === "advanced" ? "Advanced" : "All controls"}
                         </button>
                       ),
                     )}
@@ -1684,10 +1695,10 @@ export default function App() {
                     role="tabpanel"
                     aria-labelledby={`tab-${tab}`}
                   >
-                    {tab === "essentials" && (
+                    {(tab === "essentials" || tab === "all") && (
                       <>
                         <Section
-                          title="Start with a look"
+                          title="Color looks"
                           icon={<WandSparkles size={13} />}
                           trailing={
                             <button
@@ -1695,54 +1706,22 @@ export default function App() {
                               onClick={() => setSavingPreset(!savingPreset)}
                             >
                               <Plus size={11} />
-                              Save
+                              Save preset
                             </button>
                           }
                         >
-                          <div className="preset-grid">
-                            {[...builtinPresets, ...presets].map((preset) => (
-                              <div className="preset-wrap" key={preset.id}>
-                                <button
-                                  className={`preset-chip ${Object.entries(preset.settings).every(([key, value]) => settings[key as keyof RemixSettings] === value) ? "active" : ""}`}
-                                  onClick={() =>
-                                    replaceSettings({
-                                      ...preset.settings,
-                                      trimStart: settings.trimStart,
-                                      trimEnd: settings.trimEnd,
-                                      audioId: settings.audioId,
-                                      subtitleId: settings.subtitleId,
-                                    })
-                                  }
-                                >
-                                  {preset.id === "original" ? (
-                                    <span className="preset-dot original-dot" />
-                                  ) : (
-                                    <span
-                                      className={`preset-dot ${preset.id === "warm" ? "warm-dot" : "clean-dot"}`}
-                                    />
-                                  )}
-                                  {preset.name}
-                                </button>
-                                {!builtinPresets.some(
-                                  (item) => item.id === preset.id,
-                                ) && (
-                                  <button
-                                    className="delete-preset"
-                                    aria-label={`Delete preset ${preset.name}`}
-                                    onClick={() =>
-                                      setPresets((current) =>
-                                        current.filter(
-                                          (item) => item.id !== preset.id,
-                                        ),
-                                      )
-                                    }
-                                  >
-                                    <X size={10} />
-                                  </button>
-                                )}
-                              </div>
-                            ))}
+                          <div className="look-grid">
+                            {MANUAL_LOOKS.map((look) => <button key={look.id} type="button" className={`look-button ${activeColorLook(settings) === look.id ? "active" : ""}`} aria-pressed={activeColorLook(settings) === look.id} title={look.description} onClick={() => replaceSettings(applyColorLook(settings, look.id))}>
+                              <span className="look-swatch" style={{ background: look.swatch }} aria-hidden="true" /><span>{look.name}</span>
+                            </button>)}
                           </div>
+                          <p className="field-hint">Color looks keep your framing, timing and audio settings.</p>
+                          {!!presets.length && <div className="saved-editing-presets"><h4>Saved editing presets</h4><div className="preset-grid">
+                            {presets.map((preset) => <div className="preset-wrap" key={preset.id}>
+                              <button className="preset-chip" title="Apply saved editing settings; current trim and attachments stay in place" onClick={() => replaceSettings({ ...preset.settings, trimStart: settings.trimStart, trimEnd: settings.trimEnd, audioId: settings.audioId, subtitleId: settings.subtitleId })}>{preset.name}</button>
+                              <button className="delete-preset" aria-label={`Delete preset ${preset.name}`} onClick={() => setPresets((current) => current.filter((item) => item.id !== preset.id))}><X size={10} /></button>
+                            </div>)}
+                          </div></div>}
                           {savingPreset && (
                             <form
                               className="preset-save-form"
@@ -1832,6 +1811,7 @@ export default function App() {
                           <Slider
                             label="Zoom"
                             value={settings.zoom}
+                            defaultValue={DEFAULT_SETTINGS.zoom}
                             min={1}
                             max={2}
                             unit="×"
@@ -1842,6 +1822,16 @@ export default function App() {
                             value={settings.mirror}
                             onChange={(mirror) => updateSettings({ mirror })}
                           />
+                          <Toggle label="Gentle push-in" value={settings.autoMotion ?? false} onChange={(autoMotion) => updateSettings({ autoMotion })} detail="Slow camera movement. With blur fit, the background moves." />
+                          <details className="manual-subsection">
+                            <summary>Subject position</summary>
+                            <p className="field-hint">Choose what stays in frame when cropping or zooming into the original picture.</p>
+                            <fieldset disabled={settings.fit !== "crop" && settings.zoom === 1}>
+                              <legend className="visually-hidden">Crop position</legend>
+                              <Slider label="Horizontal position" value={(settings.focalPoint?.x ?? 0.5) * 100} defaultValue={50} min={0} max={100} step={1} unit="%" onChange={(x) => updateSettings({ focalPoint: { x: x / 100, y: settings.focalPoint?.y ?? 0.5 } })} />
+                              <Slider label="Vertical position" value={(settings.focalPoint?.y ?? 0.5) * 100} defaultValue={50} min={0} max={100} step={1} unit="%" onChange={(y) => updateSettings({ focalPoint: { x: settings.focalPoint?.x ?? 0.5, y: y / 100 } })} />
+                            </fieldset>
+                          </details>
                         </Section>
                         <Section
                           title="Pace & sound"
@@ -1850,6 +1840,7 @@ export default function App() {
                           <Slider
                             label="Playback speed"
                             value={settings.speed}
+                            defaultValue={DEFAULT_SETTINGS.speed}
                             min={0.5}
                             max={2}
                             unit="×"
@@ -1858,6 +1849,7 @@ export default function App() {
                           <Slider
                             label="Volume"
                             value={settings.volume}
+                            defaultValue={DEFAULT_SETTINGS.volume}
                             min={0}
                             max={2}
                             unit="×"
@@ -1868,6 +1860,7 @@ export default function App() {
                             value={settings.muted}
                             onChange={(muted) => updateSettings({ muted })}
                           />
+                          <Toggle label="Normalize loudness" value={settings.normalizeAudio ?? false} onChange={(normalizeAudio) => updateSettings({ normalizeAudio })} detail="Keep speech at a more consistent listening level." />
                           <input
                             className="visually-hidden"
                             ref={audioInput}
@@ -1922,9 +1915,9 @@ export default function App() {
                         </Section>
                       </>
                     )}
-                    {tab === "color" && (
+                    {(tab === "color" || tab === "all") && (
                       <>
-                        <div className="tab-intro">
+                        <div className="tab-intro manual-color-intro">
                           <span className="small-icon-box">
                             <WandSparkles size={16} />
                           </span>
@@ -1938,6 +1931,7 @@ export default function App() {
                           <Slider
                             label="Brightness"
                             value={settings.brightness}
+                            defaultValue={DEFAULT_SETTINGS.brightness}
                             min={-1}
                             max={1}
                             onChange={(brightness) =>
@@ -1947,6 +1941,7 @@ export default function App() {
                           <Slider
                             label="Contrast"
                             value={settings.contrast}
+                            defaultValue={DEFAULT_SETTINGS.contrast}
                             min={0}
                             max={2}
                             unit="×"
@@ -1957,6 +1952,7 @@ export default function App() {
                           <Slider
                             label="Saturation"
                             value={settings.saturation}
+                            defaultValue={DEFAULT_SETTINGS.saturation}
                             min={0}
                             max={3}
                             unit="×"
@@ -1967,6 +1963,7 @@ export default function App() {
                           <Slider
                             label="Temperature"
                             value={settings.temperature}
+                            defaultValue={DEFAULT_SETTINGS.temperature}
                             min={-1}
                             max={1}
                             onChange={(temperature) =>
@@ -1976,6 +1973,7 @@ export default function App() {
                           <Slider
                             label="Hue shift"
                             value={settings.hue}
+                            defaultValue={DEFAULT_SETTINGS.hue}
                             min={-180}
                             max={180}
                             step={1}
@@ -1985,6 +1983,7 @@ export default function App() {
                           <Slider
                             label="Gamma"
                             value={settings.gamma}
+                            defaultValue={DEFAULT_SETTINGS.gamma}
                             min={0.1}
                             max={3}
                             onChange={(gamma) => updateSettings({ gamma })}
@@ -1994,6 +1993,7 @@ export default function App() {
                           <Slider
                             label="Sharpness"
                             value={settings.sharpness}
+                            defaultValue={DEFAULT_SETTINGS.sharpness}
                             min={0}
                             max={2}
                             onChange={(sharpness) =>
@@ -2003,18 +2003,12 @@ export default function App() {
                           <Slider
                             label="Film grain"
                             value={settings.noise}
+                            defaultValue={DEFAULT_SETTINGS.noise}
                             min={0}
                             max={1}
                             onChange={(noise) => updateSettings({ noise })}
                           />
-                          <Slider
-                            label="Blend"
-                            value={settings.blend}
-                            min={0}
-                            max={1}
-                            onChange={(blend) => updateSettings({ blend })}
-                            hint="Blend neighboring frames for a softer motion effect."
-                          />
+
                         </Section>
                         <button
                           className="secondary-button full-width"
@@ -2028,7 +2022,6 @@ export default function App() {
                               temperature: 0,
                               noise: 0,
                               sharpness: 0,
-                              blend: 0,
                             })
                           }
                         >
@@ -2037,10 +2030,10 @@ export default function App() {
                         </button>
                       </>
                     )}
-                    {tab === "advanced" && (
+                    {(tab === "advanced" || tab === "all") && (
                       <>
                         <Section
-                          title="Keep the good part"
+                          title="Trim & motion"
                           icon={<Scissors size={13} />}
                         >
                           <div className="fields-row">
@@ -2089,9 +2082,11 @@ export default function App() {
                           <p className="field-hint">
                             Leave the end blank to keep the rest of the video.
                           </p>
+                          {selected && <p className={`manual-trim-summary ${liveInterval ? "" : "invalid"}`} role="status">{liveInterval ? `${liveInterval.start.toFixed(1)}–${liveInterval.end.toFixed(1)}s of source · ${liveInterval.outputDuration.toFixed(1)}s export` : "Choose a trim with its end after its start, within this video."}</p>}
                           <Slider
                             label="Time shift"
                             value={settings.timeShift}
+                            defaultValue={DEFAULT_SETTINGS.timeShift}
                             min={-5}
                             max={5}
                             step={0.1}
@@ -2102,8 +2097,19 @@ export default function App() {
                             hint="Move the trimmed window earlier or later, keeping its length. Set a trim first."
                           />
                           <Slider
+                            label="Blend"
+                            value={settings.blend}
+                            defaultValue={DEFAULT_SETTINGS.blend}
+                            min={0}
+                            max={1}
+                            onChange={(blend) => updateSettings({ blend })}
+                            hint="Blend neighboring frames for a softer motion effect."
+                          />
+                          <Slider
                             label="Frame blend"
+                            step={0.001}
                             value={settings.frameBlend}
+                            defaultValue={DEFAULT_SETTINGS.frameBlend}
                             min={0}
                             max={0.5}
                             unit="s"
@@ -2135,6 +2141,7 @@ export default function App() {
                             <Slider
                               label="Hook duration"
                               value={settings.hookDuration}
+                            defaultValue={DEFAULT_SETTINGS.hookDuration}
                               min={1}
                               max={15}
                               step={0.5}
@@ -2195,6 +2202,11 @@ export default function App() {
                             Burned into the export. Use timings for your final
                             edited video.
                           </p>
+                          {settings.subtitleId && <details className="manual-subsection">
+                            <summary>Caption size &amp; placement</summary>
+                            <Slider label="Caption size" value={settings.captionStyle?.fontSize ?? 20} defaultValue={20} min={12} max={40} step={1} onChange={(fontSize) => updateSettings({ captionStyle: { fontSize, bottomPercent: settings.captionStyle?.bottomPercent ?? 100 / 12 } })} />
+                            <Slider label="Caption bottom spacing" value={settings.captionStyle?.bottomPercent ?? 100 / 12} defaultValue={100 / 12} min={5} max={80} step={0.1} unit="%" onChange={(bottomPercent) => updateSettings({ captionStyle: { fontSize: settings.captionStyle?.fontSize ?? 20, bottomPercent } })} />
+                          </details>}
                           {attachmentError && (
                             <p className="inline-error">{attachmentError}</p>
                           )}
