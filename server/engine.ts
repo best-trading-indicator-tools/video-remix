@@ -12,6 +12,7 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import type { RemixSettings } from "../shared/types.js";
+import type { SupportingVisual } from "./visuals.js";
 
 export interface MediaInfo {
   duration: number;
@@ -359,7 +360,7 @@ function validateSettings(settings: RemixSettings): void {
   }
 }
 
-function geometry(
+export function geometry(
   source: MediaInfo,
   settings: RemixSettings,
 ): { width: number; height: number } {
@@ -474,6 +475,7 @@ export interface RenderOptions {
   source: MediaInfo;
   audioPath?: string;
   subtitlePath?: string;
+  supportingVisuals?: SupportingVisual[];
   workDir: string;
   onProgress: (progress: number) => void;
   signal: AbortSignal;
@@ -510,6 +512,23 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
   const duration = clipLength / s.speed;
   const fps = s.fps === "source" ? source.fps : Number(s.fps);
   const { width, height } = geometry(source, s);
+  const supportingVisuals = options.supportingVisuals ?? [];
+  if (
+    supportingVisuals.length > 3 ||
+    supportingVisuals.some(
+      (visual) =>
+        !Number.isFinite(visual.start) ||
+        !Number.isFinite(visual.end) ||
+        !Number.isFinite(visual.sourceStart ?? 0) ||
+        visual.start < 0 ||
+        visual.end - visual.start < 0.04 ||
+        visual.end > duration + 0.001 ||
+        (visual.sourceStart ?? 0) < 0,
+    )
+  )
+    throw new Error(
+      "Supporting visuals need valid times within the edited video (maximum 3)",
+    );
   const temporary: string[] = [];
   try {
     // The concat demuxer seeks each requested interval in order. Its frame
@@ -592,6 +611,9 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       );
       filters.push(`tmix=frames=${frames}`);
     }
+    // Cutaways are inserted beneath editorial text so captions remain readable
+    // and the original/replacement audio remains the only mapped sound track.
+    const cutawayFilterIndex = filters.length;
     if (s.hookText.trim() && s.hookDuration > 0) {
       const filename = `hook-${randomUUID()}.txt`;
       const filePath = path.join(workDir, filename);
@@ -674,16 +696,41 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "-i",
         await localFile(options.audioPath!),
       );
-    args.push(
-      "-map",
-      "0:V:0",
-      "-vf",
-      filters.join(","),
-      "-filter_threads",
-      "1",
-      "-filter_complex_threads",
-      "1",
-    );
+    if (supportingVisuals.length) {
+      const graph = [
+        `[0:V:0]${filters.slice(0, cutawayFilterIndex).join(",")}[picture0]`,
+      ];
+      for (const [index, visual] of supportingVisuals.entries()) {
+        const local = await localFile(visual.path);
+        const media = await probeMedia(local);
+        const length = visual.end - visual.start;
+        if ((visual.sourceStart ?? 0) + length > media.duration + 0.05)
+          throw new Error(
+            "Supporting visual is shorter than its selected interval",
+          );
+        args.push(
+          "-threads",
+          "2",
+          ...SAFE_INPUT,
+          "-ss",
+          decimal(visual.sourceStart ?? 0),
+          "-t",
+          decimal(length),
+          "-i",
+          local,
+        );
+        const inputIndex = index + (replacementAudio ? 2 : 1);
+        graph.push(
+          `[${inputIndex}:V:0]trim=duration=${decimal(length)},setpts=PTS-STARTPTS+${decimal(visual.start)}/TB,scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${width}:${height},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
+          `[picture${index}][cutaway${index}]overlay=x=0:y=0:eof_action=pass:repeatlast=0:enable='gte(t,${decimal(visual.start)})*lt(t,${decimal(visual.end)})'[picture${index + 1}]`,
+        );
+      }
+      graph.push(
+        `[picture${supportingVisuals.length}]${filters.slice(cutawayFilterIndex).join(",") || "null"}[edited]`,
+      );
+      args.push("-filter_complex", graph.join(";"), "-map", "[edited]");
+    } else args.push("-map", "0:V:0", "-vf", filters.join(","));
+    args.push("-filter_threads", "1", "-filter_complex_threads", "1");
     if (!s.muted && (replacementAudio || source.hasAudio)) {
       args.push("-map", replacementAudio ? "1:a:0" : "0:a:0");
       const audioFilters = replacementAudio
@@ -725,19 +772,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       "-metadata:s:v:0",
       "rotate=0",
     );
-    if (s.device !== "none" && s.device.trim()) {
-      const make = /ray.ban|meta/i.test(s.device) ? "Meta" : "Apple";
-      args.push(
-        "-metadata",
-        `make=${make}`,
-        "-metadata",
-        `model=${s.device}`,
-        "-metadata",
-        `com.apple.quicktime.make=${make}`,
-        "-metadata",
-        `com.apple.quicktime.model=${s.device}`,
-      );
-    }
+    // Legacy saved settings can contain device profiles. Never invent capture
+    // make/model metadata; metadata retention only preserves source information.
     // Disabling encoder lookahead also avoids FFmpeg 8 scheduler stalls when
     // accelerated video needs more decoded frames than its paired audio queue.
     args.push(

@@ -10,6 +10,7 @@ import {
   Subtitles,
 } from "lucide-react";
 import type { AutoCapabilities, AutoOptions } from "../shared/types";
+import BrollPanel from "./BrollPanel";
 
 export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
   "9:16": "TikTok & Reels",
@@ -25,12 +26,20 @@ export default function AutoPanel({
   capabilities,
   variants,
   onVariantsChange,
+  onBrollSelectionChange,
+  onLibraryBusyChange,
+  maxFiles,
+  maxFileSize,
 }: {
   options: AutoOptions;
   onChange: (value: AutoOptions) => void;
   capabilities: AutoCapabilities | null;
   variants: number;
   onVariantsChange: (value: number) => void;
+  onBrollSelectionChange: (ids: string[]) => void;
+  onLibraryBusyChange: (busy: boolean) => void;
+  maxFiles?: number;
+  maxFileSize?: number;
 }) {
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
   return (
@@ -92,8 +101,8 @@ export default function AutoPanel({
               <h3>Give it a fresh finish</h3>
               <p>
                 {capabilities?.transcription
-                  ? "Add speech captions, callouts and gentle motion."
-                  : "Add framing, gentle motion and balanced sound."}
+                  ? "Add captions, callouts and optional supporting visuals."
+                  : "Reframe footage and balance the source audio."}
               </p>
             </div>
           </div>
@@ -160,7 +169,7 @@ export default function AutoPanel({
               </select>
             </label>
             <label>
-              Versions per video
+              Maximum versions
               <select
                 value={variants}
                 onChange={(event) =>
@@ -169,11 +178,15 @@ export default function AutoPanel({
               >
                 {[1, 2, 3, 4, 5].map((value) => (
                   <option value={value} key={value}>
-                    {value} {value === 1 ? "version" : "versions"}
+                    Up to {value}
                   </option>
                 ))}
               </select>
             </label>
+            <p className="auto-preferences-note">
+              Per source video. Cuts that repeat another version too closely are
+              skipped, so your batch may contain fewer exports.
+            </p>
             <label
               className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}
             >
@@ -194,6 +207,55 @@ export default function AutoPanel({
                 }
               />
             </label>
+            <div className="supporting-visuals">
+              <label htmlFor="supporting-visuals">Supporting visuals</label>
+              <select
+                id="supporting-visuals"
+                value={options.supportingVisuals || "off"}
+                onChange={(event) =>
+                  onChange({
+                    ...options,
+                    supportingVisuals: event.target
+                      .value as AutoOptions["supportingVisuals"],
+                  })
+                }
+              >
+                <option value="off">Off</option>
+                <option value="library">My B-roll videos</option>
+                <option
+                  value="graphics"
+                  disabled={!capabilities?.motionGraphics}
+                >
+                  Animated cards
+                </option>
+                <option value="both" disabled={!capabilities?.motionGraphics}>
+                  B-roll + animated cards
+                </option>
+              </select>
+              {(options.supportingVisuals === "graphics" ||
+                options.supportingVisuals === "both") && (
+                <p className="auto-preferences-note">
+                  Animated text cards turn key points from your video's speech
+                  into supporting visuals. Rendered locally with HyperFrames.
+                </p>
+              )}
+              {!capabilities?.motionGraphics && (
+                <p className="auto-preferences-note">
+                  Animated cards are unavailable on this engine. Your uploaded
+                  B-roll can still be used.
+                </p>
+              )}
+              {(options.supportingVisuals === "library" ||
+                options.supportingVisuals === "both") && (
+                <BrollPanel
+                  selectedIds={options.brollIds || []}
+                  onSelectionChange={onBrollSelectionChange}
+                  onBusyChange={onLibraryBusyChange}
+                  maxFiles={maxFiles}
+                  maxFileSize={maxFileSize}
+                />
+              )}
+            </div>
             <p className="auto-preferences-note">
               Shorter videos stay short. Automatic edits use their own settings;
               manual edits are kept in Manual mode.

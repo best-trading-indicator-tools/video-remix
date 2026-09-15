@@ -12,6 +12,8 @@ export interface AutoOptions {
   aspect: Aspect;
   targetDuration: 30 | 45 | 60;
   narration: boolean;
+  supportingVisuals?: "off" | "library" | "graphics" | "both";
+  brollIds?: string[];
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
@@ -40,6 +42,7 @@ export interface AutoCapabilities {
   model: string;
   intelligence: boolean;
   narration: boolean;
+  motionGraphics?: boolean;
   message?: string;
 }
 export interface RemixSettings {
@@ -119,6 +122,9 @@ export interface VideoSource {
   thumbnailUrl: string;
   url: string;
 }
+export interface BrollAsset extends VideoSource {
+  tags: string[];
+}
 export interface Attachment {
   id: string;
   name: string;
@@ -129,7 +135,8 @@ export type JobStatus =
   | "processing"
   | "completed"
   | "failed"
-  | "cancelled";
+  | "cancelled"
+  | "skipped";
 export interface RenderJob {
   id: string;
   sourceId: string;
@@ -157,6 +164,13 @@ export interface RenderJob {
   };
   notes?: string[];
   captionUrl?: string;
+  supportingVisuals?: {
+    kind: "broll" | "graphic";
+    name: string;
+    start: number;
+    end: number;
+    assetId?: string;
+  }[];
 }
 export interface Health {
   ok: boolean;

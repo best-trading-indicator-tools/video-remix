@@ -3,8 +3,10 @@ import type {
   Transcript,
   TranscriptSegment,
   TranscriptWord,
+  TimedCallout,
 } from "../shared/types.js";
 import type { Candidate } from "./intelligence.js";
+import { isRepeatedPlan, type EditorialPlan } from "./diversity.js";
 
 const clean = (text: string) => text.replace(/\s+/gu, " ").trim();
 const annotation = (text: string) =>
@@ -90,6 +92,7 @@ export function buildCandidates(
   sourceDuration: number,
   targetDuration: number,
   variant: number,
+  previous: EditorialPlan[] = [],
 ): Candidate[] {
   if (
     !Number.isFinite(sourceDuration) ||
@@ -102,14 +105,19 @@ export function buildCandidates(
     (unit) => unit.start < sourceDuration && unit.end > 0,
   );
   if (!units.length) return [];
-  if (sourceDuration <= targetDuration)
-    return [
-      {
-        start: 0,
-        end: sourceDuration,
-        text: clean(units.map((unit) => unit.text).join(" ")),
-      },
-    ];
+  const novel = (candidate: Candidate) =>
+    !isRepeatedPlan(
+      { cuts: selectSpeechCuts(transcript, candidate), text: candidate.text },
+      previous,
+    );
+  if (sourceDuration <= targetDuration) {
+    const candidate = {
+      start: 0,
+      end: sourceDuration,
+      text: clean(units.map((unit) => unit.text).join(" ")),
+    };
+    return novel(candidate) ? [candidate] : [];
+  }
   const pool: { candidate: Candidate; score: number }[] = [];
   for (let index = 0; index < units.length; index++) {
     const first = units[index]!;
@@ -143,6 +151,9 @@ export function buildCandidates(
   );
   const chosen: Candidate[] = [];
   for (const { candidate } of pool) {
+    // Exclude completed edits before choosing the limited pool seen by the
+    // language model, so a used top candidate cannot hide fresh alternatives.
+    if (!novel(candidate)) continue;
     const redundant = chosen.some((previous) => {
       const overlap = Math.max(
         0,
@@ -344,7 +355,88 @@ export function fallbackHook(transcript: Transcript): string {
   return "";
 }
 
-export function sceneCuts(
+const calloutStopwords = new Set([
+  "a",
+  "an",
+  "the",
+  "and",
+  "or",
+  "to",
+  "of",
+  "in",
+  "on",
+  "is",
+  "are",
+  "be",
+  "for",
+  "with",
+  "your",
+  "you",
+  "this",
+  "that",
+  "it",
+]);
+const calloutTerms = (text: string) =>
+  (text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || []).filter(
+    (term) => !calloutStopwords.has(term),
+  );
+
+/** Omit callouts that cannot be anchored to words in the actual edited audio. */
+export function alignCallouts(
+  texts: string[],
+  transcript: Transcript,
+  duration: number,
+): TimedCallout[] {
+  const words = transcript.segments
+    .filter(reliable)
+    .flatMap((segment) => segment.words)
+    .sort((a, b) => a.start - b.start);
+  const result: TimedCallout[] = [];
+  const seen = new Set<string>();
+  for (const text of texts.slice(0, 2)) {
+    const terms = new Set(calloutTerms(text));
+    const key = [...terms].join(" ");
+    if (terms.size < 2 || seen.has(key)) continue;
+    seen.add(key);
+    let best: { start: number; end: number; coverage: number } | undefined;
+    for (let index = 0; index < words.length; index++) {
+      const first = words[index]!;
+      if (!calloutTerms(first.word).some((term) => terms.has(term))) continue;
+      const found = new Set<string>();
+      let end = first.end;
+      for (const word of words.slice(index, index + 12)) {
+        if (word.start - first.start > 4) break;
+        for (const term of calloutTerms(word.word)) {
+          if (terms.has(term)) {
+            found.add(term);
+            end = word.end;
+          }
+        }
+      }
+      const coverage = found.size / terms.size;
+      if (found.size < 2 || coverage < 2 / 3) continue;
+      if (
+        !best ||
+        coverage > best.coverage ||
+        (coverage === best.coverage &&
+          end - first.start < best.end - best.start)
+      )
+        best = { start: first.start, end, coverage };
+    }
+    if (!best || best.start >= duration) continue;
+    const start = Math.max(0, best.start - 0.1);
+    const end = Math.min(duration, Math.max(start + 2, best.end + 0.3));
+    if (
+      end - start < 0.5 ||
+      result.some((other) => start < other.end && end > other.start)
+    )
+      continue;
+    result.push({ text, start, end });
+  }
+  return result;
+}
+
+function sceneCutsAt(
   sceneTimes: number[],
   duration: number,
   targetDuration: number,
@@ -393,4 +485,31 @@ export function sceneCuts(
     remaining -= length;
   }
   return chosen.sort((a, b) => a.start - b.start);
+}
+
+export function sceneCuts(
+  sceneTimes: number[],
+  duration: number,
+  targetDuration: number,
+  variant: number,
+  previous: EditorialPlan[] = [],
+): EditSegment[] {
+  const sceneCount =
+    new Set(
+      sceneTimes.filter(
+        (time) => Number.isFinite(time) && time > 0 && time < duration,
+      ),
+    ).size + 1;
+  const attempts = Math.min(60, sceneCount === 1 ? 5 : sceneCount);
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const cuts = sceneCutsAt(
+      sceneTimes,
+      duration,
+      targetDuration,
+      variant + attempt,
+    );
+    if (!cuts.length) return [];
+    if (!isRepeatedPlan({ cuts }, previous)) return cuts;
+  }
+  return [];
 }

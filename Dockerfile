@@ -2,7 +2,7 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN PUPPETEER_SKIP_DOWNLOAD=true npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 
@@ -10,7 +10,7 @@ FROM node:22-bookworm-slim AS runner
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       ffmpeg fonts-dejavu-core python3 python3-venv libgomp1 ca-certificates \
+       ffmpeg fonts-dejavu-core python3 python3-venv libgomp1 ca-certificates chromium \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -18,7 +18,8 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=8787 \
     DATA_DIR=/app/data \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PRODUCER_HEADLESS_SHELL_PATH=/usr/bin/chromium
 
 COPY --from=build --chown=node:node /app/requirements-auto.txt ./requirements-auto.txt
 RUN python3 -m venv /app/.venv \

@@ -2,7 +2,9 @@ import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
 import { renderVideo } from "./engine.js";
-import { prepareAutoRemix } from "./auto.js";
+import { AutoSkipError, prepareAutoRemix } from "./auto.js";
+import { prepareSupportingVisuals } from "./supporting-plan.js";
+import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob } from "./store.js";
 const running = new Map<string, AbortController>();
 let stopped = false;
@@ -33,7 +35,7 @@ export function pumpQueue() {
 }
 async function run(job: StoredJob, controller: AbortController) {
   const workDir = path.join(paths.work, job.id);
-  let status: "completed" | "failed" | "cancelled" = "failed";
+  let status: "completed" | "failed" | "cancelled" | "skipped" = "failed";
   let errorMessage: string | undefined;
   let outputSize: number | undefined;
   try {
@@ -58,12 +60,14 @@ async function run(job: StoredJob, controller: AbortController) {
     await mkdir(workDir, { recursive: true });
     let audioPath = audio?.filePath;
     let subtitlePath = subtitle?.filePath;
+    let supportingVisuals: SupportingVisual[] = [];
     if (job.auto) {
       const prepared = await prepareAutoRemix({
         source,
         job,
         workDir,
         signal: controller.signal,
+        previous: state.jobs,
         onPhase: (phase, progress) => {
           job.phase = phase;
           job.progress = Math.max(job.progress, Math.round(progress));
@@ -74,6 +78,21 @@ async function run(job: StoredJob, controller: AbortController) {
       job.notes = prepared.notes;
       audioPath = prepared.audioPath;
       subtitlePath = prepared.subtitlePath;
+      supportingVisuals = await prepareSupportingVisuals({
+        source,
+        job,
+        transcript: prepared.transcript,
+        assets: state.broll.filter((asset) =>
+          job.auto?.brollIds?.includes(asset.id),
+        ),
+        workDir,
+        signal: controller.signal,
+        onPhase: (phase, progress) => {
+          job.phase = phase;
+          job.progress = Math.max(job.progress, progress);
+        },
+      });
+      job.phase = "Rendering your edit";
       await saveStore();
     }
     await renderVideo({
@@ -83,6 +102,7 @@ async function run(job: StoredJob, controller: AbortController) {
       settings: job.settings,
       audioPath,
       subtitlePath,
+      supportingVisuals,
       workDir,
       signal: controller.signal,
       onProgress: (progress) => {
@@ -100,7 +120,19 @@ async function run(job: StoredJob, controller: AbortController) {
     outputSize = (await stat(job.outputPath)).size;
     status = "completed";
   } catch (error) {
-    status = controller.signal.aborted ? "cancelled" : "failed";
+    status = controller.signal.aborted
+      ? "cancelled"
+      : error instanceof AutoSkipError
+        ? "skipped"
+        : "failed";
+    if (status === "skipped") {
+      job.notes = [
+        error instanceof Error
+          ? error.message
+          : "This version was too similar to an existing edit.",
+      ];
+      job.progress = 100;
+    }
     errorMessage =
       error instanceof Error
         ? error.message
@@ -118,7 +150,12 @@ async function run(job: StoredJob, controller: AbortController) {
     }
     if (controller.signal.aborted) status = "cancelled";
     job.status = status;
-    job.phase = status === "completed" ? "Ready" : undefined;
+    job.phase =
+      status === "completed"
+        ? "Ready to preview"
+        : status === "skipped"
+          ? "Skipped"
+          : undefined;
     job.error = status === "failed" ? errorMessage : undefined;
     if (status === "completed") {
       job.outputSize = outputSize;

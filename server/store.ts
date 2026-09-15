@@ -1,10 +1,18 @@
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Attachment, RenderJob, VideoSource } from "../shared/types.js";
+import type {
+  Attachment,
+  BrollAsset,
+  RenderJob,
+  VideoSource,
+} from "../shared/types.js";
 import { config, paths } from "./config.js";
 export interface StoredSource extends VideoSource {
   filePath: string;
   thumbnailPath: string;
+}
+export interface StoredBroll extends StoredSource {
+  tags: string[];
 }
 export interface StoredAttachment extends Attachment {
   filePath: string;
@@ -18,8 +26,14 @@ interface State {
   sources: StoredSource[];
   attachments: StoredAttachment[];
   jobs: StoredJob[];
+  broll: StoredBroll[];
 }
-export const state: State = { sources: [], attachments: [], jobs: [] };
+export const state: State = {
+  sources: [],
+  attachments: [],
+  jobs: [],
+  broll: [],
+};
 let writes = Promise.resolve();
 export async function initStore() {
   await Promise.all(
@@ -36,6 +50,7 @@ export async function initStore() {
     )
       throw new Error("Invalid state file");
     Object.assign(state, saved);
+    state.broll = Array.isArray(saved.broll) ? saved.broll : [];
     for (const job of state.jobs)
       if (job.status === "processing") {
         job.status = "failed";
@@ -82,5 +97,13 @@ export function publicSource(source: StoredSource): VideoSource {
 }
 export function publicJob(job: StoredJob): RenderJob {
   const { outputPath: _outputPath, captionPath: _captionPath, ...value } = job;
+  return value;
+}
+export function publicBroll(asset: StoredBroll): BrollAsset {
+  const {
+    filePath: _filePath,
+    thumbnailPath: _thumbnailPath,
+    ...value
+  } = asset;
   return value;
 }

@@ -258,7 +258,7 @@ test(
       );
       assert.equal(
         finished.filter((job) => job.status === "completed").length,
-        3,
+        2,
       );
       assert.equal(
         (await post(`/api/jobs/${cancelled.id}/retry`, {})).status,
@@ -267,9 +267,21 @@ test(
       finished = await waitFor(
         (items) =>
           items.length === 4 &&
-          items.every((job) => job.status === "completed"),
+          items.every((job) => ["completed", "skipped"].includes(job.status)),
       );
-      for (const job of finished) {
+      const skipped = finished.filter((job) => job.status === "skipped");
+      assert.equal(
+        skipped.length,
+        2,
+        "Extra versions of a short clip are skipped instead of exported twice",
+      );
+      for (const job of skipped) {
+        assert.equal(job.downloadUrl, undefined);
+        assert.ok(job.notes?.length);
+        assert.equal((await post(`/api/jobs/${job.id}/retry`, {})).status, 409);
+      }
+      const completed = finished.filter((job) => job.status === "completed");
+      for (const job of completed) {
         assert.equal(job.progress, 100);
         assert.equal(job.summary?.usedAI, false);
         assert.equal(job.summary?.narration, false);
@@ -285,14 +297,14 @@ test(
         );
       }
       assert.ok(
-        finished
+        completed
           .find((job) => job.sourceId === sources[1]!.id)!
           .notes?.some((note) => /not installed/i.test(note)),
       );
-      const silentJob = finished.find(
+      const silentJob = completed.find(
         (job) => job.sourceId === sources[0]!.id,
       )!;
-      const toneJob = finished.find((job) => job.sourceId === sources[1]!.id)!;
+      const toneJob = completed.find((job) => job.sourceId === sources[1]!.id)!;
       for (const [job, hasAudio] of [
         [silentJob, false],
         [toneJob, true],
@@ -333,7 +345,7 @@ test(
       const archive = Buffer.from(await zipped.arrayBuffer());
       assert.equal(archive.readUInt32LE(0), 0x04034b50);
       const entries = zipNames(archive);
-      assert.equal(entries.filter((name) => name.endsWith(".mp4")).length, 4);
+      assert.equal(entries.filter((name) => name.endsWith(".mp4")).length, 2);
       assert.ok(entries.includes("export-settings.json"));
       assert.equal(
         entries.some((name) => name.endsWith(".srt")),

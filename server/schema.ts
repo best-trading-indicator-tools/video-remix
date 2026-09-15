@@ -31,7 +31,8 @@ export const settingsSchema = z
     device: z
       .string()
       .max(60)
-      .regex(/^[\p{L}\p{N} .()_-]*$/u),
+      .regex(/^[\p{L}\p{N} .()_-]*$/u)
+      .transform(() => "none"),
     audioId: z.string().uuid().nullable(),
     subtitleId: z.string().uuid().nullable(),
     segments: z
@@ -95,6 +96,10 @@ export const autoBatchSchema = z
           .union([z.literal(30), z.literal(45), z.literal(60)])
           .default(45),
         narration: z.boolean().default(false),
+        supportingVisuals: z
+          .enum(["off", "library", "graphics", "both"])
+          .optional(),
+        brollIds: z.array(z.string().uuid()).max(100).optional(),
       })
       .default({ aspect: "9:16", targetDuration: 45, narration: false }),
   })

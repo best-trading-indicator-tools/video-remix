@@ -10,11 +10,28 @@ A private video repurposing workspace with **Auto remix** selected by default. I
 
 Optional output preferences let you choose **30, 45, or 60 seconds**, **1–5 versions per video**, and **9:16, square, 4:5, 16:9, or original framing**. These durations are upper limits; shorter sources stay short.
 
-With the local speech model ready, Auto transcribes speech, selects a focused excerpt, tightens longer pauses, and prepares an opening hook and timed captions. Automatic framing, gentle motion, and audio balancing finish the cut. Optional Ollama planning helps choose the excerpt and write hooks and callouts from the transcript.
+The version count is a **maximum**. Auto skips an extra version when it would repeat an already completed edit from the same batch. Short sources normally produce one worthwhile cut; a different headline or color treatment does not make an extra version necessary. Skipped jobs explain the reason and do not create duplicate downloads.
 
-If speech or the speech model is unavailable, Auto falls back to scene and timing edits using the source footage. Captions require a usable transcript. The export notes explain which tools were used and any fallback. Every visual comes from your uploaded footage.
+With the local speech model ready, Auto transcribes speech, selects a focused excerpt, tightens longer pauses, and prepares an opening hook and timed captions. Automatic framing and audio balancing finish the cut. Optional Ollama planning helps choose the excerpt and write hooks and callouts from the transcript. Callouts are shown when their words match the edited speech; unmatched ideas are omitted. Auto preserves the source's color and does not add arbitrary noise, speed changes, or mirroring.
+
+If speech or the speech model is unavailable, Auto falls back to scene and timing edits using the source footage. Captions require a usable transcript. The export notes explain which tools were used and any fallback.
 
 Use your own footage or footage you have permission to repurpose. Review the resulting cut and captions before posting. Editing or changing file metadata does **not** guarantee that TikTok, Instagram, or another platform will classify a video as original, recommend it, or permit monetization.
+
+## Optional B-roll and animated cards
+
+Open **Adjust output → Supporting visuals** in Auto mode:
+
+- **Off** keeps the edit focused on the source footage.
+- **My B-roll** inserts short supporting shots from a reusable library. Upload your own or licensed video clips once, select the clips available for a batch, and give them descriptive filenames or tags. Matching uses those names/tags and the actual spoken phrases; silent sources can match their descriptive source filename. The original edit's audio keeps playing underneath.
+- **Animated cards** uses [HyperFrames](https://github.com/heygen-com/hyperframes/) locally to turn short phrases from the speech into animated text cards. These are authored graphics, not generated photographic footage. Captions remain above the supporting visuals.
+- **Both** allows either type where relevant. Supporting visuals are limited to a few short moments; unmatched clips and unsuitable card placements are skipped.
+
+No HyperFrames or Remotion API key is required for this local implementation. HyperFrames supplies the graphic renderer; the B-roll library supplies actual footage. No paid stock search, cloud rendering, or generative-video service is called. HyperFrames's hosted MCP is a separate HeyGen service requiring account authorization and credits.
+
+`npm ci` installs the pinned HyperFrames renderer and its Chromium browser. If browser installation was skipped, run `npm run setup:visuals` once. Alternatively set `PRODUCER_HEADLESS_SHELL_PATH` to an installed Chromium executable. Generated cards use local fonts and run without external network requests. The app reports a fallback if a requested card cannot be rendered.
+
+B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses the same per-file upload limit as sources. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
 
 ## Manual editing
 
@@ -25,7 +42,7 @@ Switch to **Manual** for direct control. Its saved settings are separate from Au
 - Change speed, volume, crop, zoom, aspect ratio, color, sharpening, noise, and frame blending; mirror footage and adjust timing.
 - Trim footage, add an opening text hook, burn in an uploaded SRT subtitle file, and replace or mute audio.
 - Export in the source aspect ratio or 9:16, 1:1, 4:5, or 16:9, with framing, resolution, and frame-rate controls.
-- Strip file metadata or set a device metadata profile.
+- Strip file metadata for privacy. Device impersonation has been removed; legacy device-profile settings are ignored.
 - Generate variants, track render progress, cancel jobs, and download completed videos individually or together.
 
 The Manual browser preview approximates supported visual controls. Auto shows the original source until its finished export is ready. Review the rendered export for accurate timing, audio, subtitles, text, and FFmpeg effects.
@@ -124,7 +141,7 @@ This is a private tool with **no user authentication**. Keep the default loopbac
 
 ## Docker
 
-The image includes Node.js, FFmpeg, fonts, Python, and the isolated transcription dependencies. It runs the production app as a non-root user. Models are downloaded into the persistent data volume after the image is built.
+The image includes Node.js, FFmpeg, Chromium for HyperFrames cards, fonts, Python, and the isolated transcription dependencies. It runs the production app as a non-root user. Models are downloaded into the persistent data volume after the image is built.
 
 ```sh
 docker build -t remix-studio .

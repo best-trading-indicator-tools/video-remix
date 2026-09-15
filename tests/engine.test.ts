@@ -19,6 +19,7 @@ import {
   renderVideo,
 } from "../server/engine.js";
 import { DEFAULT_SETTINGS, type RemixSettings } from "../shared/types.js";
+import type { SupportingVisual } from "../server/visuals.js";
 
 let directory: string;
 let landscape: string;
@@ -138,7 +139,12 @@ after(async () => {
 async function render(
   name: string,
   settings: Partial<RemixSettings> = {},
-  extras: { input?: string; audioPath?: string; subtitlePath?: string } = {},
+  extras: {
+    input?: string;
+    audioPath?: string;
+    subtitlePath?: string;
+    supportingVisuals?: SupportingVisual[];
+  } = {},
 ) {
   const input = extras.input ?? landscape;
   const output = path.join(directory, `${name}.mp4`);
@@ -154,6 +160,7 @@ async function render(
     signal: new AbortController().signal,
     audioPath: extras.audioPath,
     subtitlePath: extras.subtitlePath,
+    supportingVisuals: extras.supportingVisuals,
   });
   assert.equal(progress[0], 0);
   assert.equal(progress.at(-1), 100);
@@ -393,7 +400,7 @@ test("rotation metadata is respected once and stripped from rendered display ori
   assert.deepEqual([info.width, info.height], [180, 320]);
 });
 
-test("metadata stripping and optional device labels affect exported metadata", async () => {
+test("metadata stripping works and legacy device profiles never invent camera metadata", async () => {
   const stripped = await render("stripped-metadata", {
     device: "iPhone 17 Pro",
   });
@@ -409,12 +416,165 @@ test("metadata stripping and optional device labels affect exported metadata", a
     "Source title should be removed",
   );
   assert.ok(
-    strippedText.includes("model=iPhone 17 Pro"),
-    "Selected device profile is stored",
+    !/make=|model=|iPhone|Apple|comment=/i.test(strippedText),
+    "Legacy device profile never injects capture metadata",
   );
   assert.ok(
     retainedText.includes("title=private source title"),
     "Keeping metadata retains source title",
+  );
+});
+
+test("B-roll cutaways follow the edited timeline, preserve source audio, and return cleanly to the main footage", async () => {
+  const { output, info } = await render(
+    "cutaway-timing",
+    {
+      segments: [{ start: 0, end: 1.5 }],
+      speed: 0.5,
+      fps: "30",
+    },
+    {
+      input: scenes,
+      supportingVisuals: [
+        {
+          path: scenes,
+          start: 0.75,
+          end: 1.5,
+          sourceStart: 2.1,
+          kind: "broll",
+          label: "Blue detail",
+        },
+      ],
+    },
+  );
+  assert.ok(Math.abs(info.duration - 3) < 0.05);
+  const sound = await samples(output);
+  for (const [time, dominant, tone] of [
+    [0.7, 0, 440],
+    [0.85, 2, 440],
+    [1.4, 2, 440],
+    [1.55, 0, 440],
+    [2.5, 1, 880],
+  ]) {
+    const pixel = await ffmpeg([
+      "-ss",
+      String(time),
+      "-i",
+      output,
+      "-frames:v",
+      "1",
+      "-vf",
+      "scale=1:1",
+      "-pix_fmt",
+      "rgb24",
+      "-f",
+      "rawvideo",
+      "pipe:1",
+    ]);
+    assert.ok(
+      pixel[dominant!]! > 180,
+      `Expected channel ${dominant} at ${time}s; got ${Array.from(pixel)}`,
+    );
+    const measured = frequency(
+      sound.subarray(
+        Math.round((time! - 0.035) * 48000),
+        Math.round((time! + 0.035) * 48000),
+      ),
+    );
+    assert.ok(
+      Math.abs(measured - tone!) < 35,
+      `Original audio should remain ${tone}Hz at ${time}s; got ${measured}`,
+    );
+  }
+});
+
+test("cutaways keep replacement narration and subtitles above the supporting picture", async () => {
+  const subtitles = path.join(directory, "cutaway-captions.srt");
+  await writeFile(
+    subtitles,
+    "1\n00:00:00,200 --> 00:00:01,700\nWords stay readable.\n",
+  );
+  const { output, info } = await render(
+    "cutaway-narration",
+    { hookText: "Keep this hook", hookDuration: 2 },
+    {
+      input: portrait,
+      audioPath: audio,
+      subtitlePath: subtitles,
+      supportingVisuals: [
+        {
+          path: scenes,
+          start: 0.25,
+          end: 1.15,
+          sourceStart: 2.05,
+          kind: "graphic",
+          label: "Blue idea",
+        },
+      ],
+    },
+  );
+  assert.deepEqual([info.width, info.height, info.hasAudio], [180, 320, true]);
+  assert.ok(Math.abs(frequency(await samples(output)) - 880) < 20);
+  const raw = await ffmpeg([
+    "-ss",
+    "0.7",
+    "-i",
+    output,
+    "-frames:v",
+    "1",
+    "-pix_fmt",
+    "rgb24",
+    "-f",
+    "rawvideo",
+    "pipe:1",
+  ]);
+  let whiteTop = 0;
+  let whiteBottom = 0;
+  for (let y = 0; y < info.height; y++)
+    for (let x = 0; x < info.width; x++) {
+      const i = (y * info.width + x) * 3;
+      if (raw[i]! > 180 && raw[i + 1]! > 180 && raw[i + 2]! > 180) {
+        if (y < info.height * 0.25) whiteTop++;
+        if (y > info.height * 0.65) whiteBottom++;
+      }
+    }
+  assert.ok(whiteTop > 30, "Hook remains above the cutaway");
+  assert.ok(whiteBottom > 30, "Captions remain above the cutaway");
+});
+
+test("cutaway validation rejects out-of-bounds intervals and disguised playlists", async () => {
+  const base = {
+    path: scenes,
+    start: 0.5,
+    end: 1.5,
+    kind: "broll" as const,
+    label: "Detail",
+  };
+  await assert.rejects(
+    render(
+      "cutaway-too-late",
+      {},
+      { supportingVisuals: [{ ...base, end: 3 }] },
+    ),
+    /within the edited video/,
+  );
+  await assert.rejects(
+    render(
+      "cutaway-too-short",
+      {},
+      { supportingVisuals: [{ ...base, sourceStart: 2.5 }] },
+    ),
+    /shorter than/,
+  );
+  const playlist = path.join(directory, "supporting-playlist.mp4");
+  await writeFile(playlist, "ffconcat version 1.0\nfile 'portrait.mp4'\n");
+  await assert.rejects(
+    render(
+      "cutaway-playlist",
+      {},
+      { supportingVisuals: [{ ...base, path: playlist }] },
+    ),
+    /whitelist|Invalid data/,
   );
 });
 

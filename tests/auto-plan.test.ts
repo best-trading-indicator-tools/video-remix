@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { Transcript, TranscriptSegment } from "../shared/types.js";
+import {
+  DEFAULT_AUTO_OPTIONS,
+  DEFAULT_SETTINGS,
+  type RenderJob,
+  type Transcript,
+  type TranscriptSegment,
+} from "../shared/types.js";
 import {
   buildCandidates,
   captionsSrt,
@@ -9,7 +15,15 @@ import {
   retimeTranscript,
   sceneCuts,
   selectSpeechCuts,
+  alignCallouts,
 } from "../server/auto-plan.js";
+import {
+  completedAutoSiblings,
+  footageOverlap,
+  isRepeatedPlan,
+  type EditorialPlan,
+} from "../server/diversity.js";
+import { AutoSkipError, prepareAutoRemix } from "../server/auto.js";
 
 function speech(start: number, words: string[], step = 0.4): TranscriptSegment {
   return {
@@ -300,4 +314,226 @@ test("scene selection stays chronological and within source/target bounds across
   }
   assert.notDeepEqual(sceneCuts([], 100, 15, 0), sceneCuts([], 100, 15, 1));
   assert.deepEqual(sceneCuts([], 0, 15, 0), []);
+});
+
+test("repeat comparison uses merged source coverage and source language rather than hook wording", () => {
+  const original = [{ start: 0, end: 10 }];
+  const repeated = [
+    { start: 5, end: 10 },
+    { start: 0, end: 6 },
+    { start: 0, end: 6 },
+  ];
+  const before = structuredClone(repeated);
+  assert.equal(footageOverlap(original, repeated), 1);
+  assert.deepEqual(
+    repeated,
+    before,
+    "Comparing plans never mutates saved cuts",
+  );
+  assert.equal(footageOverlap(original, [{ start: 20, end: 30 }]), 0);
+  assert.equal(footageOverlap([], []), 0);
+  const prior = [
+    { cuts: original, text: "Adjust the shutter speed for slow motion." },
+  ];
+  assert.equal(
+    isRepeatedPlan(
+      { cuts: repeated, text: "Adjust shutter speed for slow motion!" },
+      prior,
+    ),
+    true,
+  );
+  assert.equal(
+    isRepeatedPlan(
+      {
+        cuts: repeated,
+        text: "Balance microphone levels before recording dialogue.",
+      },
+      prior,
+    ),
+    false,
+    "Overlapping footage alone does not establish repeated spoken ideas",
+  );
+  assert.equal(isRepeatedPlan({ cuts: repeated }, [{ cuts: original }]), true);
+});
+
+function autoJob(overrides: Partial<RenderJob> = {}): RenderJob {
+  return {
+    id: "current-job",
+    sourceId: "source-a",
+    sourceName: "source.mp4",
+    variant: 2,
+    batchId: "batch-a",
+    status: "queued",
+    progress: 0,
+    settings: { ...DEFAULT_SETTINGS },
+    auto: { ...DEFAULT_AUTO_OPTIONS },
+    createdAt: "2026-01-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+test("only successful automatic siblings reserve an edit, so failures and retries remain usable", () => {
+  const current = autoJob();
+  const accepted = autoJob({ id: "accepted", status: "completed" });
+  const previous = [
+    accepted,
+    autoJob({ status: "completed" }),
+    autoJob({ id: "failed", status: "failed" }),
+    autoJob({ id: "cancelled", status: "cancelled" }),
+    autoJob({ id: "queued", status: "queued" }),
+    autoJob({ id: "processing", status: "processing" }),
+    autoJob({ id: "other-source", status: "completed", sourceId: "source-b" }),
+    autoJob({ id: "other-batch", status: "completed", batchId: "batch-b" }),
+    autoJob({ id: "manual", status: "completed", auto: undefined }),
+  ];
+  assert.deepEqual(completedAutoSiblings(current, previous), [accepted]);
+  assert.deepEqual(
+    completedAutoSiblings(
+      current,
+      previous.filter((job) => job.id !== accepted.id),
+    ),
+    [],
+  );
+});
+
+test("short spoken and silent sources produce no duplicate candidate after a completed edit", async () => {
+  const input = transcript(
+    [speech(1, ["A", "complete", "existing", "story."])],
+    20,
+  );
+  const first = buildCandidates(input, 20, 45, 0)[0]!;
+  const prior = [{ cuts: selectSpeechCuts(input, first), text: first.text }];
+  for (let variant = 1; variant < 5; variant++) {
+    assert.deepEqual(buildCandidates(input, 20, 45, variant, prior), []);
+    assert.deepEqual(
+      sceneCuts([4, 8, 12, 16], 20, 45, variant, [
+        { cuts: [{ start: 0, end: 20 }] },
+      ]),
+      [],
+    );
+  }
+  // Even a first narration shortened to five seconds must not cause four more
+  // versions of the same short source. This exits before any media/AI work.
+  const source = {
+    id: "source-a",
+    name: "source.mp4",
+    size: 1,
+    duration: 20,
+    width: 1920,
+    height: 1080,
+    fps: 30,
+    hasAudio: true,
+    createdAt: "2026-01-01T00:00:00Z",
+    thumbnailUrl: "",
+    url: "",
+    filePath: "/nonexistent-source",
+    thumbnailPath: "/nonexistent-thumbnail",
+  };
+  await assert.rejects(
+    prepareAutoRemix({
+      source,
+      job: { ...autoJob(), outputPath: "/nonexistent-output" },
+      previous: [
+        autoJob({
+          id: "completed",
+          status: "completed",
+          settings: {
+            ...DEFAULT_SETTINGS,
+            segments: [{ start: 0, end: 5 }],
+            hookText: "An entirely new headline",
+          },
+        }),
+      ],
+      workDir: "/nonexistent-work",
+      signal: new AbortController().signal,
+      onPhase: () =>
+        assert.fail("Duplicate was not rejected before media processing"),
+    }),
+    (error) =>
+      error instanceof AutoSkipError &&
+      /already has a finished edit/u.test(error.message),
+  );
+});
+
+test("completed spoken cuts are removed before model selection while fresh long-video ideas remain", () => {
+  const input = transcript(
+    Array.from({ length: 24 }, (_, index) =>
+      speech(index * 5 + 0.2, [
+        `Topic${index}`,
+        "has",
+        "a",
+        "specific",
+        "lesson.",
+      ]),
+    ),
+    120,
+  );
+  const used: EditorialPlan[] = [];
+  for (let variant = 0; variant < 5; variant++) {
+    const candidates = buildCandidates(input, 120, 15, 0, used);
+    assert.ok(candidates.length > 0);
+    for (const candidate of candidates)
+      assert.equal(
+        isRepeatedPlan(
+          { cuts: selectSpeechCuts(input, candidate), text: candidate.text },
+          used,
+        ),
+        false,
+      );
+    const selected = candidates[0]!;
+    used.push({ cuts: selectSpeechCuts(input, selected), text: selected.text });
+  }
+  assert.equal(new Set(used.map((plan) => JSON.stringify(plan.cuts))).size, 5);
+  assert.deepEqual(
+    buildCandidates(input, 120, 15, 0),
+    buildCandidates(input, 120, 15, 0, []),
+  );
+});
+
+test("long silent footage selects a fresh scene plan and stops when only repeats remain", () => {
+  const used: EditorialPlan[] = [{ cuts: [{ start: 0, end: 30 }] }];
+  const next = sceneCuts([30, 60, 90], 120, 30, 0, used);
+  assert.deepEqual(next, [{ start: 30, end: 60 }]);
+  used.push({ cuts: next });
+  assert.deepEqual(sceneCuts([30, 60, 90], 120, 30, 0, used), [
+    { start: 60, end: 90 },
+  ]);
+  const almostFull = [{ cuts: [{ start: 0, end: 45 }] }];
+  assert.deepEqual(sceneCuts([], 50, 45, 0, almostFull), []);
+});
+
+test("key-point overlays follow matching edited speech and omit unmatched or overlapping copy", () => {
+  const input = transcript(
+    [
+      speech(0, ["Welcome", "to", "this", "short", "lesson."]),
+      speech(8, [
+        "Adjust",
+        "the",
+        "shutter",
+        "speed",
+        "for",
+        "slow",
+        "motion.",
+      ]),
+      speech(20, ["Balance", "microphone", "levels", "before", "recording."]),
+    ],
+    30,
+  );
+  const callouts = alignCallouts(
+    ["Shutter speed", "Microphone levels"],
+    input,
+    30,
+  );
+  assert.equal(callouts.length, 2);
+  assert.ok(callouts[0]!.start >= 8.5 && callouts[0]!.start < 9);
+  assert.ok(callouts[1]!.start >= 20 && callouts[1]!.start < 21);
+  assert.deepEqual(
+    alignCallouts(["Guaranteed incredible earnings"], input, 30),
+    [],
+  );
+  assert.equal(
+    alignCallouts(["Shutter speed", "Speed for slow motion"], input, 30).length,
+    1,
+  );
+  assert.deepEqual(alignCallouts(["Shutter speed"], transcript([]), 30), []);
 });

@@ -83,25 +83,6 @@ const builtinPresets: Preset[] = [
     },
   },
 ];
-const devices = [
-  "none",
-  "iPhone 17 Pro Max",
-  "iPhone 17 Pro",
-  "iPhone 17",
-  "iPhone 16 Pro Max",
-  "iPhone 16 Pro",
-  "iPhone 16",
-  "iPhone 15 Pro Max",
-  "iPhone 15 Pro",
-  "iPhone 15",
-  "iPhone 14 Pro Max",
-  "iPhone 14 Pro",
-  "iPhone 14",
-  "iPhone 13 Pro Max",
-  "iPhone 13 Pro",
-  "iPhone 13",
-  "Ray-Ban Meta Smart Glasses",
-];
 const formatSize = (bytes: number) =>
   bytes >= 1024 ** 3
     ? `${(bytes / 1024 ** 3).toFixed(1)} GB`
@@ -328,6 +309,7 @@ export default function App() {
     () => storedObject("remix-attachments", {}),
   );
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [brollBusy, setBrollBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [view, setView] = useState<"studio" | "exports">("studio");
@@ -362,6 +344,9 @@ export default function App() {
     (job) => job.status === "queued" || job.status === "processing",
   );
   const completed = jobs.filter((job) => job.status === "completed");
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [view]);
   const notify = useCallback(
     (message: string, kind: Toast["kind"] = "info") => {
       const id = Date.now() + Math.random();
@@ -889,6 +874,10 @@ export default function App() {
       ? 1
       : sources.length) * variants;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
+  const noBrollSelected =
+    mode === "auto" &&
+    ["library", "both"].includes(autoOptions.supportingVisuals || "off") &&
+    !autoOptions.brollIds?.length;
 
   return (
     <div className="app-shell">
@@ -924,7 +913,7 @@ export default function App() {
               <span
                 className={`nav-count ${pending.length ? "is-working" : ""}`}
               >
-                {pending.length || completed.length || jobs.length}
+                {pending.length || completed.length}
               </span>
             )}
           </button>
@@ -1412,6 +1401,12 @@ export default function App() {
                   capabilities={autoCapabilities}
                   variants={variants}
                   onVariantsChange={setVariants}
+                  onBrollSelectionChange={(ids) =>
+                    setAutoOptions((current) => ({ ...current, brollIds: ids }))
+                  }
+                  onLibraryBusyChange={setBrollBusy}
+                  maxFileSize={health?.maxFileSize}
+                  maxFiles={health?.maxFiles}
                 />
               ) : (
                 <aside className="settings-panel panel">
@@ -2004,21 +1999,6 @@ export default function App() {
                               updateSettings({ stripMetadata })
                             }
                           />
-                          <SelectField
-                            label="Device metadata"
-                            value={settings.device}
-                            onChange={(device) => updateSettings({ device })}
-                          >
-                            {devices.map((device) => (
-                              <option key={device} value={device}>
-                                {device === "none" ? "None" : device}
-                              </option>
-                            ))}
-                          </SelectField>
-                          <p className="field-hint">
-                            Changes file tags only. It does not change the
-                            footage or guarantee platform originality.
-                          </p>
                         </Section>
                       </>
                     )}
@@ -2120,7 +2100,7 @@ export default function App() {
                   </span>
                   <span>
                     Up to {autoOptions.targetDuration}s
-                    {variants > 1 ? ` · ${variants} versions each` : ""}
+                    {variants > 1 ? ` · up to ${variants} versions each` : ""}
                   </span>
                 </div>
               )}
@@ -2143,7 +2123,9 @@ export default function App() {
                     !sources.length ||
                     starting ||
                     !engineReady ||
-                    attachmentBusy !== null
+                    attachmentBusy !== null ||
+                    brollBusy ||
+                    noBrollSelected
                   }
                   onClick={() => void startRender()}
                 >
@@ -2162,7 +2144,11 @@ export default function App() {
                   <ArrowRight size={17} />
                 </button>
                 <span className="render-fineprint">
-                  MP4 export · H.264 · Ready to share
+                  {noBrollSelected
+                    ? "Select a B-roll clip, or turn supporting visuals off."
+                    : brollBusy
+                      ? "Preparing your supporting clips…"
+                      : "MP4 export · H.264 · Ready to share"}
                 </span>
               </div>
             </section>
@@ -2172,7 +2158,8 @@ export default function App() {
             <div className="exports-heading">
               <div>
                 <h2>
-                  Your exports <span className="count-pill">{jobs.length}</span>
+                  Your exports{" "}
+                  <span className="count-pill">{completed.length}</span>
                 </h2>
                 <p>
                   {pending.length
@@ -2236,7 +2223,9 @@ export default function App() {
                             },
                           )}
                           <span>
-                            {batch.length} cut{batch.length === 1 ? "" : "s"}
+                            {batch.some((job) => job.status === "skipped")
+                              ? `${batchCompleted.length} exported · ${batch.filter((job) => job.status === "skipped").length} skipped`
+                              : `${batch.length} cut${batch.length === 1 ? "" : "s"}`}
                           </span>
                         </h3>
                       </div>
@@ -2267,6 +2256,10 @@ export default function App() {
                         const source = sources.find(
                           (source) => source.id === job.sourceId,
                         );
+                        const jobAspect =
+                          !job.summary && job.auto
+                            ? job.auto.aspect
+                            : job.settings.aspect;
                         return (
                           <article
                             className={`job-card status-${job.status}`}
@@ -2309,9 +2302,9 @@ export default function App() {
                               )}
                               <div className="job-details">
                                 <span>
-                                  {job.settings.aspect === "original"
+                                  {jobAspect === "original"
                                     ? "Original ratio"
-                                    : job.settings.aspect}
+                                    : jobAspect}
                                 </span>
                                 <span>·</span>
                                 <span>
@@ -2363,6 +2356,13 @@ export default function App() {
                                   ))}
                                 </ul>
                               )}
+                              {job.status === "skipped" &&
+                                !job.notes?.length && (
+                                  <p className="job-skip-note">
+                                    This cut was too similar to another version,
+                                    so no extra file was exported.
+                                  </p>
+                                )}
                               {job.error && (
                                 <p className="job-error">{job.error}</p>
                               )}
@@ -2422,6 +2422,10 @@ export default function App() {
                                   <RefreshCw size={13} />
                                   Retry
                                 </button>
+                              ) : job.status === "skipped" ? (
+                                <span className="skipped-reason">
+                                  Too similar
+                                </span>
                               ) : (
                                 <IconButton
                                   title={`Cancel ${job.sourceName} version ${job.variant}`}
@@ -2613,6 +2617,12 @@ export default function App() {
             </ol>
             <div className="guide-note">
               <h3>A couple of good things to know</h3>
+              <p>
+                Supporting visuals are optional. Add your own B-roll videos and
+                descriptive tags, or choose animated text cards based on the
+                spoken content. B-roll stays in your library until you remove
+                it.
+              </p>
               <p>
                 Want full control? Switch to Manual for your own trim, framing,
                 color, audio, captions and saved presets. Manual settings are

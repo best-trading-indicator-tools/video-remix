@@ -1,6 +1,7 @@
 import express, { type ErrorRequestHandler } from "express";
 import multer from "multer";
 import { ZipArchive } from "archiver";
+import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
@@ -15,11 +16,13 @@ import { autoBatchSchema, batchSchema } from "./schema.js";
 import { getAutoCapabilities } from "./auto.js";
 import {
   publicJob,
+  publicBroll,
   publicSource,
   saveStore,
   state,
   type StoredJob,
   type StoredSource,
+  type StoredBroll,
 } from "./store.js";
 import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
 import { DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
@@ -147,6 +150,59 @@ export function createApp() {
   app.get("/api/sources", (_req, res) =>
     res.json({ sources: state.sources.map(publicSource) }),
   );
+  app.get("/api/broll", (_req, res) =>
+    res.json({ assets: state.broll.map(publicBroll) }),
+  );
+  app.patch("/api/broll/:id", async (req, res) => {
+    const asset = state.broll.find((item) => item.id === req.params.id);
+    if (!asset) throw new HttpError(404, "B-roll clip not found.");
+    const parsed = z
+      .object({ tags: z.array(z.string().trim().min(1).max(60)).max(12) })
+      .strict()
+      .safeParse(req.body);
+    if (!parsed.success)
+      throw new HttpError(
+        400,
+        "Use up to 12 descriptive tags, each shorter than 60 characters.",
+      );
+    asset.tags = [...new Set(parsed.data.tags)];
+    await saveStore();
+    res.json(publicBroll(asset));
+  });
+  app.get("/api/broll/:id/video", (req, res, next) => {
+    const asset = state.broll.find((item) => item.id === req.params.id);
+    if (!asset) throw new HttpError(404, "B-roll clip not found.");
+    res.sendFile(asset.filePath, (error) => {
+      if (error) next(error);
+    });
+  });
+  app.get("/api/broll/:id/thumbnail", (req, res, next) => {
+    const asset = state.broll.find((item) => item.id === req.params.id);
+    if (!asset) throw new HttpError(404, "B-roll clip not found.");
+    res.sendFile(asset.thumbnailPath, (error) => {
+      if (error) next(error);
+    });
+  });
+  app.delete("/api/broll/:id", async (req, res) => {
+    const asset = state.broll.find((item) => item.id === req.params.id);
+    if (!asset) throw new HttpError(404, "B-roll clip not found.");
+    if (
+      state.jobs.some(
+        (job) => isActive(job) && job.auto?.brollIds?.includes(asset.id),
+      )
+    )
+      throw new HttpError(
+        409,
+        "Wait for edits using this B-roll clip to finish, or cancel them first.",
+      );
+    state.broll = state.broll.filter((item) => item.id !== asset.id);
+    await saveStore();
+    await Promise.all([
+      rm(asset.filePath, { force: true }),
+      rm(asset.thumbnailPath, { force: true }),
+    ]);
+    res.json({ ok: true });
+  });
   app.get("/api/auto/capabilities", async (_req, res) =>
     res.json(await getAutoCapabilities()),
   );
@@ -165,6 +221,22 @@ export function createApp() {
     if (!available.ffmpeg || !available.ffprobe)
       throw new HttpError(503, "Install FFmpeg and ffprobe before exporting.");
     const uniqueIds = [...new Set(sourceIds)];
+    const usesLibrary =
+      options.supportingVisuals === "library" ||
+      options.supportingVisuals === "both";
+    const brollIds = usesLibrary
+      ? [...new Set(options.brollIds ?? state.broll.map((asset) => asset.id))]
+      : [];
+    if (usesLibrary && !brollIds.length)
+      throw new HttpError(
+        400,
+        "Add and select a B-roll clip, or choose animated cards instead.",
+      );
+    if (brollIds.some((id) => !state.broll.some((asset) => asset.id === id)))
+      throw new HttpError(
+        404,
+        "A selected B-roll clip was removed. Choose your supporting clips again.",
+      );
     if (state.jobs.filter(isActive).length + uniqueIds.length * variants > 300)
       throw new HttpError(
         429,
@@ -188,7 +260,7 @@ export function createApp() {
           sourceId: source!.id,
           sourceName: source!.name,
           variant: index + 1,
-          auto: { ...options },
+          auto: { ...options, ...(usesLibrary ? { brollIds } : {}) },
           settings: { ...DEFAULT_SETTINGS },
           status: "queued",
           phase: "Waiting to edit",
@@ -203,7 +275,8 @@ export function createApp() {
     res.status(201).json({ batchId, jobs: jobs.map(publicJob) });
     pumpQueue();
   });
-  app.post("/api/sources", (req, res, next) => {
+  app.post(["/api/sources", "/api/broll"], (req, res, next) => {
+    const isBroll = req.path === "/api/broll";
     if (inflightUploads >= 2)
       return next(
         new HttpError(
@@ -235,9 +308,13 @@ export function createApp() {
           const id = randomUUID();
           const thumbnailPath = path.join(paths.thumbnails, `${id}.jpg`);
           try {
-            if (state.sources.length >= 200)
+            if (
+              isBroll ? state.broll.length >= 100 : state.sources.length >= 200
+            )
               throw new Error(
-                "Your workspace has 200 videos. Remove some before uploading more.",
+                isBroll
+                  ? "Your B-roll library has 100 clips. Remove some before uploading more."
+                  : "Your workspace has 200 videos. Remove some before uploading more.",
               );
             const media = await probeMedia(file.path);
             if (media.duration > 86400)
@@ -251,11 +328,14 @@ export function createApp() {
               createdAt: new Date().toISOString(),
               filePath: file.path,
               thumbnailPath,
-              url: `/api/sources/${id}/video`,
-              thumbnailUrl: `/api/sources/${id}/thumbnail`,
+              url: `/api/${isBroll ? "broll" : "sources"}/${id}/video`,
+              thumbnailUrl: `/api/${isBroll ? "broll" : "sources"}/${id}/thumbnail`,
             };
             sources.push(source);
-            state.sources.push(source);
+            if (isBroll) {
+              const asset = Object.assign(source, { tags: [] as string[] });
+              state.broll.push(asset);
+            } else state.sources.push(source);
           } catch (error) {
             await Promise.all([
               rm(file.path, { force: true }),
@@ -266,13 +346,18 @@ export function createApp() {
               error:
                 error instanceof Error
                   ? error.message
+                      .replaceAll(file.path, nameOf(file.originalname))
+                      .replaceAll(config.dataDir, "[local workspace]")
+                      .slice(-1000)
                   : "This video could not be read.",
             });
           }
         }
         await saveStore();
         res.status(sources.length ? 201 : 400).json({
-          sources: sources.map(publicSource),
+          ...(isBroll
+            ? { assets: (sources as StoredBroll[]).map(publicBroll) }
+            : { sources: sources.map(publicSource) }),
           errors,
           ...(sources.length
             ? {}
@@ -483,6 +568,15 @@ export function createApp() {
         404,
         "The source video is no longer available. Upload it again.",
       );
+    if (
+      job.auto?.brollIds?.some(
+        (id) => !state.broll.some((asset) => asset.id === id),
+      )
+    )
+      throw new HttpError(
+        404,
+        "A B-roll clip used by this edit was removed. Start a new edit with your current library.",
+      );
     if (state.jobs.filter(isActive).length >= 300)
       throw new HttpError(429, "Your render queue is full.");
     job.status = "queued";
@@ -496,6 +590,7 @@ export function createApp() {
     delete job.notes;
     delete job.captionPath;
     delete job.captionUrl;
+    delete job.supportingVisuals;
     await saveStore();
     res.json(publicJob(job));
     pumpQueue();

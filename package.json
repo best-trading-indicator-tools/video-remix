@@ -12,9 +12,11 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit",
     "start": "node dist-server/server/index.js",
     "test": "tsx --test tests/*.test.ts",
-    "setup:auto": "node scripts/setup-auto.mjs"
+    "setup:auto": "node scripts/setup-auto.mjs",
+    "setup:visuals": "puppeteer browsers install chrome"
   },
   "dependencies": {
+    "@hyperframes/producer": "0.8.40",
     "archiver": "^8.0.0",
     "express": "^5.2.1",
     "lucide-react": "^1.46.0",

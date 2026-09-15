@@ -29,19 +29,25 @@ import {
   retimeTranscript,
   sceneCuts,
   selectSpeechCuts,
+  alignCallouts,
 } from "./auto-plan.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
+import { completedAutoSiblings, type EditorialPlan } from "./diversity.js";
+import { graphicsAvailable } from "./visuals.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
-  const [transcription, intelligence, voice] = await Promise.all([
-    transcriptionAvailable(),
-    intelligenceAvailable(),
-    narrationAvailable(),
-  ]);
+  const [transcription, intelligence, voice, motionGraphics] =
+    await Promise.all([
+      transcriptionAvailable(),
+      intelligenceAvailable(),
+      narrationAvailable(),
+      graphicsAvailable(),
+    ]);
   return {
     transcription,
     intelligence,
     narration: transcription && intelligence && voice,
+    motionGraphics,
     model: process.env.WHISPER_MODEL || "small",
     ...(!transcription
       ? {
@@ -130,24 +136,38 @@ interface PreparedAuto {
   audioPath?: string;
   summary: NonNullable<RenderJob["summary"]>;
   notes: string[];
+  transcript?: Transcript;
 }
+
+export class AutoSkipError extends Error {
+  override name = "AutoSkipError";
+}
+
 export async function prepareAutoRemix({
   source,
   job,
   workDir,
   signal,
   onPhase,
+  previous = [],
 }: {
   source: StoredSource;
   job: StoredJob;
   workDir: string;
   signal: AbortSignal;
   onPhase: (phase: string, progress: number) => void;
+  previous?: RenderJob[];
 }): Promise<PreparedAuto> {
   const options = job.auto!;
   const notes: string[] = [];
   const changes: string[] = [];
   const variant = job.variant - 1;
+  const siblings = completedAutoSiblings(job, previous);
+  signal.throwIfAborted();
+  if (source.duration <= options.targetDuration && siblings.length)
+    throw new AutoSkipError(
+      "This short video already has a finished edit in this batch. Another version would repeat the same footage.",
+    );
   let transcript: Transcript | undefined;
   onPhase("Checking your footage", 2);
   if (source.hasAudio) {
@@ -169,14 +189,45 @@ export async function prepareAutoRemix({
       );
   }
   signal.throwIfAborted();
+  const previousPlans: EditorialPlan[] = siblings.map((sibling) => {
+    const cuts = sibling.settings.segments || [
+      {
+        start: sibling.settings.trimStart,
+        end: sibling.settings.trimEnd ?? source.duration,
+      },
+    ];
+    return {
+      cuts,
+      text: transcript
+        ? retimeTranscript(transcript, cuts)
+            .segments.map((segment) => segment.text)
+            .join(" ")
+        : undefined,
+    };
+  });
   const candidates = transcript
     ? buildCandidates(
         transcript,
         source.duration,
         options.targetDuration,
         variant,
+        previousPlans,
       )
     : [];
+  if (
+    transcript &&
+    previousPlans.length &&
+    !candidates.length &&
+    buildCandidates(
+      transcript,
+      source.duration,
+      options.targetDuration,
+      variant,
+    ).length
+  )
+    throw new AutoSkipError(
+      "The remaining spoken excerpts repeat edits already finished in this batch. No additional version was created.",
+    );
   let cuts: RemixSettings["segments"];
   let captionTranscript: Transcript | undefined;
   let hook = "";
@@ -263,7 +314,17 @@ export async function prepareAutoRemix({
         "Scene analysis was unavailable; a continuous excerpt was used.",
       );
     }
-    cuts = sceneCuts(scenes, source.duration, options.targetDuration, variant);
+    cuts = sceneCuts(
+      scenes,
+      source.duration,
+      options.targetDuration,
+      variant,
+      previousPlans,
+    );
+    if (!cuts.length && previousPlans.length)
+      throw new AutoSkipError(
+        "The available scene edits repeat footage already used in this batch. No additional version was created.",
+      );
     if (source.duration > options.targetDuration)
       changes.push(
         scenes.length
@@ -298,18 +359,11 @@ export async function prepareAutoRemix({
     hookText: hook,
     hookDuration: Math.min(3.5, duration),
     normalizeAudio: true,
-    autoMotion: true,
-    saturation: 1.03,
-    contrast: 1.02,
-    sharpness: 0.12,
-    callouts:
-      duration > 10
-        ? callouts.map((text, index) => ({
-            text,
-            start: duration * (0.38 + index * 0.3),
-            end: Math.min(duration, duration * (0.38 + index * 0.3) + 3),
-          }))
-        : [],
+    autoMotion: false,
+    device: "none",
+    callouts: captionTranscript
+      ? alignCallouts(callouts, captionTranscript, duration)
+      : [],
   };
   if (hook) changes.push(usedAI ? "Rewritten hook" : "Spoken hook");
   if (settings.callouts?.length) changes.push("Key-point overlays");
@@ -325,7 +379,13 @@ export async function prepareAutoRemix({
   }
   changes.push(
     `${options.aspect === "original" ? "Original format" : options.aspect} export`,
-    blur ? "Blurred background" : "Gentle motion",
+  );
+  changes.push(
+    blur
+      ? "Blurred background"
+      : Math.abs(source.width / source.height - targetRatio) < 0.001
+        ? "Original framing"
+        : "Reframed",
   );
   if (source.hasAudio || audioPath) changes.push("Balanced audio");
   onPhase("Rendering your edit", 65);
@@ -334,6 +394,7 @@ export async function prepareAutoRemix({
     subtitlePath,
     audioPath,
     notes,
+    transcript: captionTranscript,
     summary: {
       title: hook || `${path.parse(source.name).name} — cut ${job.variant}`,
       changes,
