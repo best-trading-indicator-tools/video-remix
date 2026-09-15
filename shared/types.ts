@@ -1,0 +1,120 @@
+export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
+export interface RemixSettings {
+  speed: number;
+  volume: number;
+  muted: boolean;
+  zoom: number;
+  saturation: number;
+  brightness: number;
+  contrast: number;
+  hue: number;
+  gamma: number;
+  temperature: number;
+  noise: number;
+  sharpness: number;
+  blend: number;
+  frameBlend: number;
+  timeShift: number;
+  mirror: boolean;
+  aspect: Aspect;
+  fit: "crop" | "contain";
+  resolution: "source" | "720" | "1080";
+  fps: "source" | "24" | "30" | "60";
+  trimStart: number;
+  trimEnd: number | null;
+  hookText: string;
+  hookDuration: number;
+  stripMetadata: boolean;
+  device: string;
+  audioId: string | null;
+  subtitleId: string | null;
+}
+export const DEFAULT_SETTINGS: RemixSettings = {
+  speed: 1,
+  volume: 1,
+  muted: false,
+  zoom: 1,
+  saturation: 1,
+  brightness: 0,
+  contrast: 1,
+  hue: 0,
+  gamma: 1,
+  temperature: 0,
+  noise: 0,
+  sharpness: 0,
+  blend: 0,
+  frameBlend: 0,
+  timeShift: 0,
+  mirror: false,
+  aspect: "original",
+  fit: "crop",
+  resolution: "source",
+  fps: "source",
+  trimStart: 0,
+  trimEnd: null,
+  hookText: "",
+  hookDuration: 3,
+  stripMetadata: true,
+  device: "none",
+  audioId: null,
+  subtitleId: null,
+};
+export interface VideoSource {
+  id: string;
+  name: string;
+  size: number;
+  duration: number;
+  width: number;
+  height: number;
+  fps: number;
+  hasAudio: boolean;
+  createdAt: string;
+  thumbnailUrl: string;
+  url: string;
+}
+export interface Attachment {
+  id: string;
+  name: string;
+  kind: "audio" | "subtitle";
+}
+export type JobStatus =
+  "queued" | "processing" | "completed" | "failed" | "cancelled";
+export interface RenderJob {
+  id: string;
+  sourceId: string;
+  sourceName: string;
+  variant: number;
+  batchId: string;
+  status: JobStatus;
+  progress: number;
+  settings: RemixSettings;
+  createdAt: string;
+  finishedAt?: string;
+  error?: string;
+  downloadUrl?: string;
+  outputSize?: number;
+}
+export interface Health {
+  ok: boolean;
+  ffmpeg: boolean;
+  ffprobe: boolean;
+  maxFileSize: number;
+  maxFiles: number;
+  concurrency: number;
+  retentionHours: number;
+}
+export function randomizeSettings(base: RemixSettings): RemixSettings {
+  const between = (a: number, b: number) =>
+    Math.round((a + Math.random() * (b - a)) * 100) / 100;
+  const clamp = (value: number, low: number, high: number) =>
+    Math.round(Math.max(low, Math.min(high, value)) * 100) / 100;
+  return {
+    ...base,
+    speed: clamp(base.speed * between(0.96, 1.04), 0.5, 2),
+    zoom: clamp(base.zoom * between(0.98, 1.06), 1, 2),
+    saturation: clamp(base.saturation * between(0.95, 1.08), 0, 3),
+    brightness: clamp(base.brightness + between(-0.02, 0.02), -1, 1),
+    contrast: clamp(base.contrast * between(0.97, 1.05), 0, 2),
+    temperature: clamp(base.temperature + between(-0.05, 0.05), -1, 1),
+  };
+}

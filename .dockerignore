@@ -1,0 +1,17 @@
+.git
+.github
+node_modules
+dist
+dist-server
+data
+output
+.playwright-cli
+.env
+.env.*
+!.env.example
+coverage
+*.log
+.DS_Store
+.codex
+test-results
+playwright-report
