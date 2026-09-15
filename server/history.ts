@@ -86,6 +86,11 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     publications: [],
     ...(job.corrections ? { corrections: structuredClone(job.corrections) } : {}),
     ...(job.editorialReport ? { editorialReport: structuredClone(job.editorialReport) } : {}),
+    ...(job.editorialRepair ? { editorialRepair: structuredClone(job.editorialRepair) } : {}),
+    // Do not assign today's default mode to legacy exports during reconciliation.
+    ...((job.editorialModeApplied || job.editorialRepair || job.editorialReport) ? {
+      editorialMode: job.editorialModeApplied ?? (job.editorialRepair ? "repair" : "check"),
+    } : {}),
   };
 }
 

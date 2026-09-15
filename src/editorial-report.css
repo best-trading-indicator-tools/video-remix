@@ -12,6 +12,13 @@
 .editorial-seek { margin-left: 8px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); color: var(--accent); font-size: 12px; }
 .editorial-coverage { font-size: 12px; }
 .editorial-report.compact { max-width: 100%; }
+.editorial-repair { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.editorial-repair-attempt { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.editorial-repair-attempt > summary { font-weight: 600; }
+.editorial-repair-findings { display: grid; gap: 12px; margin-top: 12px; }
+.editorial-repair-findings > section { min-width: 0; }
+.editorial-repair-findings h4 { margin: 0; font-size: 13px; }
+.editorial-repair p, .editorial-repair summary { overflow-wrap: anywhere; }
 .status-completed .job-status.quality-review { color: #e7be78; }
 @media (max-width: 680px) {
   .job-card .job-thumb { width: 38px; height: 52px; }

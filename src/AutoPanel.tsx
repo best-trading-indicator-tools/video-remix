@@ -217,12 +217,13 @@ export default function AutoPanel({
             </p>
             <label className="auto-output-field">
               Editorial review
-              <select value={options.editorialMode ?? "check"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
-                <option value="check">Check the opening, meaning, and ending</option>
+              <select value={options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
+                <option value="repair">Check and repair · up to 2 attempts</option>
+                <option value="check">Check only</option>
                 <option value="off">Off</option>
               </select>
             </label>
-            <p className="auto-preferences-note">Uses the local editing model and original transcript. Unavailable or uncertain checks are marked for your review.</p>
+            <p className="auto-preferences-note">Checks the opening, meaning, and ending using the local model and original transcript. Repair mode can try up to two corrections, keeping proposals only when the follow-up check reports fewer issues. Models can miss problems; review the finished short.</p>
             <label
               className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}
             >

@@ -109,7 +109,7 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
               <option value="">Not decided</option>
               {Object.entries(verdictLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <span>Judge the whole short after watching it. You can accept an unchanged export here without making a revision. Leave undecided work as “Not decided”.</span>
+            <span>Judge the finished short. “Accepted unchanged” means you made no human edits to the final automatic output, including any automatic repairs. “Accepted after correction” means you corrected it yourself. Leave undecided work as “Not decided”.</span>
           </label>
           <fieldset className="measurement-wide measurement-issues"><legend>Issues found <span>(optional)</span></legend>
             <div>{Object.entries(issueLabels).map(([value, label]) => {
@@ -167,6 +167,7 @@ interface MeasurementGroup {
   brollReviewExports: number; brollReviewed: number; brollAccepted: number; brollAcceptanceRate: number | null;
   captionMeasuredExports: number; captionCorrections: number | null;
   correctionTimeExports: number; averageCorrectionSeconds: number | null; medianCorrectionSeconds: number | null;
+  automaticRepair?: { logs: number; attempts: number; accepted: number; rejected: number; unavailable: number };
 }
 function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[] | null; entries: ExportHistoryEntry[] }) {
   const latest = entries.flatMap((entry) => (["instagram", "tiktok"] as const).flatMap((platform) => {
@@ -176,14 +177,17 @@ function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[]
   }));
   return <details className="measurement-comparison">
     <summary>Compare recorded results</summary>
-    <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Acceptance rates use only explicit whole-short verdicts, including rejections. Undecided exports stay outside that denominator. Each export is counted separately, including revisions.</p>
+    <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Acceptance rates use only explicit human verdicts, including rejections. Undecided exports stay outside that denominator. Automatic repairs are counted separately. Each export is counted separately, including revisions; download measurements to compare editing modes and model versions.</p>
     <div className="measurement-downloads"><a className="secondary-button" href="/api/measurements/export?format=csv" download><Download size={13} />Download all measurements · CSV</a><a className="secondary-button" href="/api/measurements/export?format=json" download><Download size={13} />JSON</a></div>
-    {groups?.length ? <><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Editorial approach comparison"><table className="measurement-table"><thead><tr><th>Approach / case</th><th>Whole-short verdicts</th><th>Accepted unchanged</th><th>Accepted overall</th><th>Exports reviewed</th><th>B-roll accepted / reviewed</th><th>Clear openings</th><th>Complete endings</th><th>Caption corrections</th><th>Median correction time</th></tr></thead><tbody>
+    {groups?.length ? <><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Editorial approach comparison"><table className="measurement-table"><thead><tr><th>Approach / case</th><th>Human verdicts</th><th>Accepted unchanged</th><th>Accepted overall</th><th>Automatic patches kept</th><th>Exports reviewed</th><th>B-roll accepted / reviewed</th><th>Clear openings</th><th>Complete endings</th><th>Caption corrections</th><th>Median human correction time</th></tr></thead><tbody>
       {groups.map((group, index) => <tr key={`${group.approach}-${group.benchmarkCase}-${index}`}>
         <th>{group.approach || "Approach not recorded"}<small>{group.benchmarkCase || "Case not recorded"}</small></th>
         <td>{group.verdictReviews} / {group.exports}<small>{group.unknownAcceptanceExports} undecided</small></td>
         <td>{group.unchangedAcceptanceRate === null ? "—" : `${group.acceptedUnchanged} / ${group.verdictReviews} (${Math.round(group.unchangedAcceptanceRate * 100)}%)`}</td>
         <td>{group.acceptanceRate === null ? "—" : `${group.acceptedUnchanged + group.acceptedAfterCorrection} / ${group.verdictReviews} (${Math.round(group.acceptanceRate * 100)}%)`}<small>{group.acceptedAfterCorrection} after correction · {group.rejected} rejected</small></td>
+        <td>{group.automaticRepair?.logs ? group.automaticRepair.attempts
+          ? `${group.automaticRepair.accepted} / ${group.automaticRepair.attempts} attempts` : "No attempts" : "—"}
+          {!!group.automaticRepair?.logs && <small>{group.automaticRepair.logs} exports with logs · {group.automaticRepair.rejected} proposals rejected · {group.automaticRepair.unavailable} unavailable</small>}</td>
         <td>{group.reviewedExports} / {group.exports}</td>
         <td>{group.brollReviewExports ? `${group.brollAccepted} / ${group.brollReviewed}${group.brollAcceptanceRate === null ? "" : ` (${Math.round(group.brollAcceptanceRate * 100)}%)`}` : "—"}</td>
         <td>{group.openingReviews ? `${group.openingClear} / ${group.openingReviews}` : "—"}</td><td>{group.endingReviews ? `${group.endingComplete} / ${group.endingReviews}` : "—"}</td>
@@ -254,7 +258,7 @@ function HistoryCard({ entry, stockUses, onSaved }: {
         <span>{shot.name}</span><small>{timeText(shot.sourceStart)}–{timeText(shot.sourceStart + shot.duration)}{(stockUses.get(shot.identity) || 0) > 1 ? ` · Used in ${stockUses.get(shot.identity)} listed exports` : ""}</small>
       </li>)}</ul></>}
     </details>
-    <EditorialReportSummary report={entry.editorialReport} compact />
+    <EditorialReportSummary report={entry.editorialReport} repair={entry.editorialRepair} compact />
     <MeasurementEditor entry={entry} onSaved={onSaved} />
     <div className="history-publications" aria-label="Recorded publications">
       {entry.publications.map((publication, index) => <div className="history-publication" key={`${publication.platform}-${publication.publishedAt}-${index}`}>

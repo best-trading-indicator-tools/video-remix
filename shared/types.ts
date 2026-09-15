@@ -1,4 +1,5 @@
 import type { EditorialReport } from "./editorial.js";
+import type { EditorialRepairLog } from "./editorial-repair.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
 export interface FocalPoint { x: number; y: number }
 export interface CaptionStyle { fontSize: number; bottomPercent: number }
@@ -28,13 +29,13 @@ export interface AutoOptions {
   /** Desired cutaways per export; fewer are allowed when no suitable shots fit. */
   brollCount?: number;
   /** Independent review of the final selected speech; unavailable checks remain visible. */
-  editorialMode?: "off" | "check";
+  editorialMode?: "off" | "check" | "repair";
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
   targetDuration: 45,
   narration: false,
-  editorialMode: "check",
+  editorialMode: "repair",
 };
 export interface AutoBatchItem {
   sourceId: string;
@@ -273,6 +274,7 @@ export interface ExportMeasurements {
 }
 export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
 export interface ExportHistoryEntry {
+  editorialMode?: AutoOptions["editorialMode"];
   id: string;
   jobId: string;
   sourceId: string;
@@ -291,6 +293,7 @@ export interface ExportHistoryEntry {
   measurements?: ExportMeasurements;
   corrections?: CorrectionRecord;
   editorialReport?: EditorialReport;
+  editorialRepair?: EditorialRepairLog;
 }
 export interface Attachment {
   id: string;
@@ -300,6 +303,8 @@ export interface Attachment {
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
+  /** Mode actually used, kept separate from unset legacy preferences. */
+  editorialModeApplied?: AutoOptions["editorialMode"];
   id: string;
   sourceId: string;
   sourceName: string;
@@ -319,6 +324,7 @@ export interface RenderJob {
   auto?: AutoOptions;
   qualityReport?: QualityReport;
   editorialReport?: EditorialReport;
+  editorialRepair?: EditorialRepairLog;
   corrections?: CorrectionRecord;
   phase?: string;
   summary?: {

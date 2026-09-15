@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { DEFAULT_SETTINGS, type EditPlan, type ExportHistoryEntry, type ExportReview, type PostMetrics } from "../shared/types.js";
 import { correctionRecord, measurementSummary, measurementsCsv, measurementsSchema } from "../server/measurements.js";
+import type { EditorialReport } from "../shared/editorial.js";
+import type { EditorialRepairLog } from "../shared/editorial-repair.js";
 
 const firstTime = "2026-09-01T09:00:00.000Z";
 const lastTime = "2026-09-01T10:00:00.000Z";
@@ -383,4 +385,95 @@ test("CSV exports verdicts and structured reasons while leaving legacy and malfo
     assert.equal(row[column("verdict")], "");
     assert.equal(row[column("issue_reasons")], "");
   }
+});
+
+const editorialReport = (status: EditorialReport["status"]): EditorialReport => ({
+  status, checkedAt: firstTime, policyVersion: "synthetic-review-v1", modelVersion: "synthetic-review-model",
+  checks: [], issues: [], coverage: { source: "word-timed", semantic: status === "unavailable" ? "unavailable" : "complete",
+    selectedWords: 10, totalSelectedWords: 10, neighboringContext: true, omittedChecks: ["source-visuals", "rendered-audio"], sourceVisuals: false, renderedAudio: false },
+});
+const repairLog = (outcomes: ("accepted" | "rejected" | "unavailable")[]): EditorialRepairLog => ({
+  policyVersion: "synthetic-repair-v1", modelVersion: "synthetic-repair-model",
+  initialReport: editorialReport("needs-review"), finalReport: editorialReport(outcomes.includes("accepted") ? "pass" : "needs-review"),
+  attempts: outcomes.map((outcome, index) => ({ attempt: index + 1, outcome, targetCodes: ["opening-context"],
+    summary: "Synthetic test proposal", reason: "Synthetic test decision", beforeReport: editorialReport("needs-review"),
+    ...(outcome === "unavailable" ? {} : { afterReport: editorialReport(outcome === "accepted" ? "pass" : "needs-review") }) })),
+  stopReason: "Synthetic test stop reason",
+});
+
+test("automatic repair counts stay separate from human acceptance, corrections and time", () => {
+  const entries = [
+    entry("kept", { editorialMode: "repair", editorialRepair: repairLog(["rejected", "accepted"]) }),
+    entry("unavailable", { editorialMode: "repair", editorialRepair: repairLog(["unavailable"]) }),
+    entry("no-attempt", { editorialMode: "repair", editorialRepair: repairLog([]) }),
+    entry("legacy"),
+  ];
+  const original = structuredClone(entries);
+  const stats = measurementSummary(entries).totals;
+  assert.deepEqual(stats.automaticRepair, { logs: 3, attempts: 3, accepted: 1, rejected: 1, unavailable: 1 });
+  assert.equal(stats.verdictReviews, 0);
+  assert.equal(stats.reviewedExports, 0);
+  assert.equal(stats.acceptanceRate, null);
+  assert.equal(stats.captionMeasuredExports, 0);
+  assert.equal(stats.brollChangedExports, 0);
+  assert.equal(stats.correctionTimeExports, 0);
+  assert.equal(stats.medianCorrectionSeconds, null);
+  assert.deepEqual(entries, original);
+  entries[0]!.measurements = { review: { verdict: "accepted-unchanged" } };
+  const reviewed = measurementSummary(entries).totals;
+  assert.equal(reviewed.acceptedUnchanged, 1, "Automatic repairs do not prevent a human from accepting the final output unchanged");
+  assert.equal(reviewed.acceptedAfterCorrection, 0);
+  assert.equal(reviewed.correctionTimeExports, 0);
+  assert.deepEqual(measurementSummary([]).totals.automaticRepair, { logs: 0, attempts: 0, accepted: 0, rejected: 0, unavailable: 0 });
+});
+
+test("CSV exports editorial cohorts and repair decisions without inventing legacy modes or missing logs", () => {
+  const repaired = repairLog(["rejected", "accepted"]);
+  repaired.modelVersion = "=synthetic-model";
+  const entries = [
+    entry("repair", { revision: 2, parentJobId: "original-job", editorialMode: "repair", editorialRepair: repaired, editorialReport: repaired.finalReport }),
+    entry("check", { editorialMode: "check", editorialReport: editorialReport("unavailable") }),
+    entry("off", { editorialMode: "off" }),
+    entry("legacy", { editorialReport: editorialReport("pass") }),
+    entry("no-attempt", { editorialMode: "repair", editorialRepair: repairLog([]) }),
+  ];
+  const [header, ...rows] = csvRows(measurementsCsv(entries));
+  const column = (name: string) => { const index = header!.indexOf(name); assert.ok(index >= 0, name); return index; };
+  assert.ok(rows.every(row => row.length === header!.length));
+  const first = rows[0]!;
+  assert.equal(first[column("revision")], "2");
+  assert.equal(first[column("parent_job_id")], "original-job");
+  assert.equal(first[column("editorial_mode")], "repair");
+  assert.equal(first[column("editorial_policy_version")], "synthetic-review-v1");
+  assert.equal(first[column("editorial_model_version")], "synthetic-review-model");
+  assert.equal(first[column("initial_editorial_status")], "needs-review");
+  assert.equal(first[column("final_editorial_status")], "pass");
+  assert.equal(first[column("repair_policy_version")], "synthetic-repair-v1");
+  assert.equal(first[column("repair_model_version")], "'=synthetic-model");
+  assert.equal(first[column("automatic_repair_attempts")], "2");
+  assert.equal(first[column("automatic_repairs_accepted")], "1");
+  assert.equal(first[column("automatic_repairs_rejected")], "1");
+  assert.equal(first[column("automatic_repairs_unavailable")], "0");
+  assert.equal(first[column("repair_stop_reason")], "Synthetic test stop reason");
+  assert.equal(first[column("verdict")], "");
+  assert.equal(first[column("caption_corrections")], "");
+  assert.equal(first[column("correction_seconds")], "");
+  assert.equal(rows[1]![column("editorial_mode")], "check");
+  assert.equal(rows[1]![column("initial_editorial_status")], "unavailable");
+  assert.equal(rows[1]![column("final_editorial_status")], "unavailable");
+  assert.equal(rows[1]![column("automatic_repair_attempts")], "");
+  assert.equal(rows[2]![column("editorial_mode")], "off");
+  assert.equal(rows[2]![column("final_editorial_status")], "");
+  assert.equal(rows[3]![column("editorial_mode")], "", "Old reports do not establish which option was selected");
+  assert.equal(rows[3]![column("automatic_repair_attempts")], "");
+  assert.equal(rows[4]![column("automatic_repair_attempts")], "0", "A recorded log with no attempts is a known zero");
+});
+
+test("malformed legacy repair records do not establish automatic decisions", () => {
+  const malformed = entry("malformed", { editorialMode: "approved", editorialRepair: { attempts: [{ outcome: "passed" }] } } as unknown as Partial<ExportHistoryEntry>);
+  const stats = measurementSummary([malformed]).totals;
+  assert.deepEqual(stats.automaticRepair, { logs: 0, attempts: 0, accepted: 0, rejected: 0, unavailable: 0 });
+  const [header, row] = csvRows(measurementsCsv([malformed]));
+  assert.equal(row![header!.indexOf("editorial_mode")], "");
+  assert.equal(row![header!.indexOf("automatic_repair_attempts")], "");
 });

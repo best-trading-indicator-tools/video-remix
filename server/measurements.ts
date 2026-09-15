@@ -128,6 +128,8 @@ export interface MeasurementStats extends PostMeasurementStats {
   correctionSeconds: number;
   averageCorrectionSeconds: number | null;
   medianCorrectionSeconds: number | null;
+  /** Recorded automatic decisions; never a human review or correction measurement. */
+  automaticRepair: { logs: number; attempts: number; accepted: number; rejected: number; unavailable: number };
   platforms: (PostMeasurementStats & { platform: PostMetrics["platform"] })[];
 }
 export interface MeasurementSummary {
@@ -142,6 +144,15 @@ function whole(value: unknown): value is number { return nonnegative(value) && N
 function label(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
+function automaticRepairCounts(entry: ExportHistoryEntry) {
+  const attempts = entry.editorialRepair?.attempts;
+  if (!Array.isArray(attempts) || attempts.some(attempt => !attempt || !["accepted", "rejected", "unavailable"].includes(attempt.outcome))) return undefined;
+  return { attempts: attempts.length, accepted: attempts.filter(attempt => attempt.outcome === "accepted").length,
+    rejected: attempts.filter(attempt => attempt.outcome === "rejected").length,
+    unavailable: attempts.filter(attempt => attempt.outcome === "unavailable").length };
+}
+const editorialStatus = (value: unknown) => value === "pass" || value === "needs-review" || value === "unavailable" ? value : undefined;
+const editorialMode = (value: unknown) => value === "off" || value === "check" || value === "repair" ? value : undefined;
 function measuredCorrections(entry: ExportHistoryEntry) {
   const review = entry.measurements?.review;
   return {
@@ -206,10 +217,16 @@ function summarize(entries: ExportHistoryEntry[]): MeasurementStats {
     brollReviewExports: 0, brollReviewed: 0, brollAccepted: 0, brollAcceptanceRate: null,
     captionMeasuredExports: 0, captionCorrections: 0, averageCaptionCorrections: null,
     brollChangedExports: 0, brollChanges: 0, correctionTimeExports: 0, correctionSeconds: 0, averageCorrectionSeconds: null, medianCorrectionSeconds: null,
+    automaticRepair: { logs: 0, attempts: 0, accepted: 0, rejected: 0, unavailable: 0 },
     ...summarizePosts([]), platforms: [],
   };
   const correctionTimes: number[] = [];
   for (const entry of entries) {
+    const automatic = automaticRepairCounts(entry);
+    if (automatic) {
+      stats.automaticRepair.logs++;
+      for (const field of ["attempts", "accepted", "rejected", "unavailable"] as const) stats.automaticRepair[field] += automatic[field];
+    }
     const review = entry.measurements?.review;
     const verdict = verdictSchema.safeParse(review?.verdict);
     const issues = issueReasonsSchema.safeParse(review?.issueReasons);
@@ -297,6 +314,8 @@ function csvCell(value: unknown): string {
 /** One row per latest platform observation; unposted exports receive one blank-platform row. */
 export function measurementsCsv(entries: ExportHistoryEntry[]): string {
   const columns = ["history_id", "job_id", "source_name", "source_fingerprint", "title", "created_at", "approach", "benchmark_case",
+    "revision", "parent_job_id", "editorial_mode", "editorial_policy_version", "editorial_model_version", "initial_editorial_status", "final_editorial_status",
+    "repair_policy_version", "repair_model_version", "automatic_repair_attempts", "automatic_repairs_accepted", "automatic_repairs_rejected", "automatic_repairs_unavailable", "repair_stop_reason",
     "verdict", "issue_reasons",
     "opening_clear", "ending_complete", "broll_reviewed", "broll_accepted", "caption_corrections", "broll_changes", "correction_seconds", "review_notes",
     "platform", "measured_at", "views", "average_watch_seconds", "completion_percent", "saves", "shares", "platform_notice"];
@@ -306,10 +325,16 @@ export function measurementsCsv(entries: ExportHistoryEntry[]): string {
     const verdict = verdictSchema.safeParse(review?.verdict);
     const issues = issueReasonsSchema.safeParse(review?.issueReasons);
     const correction = measuredCorrections(entry);
+    const repair = entry.editorialRepair;
+    const report = entry.editorialReport ?? repair?.finalReport;
+    const automatic = automaticRepairCounts(entry);
     const posts = latestPosts(entry);
     for (const post of posts.length ? posts : [undefined]) rows.push([
       entry.id, entry.jobId, entry.sourceName, entry.sourceFingerprint, entry.title, entry.createdAt,
       label(review?.approach), label(review?.benchmarkCase),
+      whole(entry.revision) ? entry.revision : undefined, label(entry.parentJobId), editorialMode(entry.editorialMode),
+      label(report?.policyVersion), label(report?.modelVersion), editorialStatus((repair?.initialReport ?? report)?.status), editorialStatus(report?.status),
+      label(repair?.policyVersion), label(repair?.modelVersion), automatic?.attempts, automatic?.accepted, automatic?.rejected, automatic?.unavailable, label(repair?.stopReason),
       verdict.success ? verdict.data : undefined, issues.success ? issues.data.join(";") : undefined,
       typeof review?.openingClear === "boolean" ? review.openingClear : undefined,
       typeof review?.endingComplete === "boolean" ? review.endingComplete : undefined,

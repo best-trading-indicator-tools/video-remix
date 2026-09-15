@@ -48,8 +48,9 @@ where the words came from, not that the model's judgment is correct.
 
 ### Independent editorial checks
 
-**Output preferences → Editorial review** enables a separate local check of the
-saved cut before rendering, or switches it off. It checks whether the opening has
+**Output preferences → Editorial review** offers **Check and repair** (the default
+for new settings), **Check only**, and **Off**. Each source keeps its own preference.
+The checker reviews the saved cut before rendering. It checks whether the opening has
 enough context, the ending finishes the idea, headings and callouts are supported,
 the source meaning is preserved, and captions match the selected speech. Findings
 include validated source quotes and timestamps. Exports, the editor, and durable
@@ -76,6 +77,38 @@ validated issue finding. This model has **not** demonstrated reliable editorial
 judgment. The app keeps those results for manual review and skips unverified
 repairs. Evaluate your configured model and real creator acceptance before relying
 on automatic judgments.
+
+### Bounded automatic repair
+
+With **Check and repair**, concrete, source-cited findings can trigger at most two
+small correction proposals within a 120-second review/repair budget. Allowed
+changes are a source-quoted heading, a modest extension to an existing cut that
+restores nearby words, or a source-grounded caption correction. Extensions retain
+all originally selected speech, preserve sequence order, add at most three source
+seconds per boundary and six seconds overall, and respect your duration cap.
+Supporting footage and overlay timing must stay intact.
+
+Every proposal passes the existing edit-plan validator and a fresh independent
+editorial check. It is kept only when targeted findings decrease without new,
+worse, or missing checks. An invalid proposal, unverified improvement, unavailable
+model, timeout, or exhausted budget leaves the best reviewed edit in place and
+shows what still needs review. Human-edited revisions and replacement/narrated
+audio receive checks only. Rendering retries reuse the saved correction history
+without granting a new repair budget.
+
+The final plan drives the actual render, captions, and export title. Reports retain
+attempt outcomes, proposed changes, before/after findings, and the stopping reason
+in Exports and History. Automatic attempts do not count as human corrections or
+create extra user revisions. **Accepted unchanged** means you accepted the final
+automatic output without making human edits; a successful model check never fills
+in that verdict for you.
+
+To measure improvement, review representative **Check only** and **Check and
+repair** exports using the same human rubric in History. CSV/JSON retain mode,
+policy/model, automatic attempt outcomes, and revision relationships alongside your
+verdict and correction time. Missing verdicts remain unknown. These measurements
+can compare reviewed outputs; real creator reviews are still required to establish
+acceptance rates, missed useful moments, and platform performance.
 
 ## Optional B-roll and animated cards
 

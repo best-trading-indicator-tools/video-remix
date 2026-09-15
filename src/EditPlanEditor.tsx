@@ -354,7 +354,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
               <QualityReportSummary report={job.qualityReport} />
               {changed ? <p className="editorial-coverage">Your draft changes have not received an editorial check. The saved export's findings are available in Exports and History. Render the revision to review its final result.</p>
-                : <EditorialReportSummary report={job.editorialReport} />}
+                : <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} />}
             </aside>
             <div className="edit-plan-fields">
               <PromptEditor contextKey={`${job.id}:${plan.revision}:${draftKey}`} disabled={saving} onSuggest={suggestEdit} onApply={applyPrompt}

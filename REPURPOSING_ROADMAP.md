@@ -1,6 +1,6 @@
 # Roadmap: consistently good automatic shorts
 
-Date: 2026-09-15. Status: implementation in progress. The authorized first delivery covers complete-idea selection, editorial checks, bounded repair, and measured human acceptance. Each completed feature is verified, committed, and pushed to `main` separately.
+Date: 2026-09-15. Status: the authorized four-feature implementation is complete. It covers complete-idea selection, advisory editorial checks, bounded repair, and measured human acceptance. Each feature is verified, committed, and pushed to `main` separately. Real creator acceptance and reliable model judgment remain to be established; the broader follow-up roadmap below is not yet implemented.
 
 ## Implementation progress
 
@@ -9,7 +9,7 @@ Date: 2026-09-15. Status: implementation in progress. The authorized first deliv
 | Whole-short human acceptance | Complete. Explicit verdicts, issue categories, unknown-safe rates, median correction time, and durable CSV/JSON export extend the existing History review. Production build passed; all 274 tests covered successfully (two optional speech cases rerun with the installed local model); desktop/mobile browser review passed. |
 | Complete-idea selection | Complete. Shorter context-aware candidates, bounded cached local idea discovery, validated source anchors, and indexed history/transcript lookup. Production build and all 288 tests passed. |
 | Independent editorial checks | Complete as an advisory check. Separate source-cited comparisons, conservative unavailable states, actual-plan integration, and durable reports. Production build, all 307 tests, and desktop/mobile browser checks passed. The installed llama3.2 yielded only one validated (uncertain) report in four authored examples; reliable model judgment remains unproven. The opt-in smoke runner records this separately from software tests. |
-| Bounded automatic repair | Next, using the validated edit-plan operations. |
+| Bounded automatic repair | Complete. At most two grounded proposals, independent rechecks, conservative rollback, manual-edit protection, final-plan rendering, durable attempt logs, and separate human acceptance. Final production build and all 330 tests passed, including 20 repair/queue cases and real rendered-frame comparisons. Eleven browser checks passed, including mobile, settings persistence, and stale-report prevention. Unverified repairs are skipped and unresolved uncertainty stays for human review; model quality remains a measured limitation. |
 
 The sections below retain the audit rationale and broader follow-up roadmap. Product targets remain unmeasured until real human reviews are collected.
 
@@ -31,13 +31,13 @@ The scan covered application code, shared types, UI and styles, server pipelines
 - Existing engineering tests exercise real FFmpeg rendering and persistence as well as mocked model/provider behavior. They do not establish real-world editorial acceptance or platform outcomes.
 - The current benchmark already distinguishes synthetic diagnostics from human editorial evaluation. Its automated report marks the human set as not run. Extend this foundation: [benchmark guide](benchmarks/README.md).
 
-### Reassessment after updates through `4d193ed`
+### Earlier reassessment, through `4d193ed`
 
 The four-step workflow remains valid. The update adds reusable editing capabilities and targeted safeguards, so the implementation should extend those foundations.
 
 Validation on reassessment: `npm test` passed **270/270** with no skips, and `npm run typecheck` passed, including a repeat after the concurrent prompt-example/hint UI edits. Compared the 48 files changed since `5a1900c` and reviewed those additional UI edits. Model responses in the relevant tests are mocked; no real-model editorial acceptance study was run.
 
-| Step | Current implementation | Remaining work |
+| Step | Behavior at that reassessment | Work identified then |
 | --- | --- | --- |
 | Complete-idea selection | AI selects an excerpt first, then writes the headline/callouts using only that excerpt; failures preserve the selection and use its speech as the fallback hook. | Candidate scoring is still duration/density/punctuation based. Add surrounding context, complete-idea boundaries, and selection criteria for useful takeaways. |
 | Editorial checks | Selected-speech grounding, validated edit operations, and technical output/B-roll checks exist. | Independently check whether the resulting cut is understandable, accurate to the source, and complete. Recheck the hook after changes to the selected cuts. |

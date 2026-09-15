@@ -11,6 +11,7 @@ import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } 
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
 import { reviewEditorialPlan } from "./editorial-review.js";
+import { repairEditorialPlan } from "./editorial-repair.js";
 import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
 import { readFile } from "node:fs/promises";
@@ -55,8 +56,11 @@ async function run(job: StoredJob, controller: AbortController) {
   let status: "completed" | "failed" | "cancelled" | "skipped" = "failed";
   let errorMessage: string | undefined;
   let outputSize: number | undefined;
+  const savedRepair = job.editorialRepair;
   delete job.qualityReport;
   delete job.editorialReport;
+  // Keep the saved correction history through failed retries; its budget belongs to this job.
+  delete job.editorialModeApplied;
   try {
     await saveStore();
     const source = state.sources.find((item) => item.id === job.sourceId);
@@ -140,13 +144,39 @@ async function run(job: StoredJob, controller: AbortController) {
       job.phase = "Rendering your edit";
       await saveStore();
     }
-    if (job.editPlan && job.auto && job.auto.editorialMode !== "off") {
-      job.phase = "Checking the opening, meaning, and ending";
-      job.editorialReport = await reviewEditorialPlan({ plan: job.editPlan,
-        transcript: job.sourceTranscript, signal: controller.signal });
+    if (job.editPlan && job.auto) {
+      const mode = job.auto.editorialMode ?? "repair";
+      job.editorialModeApplied = mode;
+      if (mode !== "off") {
+        job.phase = mode === "repair" && !job.parentJobId && !savedRepair
+          ? "Checking the edit and trying up to two small corrections"
+          : "Checking the opening, meaning, and ending";
+        if (mode === "repair" && !savedRepair) {
+          const reviewed = await repairEditorialPlan({ plan: job.editPlan,
+            transcript: job.sourceTranscript, signal: controller.signal,
+            maxDuration: job.auto.targetDuration, protectedEdit: Boolean(job.parentJobId) });
+          job.editPlan = reviewed.plan;
+          job.editorialReport = reviewed.report;
+          job.editorialRepair = reviewed.repairLog;
+        } else {
+          job.editorialReport = await reviewEditorialPlan({ plan: job.editPlan,
+            transcript: job.sourceTranscript, signal: controller.signal });
+          // A retry rechecks the saved result; it does not grant another repair budget.
+          if (savedRepair && mode === "repair") job.editorialRepair = { ...savedRepair,
+            finalReport: structuredClone(job.editorialReport),
+            stopReason: "The saved edit was checked again for this render. No additional automatic corrections were attempted." };
+        }
+        // Rebuild every render input from the final reviewed plan. This also writes
+        // retimed captions, so a verified boundary/hook fix reaches the actual MP4.
+        const saved = await renderInputsFromPlan(job, workDir);
+        audioPath = saved.audioPath;
+        subtitlePath = saved.subtitlePath;
+        supportingVisuals = saved.supportingVisuals;
+        if (job.summary && job.editPlan.settings.hookText) job.summary.title = job.editPlan.settings.hookText;
+        job.phase = "Rendering the reviewed edit";
+      } else delete job.editorialRepair;
       await saveStore();
-      job.phase = "Rendering the reviewed edit";
-    } else delete job.editorialReport;
+    }
     await renderVideo({
       input: source.filePath,
       output: job.outputPath,

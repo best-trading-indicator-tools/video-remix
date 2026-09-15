@@ -86,7 +86,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         ? options!.targetDuration
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
-      editorialMode: options?.editorialMode === "off" ? "off" : "check",
+      editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
       supportingVisuals: [
         "off",
         "stock",
@@ -2499,7 +2499,7 @@ export default function App() {
                                 </div>
                               )}
                               <QualityReportSummary report={job.qualityReport} compact />
-                              <EditorialReportSummary report={job.editorialReport} compact />
+                              <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} compact />
                               {job.supportingVisuals?.some(
                                 (visual) => visual.attribution,
                               ) && (
@@ -2700,7 +2700,7 @@ export default function App() {
               autoPlay
             />
             <QualityReportSummary report={previewJob.qualityReport} />
-            <EditorialReportSummary report={previewJob.editorialReport} />
+            <EditorialReportSummary report={previewJob.editorialReport} repair={previewJob.editorialRepair} />
             {previewJob.summary && (
               <div className="export-auto-summary">
                 <h3>What changed</h3>
