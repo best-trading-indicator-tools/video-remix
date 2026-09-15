@@ -58,6 +58,11 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     return image;
   };
   const retainedThumbnails = new Map<string, Buffer>();
+  const retainedKinds = new Map<string, "export" | "source">();
+  let expectedHistoryCount = 1;
+  let expectedSourceExports = 1;
+  const reuseNotice = (job: RenderJob) => assert.ok(job.notes?.includes(
+    "This edit reuses footage from an earlier export. Open History to compare."), "Reused source footage is explained without preventing the export");
   const clearLegacyThumbnails = async () => {
     const statePath = path.join(dataDirectory, "state.json");
     const saved = JSON.parse(await readFile(statePath, "utf8")) as { history: ExportHistoryEntry[] };
@@ -196,13 +201,19 @@ test("export history survives new batches, renamed reuploads, deletion and expir
         assert.equal((await fetch(`${base}/api/history/${id}/thumbnail`)).status, 404);
     });
 
-    await t.test("fresh batches skip completed source excerpts while explicit corrections remain renderable", async () => {
+    await t.test("fresh batches render previously exported footage with requested B-roll and explicit corrections remain renderable", async () => {
       const fresh = await auto(source.id, asset.id);
       assert.notEqual(fresh.batchId, original.batchId);
-      const skipped = await finished(fresh.id, "skipped");
-      assert.equal(skipped.downloadUrl, undefined);
-      assert.match(skipped.notes?.join(" ") || "", /previous|earlier|already|repeat|similar/iu);
-      assert.equal((await history()).length, 1, "A skipped attempt is not an exported version");
+      const repeated = await finished(fresh.id, "completed");
+      reuseNotice(repeated);
+      assert.ok(repeated.downloadUrl);
+      assert.equal(repeated.supportingVisuals?.filter(item => item.kind === "broll").length, 1,
+        "History cannot skip planning or discard the B-roll requested for a new export");
+      assert.equal(repeated.supportingVisuals?.find(item => item.kind === "broll")?.assetId, asset.id);
+      expectedHistoryCount++; expectedSourceExports++;
+      const repeatedEntry = (await history()).find(item => item.jobId === repeated.id)!;
+      retainedThumbnails.set(repeatedEntry.id, await thumbnailBytes(repeatedEntry));
+      assert.equal((await history()).length, expectedHistoryCount);
       const planResponse = await fetch(`${base}/api/jobs/${original.id}/plan`);
       assert.equal(planResponse.status, 200);
       const plan = await planResponse.json() as EditPlan;
@@ -223,7 +234,8 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.notDeepEqual(revisedThumbnail, retainedThumbnails.get(entry.id),
         "A changed rendered hook must change the preview instead of reusing the source thumbnail");
       retainedThumbnails.set(revisedEntry.id, revisedThumbnail);
-      assert.equal((await history()).length, 2);
+      expectedHistoryCount++; expectedSourceExports++;
+      assert.equal((await history()).length, expectedHistoryCount);
     });
 
     let renamed!: VideoSource;
@@ -232,10 +244,14 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       renamed = await sourceUpload(sourcePath, "a completely different filename.mp4");
       assert.notEqual(renamed.id, source.id);
       assert.equal(renamed.fingerprint, source.fingerprint);
-      assert.equal(renamed.previousExports, 2);
-      assert.equal((await history(renamed.id)).length, 2);
-      await finished((await auto(renamed.id)).id, "skipped");
-      assert.equal((await history()).length, 2);
+      assert.equal(renamed.previousExports, expectedSourceExports);
+      assert.equal((await history(renamed.id)).length, expectedSourceExports);
+      const regenerated = await finished((await auto(renamed.id)).id, "completed");
+      reuseNotice(regenerated);
+      expectedHistoryCount++; expectedSourceExports++;
+      const regeneratedEntry = (await history()).find(item => item.jobId === regenerated.id)!;
+      retainedThumbnails.set(regeneratedEntry.id, await thumbnailBytes(regeneratedEntry));
+      assert.equal((await history()).length, expectedHistoryCount);
       const changed = await sourceUpload(changedPath, source.name);
       assert.notEqual(changed.fingerprint, source.fingerprint);
       assert.equal(changed.previousExports, 0);
@@ -243,8 +259,9 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       different = await finished((await auto(changed.id)).id, "completed");
       const differentEntry = (await history()).find(item => item.jobId === different.id)!;
       retainedThumbnails.set(differentEntry.id, await thumbnailBytes(differentEntry));
+      expectedHistoryCount++;
       assert.equal((await history(changed.id)).length, 1);
-      assert.equal((await history()).length, 3);
+      assert.equal((await history()).length, expectedHistoryCount);
     });
 
     const publications: ExportHistoryEntry["publications"] = [
@@ -343,7 +360,7 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       await clearLegacyThumbnails();
       await start();
       const restored = await history();
-      assert.equal(restored.length, 3);
+      assert.equal(restored.length, expectedHistoryCount);
       for (const item of restored)
         assert.deepEqual(await thumbnailBytes(item), retainedThumbnails.get(item.id), "Backfill captures the same completed export frame");
       const reviewed = restored.find(item => item.id === entry.id)!;
@@ -364,18 +381,22 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.deepEqual(retained.measurements, measurements);
       assert.equal(retained.sourceText, entry.sourceText);
       assert.deepEqual(await thumbnailBytes(retained), retainedThumbnails.get(entry.id));
-      assert.equal((await history(renamed.id)).length, 2);
-      assert.equal((await history()).length, 3);
+      assert.equal((await history(renamed.id)).length, expectedSourceExports);
+      assert.equal((await history()).length, expectedHistoryCount);
       assert.equal((await request(`/api/sources/${source.id}`, "DELETE")).status, 200);
       await stop();
       await start();
       assert.deepEqual((await history()).find((item) => item.id === entry.id), retained);
       assert.deepEqual(await thumbnailBytes(retained), retainedThumbnails.get(entry.id), "Deleting the source and restarting cannot remove the retained preview");
       const reimport = await sourceUpload(sourcePath, "yesterdays source again.mp4");
-      assert.equal(reimport.previousExports, 2);
+      assert.equal(reimport.previousExports, expectedSourceExports);
       assert.deepEqual((await history(reimport.id)).find((item) => item.id === entry.id), retained);
-      await finished((await auto(reimport.id)).id, "skipped");
-      assert.equal((await history()).length, 3);
+      const regenerated = await finished((await auto(reimport.id)).id, "completed");
+      reuseNotice(regenerated);
+      expectedHistoryCount++; expectedSourceExports++;
+      const regeneratedEntry = (await history()).find(item => item.jobId === regenerated.id)!;
+      retainedThumbnails.set(regeneratedEntry.id, await thumbnailBytes(regeneratedEntry));
+      assert.equal((await history()).length, expectedHistoryCount);
     });
 
     await t.test("legacy deleted-export previews fall back to the matching reuploaded source and are labeled as source frames", async () => {
@@ -383,10 +404,11 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       await clearLegacyThumbnails();
       await start();
       const restored = await history();
-      assert.equal(restored.length, 3);
+      assert.equal(restored.length, expectedHistoryCount);
       for (const item of restored) {
-        const kind = item.jobId === different.id ? "export" : "source";
+        const kind = item.available ? "export" : "source";
         retainedThumbnails.set(item.id, await thumbnailBytes(item, kind));
+        retainedKinds.set(item.id, kind);
       }
       const reviewed = restored.find(item => item.id === entry.id)!;
       assert.equal(reviewed.available, false);
@@ -412,19 +434,23 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.deepEqual(await readdir(path.join(dataDirectory, "plans")), []);
       assert.equal((await fetch(`${base}${different.downloadUrl}`)).status, 404);
       const retained = await history();
-      assert.equal(retained.length, 3);
+      assert.equal(retained.length, expectedHistoryCount);
       assert.ok(retained.every((item) => item.available === false));
       assert.deepEqual(retained.find((item) => item.id === entry.id)!.publications, publications);
       assert.deepEqual(retained.find((item) => item.id === entry.id)!.measurements, measurements);
       for (const item of retained)
-        assert.deepEqual(await thumbnailBytes(item, item.jobId === different.id ? "export" : "source"), retainedThumbnails.get(item.id),
+        assert.deepEqual(await thumbnailBytes(item, retainedKinds.get(item.id)!), retainedThumbnails.get(item.id),
           "Retention removes full media but preserves every retained history preview");
       const reimport = await sourceUpload(sourcePath, "after all media expired.mp4");
       assert.equal(reimport.fingerprint, source.fingerprint);
-      assert.equal(reimport.previousExports, 2);
-      assert.equal((await history(reimport.id)).length, 2);
-      await finished((await auto(reimport.id)).id, "skipped");
-      assert.equal((await history()).length, 3);
+      assert.equal(reimport.previousExports, expectedSourceExports);
+      assert.equal((await history(reimport.id)).length, expectedSourceExports);
+      const regenerated = await finished((await auto(reimport.id)).id, "completed");
+      reuseNotice(regenerated);
+      expectedHistoryCount++; expectedSourceExports++;
+      const regeneratedEntry = (await history()).find(item => item.jobId === regenerated.id)!;
+      retainedThumbnails.set(regeneratedEntry.id, await thumbnailBytes(regeneratedEntry));
+      assert.equal((await history()).length, expectedHistoryCount);
     });
 
     await t.test("legacy history without a remaining export or matching source leaves the preview absent", async () => {
@@ -437,14 +463,15 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.equal(missing.thumbnailUrl, undefined);
       assert.equal(missing.thumbnailKind, undefined);
       assert.equal((await fetch(`${base}/api/history/${missing.id}/thumbnail`)).status, 404);
-      assert.equal(restored.length, 3, "A missing preview never removes the history record");
+      assert.equal(restored.length, expectedHistoryCount, "A missing preview never removes the history record");
       const reviewed = restored.find(item => item.id === entry.id)!;
       await thumbnailBytes(reviewed, "source");
       assert.deepEqual(reviewed.measurements, measurements);
       assert.deepEqual(reviewed.publications, publications);
     });
 
-    await t.test("concurrent fresh uploads with identical fingerprints cannot both render before history is recorded", async () => {
+    let concurrentSource!: VideoSource;
+    await t.test("concurrent uploads with identical fingerprints both render and explain reuse after serialized analysis", async () => {
       const freshPath = path.join(directory, "fresh-for-concurrency.mp4");
       await exec("ffmpeg", [
         "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
@@ -453,8 +480,9 @@ test("export history survives new batches, renamed reuploads, deletion and expir
         "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p",
         "-c:a", "aac", "-shortest", freshPath,
       ]);
-      const first = await sourceUpload(freshPath, "fresh first import.mp4");
-      const second = await sourceUpload(freshPath, "fresh duplicate import.mp4");
+      const first = await sourceUpload(freshPath, "fresh sunset coast.mp4");
+      concurrentSource = first;
+      const second = await sourceUpload(freshPath, "fresh sunset coast duplicate.mp4");
       assert.notEqual(first.id, second.id);
       assert.equal(first.fingerprint, second.fingerprint);
       assert.equal(first.previousExports, 0);
@@ -481,11 +509,40 @@ test("export history survives new batches, renamed reuploads, deletion and expir
         }
         await sleep(50);
       }
-      assert.deepEqual(complete.map((job) => job.status).sort(), ["completed", "skipped"],
+      assert.deepEqual(complete.map((job) => job.status).sort(), ["completed", "completed"],
         `Duplicate-import jobs did not finish: ${JSON.stringify(current)}\n${processLog}`);
-      assert.equal((await history(first.id)).length, 1);
-      assert.equal((await history(second.id)).length, 1);
-      assert.equal((await history()).length, 4);
+      reuseNotice(complete.find(job => job.id === queued[1]!.id)!);
+      expectedHistoryCount += 2;
+      assert.equal((await history(first.id)).length, 2);
+      assert.equal((await history(second.id)).length, 2);
+      assert.equal((await history()).length, expectedHistoryCount);
+    });
+
+    await t.test("a skipped within-batch alternative can explicitly generate anyway with requested B-roll", async () => {
+      const created = await request("/api/auto/jobs", "POST", {
+        sourceIds: [concurrentSource.id], variants: 2,
+        options: { aspect: "16:9", targetDuration: 30, narration: false,
+          supportingVisuals: "library", brollMatching: "tags", brollIds: [asset.id] },
+      });
+      assert.equal(created.status, 201, await created.clone().text());
+      const queued = (await created.json() as { jobs: RenderJob[] }).jobs;
+      assert.equal(queued.length, 2);
+      await finished(queued[0]!.id, "completed");
+      const skipped = await finished(queued[1]!.id, "skipped");
+      assert.match(skipped.notes?.join(" ") || "", /this batch|Generate anyway/iu);
+      expectedHistoryCount++;
+      assert.equal((await history()).length, expectedHistoryCount, "The skipped suggestion creates no export history entry");
+      const retried = await request(`/api/jobs/${skipped.id}/retry`, "POST");
+      assert.equal(retried.status, 200, await retried.clone().text());
+      const regenerated = await finished(skipped.id, "completed");
+      reuseNotice(regenerated);
+      assert.ok(regenerated.downloadUrl);
+      assert.equal(regenerated.supportingVisuals?.filter(item => item.kind === "broll").length, 1);
+      assert.equal(regenerated.supportingVisuals?.find(item => item.kind === "broll")?.assetId, asset.id);
+      expectedHistoryCount++;
+      assert.equal((await history()).length, expectedHistoryCount);
+      assert.equal((await history()).filter(item => item.jobId === regenerated.id).length, 1);
+      assert.equal((await request(`/api/jobs/${regenerated.id}/retry`, "POST")).status, 409, "Completed exports retain the existing retry guard");
     });
   } finally {
     await stop();

@@ -29,6 +29,8 @@ export interface StoredAttachment extends Attachment {
   createdAt: string;
 }
 export interface StoredJob extends RenderJob {
+  /** An explicit retry of a skipped Auto version can reuse this batch's footage. */
+  allowRepeatedFootage?: boolean;
   refreshBroll?: boolean;
   outputPath: string;
   captionPath?: string;
@@ -147,7 +149,8 @@ export function publicSource(source: StoredSource): VideoSource {
 export function publicJob(job: StoredJob): RenderJob {
   const { outputPath: _outputPath, captionPath: _captionPath,
     editPlan: _editPlan, planFiles: _planFiles, sourceTranscript: _transcript,
-    brollCandidates: _candidates, refreshBroll: _refreshBroll, ...value } = job;
+    brollCandidates: _candidates, refreshBroll: _refreshBroll,
+    allowRepeatedFootage: _allowRepeatedFootage, ...value } = job;
   return { ...value, ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
 }
 export function publicBroll(asset: StoredBroll): BrollAsset {

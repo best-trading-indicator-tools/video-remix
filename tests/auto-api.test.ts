@@ -353,9 +353,14 @@ test(
       );
       for (const job of skipped) {
         assert.equal(job.downloadUrl, undefined);
-        assert.ok(job.notes?.length);
-        assert.equal((await post(`/api/jobs/${job.id}/retry`, {})).status, 409);
+        assert.match(job.notes?.join(" ") ?? "", /Generate anyway/u);
+        assert.equal((await post(`/api/jobs/${job.id}/retry`, {})).status, 200);
       }
+      finished = await waitFor(items => items.length === 4 && items.every(job => job.status === "completed"));
+      assert.ok(skipped.every(job => finished.find(item => item.id === job.id)?.downloadUrl),
+        "Explicit retries must render the skipped versions with their original options");
+      assert.equal((await post(`/api/jobs/${skipped[0]!.id}/retry`, {})).status, 409,
+        "A completed export still cannot be overwritten through Retry");
       const completed = finished.filter((job) => job.status === "completed");
       for (const job of completed) {
         assert.equal(job.progress, 100);
@@ -421,7 +426,7 @@ test(
       const archive = Buffer.from(await zipped.arrayBuffer());
       assert.equal(archive.readUInt32LE(0), 0x04034b50);
       const entries = zipNames(archive);
-      assert.equal(entries.filter((name) => name.endsWith(".mp4")).length, 2);
+      assert.equal(entries.filter((name) => name.endsWith(".mp4")).length, 4);
       assert.ok(entries.includes("export-settings.json"));
       assert.equal(
         entries.some((name) => name.endsWith(".srt")),
@@ -446,8 +451,7 @@ test(
       assert.equal(brollUpload.status, 201, await brollUpload.clone().text());
       const { assets } = (await brollUpload.json()) as { assets: BrollAsset[] };
       // This section checks per-source settings on real completed renders.
-      // Already exported short sources now correctly skip across batches, so
-      // use distinct footage instead of bypassing the durable-history rules.
+      // Use distinct footage to isolate per-source settings from history notices.
       const mixedForm = new FormData();
       for (const [input, filename] of [
         [silent, "Fresh silent landscape.mp4"],

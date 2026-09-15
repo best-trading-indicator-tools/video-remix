@@ -177,12 +177,11 @@ export async function prepareAutoRemix({
   const changes: string[] = [];
   const variant = job.variant - 1;
   const siblings = completedAutoSiblings(job, previous);
+  const avoidSiblings = job.allowRepeatedFootage ? [] : siblings;
   signal.throwIfAborted();
-  const wholeSource = [{ start: 0, end: source.duration }];
-  if (source.duration <= options.targetDuration && (siblings.length ||
-    historyPlans.some(plan => footageOverlap(wholeSource, plan.cuts) >= 0.8)))
+  if (source.duration <= options.targetDuration && avoidSiblings.length)
     throw new AutoSkipError(
-      "This short video already has a finished edit in your history. Another version would repeat the same footage. Open History to see the matching excerpt.",
+      "This batch already has a version of this short source. Choose Generate anyway to make another version using the same footage.",
     );
   let transcript: Transcript | undefined;
   onPhase("Checking your footage", 2);
@@ -205,7 +204,7 @@ export async function prepareAutoRemix({
       );
   }
   signal.throwIfAborted();
-  const previousPlans: EditorialPlan[] = [...historyPlans, ...siblings.map((sibling) => {
+  const batchPlans: EditorialPlan[] = avoidSiblings.map((sibling) => {
     const cuts = sibling.settings.segments || [
       {
         start: sibling.settings.trimStart,
@@ -220,15 +219,16 @@ export async function prepareAutoRemix({
             .join(" ")
         : undefined,
     };
-  })];
+  });
+  // History helps choose a fresh excerpt, but never prevents a new render.
+  // Explicitly retrying a skipped version also permits reusing its batch's cuts.
+  const previousPlans = [...historyPlans, ...batchPlans];
+  const preferUnused = <T,>(select: (previous: EditorialPlan[]) => T[]): T[] => {
+    const unused = select(previousPlans);
+    return unused.length || !historyPlans.length ? unused : select(batchPlans);
+  };
   let candidates = transcript
-    ? buildCandidates(
-        transcript,
-        source.duration,
-        options.targetDuration,
-        variant,
-        previousPlans,
-      )
+    ? preferUnused(previous => buildCandidates(transcript!, source.duration, options.targetDuration, variant, previous))
     : [];
   if (transcript?.segments.length) {
     onPhase("Finding complete spoken ideas", 36);
@@ -238,16 +238,16 @@ export async function prepareAutoRemix({
     if (ideas.noCompleteIdea)
       throw new AutoSkipError("No complete, self-contained spoken idea fit this duration. No additional short was created. Try a longer duration or choose an excerpt in the editor.");
     if (ideas.analyzed && ideas.candidates.length) {
-      const novel = novelIdeaCandidates(ideas.candidates, transcript, previousPlans, variant);
+      const novel = preferUnused(previous => novelIdeaCandidates(ideas.candidates, transcript!, previous, variant));
       if (novel.length) candidates = novel;
       else if (ideas.coverage.full)
-        throw new AutoSkipError("The complete spoken ideas found in this source repeat earlier exports. No additional short was created. Open History to review the existing excerpts.");
-      else notes.push("The ideas found in sampled sections were already used. Remaining sentence-based alternatives were considered.");
+        throw new AutoSkipError("The complete spoken ideas found in this source are already used in this batch. Choose Generate anyway to make another version using the same footage.");
+      else notes.push("The ideas found in sampled sections are already used in this batch. Remaining sentence-based alternatives were considered.");
     }
   }
   if (
     transcript &&
-    previousPlans.length &&
+    batchPlans.length &&
     !candidates.length &&
     buildCandidates(
       transcript,
@@ -257,7 +257,7 @@ export async function prepareAutoRemix({
     ).length
   )
     throw new AutoSkipError(
-      "The remaining spoken excerpts repeat earlier exports. Open History to see the matching excerpts. No additional version was created.",
+      "The remaining spoken excerpts are already used in this batch. Choose Generate anyway to make another version using the same footage.",
     );
   let cuts: RemixSettings["segments"];
   let captionTranscript: Transcript | undefined;
@@ -348,16 +348,16 @@ export async function prepareAutoRemix({
         "Scene analysis was unavailable; a continuous excerpt was used.",
       );
     }
-    cuts = sceneCuts(
+    cuts = preferUnused(previous => sceneCuts(
       scenes,
       source.duration,
       options.targetDuration,
       variant,
-      previousPlans,
-    );
-    if (!cuts.length && previousPlans.length)
+      previous,
+    ));
+    if (!cuts.length && batchPlans.length)
       throw new AutoSkipError(
-        "The available scene edits repeat footage already used in earlier exports. Open History to see the matching excerpts. No additional version was created.",
+        "The available scene edits are already used in this batch. Choose Generate anyway to make another version using the same footage.",
       );
     if (source.duration > options.targetDuration)
       changes.push(
@@ -376,6 +376,8 @@ export async function prepareAutoRemix({
   signal.throwIfAborted();
   if (!cuts?.length)
     throw new Error("This video did not contain a usable section to edit.");
+  if (historyPlans.some(plan => footageOverlap(cuts, plan.cuts) >= 0.8))
+    notes.push("This edit reuses footage from an earlier export. Open History to compare.");
   const duration = cutsDuration(cuts);
   const targetRatio =
     options.aspect === "original"

@@ -21,7 +21,7 @@ Optional output preferences let you choose **30, 45, or 60 seconds**, type **1â€
 
 Select a source video to change **only that video's Auto settings**, including format, duration, narration, supporting visuals, selected B-roll clips, and maximum versions. **Apply to all** copies the selected video's complete settings to the other sources and updates the defaults for future imports. One Auto remix click still processes the whole batch, with each video using its own saved settings. Manual settings remain separate.
 
-The version count is a **maximum**. Auto skips an extra version when it would repeat an already completed edit from the same batch. Short sources normally produce one worthwhile cut; a different headline or color treatment does not make an extra version necessary. Skipped jobs explain the reason and do not create duplicate downloads.
+The version count is a **maximum**. Auto normally skips an extra version when it would repeat an already completed cut from the same batch. Choose **Generate anyway** on that skipped job to explicitly make another version with its selected settings and B-roll options. Earlier exports in History never block a new batch: Auto prefers unused excerpts when possible, and adds a reuse notice when it uses earlier footage.
 
 With the local speech model ready, Auto transcribes speech, selects a focused excerpt, tightens longer pauses, and prepares an opening hook and timed captions. Automatic framing and audio balancing finish the cut. DeepSeek planning helps choose the excerpt and write hooks and callouts from the transcript. Callouts are shown when their words match the edited speech; unmatched ideas are omitted. Auto preserves the source's color and does not add arbitrary noise, speed changes, or mirroring.
 
@@ -441,8 +441,10 @@ The frontend uses React, TypeScript, and Vite. The Express API validates uploads
 History records completed exports independently of temporary video files: source
 content fingerprint, original source excerpts, saved title, B-roll IDs and intervals,
 and publication notes. Reimporting identical bytes under a new filename or batch
-reveals earlier exports and Auto avoids repeating them. Explicit edits of a saved
-result remain available as revisions. A different encoding is a different fingerprint.
+reveals earlier exports. Auto prefers unused excerpts, but history similarity is
+advisory: it can reuse an excerpt and render again with your current B-roll and
+settings. Explicit edits of a saved result remain available as revisions. A
+different encoding is a different fingerprint.
 Available older exports are migrated when the server starts; sources already removed
 before this feature cannot be reconstructed. Deleting a batch or automatic media
 expiry keeps the history. Publication dates and links are local records of posts you

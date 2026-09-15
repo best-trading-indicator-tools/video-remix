@@ -523,11 +523,11 @@ test("short spoken and silent sources produce no duplicate candidate after a com
     }),
     (error) =>
       error instanceof AutoSkipError &&
-      /already has a finished edit/u.test(error.message),
+      /batch already has a version/u.test(error.message),
   );
 });
 
-test("a small earlier excerpt does not reserve the whole short source in another batch", async () => {
+test("history never blocks a short source from entering normal planning in another batch", async () => {
   const input = transcript([speech(1, ["A", "fresh", "complete", "story."])], 20);
   const partialHistory = [{ cuts: [{ start: 12, end: 14 }], text: "An unrelated partial excerpt" }];
   assert.ok(buildCandidates(input, 20, 45, 0, partialHistory).length > 0);
@@ -549,8 +549,8 @@ test("a small earlier excerpt does not reserve the whole short source in another
     source, job: { ...autoJob(), outputPath: "/nonexistent-output" },
     previous: [], historyPlans: [{ cuts: [{ start: 0, end: 16 }] }], workDir: "/nonexistent-work",
     signal: new AbortController().signal,
-    onPhase: () => assert.fail("An existing export covering 80% of this short source should be rejected before analysis"),
-  }), error => error instanceof AutoSkipError && /already has a finished edit/u.test(error.message));
+    onPhase: () => { throw enteredPlanning; },
+  }), error => error === enteredPlanning);
 });
 
 test("unidentified legacy Auto sources cannot race identical content before fingerprints resolve", () => {

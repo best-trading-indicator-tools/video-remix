@@ -689,10 +689,10 @@ export function createApp() {
   app.post("/api/jobs/:id/retry", async (req, res) => {
     const job = state.jobs.find((item) => item.id === req.params.id);
     if (!job) throw new HttpError(404, "Export not found.");
-    if (!["failed", "cancelled"].includes(job.status))
+    if (!["failed", "cancelled", "skipped"].includes(job.status))
       throw new HttpError(
         409,
-        "Only failed or cancelled exports can be retried.",
+        "Only failed, cancelled, or skipped exports can be retried.",
       );
     if (isRunning(job.id))
       throw new HttpError(
@@ -715,6 +715,7 @@ export function createApp() {
       );
     if (state.jobs.filter(isActive).length >= 300)
       throw new HttpError(429, "Your render queue is full.");
+    if (job.status === "skipped") job.allowRepeatedFootage = true;
     job.status = "queued";
     job.progress = 0;
     delete job.error;

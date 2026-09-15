@@ -893,7 +893,7 @@ export default function App() {
       await api(`/api/batches/${batchId}`, { method: "DELETE" });
       setJobs((current) => current.filter((job) => job.batchId !== batchId));
       notify(
-        "Export collection cleared. Your source videos are still in the workspace.",
+        "Export files removed. Source videos and History records are kept.",
         "success",
       );
     } catch (error) {
@@ -2392,7 +2392,7 @@ export default function App() {
                       )}
                       {!batchActive && (
                         <IconButton
-                          title="Clear export collection"
+                          title="Clear export files; keep source videos and History"
                           onClick={() => void clearBatch(batch[0].batchId)}
                         >
                           <Trash2 size={15} />
@@ -2404,6 +2404,9 @@ export default function App() {
                         const source = sources.find(
                           (source) => source.id === job.sourceId,
                         );
+                        const retryStatus = ["failed", "cancelled", "skipped"].includes(job.status);
+                        const repeatedSkip = job.status === "skipped" && (!job.notes?.length ||
+                          job.notes.some(note => /\brepeat\w*|\btoo similar\b|\balready has\b|\bgenerate anyway\b/i.test(note)));
                         const jobAspect =
                           !job.summary && job.auto
                             ? job.auto.aspect
@@ -2539,6 +2542,9 @@ export default function App() {
                                     so no extra file was exported.
                                   </p>
                                 )}
+                              {retryStatus && !source && <p id={`retry-source-${job.id}`} className="job-skip-note">
+                                The source video is no longer available. Import it again to start a new edit.
+                              </p>}
                               {job.error && (
                                 <p className="job-error">{job.error}</p>
                               )}
@@ -2592,19 +2598,17 @@ export default function App() {
                                     <span>Download</span>
                                   </a>
                                 </>
-                              ) : job.status === "failed" ||
-                                job.status === "cancelled" ? (
+                              ) : retryStatus ? (
                                 <button
+                                  type="button"
                                   className="secondary-button"
+                                  disabled={!source}
+                                  aria-describedby={!source ? `retry-source-${job.id}` : undefined}
                                   onClick={() => void jobAction(job, "retry")}
                                 >
                                   <RefreshCw size={13} />
-                                  Retry
+                                  {repeatedSkip ? "Generate anyway" : "Retry"}
                                 </button>
-                              ) : job.status === "skipped" ? (
-                                <span className="skipped-reason">
-                                  See reason
-                                </span>
                               ) : (
                                 <IconButton
                                   title={`Cancel ${job.sourceName} version ${job.variant}`}
