@@ -322,7 +322,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
       {loading ? <div className="edit-plan-loading" role="status"><LoaderCircle className="spin" size={22} /> Loading your edit…</div> :
         plan && draft ? <form ref={form} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="edit-plan-body">
-            <aside className="edit-plan-playback">
+            <aside className="edit-plan-playback" aria-label="Video preview and checks" tabIndex={0}>
               <div className="edit-preview-tabs" aria-label="Preview view">
                 <button type="button" aria-pressed={previewMode === "export"} onClick={() => setPreviewMode("export")}>Current export</button>
                 <button type="button" aria-pressed={previewMode === "framing"} onClick={() => setPreviewMode("framing")}>Draft framing</button>
@@ -356,7 +356,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               {changed ? <p className="editorial-coverage">Your draft changes have not received an editorial check. The saved export's findings are available in Exports and History. Render the revision to review its final result.</p>
                 : <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} />}
             </aside>
-            <div className="edit-plan-fields">
+            <div className="edit-plan-fields" role="region" aria-label="Edit controls" tabIndex={0}>
               <PromptEditor contextKey={`${job.id}:${plan.revision}:${draftKey}`} disabled={saving} onSuggest={suggestEdit} onApply={applyPrompt}
                 examples={savedEditExamples(draft)}
                 applied={!!promptUndo} canUndo={!!promptUndo && promptUndo.appliedIdentity === draftKey} onUndo={() => {

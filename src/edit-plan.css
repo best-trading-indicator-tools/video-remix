@@ -1,11 +1,13 @@
 .edit-plan-backdrop { z-index: 95; }
-.edit-plan-modal { width: 1120px; max-width: 100%; max-height: calc(100dvh - 40px); overflow: auto; overscroll-behavior: contain; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 80px #0008; color: var(--text); }
-.edit-plan-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 28px; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 3; background: var(--surface); }
+.edit-plan-modal { display: flex; flex-direction: column; width: 1120px; max-width: 100%; max-height: calc(100dvh - 40px); overflow: hidden; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 24px 80px #0008; color: var(--text); }
+.edit-plan-modal > form { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.edit-plan-heading { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 24px 28px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .edit-plan-heading > div { min-width: 0; }
 .edit-plan-heading h2 { margin: 8px 0; font-size: 26px; letter-spacing: -.7px; }
 .edit-plan-heading p { color: var(--subtle); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
-.edit-plan-body { display: grid; grid-template-columns: minmax(240px, .75fr) minmax(0, 1.25fr); gap: 32px; padding: 28px; }
-.edit-plan-playback { align-self: start; position: sticky; top: 150px; min-width: 0; }
+.edit-plan-body { display: grid; flex: 1 1 auto; min-height: 0; grid-template-columns: minmax(240px, .75fr) minmax(0, 1.25fr); grid-template-rows: minmax(0, 1fr); gap: 32px; padding: 28px; overflow: hidden; }
+.edit-plan-playback, .edit-plan-fields { min-width: 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: var(--muted) var(--surface); padding: 4px 10px 8px 4px; scroll-padding: 12px; }
+.edit-plan-playback:focus-visible, .edit-plan-fields:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 8px; }
 .edit-plan-playback video { display: block; width: 100%; max-height: 48dvh; background: var(--canvas); border-radius: 12px; }
 .edit-plan-playback h3 { font-size: 16px; margin-top: 20px; }
 .edit-plan-playback p, .edit-plan-note, .edit-plan-empty { font-size: 13px; line-height: 1.7; color: var(--subtle); margin-top: 10px; }
@@ -36,7 +38,7 @@
 .edit-plan-lock { margin-bottom: 18px; }
 .edit-plan-credit { font-size: 12px; color: var(--subtle); line-height: 1.7; margin-top: 12px; }
 .edit-plan-credit a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
-.edit-plan-footer { position: sticky; bottom: 0; z-index: 3; background: var(--surface); padding: 18px 28px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
+.edit-plan-footer { flex: 0 0 auto; background: var(--surface); padding: 18px 28px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; }
 .edit-plan-footer > div:first-child { flex: 1 1 200px; }
 .edit-plan-footer p { font-size: 13px; line-height: 1.6; color: var(--subtle); }
 .edit-plan-footer p.edit-plan-pending-search { color: var(--accent); margin-top: 4px; }
@@ -106,8 +108,9 @@
   .edit-plan-modal { max-height: calc(100dvh - 24px); border-radius: 14px; }
   .edit-plan-heading { padding: 18px; gap: 12px; }
   .edit-plan-heading h2 { font-size: 22px; }
-  .edit-plan-body { display: block; padding: 18px; }
-  .edit-plan-playback { position: static; margin-bottom: 30px; }
+  .edit-plan-body { display: block; padding: 18px; overflow-y: auto; overscroll-behavior: contain; scroll-padding: 18px; }
+  .edit-plan-playback, .edit-plan-fields { overflow: visible; scrollbar-gutter: auto; padding: 0; }
+  .edit-plan-playback { margin-bottom: 30px; }
   .edit-plan-playback video { max-height: 40dvh; }
   .edit-plan-footer { padding: 16px 18px; }
   .edit-plan-buttons { width: 100%; }
