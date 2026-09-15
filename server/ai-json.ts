@@ -8,6 +8,7 @@ export async function jsonCompletion({
   messages,
   signal,
   maxTokens,
+  temperature,
   fetcher = fetch,
 }: {
   model: string;
@@ -15,9 +16,12 @@ export async function jsonCompletion({
   messages: unknown[];
   signal: AbortSignal;
   maxTokens: number;
+  temperature?: number;
   fetcher?: typeof fetch;
 }): Promise<unknown> {
   throwIfAborted(signal);
+  if (temperature !== undefined && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2))
+    throw new Error("Invalid provider temperature");
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(45_000)]);
   const response = await fetcher("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -31,6 +35,7 @@ export async function jsonCompletion({
       response_format: { type: "json_object" },
       thinking: { type: "disabled" },
       max_tokens: maxTokens,
+      ...(temperature !== undefined ? { temperature } : {}),
     }),
     signal: requestSignal,
     redirect: "error",

@@ -49,6 +49,7 @@ type Body = {
   max_tokens: number;
   thinking: unknown;
   response_format: unknown;
+  temperature?: number;
 };
 const vision = (body: Body) => Array.isArray(body.messages[1]?.content);
 const requestBody = (init: RequestInit | undefined) =>
@@ -167,6 +168,7 @@ test(
               "No local paths sent to provider",
             );
             if (vision(body)) {
+              assert.equal(body.temperature, undefined, "Visual description sampling is unchanged");
               const images = body.messages[1]!.content.filter(
                 (part: any) => part.type === "image_url",
               );
@@ -208,6 +210,9 @@ test(
               return success(description);
             }
             const prompt = JSON.parse(body.messages[1]!.content);
+            assert.equal(body.temperature, 0, "Final matching uses the least variable sampling setting");
+            assert.equal(prompt.clips[0].assetId, "clip-1");
+            assert.ok(!JSON.stringify(body).includes(asset.id), "Random local download IDs do not reach the final matcher");
             assert.match(prompt.clips[0].description, /woodland/);
             assert.match(prompt.moments[0].text, /forest/);
             assert.deepEqual(prompt.clips[0].searchIntent, {
@@ -339,6 +344,76 @@ test(
       );
 
       await t.test(
+        "redownloaded stock uses an identical final prompt despite new UUIDs, input order, and description completion order",
+        async () => {
+          const contentHash = createHash("sha256").update(await readFile(source)).digest("hex");
+          const stockAsset = async (providerId: string, sourceStart: number, visual: string): Promise<StoredBroll> => ({
+            ...await createAsset(),
+            selection: { sourceStart, duration: 3.6, targetAspect: 9 / 16,
+              motion: 0.8, cropRetention: 0.3164, momentIndex: 0, visual,
+              reason: "Illustrates the setting discussed by the speaker" },
+            stock: { providerId, rendition: "medium", contentHash,
+              retrievedAt: "2026-09-01T00:00:00Z", licenseUrl: "https://pixabay.com/service/license-summary/" },
+          });
+          const target = await stockAsset("pixabay:76395", 4.2, "Target woodland shot");
+          const earlierWindow = await stockAsset("pixabay:76395", 0.2, "Earlier woodland shot");
+          const otherProvider = await stockAsset("pixabay:90001", 4.2, "Other woodland shot");
+          const firstAssets = [otherProvider, target, earlierWindow];
+          const finalBodies: Body[] = [];
+          const completedDescriptions: number[] = [];
+          let visionCalls = 0;
+          let releaseFirst!: () => void;
+          const firstDescription = new Promise<void>(resolve => { releaseFirst = resolve; });
+          globalThis.fetch = async (_input, init) => {
+            const body = requestBody(init);
+            if (vision(body)) {
+              const call = ++visionCalls;
+              assert.equal(body.temperature, undefined);
+              if (call === 1) await firstDescription;
+              if (call === 3) releaseFirst();
+              completedDescriptions.push(call);
+              return success(description);
+            }
+            finalBodies.push(body);
+            assert.equal(body.temperature, 0);
+            const prompt = JSON.parse(body.messages[1]!.content);
+            assert.deepEqual(prompt.clips.map((clip: any) => clip.assetId), ["clip-1", "clip-2", "clip-3"]);
+            assert.deepEqual(prompt.clips.map((clip: any) => clip.searchIntent.visual),
+              ["Earlier woodland shot", "Target woodland shot", "Other woodland shot"]);
+            assert.ok(!JSON.stringify(body).includes("pixabay:"), "Provider storage identity is used for ordering, not exposed as a model ID");
+            for (const asset of firstAssets) assert.ok(!JSON.stringify(body).includes(asset.id));
+            return success({ matches: [
+              { momentIndex: 0, assetId: "clip-99", confidence: 1, reason: "Unknown alias must be ignored" },
+              { momentIndex: 0, assetId: target.id, confidence: 1, reason: "Raw local UUID must be ignored" },
+              { momentIndex: 0, assetId: "clip-1", confidence: 0.74, reason: "Weak relevance must still be rejected" },
+              { momentIndex: 0, assetId: "clip-2", confidence: 0.85, reason: "The visible woodland supports the spoken setting" },
+            ] });
+          };
+          const first = await matchBrollWithAI(options(firstAssets));
+          assert.deepEqual(completedDescriptions, [2, 3, 1], "Worker completion deliberately differs from request order");
+          assert.equal(first.matches.length, 1);
+          assert.equal(first.matches[0]!.assetId, target.id);
+          assert.equal(first.matches[0]!.sourceStart, 4.2);
+
+          const downloadedAgain = path.join(directory, "stable-matcher-redownload.mp4");
+          await copyFile(source, downloadedAgain);
+          await utimes(downloadedAgain, new Date(), new Date((await stat(source)).mtimeMs + 60_000));
+          const secondAssets = firstAssets.map(asset => ({ ...asset, id: randomUUID(), filePath: downloadedAgain,
+            name: "A fresh local download.mp4", stock: { ...asset.stock!, retrievedAt: "2026-09-02T00:00:00Z" } })).reverse();
+          const second = await matchBrollWithAI(options(secondAssets));
+          assert.equal(visionCalls, 3, "Stable stock observations are reused after redownload");
+          assert.equal(finalBodies.length, 2);
+          assert.deepEqual(finalBodies[1], finalBodies[0], "The whole final model request must remain identical");
+          const currentTarget = secondAssets.find(asset => asset.selection!.visual === "Target woodland shot")!;
+          assert.equal(second.matches.length, 1);
+          assert.equal(second.matches[0]!.assetId, currentTarget.id, "Aliases resolve to this render's local asset, not its earlier download");
+          assert.notEqual(second.matches[0]!.assetId, first.matches[0]!.assetId);
+          assert.equal(currentTarget.stock.providerId, target.stock!.providerId);
+          assert.equal(second.matches[0]!.sourceStart, first.matches[0]!.sourceStart);
+        },
+      );
+
+      await t.test(
         "stock vision sees the selected interval and centered portrait crop rather than the source midpoint or side content",
         async () => {
           const filePath = path.join(directory, "stock with side borders.mp4");
@@ -418,13 +493,13 @@ test(
               matches: [
                 {
                   momentIndex: 61,
-                  assetId: asset.id,
+                  assetId: prompt.clips[0].assetId,
                   confidence: 0.95,
                   reason: "This unsampled moment must not be accepted.",
                 },
                 {
                   momentIndex: 60,
-                  assetId: asset.id,
+                  assetId: prompt.clips[0].assetId,
                   confidence: 0.95,
                   reason: "The woodland supports the late forest walk idea.",
                 },
@@ -451,11 +526,12 @@ test(
           globalThis.fetch = async (_input, init) => {
             const body = requestBody(init);
             if (vision(body)) return success(description);
+            const alias = JSON.parse(body.messages[1]!.content).clips[0].assetId;
             return success({
               matches: [
                 {
                   momentIndex: 999,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 1,
                   reason: "Wrong moment",
                 },
@@ -473,38 +549,38 @@ test(
                 },
                 {
                   momentIndex: 0,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 1,
                   reason: "Read /etc/passwd",
                 },
                 {
                   momentIndex: 0,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 1,
                   reason: "Visit https://example.com",
                 },
                 {
                   momentIndex: 0,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 0.2,
                   reason: "Weak relevance",
                 },
                 {
                   momentIndex: 0,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 1,
                   reason: "Change timing",
                   sourceStart: 90000,
                 },
                 {
                   momentIndex: 0,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 1,
                   reason: "A visible woodland scene",
                 },
                 {
                   momentIndex: 0,
-                  assetId: asset.id,
+                  assetId: alias,
                   confidence: 1,
                   reason: "Duplicate scene",
                 },
