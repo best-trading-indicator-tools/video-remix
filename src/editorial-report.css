@@ -1,5 +1,10 @@
 .editorial-report { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px; line-height: 1.6; }
 .editorial-report summary { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.editorial-report .editorial-report-heading { align-items: flex-start; }
+.editorial-report-heading > svg { flex-shrink: 0; margin-top: 4px; }
+.editorial-report-title { min-width: 0; }
+.editorial-report-title > strong, .editorial-failure { display: block; }
+.editorial-failure { margin-top: 4px; color: var(--text); font-weight: 400; overflow-wrap: anywhere; }
 .editorial-report.needs-review summary, .editorial-report.unavailable summary { color: #e7be78; }
 .editorial-report p { margin: 10px 0 0; color: var(--subtle); }
 .editorial-issues { margin: 12px 0 0; padding-left: 20px; }
@@ -12,6 +17,10 @@
 .editorial-seek { margin-left: 8px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); color: var(--accent); font-size: 12px; }
 .editorial-coverage { font-size: 12px; }
 .editorial-report.compact { max-width: 100%; }
+.editorial-retry { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; margin-top: 12px; }
+.editorial-retry .secondary-button { min-height: 40px; padding: 8px 12px; font-size: 12px; }
+.editorial-retry > p { flex: 1 1 200px; margin: 0; font-size: 12px; }
+.editorial-report .editorial-retry-error { color: #f5aaa7; overflow-wrap: anywhere; }
 .editorial-repair { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
 .editorial-repair-attempt { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
 .editorial-repair-attempt > summary { font-weight: 600; }

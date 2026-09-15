@@ -6,6 +6,7 @@ import { buildEditorialReviewContext, reviewEditorialPlan } from "../server/edit
 import { deepseekEditorialReviewer } from "../server/editorial-model.js";
 import { config } from "../server/config.js";
 import { editorialModel } from "../server/editorial-provider.js";
+import { AIRequestError } from "../server/ai-errors.js";
 
 const originalProvider = { key: process.env.DEEPSEEK_API_KEY, textModel: process.env.DEEPSEEK_TEXT_MODEL,
   model: process.env.DEEPSEEK_MODEL, enabled: config.aiEnabled };
@@ -117,6 +118,8 @@ test("editorial review separates validated semantic findings from structural evi
       assert.ok(report.policyVersion); assert.equal(report.modelVersion, editorialModel()); assert.equal(report.provider, "deepseek");
       assert.ok(Number.isFinite(Date.parse(report.checkedAt)));
       assert.deepEqual(report.issues, []);
+      assert.equal(report.failure, undefined);
+      assert.equal(Object.hasOwn(report, "failure"), false, "A valid review must not carry a stale failure diagnostic");
     });
     await t.test("clipped words and invalid caption timing cannot be overruled by a passing model", async () => {
       const edit = plan(); edit.cuts = [{ start: 3.2, end: 8 }]; edit.outputDuration = 4.8;
@@ -233,6 +236,9 @@ test("editorial review separates validated semantic findings from structural evi
       const report = await review(plan(), transcript(), async () => { throw new Error("private /tmp/folder or credential"); });
       assert.equal(report.status, "unavailable"); assert.ok(!JSON.stringify(report).includes("credential"));
       assert.equal(report.modelVersion, editorialModel()); assert.equal(report.provider, "deepseek");
+      assert.equal(report.failure?.code, "invalid-review");
+      assert.equal(report.failure?.retryable, true);
+      assert.ok(!JSON.stringify(report).includes("/tmp/folder"));
       const controller = new AbortController();
       let called = false;
       const running = reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: controller.signal,
@@ -242,6 +248,35 @@ test("editorial review separates validated semantic findings from structural evi
       await assert.rejects(reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: controller.signal }), { name: "AbortError" });
     });
   } finally { config.aiEnabled = configured; }
+});
+
+test("editorial reports preserve safe failure categories from provider responses and timeouts", async () => {
+  const oldFetch = globalThis.fetch;
+  try {
+    const request = buildEditorialReviewContext(plan(), transcript()).request;
+    for (const [code, response] of [
+      ["authentication", () => new Response("private-provider-diagnostic", { status: 401 })],
+      ["rate-limit", () => new Response("private-provider-diagnostic", { status: 429 })],
+      ["invalid-schema", () => completion({ checks: {}, private: "private-provider-diagnostic" })],
+      ["output-truncated", () => completion(providerPassing(request), "length")],
+    ] as const) {
+      globalThis.fetch = async () => response();
+      const report = await reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: new AbortController().signal });
+      const error = new AIRequestError(code);
+      assert.equal(report.status, "unavailable");
+      assert.equal(report.coverage.semantic, "unavailable");
+      assert.deepEqual(report.failure, { code, message: error.message, retryable: error.retryable });
+      assert.ok(report.checks.filter(check => check.origin === "semantic").every(check => check.status === "unavailable" && check.message === error.message));
+      assert.ok(!JSON.stringify(report).includes("private-provider-diagnostic"));
+      assert.ok(!JSON.stringify(report).includes("test-editorial-key"));
+    }
+    for (const timeout of [new AIRequestError("timeout"), new DOMException("private-provider-diagnostic", "TimeoutError")]) {
+      const report = await review(plan(), transcript(), async () => { throw timeout; });
+      const expected = new AIRequestError("timeout");
+      assert.deepEqual(report.failure, { code: "timeout", message: expected.message, retryable: true });
+      assert.ok(!JSON.stringify(report).includes("private-provider-diagnostic"));
+    }
+  } finally { globalThis.fetch = oldFetch; }
 });
 
 test("DeepSeek reviewer uses the fixed endpoint and rejects oversized or unfinished replies", async () => {
@@ -300,6 +335,63 @@ test("reply schema binds requested checks and selected evidence without forcing 
   const request = buildEditorialReviewContext(edit, transcript()).request;
   const envelope = completion;
   try {
+    await t.test("bounded claim summaries longer than 300 characters retain valid source evidence", async () => {
+      const sent = buildEditorialReviewContext(plan(), transcript()).request;
+      const summary = "The selected statement says that the treatment does not cure everyone. It therefore preserves the limitation in the original source instead of claiming universal success. The speaker describes a treatment with limited outcomes; the selected words retain the negative qualification and do not promise a cure for every person. This summary concerns the source's expressed claim and does not independently verify the medical claim.";
+      assert.ok(summary.length > 400 && summary.length < 700);
+      const response = providerPassing(sent);
+      response.checks["hook-supported"]!.comparison.sourceClaim = summary;
+      response.checks["meaning-preserved"]!.comparison.selectedClaim = summary;
+      response.checks["meaning-preserved"]!.comparison.originalClaim = summary;
+      globalThis.fetch = async () => envelope(response);
+      const report = await reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: new AbortController().signal });
+      assert.equal(report.status, "pass");
+      assert.equal(report.coverage.semantic, "complete");
+      assert.equal(report.failure, undefined);
+      assert.ok(report.checks.every(check => check.message.length <= 500));
+      const context = sent.excerpts.find(excerpt => excerpt.sourceId === "context-2")!;
+      const change = "The original advice to ask a qualified professional was omitted from the short";
+      response.checks["meaning-preserved"]!.comparison.omittedOrChangedMeaning = change;
+      response.checks["meaning-preserved"]!.comparison.relationship = "lost-qualification";
+      response.checks["meaning-preserved"]!.additionalEvidence = [{ sourceId: context.sourceId, quote: context.quote }];
+      const warning = await reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: new AbortController().signal });
+      const issue = warning.issues.find(item => item.code === "meaning-preserved")!;
+      assert.ok(issue.message.startsWith(`Change: ${change}.`) && issue.message.length <= 500,
+        "The grounded warning must remain visible when long summaries are shortened for display");
+      response.checks["meaning-preserved"]!.comparison.originalClaim = "x".repeat(1201);
+      const oversized = await reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: new AbortController().signal });
+      assert.equal(oversized.failure?.code, "invalid-schema", "The larger summary allowance remains bounded");
+    });
+
+    await t.test("caption comparison schema selects one complete supplied cue and rejects combined or invented captions", async () => {
+      const edit = plan();
+      edit.captions = [
+        { id: "first-caption", start: 0, end: 2.2, text: "The treatment does" },
+        { id: "second-caption", start: 2.2, end: 5, text: "not cure everyone." },
+      ];
+      const sent = buildEditorialReviewContext(edit, transcript()).request;
+      const response = providerPassing(sent);
+      globalThis.fetch = async (_url, init) => {
+        const schema = providerRequest(init!).payload.outputSchema;
+        const resolve = (value: any): any => value.$ref ? resolve(schema.$defs[value.$ref.split("/").at(-1)]) : value;
+        const comparison = resolve(resolve(schema.properties.checks.properties["captions-supported"]).properties.comparison);
+        assert.deepEqual(resolve(comparison.properties.captionWords).enum, edit.captions.map(caption => caption.text));
+        assert.equal(resolve(comparison.properties.spokenWords).maxLength, 700);
+        return envelope(response);
+      };
+      const valid = await reviewEditorialPlan({ plan: edit, transcript: transcript(), signal: new AbortController().signal });
+      assert.equal(valid.status, "pass");
+      for (const captionWords of [edit.captions.map(caption => caption.text).join(" "), "An invented caption", "The treatment"]) {
+        response.checks["captions-supported"]!.comparison.captionWords = captionWords;
+        await assert.rejects(deepseekEditorialReviewer(sent, new AbortController().signal), error =>
+          error instanceof AIRequestError && error.code === "invalid-schema");
+      }
+      response.checks["captions-supported"]!.comparison.captionWords = edit.captions[0]!.text;
+      response.checks["captions-supported"]!.comparison.spokenWords = "An invented source quotation";
+      await assert.rejects(deepseekEditorialReviewer(sent, new AbortController().signal), /supplied words/u,
+        "A valid caption choice still requires exact source evidence");
+    });
+
     await t.test("uncaptioned edits cannot acquire an unrequested caption check and source timestamps are restored locally", async () => {
       globalThis.fetch = async (_input, init) => {
         const { payload } = providerRequest(init!);

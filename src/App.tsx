@@ -331,6 +331,8 @@ export default function App() {
     "essentials",
   );
   const [jobs, setJobs] = useState<RenderJob[]>([]);
+  const [editorialRetries, setEditorialRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
+  const editorialRequests = useRef(new Set<string>());
   const [variants, setVariants] = useState(1);
   const [variation, setVariation] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -886,6 +888,22 @@ export default function App() {
       );
     } catch (error) {
       notify((error as Error).message, "error");
+    }
+  };
+
+  const retryEditorialReview = async (job: RenderJob) => {
+    if (editorialRequests.current.has(job.id)) return;
+    editorialRequests.current.add(job.id);
+    setEditorialRetries((current) => ({ ...current, [job.id]: { pending: true, error: "" } }));
+    try {
+      const result = await api<RenderJob>(`/api/jobs/${job.id}/editorial-review`, { method: "POST" });
+      setJobs((current) => current.map((item) => item.id === result.id ? result : item));
+      setPreviewJob((current) => current?.id === result.id ? result : current);
+      setEditorialRetries((current) => ({ ...current, [job.id]: { pending: false, error: "" } }));
+    } catch (error) {
+      setEditorialRetries((current) => ({ ...current, [job.id]: { pending: false, error: (error as Error).message } }));
+    } finally {
+      editorialRequests.current.delete(job.id);
     }
   };
 
@@ -2503,7 +2521,9 @@ export default function App() {
                                 </div>
                               )}
                               <QualityReportSummary report={job.qualityReport} compact />
-                              <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} compact />
+                              <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} compact
+                                onRetry={job.status === "completed" && job.auto && job.editable ? () => void retryEditorialReview(job) : undefined}
+                                retrying={editorialRetries[job.id]?.pending} retryError={editorialRetries[job.id]?.error} />
                               {job.supportingVisuals?.some(
                                 (visual) => visual.attribution,
                               ) && (
@@ -2705,7 +2725,9 @@ export default function App() {
               autoPlay
             />
             <QualityReportSummary report={previewJob.qualityReport} />
-            <EditorialReportSummary report={previewJob.editorialReport} repair={previewJob.editorialRepair} />
+            <EditorialReportSummary report={previewJob.editorialReport} repair={previewJob.editorialRepair}
+              onRetry={previewJob.status === "completed" && previewJob.auto && previewJob.editable ? () => void retryEditorialReview(previewJob) : undefined}
+              retrying={editorialRetries[previewJob.id]?.pending} retryError={editorialRetries[previewJob.id]?.error} />
             {previewJob.summary && (
               <div className="export-auto-summary">
                 <h3>What changed</h3>

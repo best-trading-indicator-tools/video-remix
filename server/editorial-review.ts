@@ -5,7 +5,8 @@ import {
   type EditorialReport, type EditorialReviewer, type EditorialReviewRequest, type EditorialSourceExcerpt,
 } from "../shared/editorial.js";
 import { editorialAIConfigured, editorialAIEnabled, editorialModel } from "./editorial-provider.js";
-import { editorialReplySchema, deepseekEditorialReviewer } from "./editorial-model.js";
+import { editorialReplySchema, deepseekEditorialReviewer, EditorialValidationError } from "./editorial-model.js";
+import { AIRequestError } from "./ai-errors.js";
 
 const MAX_EXCERPTS = 80;
 const MAX_EVIDENCE_CHARS = 12_000;
@@ -182,17 +183,18 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
   const context = buildEditorialReviewContext(plan, transcript);
   const report: EditorialReport = { status: "unavailable", checkedAt: new Date().toISOString(), policyVersion: EDITORIAL_POLICY_VERSION,
     modelVersion: null, checks: context.structuralChecks, issues: context.structuralIssues, coverage: context.coverage };
-  const unavailable = (message: string) => {
+  const unavailable = (message: string, code: string, retryable = false) => {
+    report.failure = { code, message, retryable };
     report.coverage.semantic = "unavailable";
     report.coverage.omittedChecks.push(...context.request.checks);
     report.checks.push(...context.request.checks.map(check => ({ check, status: "unavailable" as const, origin: "semantic" as const, message })));
     report.status = report.issues.length ? "needs-review" : "unavailable";
     return report;
   };
-  if (!context.validPlan) return unavailable("Correct the saved timeline before editorial review.");
-  if (!context.request.excerpts.some(excerpt => excerpt.role === "selected")) return unavailable("A transcript of the selected speech is required for editorial review.");
-  if (!editorialAIEnabled() || !aiEnabled) return unavailable("AI editorial review is disabled. Review this short manually.");
-  if (!editorialAIConfigured()) return unavailable("Configure a DeepSeek API key and valid model identifier for editorial review.");
+  if (!context.validPlan) return unavailable("Correct the saved timeline before editorial review.", "invalid-plan");
+  if (!context.request.excerpts.some(excerpt => excerpt.role === "selected")) return unavailable("A transcript of the selected speech is required for editorial review.", "missing-transcript");
+  if (!editorialAIEnabled() || !aiEnabled) return unavailable("AI editorial review is disabled. Enable Auto AI to run this check.", "disabled");
+  if (!editorialAIConfigured()) return unavailable("Configure a DeepSeek API key and valid model identifier for editorial review.", "configuration");
   report.modelVersion = editorialModel();
   report.provider = "deepseek";
   try {
@@ -209,17 +211,17 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
     const evidenceById = new Map(context.request.excerpts.map(excerpt => [excerpt.sourceId, excerpt]));
     const expected = new Set(context.request.checks);
     if (reply.checks.length !== expected.size || new Set(reply.checks.map(check => check.check)).size !== expected.size ||
-      reply.checks.some(check => !expected.has(check.check))) throw new Error("Incomplete editorial checks");
+      reply.checks.some(check => !expected.has(check.check))) throw new EditorialValidationError("Incomplete editorial checks");
     // Validate the complete reply before accepting even one verdict.
     const validated = reply.checks.map(check => {
       const evidence: EditorialEvidence[] = check.evidence.map(citation => {
         const original = evidenceById.get(citation.sourceId);
         if (!original || citation.start !== original.start || citation.end !== original.end ||
-          !clean(original.quote).includes(clean(citation.quote))) throw new Error("Unsupported editorial evidence");
+          !clean(original.quote).includes(clean(citation.quote))) throw new EditorialValidationError("Unsupported editorial evidence");
         return { sourceId: original.sourceId, start: original.start, end: original.end, quote: clean(citation.quote),
           ...(original.cutIndex === undefined ? {} : { cutIndex: original.cutIndex }) };
       });
-      if (!check.evidence.some(citation => evidenceById.get(citation.sourceId)?.role === "selected")) throw new Error("Review omitted selected speech");
+      if (!check.evidence.some(citation => evidenceById.get(citation.sourceId)?.role === "selected")) throw new EditorialValidationError("Review omitted selected speech");
       return { ...check, evidence };
     });
     for (const check of validated) {
@@ -236,8 +238,15 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
     report.coverage.semantic = context.coverage.semantic === "partial" || context.coverage.source !== "word-timed" ? "partial" : "complete";
     report.status = report.issues.length || report.coverage.semantic !== "complete" ? "needs-review" : "pass";
     return report;
-  } catch {
+  } catch (error) {
     signal.throwIfAborted();
-    return unavailable("The DeepSeek reviewer was unavailable or returned incomplete or unsupported findings. Review the short manually.");
+    if (error instanceof AIRequestError) return unavailable(error.message, error.code, error.retryable);
+    if (error instanceof EditorialValidationError)
+      return unavailable("DeepSeek returned findings whose source quotations or comparisons could not be verified. Retry the editorial check.", "invalid-evidence", true);
+    if (error instanceof Error && error.name === "TimeoutError") {
+      const timeout = new AIRequestError("timeout");
+      return unavailable(timeout.message, timeout.code, timeout.retryable);
+    }
+    return unavailable("The editorial answer could not be validated. Retry the editorial check.", "invalid-review", true);
   }
 }

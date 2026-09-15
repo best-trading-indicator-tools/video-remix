@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { z } from "zod";
 import { config } from "../server/config.js";
 import { editorialAIConfigured, editorialModel, generateEditorialJSON } from "../server/editorial-provider.js";
+import { AIRequestError, type AIRequestErrorCode } from "../server/ai-errors.js";
 
 test("Auto editorial AI reuses DeepSeek configuration with bounded validated requests", async t => {
   const oldFetch = globalThis.fetch, enabled = config.aiEnabled;
@@ -58,18 +59,44 @@ test("Auto editorial AI reuses DeepSeek configuration with bounded validated req
       assert.deepEqual(await request(), { chosen: 2 }); assert.equal(calls, 1);
     });
     await t.test("invalid or truncated results are rejected without another provider or leaked diagnostics", async () => {
-      for (const response of [() => envelope({ chosen: -1 }), () => envelope({ chosen: 1, extra: true }),
-        () => envelope({ chosen: 1 }, "length"), () => new Response("private-provider-details", { status: 500 }),
-        () => new Response("x".repeat(64001))]) {
+      const cases: [() => Response, AIRequestErrorCode][] = [
+        [() => envelope({ chosen: -1 }), "invalid-schema"],
+        [() => envelope({ chosen: 1, extra: "private-provider-details" }), "invalid-schema"],
+        [() => envelope({ chosen: 1 }, "length"), "output-truncated"],
+        [() => new Response("private-provider-details", { status: 500 }), "service"],
+        [() => new Response("private-provider-details", { status: 401 }), "authentication"],
+        [() => new Response("private-provider-details", { status: 402 }), "quota"],
+        [() => new Response("private-provider-details", { status: 429 }), "rate-limit"],
+        [() => new Response("x".repeat(64001)), "invalid-response"],
+        [() => { throw new Error("private-provider-details"); }, "network"],
+      ];
+      for (const [response, code] of cases) {
         let calls = 0;
         globalThis.fetch = async () => { calls++; return response(); };
         await assert.rejects(request(), error => {
-          assert.ok(error instanceof Error); assert.match(error.message, /DeepSeek editing/);
-          assert.ok(!error.message.includes("private-provider-details"));
-          assert.ok(!error.message.includes("fixture-key")); return true;
+          assert.ok(error instanceof AIRequestError); assert.equal(error.code, code);
+          assert.equal(error.message, new AIRequestError(code).message);
+          assert.equal(error.retryable, code !== "authentication" && code !== "quota");
+          assert.ok(!String(error.stack).includes("private-provider-details"));
+          assert.ok(!JSON.stringify(error).includes("fixture-key")); return true;
         });
         assert.equal(calls, 1);
       }
+    });
+    await t.test("an editorial deadline remains a typed timeout through the nested provider request", async () => {
+      const originalTimeout = AbortSignal.timeout, budget = new AbortController();
+      try {
+        AbortSignal.timeout = () => budget.signal;
+        globalThis.fetch = async (_url, options) => new Promise((_resolve, reject) => {
+          options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), { once: true });
+          queueMicrotask(() => budget.abort(new DOMException("private-provider-details", "TimeoutError")));
+        });
+        await assert.rejects(request(), error => {
+          assert.ok(error instanceof AIRequestError); assert.equal(error.code, "timeout");
+          assert.equal(error.retryable, true); assert.ok(!String(error.stack).includes("private-provider-details"));
+          return true;
+        });
+      } finally { AbortSignal.timeout = originalTimeout; }
     });
     await t.test("caller cancellation propagates before and during the request", async () => {
       const controller = new AbortController();

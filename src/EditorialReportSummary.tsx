@@ -1,4 +1,4 @@
-import { AlertTriangle, Check, CircleHelp } from "lucide-react";
+import { AlertTriangle, Check, CircleHelp, LoaderCircle, RefreshCw } from "lucide-react";
 import type { EditorialReport } from "../shared/editorial";
 import type { EditorialRepairLog } from "../shared/editorial-repair";
 import "./editorial-report.css";
@@ -15,16 +15,23 @@ const statusLabel = (report: EditorialReport) => report.status === "pass" ? "Che
 const attemptLabels = { accepted: "Kept after recheck", rejected: "Proposal rejected", unavailable: "Unavailable" };
 
 /** Keep editorial findings distinct from media diagnostics and human acceptance. */
-export default function EditorialReportSummary({ report: savedReport, repair, compact = false, onSeek }: {
+export default function EditorialReportSummary({ report: savedReport, repair, compact = false, onSeek, onRetry, retrying = false, retryError }: {
   report?: EditorialReport; repair?: EditorialRepairLog; compact?: boolean; onSeek?: (seconds: number) => void;
+  onRetry?: () => void; retrying?: boolean; retryError?: string;
 }) {
   const report = savedReport;
   if (!report) return null;
   const title = report.status === "pass" ? "Editorial checks passed"
     : report.status === "unavailable" ? "Editorial check unavailable" : "Editorial review needed";
-  return <details className={`editorial-report ${report.status} ${compact ? "compact" : ""}`} open={!compact && report.status !== "pass"}>
-    <summary>{report.status === "pass" ? <Check size={14} /> : report.status === "unavailable" ? <CircleHelp size={14} /> : <AlertTriangle size={14} />}
-      <strong>{title}</strong></summary>
+  const failureMessage = report.failure?.message || (report.status === "unavailable" || report.coverage.semantic === "unavailable"
+    ? "The exact reason was not saved for this earlier check." : undefined);
+  const canRetry = !!onRetry && (report.status === "unavailable" || report.coverage.semantic !== "complete" || !!report.failure);
+  return <section className={`editorial-report ${report.status} ${compact ? "compact" : ""}`}>
+    <details className="editorial-report-details" open={!compact && report.status !== "pass"}>
+    <summary className="editorial-report-heading">{report.status === "pass" ? <Check size={14} /> : report.status === "unavailable" ? <CircleHelp size={14} /> : <AlertTriangle size={14} />}
+      <span className="editorial-report-title"><strong>{title}</strong>
+        {failureMessage && <span className="editorial-failure">{failureMessage}</span>}
+      </span></summary>
     <p>Checks selected speech, headings, callouts, and captions against the original transcript. Your judgment of the finished video is recorded separately in History.</p>
     {!!report.issues.length && <ul className="editorial-issues">{report.issues.map((issue, index) => <li key={`${issue.code}-${index}`}>
       <strong>{names[issue.check] || "Edit review"}: </strong>{issue.message}
@@ -60,5 +67,14 @@ export default function EditorialReportSummary({ report: savedReport, repair, co
         </div>
       </details>)}
     </details>}
-  </details>;
+    </details>
+    {canRetry && <div className="editorial-retry">
+      <button type="button" className="secondary-button" onClick={onRetry} disabled={retrying} aria-label={retrying ? "Checking edit…" : undefined}>
+        {retrying ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
+        <span role={retrying ? "status" : undefined}>{retrying ? "Checking edit…" : "Retry editorial check"}</span>
+      </button>
+      <p>Checks this saved edit without changing or rendering the video.</p>
+    </div>}
+    {retryError && <p className="editorial-retry-error" role="alert">{retryError}</p>}
+  </section>;
 }

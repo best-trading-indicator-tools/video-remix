@@ -45,6 +45,8 @@ export interface EditorialReport {
   modelVersion: string | null;
   /** Present only when a configured provider review was attempted. */
   provider?: "deepseek";
+  /** Safe diagnostic only; never raw provider responses, credentials or transcript text. */
+  failure?: { code: string; message: string; retryable: boolean };
   checks: EditorialCheck[];
   issues: EditorialIssue[];
   coverage: EditorialCoverage;

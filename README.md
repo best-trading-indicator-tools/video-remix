@@ -86,6 +86,13 @@ not inspect picture content or listen to the rendered audio; narration and
 replacement audio need manual review. An edited draft has no current report until
 its revision is rendered with checks enabled. Source text is treated as data.
 
+If a check cannot finish, its report shows a safe reason such as a request timeout,
+account/configuration issue, response-format error, or unverifiable source evidence.
+Older reports may not have recorded the precise cause. **Retry editorial check**
+reviews that saved export again using DeepSeek and updates its report in Exports
+and History. It does not render a new video, change the edit, or attempt repairs.
+The saved plan and transcript are enough even if the original media has expired.
+
 The reviewer is a separate request to the same configured model, so it can still
 miss problems or agree with an earlier mistake. A passing report is advisory and
 never records human acceptance or approval to publish. Real-model smoke checks and

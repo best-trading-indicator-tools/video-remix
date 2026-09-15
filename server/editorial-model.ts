@@ -4,6 +4,10 @@ import { editorialAIEnabled, generateEditorialJSON } from "./editorial-provider.
 
 const plain = (maximum: number) => z.string().trim().min(1).max(maximum)
   .refine(value => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value));
+/** Messages come only from the fixed validation checks below, never provider diagnostics. */
+export class EditorialValidationError extends Error {
+  override name = "EditorialValidationError";
+}
 export const editorialReplySchema = z.object({ checks: z.array(z.object({
   check: z.enum(SEMANTIC_EDITORIAL_CHECKS),
   verdict: z.enum(["pass", "issue", "uncertain"]),
@@ -21,19 +25,23 @@ function providerSchema(request: EditorialReviewRequest) {
     throw new Error("Invalid editorial review request");
   const selectedEvidence = z.object({ sourceId: z.enum(selectedIds as [string, ...string[]]), quote: plain(700) }).strict();
   const otherEvidence = z.object({ sourceId: z.enum(allIds as [string, ...string[]]), quote: plain(700) }).strict();
+  const captionTexts = [...new Set(request.captions.map(caption => caption.text))];
+  const captionWords = captionTexts.length ? z.enum(captionTexts as [string, ...string[]]) : plain(500);
   const comparisons = {
     "opening-context": z.object({ openingWords: plain(300), subjectOrQuestion: plain(240),
       necessaryOmittedContext: plain(300).nullable(), relationship: z.enum(["self-contained", "missing-context", "uncertain"]) }).strict(),
     "ending-complete": z.object({ endingWords: plain(300), pointBeingMade: plain(240),
       unresolvedPromise: plain(300).nullable(), relationship: z.enum(["resolved", "unfinished", "uncertain"]) }).strict(),
     "hook-supported": z.object({ onScreenClaims: z.array(plain(300)).min(1).max(21),
-      sourceClaim: plain(300), onScreenScope: plain(160), sourceScope: plain(160),
+      sourceClaim: plain(1200).describe("A concise summary of the supported claim, not the full transcript."), onScreenScope: plain(160), sourceScope: plain(160),
       onScreenCertainty: z.enum(["absolute", "conditional", "unspecified"]), sourceCertainty: z.enum(["absolute", "conditional", "unspecified"]),
       relationship: z.enum(["supported", "broader-than-source", "contradicted", "unsupported", "uncertain"]) }).strict(),
-    "meaning-preserved": z.object({ selectedClaim: plain(300), originalClaim: plain(300),
+    "meaning-preserved": z.object({ selectedClaim: plain(1200).describe("Summarize the selected claim concisely."),
+      originalClaim: plain(1200).describe("Summarize the original claim and relevant qualifications concisely."),
       omittedOrChangedMeaning: plain(300).nullable(),
       relationship: z.enum(["preserved", "lost-negation", "lost-qualification", "changed-attribution", "changed-causality", "uncertain"]) }).strict(),
-    "captions-supported": z.object({ captionWords: plain(500), spokenWords: plain(500),
+    "captions-supported": z.object({ captionWords: captionWords.describe("Copy ONE complete supplied caption. Never combine separate caption cues."),
+      spokenWords: plain(700).describe("A short exact quote from selectedEvidence corresponding to that one caption."),
       difference: plain(300).nullable(), relationship: z.enum(["faithful", "unsupported", "uncertain"]) }).strict(),
   };
   return z.object({ checks: z.object(Object.fromEntries(request.checks.map(check => [check, z.object({
@@ -60,7 +68,7 @@ export const deepseekEditorialReviewer: EditorialReviewer = async (request, sign
       "ending-complete checks whether the ASSEMBLED SPEECH concludes its point or delivers an answer or payoff that the speech actually promises. Cite the last selected excerpt, copy its actual endingWords as an anchor, and state the pointBeingMade using the preceding selected speech too. unresolvedPromise is an actual unanswered spoken question or unfinished point, or null. A complete assertion can be false or distorted and still have a complete ending. Do not turn an unsupported heading or removed caveat into an unfinished-ending finding unless the speech also ends with an unresolved point.",
       "hook-supported checks every supplied on-screen text against the assembled selected speech. Copy the entire hook and every callout verbatim into onScreenClaims. First distinguish topic labels, questions, goals or imperatives from factual assertions. A relevant topic label need not assert a particular answer. A goal or imperative does not assert universal success or a guarantee merely because it lacks qualifiers. However, a concrete instruction must match the source advice in action, target, quantity, frequency and conditions; imperative wording does not excuse an unsupported instruction. For a heading without an asserted certainty, use onScreenCertainty unspecified and explain its topic or goal in onScreenScope. Still flag irrelevant topics and any factual assertions or guarantees that the words actually make. Compare those actual assertions with sourceClaim, scope (which things or people and how many), and certainty. An explicit universal or guaranteed claim is not supported by a narrower conditional statement. The final verdict covers ALL supplied on-screen claims; one supported heading cannot justify passing other claims. Do not use omitted context to supply support absent from selected speech.",
       "meaning-preserved compares what the ASSEMBLED selected speech communicates with the original source. Write selectedClaim and originalClaim using all relevant fragments, and identify omittedOrChangedMeaning. Check neighboring context for removed negations, material qualifications, attribution or changed cause and effect. Cite each selected fragment needed to express the assembled claim, and cite any original words whose removal changes its meaning. Choose lost-qualification when removing an important limitation materially changes the claim, even if the retained sentence is unchanged. Do not copy a separate heading problem into this speech-meaning check.",
-      "captions-supported compares EVERY supplied caption with its corresponding assembled selected speech. Report a particular unsupported pair as captionWords and spokenWords if there is any mismatch; a representative faithful pair is sufficient evidence only after checking the whole list. Keep quoted spokenWords within its cited excerpt. Identify any unsupported difference, and use uncertain if you cannot check all supplied captions.",
+      "captions-supported compares EVERY supplied caption with its corresponding assembled selected speech. Report a particular unsupported pair as captionWords and spokenWords if there is any mismatch; a representative faithful pair is sufficient evidence only after checking the whole list. captionWords must be ONE complete caption from the supplied enum, never concatenated captions or the whole transcript. spokenWords is the short matching portion of its cited selectedEvidence, not the entire speech. Identify any unsupported difference, and use uncertain if you cannot check all supplied captions.",
       "Use pass only for a comparison that establishes the requested textual property, issue for an evidenced difference, and uncertain when the comparison cannot decide. These are textual editing checks, not independent fact checking or judgments about unseen pictures, unheard audio or platform eligibility.",
     ].join("\n\n"),
     prompt: { ...request, selectedSpeech }, schema, signal, maxTokens: 2200, temperature: 0, timeoutMs: 45_000,
@@ -73,7 +81,7 @@ export const deepseekEditorialReviewer: EditorialReviewer = async (request, sign
       const original = excerpts.get(citation.sourceId)!;
       // Schema-valid replies still need exact-source quotation validation.
       if (!original.quote.replace(/\s+/gu, " ").includes(citation.quote.replace(/\s+/gu, " ")))
-        throw new Error("Unsupported editorial quotation");
+        throw new EditorialValidationError("Unsupported editorial quotation");
       return { sourceId: original.sourceId, start: original.start, end: original.end, quote: citation.quote };
     });
     const comparison = result.comparison as Record<string, unknown> & { relationship: string };
@@ -83,25 +91,26 @@ export const deepseekEditorialReviewer: EditorialReviewer = async (request, sign
     let explanation: string;
     if (check === "opening-context") {
       if (result.selectedEvidence.sourceId !== selected[0]!.sourceId || !exact(comparison.openingWords, selectedQuote))
-        throw new Error("Opening comparison did not quote the opening selected excerpt");
-      if (comparison.necessaryOmittedContext && !contextCited) throw new Error("Opening comparison omitted its context evidence");
+        throw new EditorialValidationError("Opening comparison did not quote the opening selected excerpt");
+      if (comparison.necessaryOmittedContext && !contextCited) throw new EditorialValidationError("Opening comparison omitted its context evidence");
       explanation = `Opening: “${comparison.openingWords}”. Subject or question: ${comparison.subjectOrQuestion}.${comparison.necessaryOmittedContext ? ` Missing setup: ${comparison.necessaryOmittedContext}.` : " No missing setup identified."}`;
     } else if (check === "ending-complete") {
       if (result.selectedEvidence.sourceId !== selected.at(-1)!.sourceId || !exact(comparison.endingWords, selectedQuote))
-        throw new Error("Ending comparison did not quote the ending selected excerpt");
+        throw new EditorialValidationError("Ending comparison did not quote the ending selected excerpt");
       explanation = `Ending: “${comparison.endingWords}”. Point: ${comparison.pointBeingMade}.${comparison.unresolvedPromise ? ` Unresolved: ${comparison.unresolvedPromise}.` : " No unresolved promise identified."}`;
     } else if (check === "hook-supported") {
       const required = [request.hook, ...(request.callouts || []).map(item => item.text)].filter(text => text.trim());
       const supplied = comparison.onScreenClaims as string[];
       if (supplied.length !== required.length || required.some(text => !supplied.includes(text)))
-        throw new Error("Heading comparison did not cover the supplied on-screen claims");
+        throw new EditorialValidationError("Heading comparison did not cover the supplied on-screen claims");
       explanation = `On screen: ${supplied.map(text => `“${text}”`).join("; ")} (${comparison.onScreenScope}; ${comparison.onScreenCertainty}). Selected source: ${comparison.sourceClaim} (${comparison.sourceScope}; ${comparison.sourceCertainty}).`;
     } else if (check === "meaning-preserved") {
-      if (comparison.omittedOrChangedMeaning && !contextCited) throw new Error("Meaning comparison omitted its original context evidence");
-      explanation = `Selected: ${comparison.selectedClaim}. Original: ${comparison.originalClaim}.${comparison.omittedOrChangedMeaning ? ` Change: ${comparison.omittedOrChangedMeaning}.` : " No meaning change identified."}`;
+      if (comparison.omittedOrChangedMeaning && !contextCited) throw new EditorialValidationError("Meaning comparison omitted its original context evidence");
+      // Keep the actual finding visible even when a model writes longer summaries.
+      explanation = `${comparison.omittedOrChangedMeaning ? `Change: ${comparison.omittedOrChangedMeaning}. ` : ""}Selected: ${comparison.selectedClaim}. Original: ${comparison.originalClaim}.${comparison.omittedOrChangedMeaning ? "" : " No meaning change identified."}`;
     } else {
       if (!request.captions.some(caption => exact(comparison.captionWords, caption.text)) || !exact(comparison.spokenWords, selectedQuote))
-        throw new Error("Caption comparison did not quote the supplied words");
+        throw new EditorialValidationError("Caption comparison did not quote the supplied words");
       explanation = `Caption: “${comparison.captionWords}”. Speech: “${comparison.spokenWords}”.${comparison.difference ? ` Difference: ${comparison.difference}.` : " No unsupported wording identified."}`;
     }
     const consistent = ["self-contained", "resolved", "supported", "preserved", "faithful"].includes(comparison.relationship);

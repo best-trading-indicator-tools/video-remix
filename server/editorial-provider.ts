@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { config } from "./config.js";
 import { jsonCompletion } from "./ai-json.js";
+import { AIRequestError } from "./ai-errors.js";
 
 /** Reuse the same private DeepSeek configuration as prompt editing and stock search. */
 export const editorialModel = () => process.env.DEEPSEEK_TEXT_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
@@ -31,9 +32,12 @@ export async function generateEditorialJSON({ prompt, schema, signal, system, ma
         { role: "user", content }],
     });
     budget.throwIfAborted();
-    return schema.parse(reply);
-  } catch {
+    const parsed = schema.safeParse(reply);
+    if (!parsed.success) throw new AIRequestError("invalid-schema");
+    return parsed.data;
+  } catch (error) {
     signal.throwIfAborted();
-    throw new Error("DeepSeek editing was unavailable or returned an incomplete or invalid response.");
+    if (budget.aborted) throw new AIRequestError("timeout");
+    throw error instanceof AIRequestError ? error : new AIRequestError("invalid-response");
   }
 }
