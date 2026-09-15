@@ -40,14 +40,18 @@ import {
   X,
 } from "lucide-react";
 import {
+  DEFAULT_AUTO_OPTIONS,
   DEFAULT_SETTINGS,
   randomizeSettings,
+  type AutoCapabilities,
+  type AutoOptions,
   type Attachment,
   type Health,
   type RemixSettings,
   type RenderJob,
   type VideoSource,
 } from "../shared/types";
+import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
 type Toast = {
@@ -302,6 +306,12 @@ function Section({
 }
 
 export default function App() {
+  const [mode, setMode] = useState<"auto" | "manual">("auto");
+  const [autoOptions, setAutoOptions] = useState<AutoOptions>({
+    ...DEFAULT_AUTO_OPTIONS,
+  });
+  const [autoCapabilities, setAutoCapabilities] =
+    useState<AutoCapabilities | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [connected, setConnected] = useState(true);
   const [sources, setSources] = useState<VideoSource[]>([]);
@@ -347,6 +357,7 @@ export default function App() {
   const settings = selected
     ? settingsById[selected.id] || defaultSettings
     : defaultSettings;
+  const sourcePreview = mode === "auto" || original;
   const pending = jobs.filter(
     (job) => job.status === "queued" || job.status === "processing",
   );
@@ -363,6 +374,35 @@ export default function App() {
     },
     [],
   );
+
+  useEffect(() => {
+    let stopped = false;
+    const check = () =>
+      api<AutoCapabilities>("/api/auto/capabilities")
+        .then((value) => {
+          if (stopped) return;
+          setAutoCapabilities(value);
+          if (!value.narration)
+            setAutoOptions((current) => ({ ...current, narration: false }));
+        })
+        .catch(() => {
+          if (!stopped)
+            setAutoCapabilities({
+              transcription: false,
+              model: "",
+              intelligence: false,
+              narration: false,
+              message:
+                "Automatic editing tools could not be checked. The engine will try available local tools when you start.",
+            });
+        });
+    void check();
+    const timer = setInterval(() => void check(), 30000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -468,10 +508,16 @@ export default function App() {
 
   useEffect(() => {
     if (!videoRef.current) return;
-    videoRef.current.playbackRate = original ? 1 : settings.speed;
-    videoRef.current.volume = original ? 1 : Math.min(1, settings.volume);
-    videoRef.current.muted = !original && settings.muted;
-  }, [settings.speed, settings.volume, settings.muted, original, selected?.id]);
+    videoRef.current.playbackRate = sourcePreview ? 1 : settings.speed;
+    videoRef.current.volume = sourcePreview ? 1 : Math.min(1, settings.volume);
+    videoRef.current.muted = !sourcePreview && settings.muted;
+  }, [
+    settings.speed,
+    settings.volume,
+    settings.muted,
+    sourcePreview,
+    selected?.id,
+  ]);
 
   useEffect(() => {
     try {
@@ -685,6 +731,40 @@ export default function App() {
   };
 
   const startRender = async () => {
+    if (mode === "auto") {
+      if (!sources.length) return;
+      setStarting(true);
+      try {
+        const result = await api<{ jobs: RenderJob[]; batchId: string }>(
+          "/api/auto/jobs",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              sourceIds: sources.map((source) => source.id),
+              variants,
+              options: autoOptions,
+            }),
+          },
+        );
+        setJobs((current) => [
+          ...result.jobs,
+          ...current.filter(
+            (job) => !result.jobs.some((added) => added.id === job.id),
+          ),
+        ]);
+        setView("exports");
+        notify(
+          `${sources.length} video${sources.length === 1 ? "" : "s"} queued for automatic editing. Follow each cut below.`,
+          "success",
+        );
+      } catch (error) {
+        notify((error as Error).message, "error");
+      } finally {
+        setStarting(false);
+      }
+      return;
+    }
     const targets =
       renderScope === "selected" && selected ? [selected] : sources;
     if (!targets.length) return;
@@ -795,7 +875,7 @@ export default function App() {
       settings[key as keyof RemixSettings] !==
       DEFAULT_SETTINGS[key as keyof RemixSettings],
   );
-  const previewFilter = original
+  const previewFilter = sourcePreview
     ? "none"
     : `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`;
   const targetAspect =
@@ -805,7 +885,9 @@ export default function App() {
         : "9 / 16"
       : settings.aspect.replace(":", " / ");
   const exportCount =
-    (renderScope === "selected" && selected ? 1 : sources.length) * variants;
+    (mode === "manual" && renderScope === "selected" && selected
+      ? 1
+      : sources.length) * variants;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
 
   return (
@@ -856,7 +938,11 @@ export default function App() {
                 ? "Local engine ready"
                 : "Engine unavailable"}
           </span>
-          <button className="help-button" onClick={() => setShowHelp(true)}>
+          <button
+            className="help-button"
+            aria-label="Quick guide"
+            onClick={() => setShowHelp(true)}
+          >
             <CircleHelp size={17} />
             <span>Quick guide</span>
           </button>
@@ -873,7 +959,15 @@ export default function App() {
             <h1>
               {view === "studio" ? (
                 <>
-                  Make your next <span>great cut.</span>
+                  {mode === "auto" ? (
+                    <>
+                      Your footage. <span>Automatically reimagined.</span>
+                    </>
+                  ) : (
+                    <>
+                      Make your next <span>great cut.</span>
+                    </>
+                  )}
                 </>
               ) : (
                 <>
@@ -883,7 +977,9 @@ export default function App() {
             </h1>
             <p>
               {view === "studio"
-                ? "Fresh edits, new formats, endless creative possibilities. All in one batch."
+                ? mode === "auto"
+                  ? "Upload your videos. One click finds the story, makes the cuts, and prepares every remix."
+                  : "Fresh edits, new formats, endless creative possibilities. All in one batch."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>
           </div>
@@ -921,33 +1017,59 @@ export default function App() {
                   {sources.length} video{sources.length === 1 ? "" : "s"}
                 </span>
               </div>
-              <div className="toolbar-actions">
+              <div
+                className="mode-switch"
+                role="group"
+                aria-label="Editing mode"
+              >
                 <button
-                  onClick={() => {
-                    replaceSettings({ ...DEFAULT_SETTINGS });
-                    notify("Selected settings reset.", "info");
-                  }}
-                  disabled={!edited}
+                  aria-pressed={mode === "auto"}
+                  className={mode === "auto" ? "active" : ""}
+                  onClick={() => setMode("auto")}
                 >
-                  <RotateCcw size={13} />
-                  Reset settings
+                  <Sparkles size={13} />
+                  Auto remix
                 </button>
-                <span className="toolbar-divider" />
                 <button
-                  onClick={() => {
-                    replaceSettings(randomizeSettings(settings));
-                    notify(
-                      "A subtle new variation is ready to preview.",
-                      "success",
-                    );
-                  }}
+                  aria-pressed={mode === "manual"}
+                  className={mode === "manual" ? "active" : ""}
+                  onClick={() => setMode("manual")}
                 >
-                  <Shuffle size={13} />
-                  Surprise me
+                  <SlidersHorizontal size={13} />
+                  Manual
                 </button>
               </div>
+              {mode === "manual" && (
+                <div className="toolbar-actions">
+                  <button
+                    onClick={() => {
+                      replaceSettings({ ...DEFAULT_SETTINGS });
+                      notify("Selected settings reset.", "info");
+                    }}
+                    disabled={!edited}
+                  >
+                    <RotateCcw size={13} />
+                    Reset settings
+                  </button>
+                  <span className="toolbar-divider" />
+                  <button
+                    onClick={() => {
+                      replaceSettings(randomizeSettings(settings));
+                      notify(
+                        "A subtle new variation is ready to preview.",
+                        "success",
+                      );
+                    }}
+                  >
+                    <Shuffle size={13} />
+                    Surprise me
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="studio-grid">
+            <div
+              className={`studio-grid ${mode === "auto" ? "auto-studio" : ""}`}
+            >
               <aside className="source-panel panel">
                 <div className="panel-heading">
                   <h2>
@@ -1017,8 +1139,7 @@ export default function App() {
                   </span>
                   {uploadProgress === null ? (
                     <small>
-                      MP4, MOV, WEBM + more
-                      <br />
+                      MP4, MOV, WEBM + more <br />
                       {health
                         ? `${formatSize(health.maxFileSize)} per file · up to ${health.maxFiles} at once`
                         : "Multiple videos welcome"}
@@ -1110,36 +1231,38 @@ export default function App() {
                 <div className="panel-heading">
                   <h2>
                     <MonitorPlay size={16} />
-                    Preview
+                    {mode === "auto" ? "Your footage" : "Preview"}
                   </h2>
-                  <div className="preview-switch">
-                    <button
-                      disabled={!selected}
-                      className={!original ? "active" : ""}
-                      onClick={() => setOriginal(false)}
-                    >
-                      Edited
-                    </button>
-                    <button
-                      disabled={!selected}
-                      className={original ? "active" : ""}
-                      onClick={() => setOriginal(true)}
-                    >
-                      Original
-                    </button>
-                  </div>
+                  {mode === "manual" && (
+                    <div className="preview-switch">
+                      <button
+                        disabled={!selected}
+                        className={!original ? "active" : ""}
+                        onClick={() => setOriginal(false)}
+                      >
+                        Edited
+                      </button>
+                      <button
+                        disabled={!selected}
+                        className={original ? "active" : ""}
+                        onClick={() => setOriginal(true)}
+                      >
+                        Original
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
                   {selected ? (
                     <>
                       <div className="preview-label">
                         <span />
-                        {original ? "ORIGINAL FOOTAGE" : "LIVE PREVIEW"}
+                        {sourcePreview ? "ORIGINAL FOOTAGE" : "LIVE PREVIEW"}
                       </div>
                       <div
                         className="video-frame"
                         style={{
-                          aspectRatio: original
+                          aspectRatio: sourcePreview
                             ? `${selected.width} / ${selected.height}`
                             : targetAspect,
                         }}
@@ -1154,32 +1277,34 @@ export default function App() {
                           preload="metadata"
                           onLoadedMetadata={() => {
                             if (videoRef.current) {
-                              videoRef.current.playbackRate = original
+                              videoRef.current.playbackRate = sourcePreview
                                 ? 1
                                 : settings.speed;
-                              videoRef.current.currentTime = settings.trimStart;
+                              videoRef.current.currentTime = sourcePreview
+                                ? 0
+                                : settings.trimStart;
                             }
                           }}
                           style={{
-                            objectFit: original
+                            objectFit: sourcePreview
                               ? "contain"
                               : settings.fit === "crop"
                                 ? "cover"
                                 : "contain",
                             filter: previewFilter,
-                            transform: original
+                            transform: sourcePreview
                               ? "none"
                               : `scale(${settings.mirror ? -settings.zoom : settings.zoom}, ${settings.zoom})`,
                           }}
                         />
-                        {!original && settings.hookText && (
+                        {!sourcePreview && settings.hookText && (
                           <div className="hook-preview">
                             {settings.hookText}
                           </div>
                         )}
                       </div>
                       <span className="preview-ratio">
-                        {original
+                        {sourcePreview
                           ? `${selected.width} × ${selected.height}`
                           : settings.aspect === "original"
                             ? "ORIGINAL RATIO"
@@ -1250,8 +1375,9 @@ export default function App() {
                       <div className="preview-note">
                         <CircleHelp size={12} />
                         <span>
-                          Approximate preview. Audio, captions and advanced
-                          effects appear in your export.
+                          {mode === "auto"
+                            ? "Your original source. The finished remix will be ready to preview in Exports."
+                            : "Approximate preview. Audio, captions and advanced effects appear in your export."}
                         </span>
                       </div>
                     </>
@@ -1266,7 +1392,8 @@ export default function App() {
                         </span>
                         <ArrowRight size={12} />
                         <span>
-                          <b>02</b> Make it yours
+                          <b>02</b>{" "}
+                          {mode === "auto" ? "Auto remix" : "Make it yours"}
                         </span>
                         <ArrowRight size={12} />
                         <span>
@@ -1278,616 +1405,642 @@ export default function App() {
                 </div>
               </section>
 
-              <aside className="settings-panel panel">
-                <div className="panel-heading">
-                  <h2>
-                    <Settings2 size={16} />
-                    Make it yours
-                  </h2>
-                  <span className="settings-state">
-                    {edited ? (
-                      <>
-                        <span />
-                        Edited
-                      </>
-                    ) : (
-                      "Original"
+              {mode === "auto" ? (
+                <AutoPanel
+                  options={autoOptions}
+                  onChange={setAutoOptions}
+                  capabilities={autoCapabilities}
+                  variants={variants}
+                  onVariantsChange={setVariants}
+                />
+              ) : (
+                <aside className="settings-panel panel">
+                  <div className="panel-heading">
+                    <h2>
+                      <Settings2 size={16} />
+                      Make it yours
+                    </h2>
+                    <span className="settings-state">
+                      {edited ? (
+                        <>
+                          <span />
+                          Edited
+                        </>
+                      ) : (
+                        "Original"
+                      )}
+                    </span>
+                  </div>
+                  <div
+                    className="settings-tabs"
+                    role="tablist"
+                    aria-label="Editing controls"
+                  >
+                    {(["essentials", "color", "advanced"] as const).map(
+                      (value) => (
+                        <button
+                          key={value}
+                          id={`tab-${value}`}
+                          type="button"
+                          role="tab"
+                          aria-selected={tab === value}
+                          aria-controls="settings-content"
+                          className={tab === value ? "active" : ""}
+                          onClick={() => setTab(value)}
+                        >
+                          {value === "essentials"
+                            ? "Essentials"
+                            : value === "color"
+                              ? "Color & feel"
+                              : "Advanced"}
+                        </button>
+                      ),
                     )}
-                  </span>
-                </div>
-                <div
-                  className="settings-tabs"
-                  role="tablist"
-                  aria-label="Editing controls"
-                >
-                  {(["essentials", "color", "advanced"] as const).map(
-                    (value) => (
-                      <button
-                        key={value}
-                        id={`tab-${value}`}
-                        type="button"
-                        role="tab"
-                        aria-selected={tab === value}
-                        aria-controls="settings-content"
-                        className={tab === value ? "active" : ""}
-                        onClick={() => setTab(value)}
-                      >
-                        {value === "essentials"
-                          ? "Essentials"
-                          : value === "color"
-                            ? "Color & feel"
-                            : "Advanced"}
-                      </button>
-                    ),
-                  )}
-                </div>
-                <div
-                  className="settings-content"
-                  id="settings-content"
-                  role="tabpanel"
-                  aria-labelledby={`tab-${tab}`}
-                >
-                  {tab === "essentials" && (
-                    <>
-                      <Section
-                        title="Start with a look"
-                        icon={<WandSparkles size={13} />}
-                        trailing={
-                          <button
-                            className="text-button"
-                            onClick={() => setSavingPreset(!savingPreset)}
-                          >
-                            <Plus size={11} />
-                            Save
-                          </button>
-                        }
-                      >
-                        <div className="preset-grid">
-                          {[...builtinPresets, ...presets].map((preset) => (
-                            <div className="preset-wrap" key={preset.id}>
-                              <button
-                                className={`preset-chip ${Object.entries(preset.settings).every(([key, value]) => settings[key as keyof RemixSettings] === value) ? "active" : ""}`}
-                                onClick={() =>
-                                  replaceSettings({
-                                    ...preset.settings,
-                                    trimStart: settings.trimStart,
-                                    trimEnd: settings.trimEnd,
-                                    audioId: settings.audioId,
-                                    subtitleId: settings.subtitleId,
-                                  })
-                                }
-                              >
-                                {preset.id === "original" ? (
-                                  <span className="preset-dot original-dot" />
-                                ) : (
-                                  <span
-                                    className={`preset-dot ${preset.id === "warm" ? "warm-dot" : "clean-dot"}`}
-                                  />
-                                )}
-                                {preset.name}
-                              </button>
-                              {!builtinPresets.some(
-                                (item) => item.id === preset.id,
-                              ) && (
+                  </div>
+                  <div
+                    className="settings-content"
+                    id="settings-content"
+                    role="tabpanel"
+                    aria-labelledby={`tab-${tab}`}
+                  >
+                    {tab === "essentials" && (
+                      <>
+                        <Section
+                          title="Start with a look"
+                          icon={<WandSparkles size={13} />}
+                          trailing={
+                            <button
+                              className="text-button"
+                              onClick={() => setSavingPreset(!savingPreset)}
+                            >
+                              <Plus size={11} />
+                              Save
+                            </button>
+                          }
+                        >
+                          <div className="preset-grid">
+                            {[...builtinPresets, ...presets].map((preset) => (
+                              <div className="preset-wrap" key={preset.id}>
                                 <button
-                                  className="delete-preset"
-                                  aria-label={`Delete preset ${preset.name}`}
+                                  className={`preset-chip ${Object.entries(preset.settings).every(([key, value]) => settings[key as keyof RemixSettings] === value) ? "active" : ""}`}
                                   onClick={() =>
-                                    setPresets((current) =>
-                                      current.filter(
-                                        (item) => item.id !== preset.id,
-                                      ),
-                                    )
+                                    replaceSettings({
+                                      ...preset.settings,
+                                      trimStart: settings.trimStart,
+                                      trimEnd: settings.trimEnd,
+                                      audioId: settings.audioId,
+                                      subtitleId: settings.subtitleId,
+                                    })
                                   }
                                 >
-                                  <X size={10} />
+                                  {preset.id === "original" ? (
+                                    <span className="preset-dot original-dot" />
+                                  ) : (
+                                    <span
+                                      className={`preset-dot ${preset.id === "warm" ? "warm-dot" : "clean-dot"}`}
+                                    />
+                                  )}
+                                  {preset.name}
                                 </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {savingPreset && (
-                          <form
-                            className="preset-save-form"
-                            onSubmit={(event) => {
-                              event.preventDefault();
-                              savePreset();
+                                {!builtinPresets.some(
+                                  (item) => item.id === preset.id,
+                                ) && (
+                                  <button
+                                    className="delete-preset"
+                                    aria-label={`Delete preset ${preset.name}`}
+                                    onClick={() =>
+                                      setPresets((current) =>
+                                        current.filter(
+                                          (item) => item.id !== preset.id,
+                                        ),
+                                      )
+                                    }
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          {savingPreset && (
+                            <form
+                              className="preset-save-form"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                savePreset();
+                              }}
+                            >
+                              <input
+                                autoFocus
+                                aria-label="Preset name"
+                                placeholder="Name your preset"
+                                maxLength={32}
+                                value={presetName}
+                                onChange={(event) =>
+                                  setPresetName(event.target.value)
+                                }
+                              />
+                              <button
+                                disabled={!presetName.trim()}
+                                aria-label="Save preset"
+                              >
+                                <Check size={16} />
+                              </button>
+                            </form>
+                          )}
+                        </Section>
+                        <Section
+                          title="Frame it right"
+                          icon={<Expand size={13} />}
+                        >
+                          <div className="aspect-options">
+                            {(
+                              [
+                                "original",
+                                "9:16",
+                                "1:1",
+                                "4:5",
+                                "16:9",
+                              ] as const
+                            ).map((aspect) => (
+                              <button
+                                key={aspect}
+                                className={
+                                  settings.aspect === aspect ? "active" : ""
+                                }
+                                onClick={() => updateSettings({ aspect })}
+                              >
+                                <span
+                                  className={`aspect-icon aspect-${aspect.replace(":", "-")}`}
+                                />
+                                <span>
+                                  {aspect === "original" ? "Original" : aspect}
+                                </span>
+                              </button>
+                            ))}
+                          </div>
+                          <div className="fields-row">
+                            <SelectField
+                              label="Framing"
+                              value={settings.fit}
+                              onChange={(value) =>
+                                updateSettings({
+                                  fit: value as RemixSettings["fit"],
+                                })
+                              }
+                            >
+                              <option value="crop">Fill & crop</option>
+                              <option value="contain">Fit entire video</option>
+                              <option value="blur">Blur background</option>
+                            </SelectField>
+                            <SelectField
+                              label="Resolution"
+                              value={settings.resolution}
+                              onChange={(value) =>
+                                updateSettings({
+                                  resolution:
+                                    value as RemixSettings["resolution"],
+                                })
+                              }
+                            >
+                              <option value="source">Match source</option>
+                              <option value="1080">1080p</option>
+                              <option value="720">720p</option>
+                            </SelectField>
+                          </div>
+                          <Slider
+                            label="Zoom"
+                            value={settings.zoom}
+                            min={1}
+                            max={2}
+                            unit="×"
+                            onChange={(zoom) => updateSettings({ zoom })}
+                          />
+                          <Toggle
+                            label="Mirror horizontally"
+                            value={settings.mirror}
+                            onChange={(mirror) => updateSettings({ mirror })}
+                          />
+                        </Section>
+                        <Section
+                          title="Pace & sound"
+                          icon={<AudioLines size={14} />}
+                        >
+                          <Slider
+                            label="Playback speed"
+                            value={settings.speed}
+                            min={0.5}
+                            max={2}
+                            unit="×"
+                            onChange={(speed) => updateSettings({ speed })}
+                          />
+                          <Slider
+                            label="Volume"
+                            value={settings.volume}
+                            min={0}
+                            max={2}
+                            unit="×"
+                            onChange={(volume) => updateSettings({ volume })}
+                          />
+                          <Toggle
+                            label="Mute audio"
+                            value={settings.muted}
+                            onChange={(muted) => updateSettings({ muted })}
+                          />
+                          <input
+                            className="visually-hidden"
+                            ref={audioInput}
+                            type="file"
+                            accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
+                            aria-label="Upload replacement audio"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) void uploadAttachment(file, "audio");
+                              event.target.value = "";
                             }}
-                          >
-                            <input
-                              autoFocus
-                              aria-label="Preset name"
-                              placeholder="Name your preset"
-                              maxLength={32}
-                              value={presetName}
-                              onChange={(event) =>
-                                setPresetName(event.target.value)
+                          />
+                          {settings.audioId ? (
+                            <div className="attached-file">
+                              <AudioLines size={14} />
+                              <span>
+                                {attachments[settings.audioId]?.name ||
+                                  "Replacement audio attached"}
+                              </span>
+                              <IconButton
+                                title="Remove replacement audio"
+                                onClick={() =>
+                                  updateSettings({ audioId: null })
+                                }
+                              >
+                                <X size={12} />
+                              </IconButton>
+                            </div>
+                          ) : (
+                            <button
+                              className="attachment-button"
+                              disabled={!selected || attachmentBusy !== null}
+                              onClick={() => audioInput.current?.click()}
+                            >
+                              {attachmentBusy === "audio" ? (
+                                <LoaderCircle size={13} className="spin" />
+                              ) : (
+                                <Plus size={13} />
+                              )}
+                              Add a replacement audio track
+                            </button>
+                          )}
+                          {settings.audioId && settings.muted && (
+                            <p className="field-hint accent-hint">
+                              Mute is on. Turn it off to hear the replacement
+                              track in your export.
+                            </p>
+                          )}
+                          {attachmentError && (
+                            <p className="inline-error">{attachmentError}</p>
+                          )}
+                        </Section>
+                      </>
+                    )}
+                    {tab === "color" && (
+                      <>
+                        <div className="tab-intro">
+                          <span className="small-icon-box">
+                            <WandSparkles size={16} />
+                          </span>
+                          <p>
+                            A new mood for your footage.
+                            <br />
+                            <span>Small adjustments go a long way.</span>
+                          </p>
+                        </div>
+                        <Section title="Light & color">
+                          <Slider
+                            label="Brightness"
+                            value={settings.brightness}
+                            min={-1}
+                            max={1}
+                            onChange={(brightness) =>
+                              updateSettings({ brightness })
+                            }
+                          />
+                          <Slider
+                            label="Contrast"
+                            value={settings.contrast}
+                            min={0}
+                            max={2}
+                            unit="×"
+                            onChange={(contrast) =>
+                              updateSettings({ contrast })
+                            }
+                          />
+                          <Slider
+                            label="Saturation"
+                            value={settings.saturation}
+                            min={0}
+                            max={3}
+                            unit="×"
+                            onChange={(saturation) =>
+                              updateSettings({ saturation })
+                            }
+                          />
+                          <Slider
+                            label="Temperature"
+                            value={settings.temperature}
+                            min={-1}
+                            max={1}
+                            onChange={(temperature) =>
+                              updateSettings({ temperature })
+                            }
+                          />
+                          <Slider
+                            label="Hue shift"
+                            value={settings.hue}
+                            min={-180}
+                            max={180}
+                            step={1}
+                            unit="°"
+                            onChange={(hue) => updateSettings({ hue })}
+                          />
+                          <Slider
+                            label="Gamma"
+                            value={settings.gamma}
+                            min={0.1}
+                            max={3}
+                            onChange={(gamma) => updateSettings({ gamma })}
+                          />
+                        </Section>
+                        <Section title="Texture">
+                          <Slider
+                            label="Sharpness"
+                            value={settings.sharpness}
+                            min={0}
+                            max={2}
+                            onChange={(sharpness) =>
+                              updateSettings({ sharpness })
+                            }
+                          />
+                          <Slider
+                            label="Film grain"
+                            value={settings.noise}
+                            min={0}
+                            max={1}
+                            onChange={(noise) => updateSettings({ noise })}
+                          />
+                          <Slider
+                            label="Blend"
+                            value={settings.blend}
+                            min={0}
+                            max={1}
+                            onChange={(blend) => updateSettings({ blend })}
+                            hint="Blend neighboring frames for a softer motion effect."
+                          />
+                        </Section>
+                        <button
+                          className="secondary-button full-width"
+                          onClick={() =>
+                            updateSettings({
+                              saturation: 1,
+                              brightness: 0,
+                              contrast: 1,
+                              hue: 0,
+                              gamma: 1,
+                              temperature: 0,
+                              noise: 0,
+                              sharpness: 0,
+                              blend: 0,
+                            })
+                          }
+                        >
+                          <RotateCcw size={13} />
+                          Reset color & texture
+                        </button>
+                      </>
+                    )}
+                    {tab === "advanced" && (
+                      <>
+                        <Section
+                          title="Keep the good part"
+                          icon={<Scissors size={13} />}
+                        >
+                          <div className="fields-row">
+                            <label className="number-field">
+                              Start (seconds)
+                              <input
+                                type="number"
+                                min={0}
+                                max={selected?.duration}
+                                step={0.1}
+                                value={settings.trimStart}
+                                onChange={(event) =>
+                                  updateSettings({
+                                    trimStart: Math.max(
+                                      0,
+                                      Number(event.target.value),
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="number-field">
+                              End (seconds)
+                              <input
+                                type="number"
+                                min={0}
+                                max={selected?.duration}
+                                step={0.1}
+                                placeholder={
+                                  selected
+                                    ? selected.duration.toFixed(1)
+                                    : "Full length"
+                                }
+                                value={settings.trimEnd ?? ""}
+                                onChange={(event) =>
+                                  updateSettings({
+                                    trimEnd:
+                                      event.target.value === ""
+                                        ? null
+                                        : Number(event.target.value),
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                          <p className="field-hint">
+                            Leave the end blank to keep the rest of the video.
+                          </p>
+                          <Slider
+                            label="Time shift"
+                            value={settings.timeShift}
+                            min={-5}
+                            max={5}
+                            step={0.1}
+                            unit="s"
+                            onChange={(timeShift) =>
+                              updateSettings({ timeShift })
+                            }
+                            hint="Move the trimmed window earlier or later, keeping its length. Set a trim first."
+                          />
+                          <Slider
+                            label="Frame blend"
+                            value={settings.frameBlend}
+                            min={0}
+                            max={0.5}
+                            unit="s"
+                            onChange={(frameBlend) =>
+                              updateSettings({ frameBlend })
+                            }
+                          />
+                        </Section>
+                        <Section
+                          title="Give it a hook"
+                          icon={<Clapperboard size={13} />}
+                        >
+                          <textarea
+                            className="hook-input"
+                            aria-label="Opening hook text"
+                            placeholder="The part nobody tells you about…"
+                            rows={2}
+                            value={settings.hookText}
+                            maxLength={160}
+                            onChange={(event) =>
+                              updateSettings({ hookText: event.target.value })
+                            }
+                          />
+                          <div className="hook-meta">
+                            <span>Opening text overlay</span>
+                            <span>{settings.hookText.length}/160</span>
+                          </div>
+                          {settings.hookText && (
+                            <Slider
+                              label="Hook duration"
+                              value={settings.hookDuration}
+                              min={1}
+                              max={15}
+                              step={0.5}
+                              unit="s"
+                              onChange={(hookDuration) =>
+                                updateSettings({ hookDuration })
                               }
                             />
-                            <button
-                              disabled={!presetName.trim()}
-                              aria-label="Save preset"
-                            >
-                              <Check size={16} />
-                            </button>
-                          </form>
-                        )}
-                      </Section>
-                      <Section
-                        title="Frame it right"
-                        icon={<Expand size={13} />}
-                      >
-                        <div className="aspect-options">
-                          {(
-                            ["original", "9:16", "1:1", "4:5", "16:9"] as const
-                          ).map((aspect) => (
-                            <button
-                              key={aspect}
-                              className={
-                                settings.aspect === aspect ? "active" : ""
-                              }
-                              onClick={() => updateSettings({ aspect })}
-                            >
-                              <span
-                                className={`aspect-icon aspect-${aspect.replace(":", "-")}`}
-                              />
+                          )}
+                        </Section>
+                        <Section
+                          title="Captions"
+                          icon={<Subtitles size={14} />}
+                        >
+                          <input
+                            ref={subtitleInput}
+                            className="visually-hidden"
+                            type="file"
+                            accept=".srt"
+                            aria-label="Upload SRT subtitles"
+                            onChange={(event) => {
+                              const file = event.target.files?.[0];
+                              if (file) void uploadAttachment(file, "subtitle");
+                              event.target.value = "";
+                            }}
+                          />
+                          {settings.subtitleId ? (
+                            <div className="attached-file">
+                              <Subtitles size={14} />
                               <span>
-                                {aspect === "original" ? "Original" : aspect}
+                                {attachments[settings.subtitleId]?.name ||
+                                  "SRT subtitles attached"}
                               </span>
+                              <IconButton
+                                title="Remove subtitles"
+                                onClick={() =>
+                                  updateSettings({ subtitleId: null })
+                                }
+                              >
+                                <X size={12} />
+                              </IconButton>
+                            </div>
+                          ) : (
+                            <button
+                              className="attachment-button"
+                              onClick={() => subtitleInput.current?.click()}
+                              disabled={!selected || attachmentBusy !== null}
+                            >
+                              {attachmentBusy === "subtitle" ? (
+                                <LoaderCircle size={14} className="spin" />
+                              ) : (
+                                <Upload size={14} />
+                              )}
+                              Upload SRT captions
                             </button>
-                          ))}
-                        </div>
-                        <div className="fields-row">
+                          )}
+                          <p className="field-hint">
+                            Burned into the export. Use timings for your final
+                            edited video.
+                          </p>
+                          {attachmentError && (
+                            <p className="inline-error">{attachmentError}</p>
+                          )}
+                        </Section>
+                        <Section
+                          title="Export details"
+                          icon={<Settings2 size={13} />}
+                        >
                           <SelectField
-                            label="Framing"
-                            value={settings.fit}
+                            label="Frame rate"
+                            value={settings.fps}
                             onChange={(value) =>
                               updateSettings({
-                                fit: value as RemixSettings["fit"],
-                              })
-                            }
-                          >
-                            <option value="crop">Fill & crop</option>
-                            <option value="contain">Fit entire video</option>
-                          </SelectField>
-                          <SelectField
-                            label="Resolution"
-                            value={settings.resolution}
-                            onChange={(value) =>
-                              updateSettings({
-                                resolution:
-                                  value as RemixSettings["resolution"],
+                                fps: value as RemixSettings["fps"],
                               })
                             }
                           >
                             <option value="source">Match source</option>
-                            <option value="1080">1080p</option>
-                            <option value="720">720p</option>
+                            <option value="24">24 fps</option>
+                            <option value="30">30 fps</option>
+                            <option value="60">60 fps</option>
                           </SelectField>
-                        </div>
-                        <Slider
-                          label="Zoom"
-                          value={settings.zoom}
-                          min={1}
-                          max={2}
-                          unit="×"
-                          onChange={(zoom) => updateSettings({ zoom })}
-                        />
-                        <Toggle
-                          label="Mirror horizontally"
-                          value={settings.mirror}
-                          onChange={(mirror) => updateSettings({ mirror })}
-                        />
-                      </Section>
-                      <Section
-                        title="Pace & sound"
-                        icon={<AudioLines size={14} />}
-                      >
-                        <Slider
-                          label="Playback speed"
-                          value={settings.speed}
-                          min={0.5}
-                          max={2}
-                          unit="×"
-                          onChange={(speed) => updateSettings({ speed })}
-                        />
-                        <Slider
-                          label="Volume"
-                          value={settings.volume}
-                          min={0}
-                          max={2}
-                          unit="×"
-                          onChange={(volume) => updateSettings({ volume })}
-                        />
-                        <Toggle
-                          label="Mute audio"
-                          value={settings.muted}
-                          onChange={(muted) => updateSettings({ muted })}
-                        />
-                        <input
-                          className="visually-hidden"
-                          ref={audioInput}
-                          type="file"
-                          accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac"
-                          aria-label="Upload replacement audio"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            if (file) void uploadAttachment(file, "audio");
-                            event.target.value = "";
-                          }}
-                        />
-                        {settings.audioId ? (
-                          <div className="attached-file">
-                            <AudioLines size={14} />
-                            <span>
-                              {attachments[settings.audioId]?.name ||
-                                "Replacement audio attached"}
-                            </span>
-                            <IconButton
-                              title="Remove replacement audio"
-                              onClick={() => updateSettings({ audioId: null })}
-                            >
-                              <X size={12} />
-                            </IconButton>
-                          </div>
-                        ) : (
-                          <button
-                            className="attachment-button"
-                            disabled={!selected || attachmentBusy !== null}
-                            onClick={() => audioInput.current?.click()}
-                          >
-                            {attachmentBusy === "audio" ? (
-                              <LoaderCircle size={13} className="spin" />
-                            ) : (
-                              <Plus size={13} />
-                            )}
-                            Add a replacement audio track
-                          </button>
-                        )}
-                        {settings.audioId && settings.muted && (
-                          <p className="field-hint accent-hint">
-                            Mute is on. Turn it off to hear the replacement
-                            track in your export.
-                          </p>
-                        )}
-                        {attachmentError && (
-                          <p className="inline-error">{attachmentError}</p>
-                        )}
-                      </Section>
-                    </>
-                  )}
-                  {tab === "color" && (
-                    <>
-                      <div className="tab-intro">
-                        <span className="small-icon-box">
-                          <WandSparkles size={16} />
-                        </span>
-                        <p>
-                          A new mood for your footage.
-                          <br />
-                          <span>Small adjustments go a long way.</span>
-                        </p>
-                      </div>
-                      <Section title="Light & color">
-                        <Slider
-                          label="Brightness"
-                          value={settings.brightness}
-                          min={-1}
-                          max={1}
-                          onChange={(brightness) =>
-                            updateSettings({ brightness })
-                          }
-                        />
-                        <Slider
-                          label="Contrast"
-                          value={settings.contrast}
-                          min={0}
-                          max={2}
-                          unit="×"
-                          onChange={(contrast) => updateSettings({ contrast })}
-                        />
-                        <Slider
-                          label="Saturation"
-                          value={settings.saturation}
-                          min={0}
-                          max={3}
-                          unit="×"
-                          onChange={(saturation) =>
-                            updateSettings({ saturation })
-                          }
-                        />
-                        <Slider
-                          label="Temperature"
-                          value={settings.temperature}
-                          min={-1}
-                          max={1}
-                          onChange={(temperature) =>
-                            updateSettings({ temperature })
-                          }
-                        />
-                        <Slider
-                          label="Hue shift"
-                          value={settings.hue}
-                          min={-180}
-                          max={180}
-                          step={1}
-                          unit="°"
-                          onChange={(hue) => updateSettings({ hue })}
-                        />
-                        <Slider
-                          label="Gamma"
-                          value={settings.gamma}
-                          min={0.1}
-                          max={3}
-                          onChange={(gamma) => updateSettings({ gamma })}
-                        />
-                      </Section>
-                      <Section title="Texture">
-                        <Slider
-                          label="Sharpness"
-                          value={settings.sharpness}
-                          min={0}
-                          max={2}
-                          onChange={(sharpness) =>
-                            updateSettings({ sharpness })
-                          }
-                        />
-                        <Slider
-                          label="Film grain"
-                          value={settings.noise}
-                          min={0}
-                          max={1}
-                          onChange={(noise) => updateSettings({ noise })}
-                        />
-                        <Slider
-                          label="Blend"
-                          value={settings.blend}
-                          min={0}
-                          max={1}
-                          onChange={(blend) => updateSettings({ blend })}
-                          hint="Blend neighboring frames for a softer motion effect."
-                        />
-                      </Section>
-                      <button
-                        className="secondary-button full-width"
-                        onClick={() =>
-                          updateSettings({
-                            saturation: 1,
-                            brightness: 0,
-                            contrast: 1,
-                            hue: 0,
-                            gamma: 1,
-                            temperature: 0,
-                            noise: 0,
-                            sharpness: 0,
-                            blend: 0,
-                          })
-                        }
-                      >
-                        <RotateCcw size={13} />
-                        Reset color & texture
-                      </button>
-                    </>
-                  )}
-                  {tab === "advanced" && (
-                    <>
-                      <Section
-                        title="Keep the good part"
-                        icon={<Scissors size={13} />}
-                      >
-                        <div className="fields-row">
-                          <label className="number-field">
-                            Start (seconds)
-                            <input
-                              type="number"
-                              min={0}
-                              max={selected?.duration}
-                              step={0.1}
-                              value={settings.trimStart}
-                              onChange={(event) =>
-                                updateSettings({
-                                  trimStart: Math.max(
-                                    0,
-                                    Number(event.target.value),
-                                  ),
-                                })
-                              }
-                            />
-                          </label>
-                          <label className="number-field">
-                            End (seconds)
-                            <input
-                              type="number"
-                              min={0}
-                              max={selected?.duration}
-                              step={0.1}
-                              placeholder={
-                                selected
-                                  ? selected.duration.toFixed(1)
-                                  : "Full length"
-                              }
-                              value={settings.trimEnd ?? ""}
-                              onChange={(event) =>
-                                updateSettings({
-                                  trimEnd:
-                                    event.target.value === ""
-                                      ? null
-                                      : Number(event.target.value),
-                                })
-                              }
-                            />
-                          </label>
-                        </div>
-                        <p className="field-hint">
-                          Leave the end blank to keep the rest of the video.
-                        </p>
-                        <Slider
-                          label="Time shift"
-                          value={settings.timeShift}
-                          min={-5}
-                          max={5}
-                          step={0.1}
-                          unit="s"
-                          onChange={(timeShift) =>
-                            updateSettings({ timeShift })
-                          }
-                          hint="Move the trimmed window earlier or later, keeping its length. Set a trim first."
-                        />
-                        <Slider
-                          label="Frame blend"
-                          value={settings.frameBlend}
-                          min={0}
-                          max={0.5}
-                          unit="s"
-                          onChange={(frameBlend) =>
-                            updateSettings({ frameBlend })
-                          }
-                        />
-                      </Section>
-                      <Section
-                        title="Give it a hook"
-                        icon={<Clapperboard size={13} />}
-                      >
-                        <textarea
-                          className="hook-input"
-                          aria-label="Opening hook text"
-                          placeholder="The part nobody tells you about…"
-                          rows={2}
-                          value={settings.hookText}
-                          maxLength={160}
-                          onChange={(event) =>
-                            updateSettings({ hookText: event.target.value })
-                          }
-                        />
-                        <div className="hook-meta">
-                          <span>Opening text overlay</span>
-                          <span>{settings.hookText.length}/160</span>
-                        </div>
-                        {settings.hookText && (
-                          <Slider
-                            label="Hook duration"
-                            value={settings.hookDuration}
-                            min={1}
-                            max={15}
-                            step={0.5}
-                            unit="s"
-                            onChange={(hookDuration) =>
-                              updateSettings({ hookDuration })
+                          <Toggle
+                            label="Clean file metadata"
+                            detail="Remove embedded source metadata."
+                            value={settings.stripMetadata}
+                            onChange={(stripMetadata) =>
+                              updateSettings({ stripMetadata })
                             }
                           />
-                        )}
-                      </Section>
-                      <Section title="Captions" icon={<Subtitles size={14} />}>
-                        <input
-                          ref={subtitleInput}
-                          className="visually-hidden"
-                          type="file"
-                          accept=".srt"
-                          aria-label="Upload SRT subtitles"
-                          onChange={(event) => {
-                            const file = event.target.files?.[0];
-                            if (file) void uploadAttachment(file, "subtitle");
-                            event.target.value = "";
-                          }}
-                        />
-                        {settings.subtitleId ? (
-                          <div className="attached-file">
-                            <Subtitles size={14} />
-                            <span>
-                              {attachments[settings.subtitleId]?.name ||
-                                "SRT subtitles attached"}
-                            </span>
-                            <IconButton
-                              title="Remove subtitles"
-                              onClick={() =>
-                                updateSettings({ subtitleId: null })
-                              }
-                            >
-                              <X size={12} />
-                            </IconButton>
-                          </div>
-                        ) : (
-                          <button
-                            className="attachment-button"
-                            onClick={() => subtitleInput.current?.click()}
-                            disabled={!selected || attachmentBusy !== null}
+                          <SelectField
+                            label="Device metadata"
+                            value={settings.device}
+                            onChange={(device) => updateSettings({ device })}
                           >
-                            {attachmentBusy === "subtitle" ? (
-                              <LoaderCircle size={14} className="spin" />
-                            ) : (
-                              <Upload size={14} />
-                            )}
-                            Upload SRT captions
-                          </button>
-                        )}
-                        <p className="field-hint">
-                          Burned into the export. Use timings for your final
-                          edited video.
-                        </p>
-                        {attachmentError && (
-                          <p className="inline-error">{attachmentError}</p>
-                        )}
-                      </Section>
-                      <Section
-                        title="Export details"
-                        icon={<Settings2 size={13} />}
-                      >
-                        <SelectField
-                          label="Frame rate"
-                          value={settings.fps}
-                          onChange={(value) =>
-                            updateSettings({
-                              fps: value as RemixSettings["fps"],
-                            })
-                          }
-                        >
-                          <option value="source">Match source</option>
-                          <option value="24">24 fps</option>
-                          <option value="30">30 fps</option>
-                          <option value="60">60 fps</option>
-                        </SelectField>
-                        <Toggle
-                          label="Clean file metadata"
-                          detail="Remove embedded source metadata."
-                          value={settings.stripMetadata}
-                          onChange={(stripMetadata) =>
-                            updateSettings({ stripMetadata })
-                          }
-                        />
-                        <SelectField
-                          label="Device metadata"
-                          value={settings.device}
-                          onChange={(device) => updateSettings({ device })}
-                        >
-                          {devices.map((device) => (
-                            <option key={device} value={device}>
-                              {device === "none" ? "None" : device}
-                            </option>
-                          ))}
-                        </SelectField>
-                        <p className="field-hint">
-                          Changes file tags only. It does not change the footage
-                          or guarantee platform originality.
-                        </p>
-                      </Section>
-                    </>
-                  )}
-                </div>
-                <div className="settings-footer">
-                  <button
-                    className="apply-all-button"
-                    disabled={sources.length < 2}
-                    onClick={applyAll}
-                  >
-                    <Copy size={14} />
-                    Apply settings to all videos
-                    <span>{sources.length || "—"}</span>
-                  </button>
-                </div>
-              </aside>
+                            {devices.map((device) => (
+                              <option key={device} value={device}>
+                                {device === "none" ? "None" : device}
+                              </option>
+                            ))}
+                          </SelectField>
+                          <p className="field-hint">
+                            Changes file tags only. It does not change the
+                            footage or guarantee platform originality.
+                          </p>
+                        </Section>
+                      </>
+                    )}
+                  </div>
+                  <div className="settings-footer">
+                    <button
+                      className="apply-all-button"
+                      disabled={sources.length < 2}
+                      onClick={applyAll}
+                    >
+                      <Copy size={14} />
+                      Apply settings to all videos
+                      <span>{sources.length || "—"}</span>
+                    </button>
+                  </div>
+                </aside>
+              )}
             </div>
 
-            <section className="render-bar">
+            <section
+              className={`render-bar ${mode === "auto" ? "auto-render-bar" : ""}`}
+            >
               <div className="render-info">
                 <span className="render-icon">
                   <Sparkles size={21} />
@@ -1901,64 +2054,78 @@ export default function App() {
                   </p>
                 </div>
               </div>
-              <div className="render-options">
-                <div className="version-control">
-                  <label htmlFor="versions">Versions per video</label>
-                  <div>
-                    <button
-                      aria-label="Fewer versions"
-                      disabled={variants <= 1}
-                      onClick={() => setVariants((value) => value - 1)}
-                    >
-                      −
-                    </button>
-                    <input
-                      id="versions"
-                      type="number"
-                      min={1}
-                      max={5}
-                      value={variants}
-                      onChange={(event) =>
-                        setVariants(
-                          Math.min(
-                            5,
-                            Math.max(
-                              1,
-                              Math.floor(Number(event.target.value)) || 1,
+              {mode === "manual" && (
+                <div className="render-options">
+                  <div className="version-control">
+                    <label htmlFor="versions">Versions per video</label>
+                    <div>
+                      <button
+                        aria-label="Fewer versions"
+                        disabled={variants <= 1}
+                        onClick={() => setVariants((value) => value - 1)}
+                      >
+                        −
+                      </button>
+                      <input
+                        id="versions"
+                        type="number"
+                        min={1}
+                        max={5}
+                        value={variants}
+                        onChange={(event) =>
+                          setVariants(
+                            Math.min(
+                              5,
+                              Math.max(
+                                1,
+                                Math.floor(Number(event.target.value)) || 1,
+                              ),
                             ),
-                          ),
-                        )
-                      }
+                          )
+                        }
+                      />
+                      <button
+                        aria-label="More versions"
+                        disabled={variants >= 5}
+                        onClick={() => {
+                          setVariants((value) => value + 1);
+                          if (variants === 1) setVariation(true);
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="variation-control">
+                    <Toggle
+                      label="Subtle variations"
+                      value={variation}
+                      onChange={setVariation}
                     />
-                    <button
-                      aria-label="More versions"
-                      disabled={variants >= 5}
-                      onClick={() => {
-                        setVariants((value) => value + 1);
-                        if (variants === 1) setVariation(true);
-                      }}
-                    >
-                      +
-                    </button>
+                    <span>
+                      {variation
+                        ? "Mix up pace, crop & color"
+                        : variants > 1
+                          ? "Off: versions use identical settings"
+                          : "Mix up pace, crop & color"}
+                    </span>
                   </div>
                 </div>
-                <div className="variation-control">
-                  <Toggle
-                    label="Subtle variations"
-                    value={variation}
-                    onChange={setVariation}
-                  />
+              )}
+              {mode === "auto" && (
+                <div className="auto-render-summary">
                   <span>
-                    {variation
-                      ? "Mix up pace, crop & color"
-                      : variants > 1
-                        ? "Off: versions use identical settings"
-                        : "Mix up pace, crop & color"}
+                    <Check size={12} />
+                    {AUTO_FORMAT_NAMES[autoOptions.aspect]}
+                  </span>
+                  <span>
+                    Up to {autoOptions.targetDuration}s
+                    {variants > 1 ? ` · ${variants} versions each` : ""}
                   </span>
                 </div>
-              </div>
+              )}
               <div className="render-cta">
-                {sources.length > 1 && (
+                {mode === "manual" && sources.length > 1 && (
                   <select
                     aria-label="Videos to render"
                     value={renderScope}
@@ -1988,7 +2155,9 @@ export default function App() {
                   <span>
                     {starting
                       ? "Preparing exports…"
-                      : `Create ${exportCount || ""} ${exportCount === 1 ? "remix" : "remixes"}`}
+                      : mode === "auto"
+                        ? `Auto remix ${sources.length || ""} video${sources.length === 1 ? "" : "s"}`
+                        : `Create ${exportCount || ""} ${exportCount === 1 ? "remix" : "remixes"}`}
                   </span>
                   <ArrowRight size={17} />
                 </button>
@@ -2117,11 +2286,27 @@ export default function App() {
                             </div>
                             <div className="job-main">
                               <div className="job-title">
-                                <strong title={job.sourceName}>
-                                  {job.sourceName}
+                                <strong
+                                  title={job.summary?.title || job.sourceName}
+                                >
+                                  {job.summary?.title || job.sourceName}
                                 </strong>
                                 <span>V{job.variant}</span>
+                                {job.auto && (
+                                  <span className="job-auto-tag">
+                                    <Sparkles size={9} />
+                                    Auto
+                                  </span>
+                                )}
                               </div>
+                              {job.summary?.title && (
+                                <p
+                                  className="job-source-name"
+                                  title={job.sourceName}
+                                >
+                                  {job.sourceName}
+                                </p>
+                              )}
                               <div className="job-details">
                                 <span>
                                   {job.settings.aspect === "original"
@@ -2130,7 +2315,11 @@ export default function App() {
                                 </span>
                                 <span>·</span>
                                 <span>
-                                  {job.settings.speed.toFixed(2)}× speed
+                                  {job.summary
+                                    ? `${duration(job.summary.sourceDuration)} → ${duration(job.summary.outputDuration)}`
+                                    : job.auto
+                                      ? `Up to ${job.auto.targetDuration}s`
+                                      : `${job.settings.speed.toFixed(2)}× speed`}
                                 </span>
                                 <span>·</span>
                                 <span>
@@ -2139,6 +2328,12 @@ export default function App() {
                                     : "MP4"}
                                 </span>
                               </div>
+                              {job.status === "processing" && job.phase && (
+                                <p className="job-phase">
+                                  <LoaderCircle size={11} className="spin" />
+                                  {job.phase}
+                                </p>
+                              )}
                               {job.status === "processing" && (
                                 <div className="job-progress">
                                   <span
@@ -2147,6 +2342,26 @@ export default function App() {
                                     }}
                                   />
                                 </div>
+                              )}
+                              {job.summary && (
+                                <div className="job-summary">
+                                  {job.summary.changes.map((change, index) => (
+                                    <span key={index}>{change}</span>
+                                  ))}
+                                  {job.summary.narration &&
+                                    !job.summary.changes.some(
+                                      (change) =>
+                                        change.toLowerCase() ===
+                                        "new narration",
+                                    ) && <span>New narration</span>}
+                                </div>
+                              )}
+                              {!!job.notes?.length && (
+                                <ul className="job-notes">
+                                  {job.notes.map((note, index) => (
+                                    <li key={index}>{note}</li>
+                                  ))}
+                                </ul>
                               )}
                               {job.error && (
                                 <p className="job-error">{job.error}</p>
@@ -2171,6 +2386,17 @@ export default function App() {
                             <div className="job-actions">
                               {job.status === "completed" && job.downloadUrl ? (
                                 <>
+                                  {job.captionUrl && (
+                                    <a
+                                      className="caption-download"
+                                      href={job.captionUrl}
+                                      download
+                                      title="Download SRT captions"
+                                      aria-label={`Download captions for ${job.sourceName}`}
+                                    >
+                                      <Subtitles size={15} />
+                                    </a>
+                                  )}
                                   <IconButton
                                     title={`Preview ${job.sourceName} version ${job.variant}`}
                                     onClick={() => setPreviewJob(job)}
@@ -2267,7 +2493,9 @@ export default function App() {
                 <span className="eyebrow">
                   YOUR FINISHED CUT · VERSION {previewJob.variant}
                 </span>
-                <h2 title={previewJob.sourceName}>{previewJob.sourceName}</h2>
+                <h2 title={previewJob.summary?.title || previewJob.sourceName}>
+                  {previewJob.summary?.title || previewJob.sourceName}
+                </h2>
               </div>
               <IconButton
                 title="Close export preview"
@@ -2282,8 +2510,36 @@ export default function App() {
               playsInline
               autoPlay
             />
+            {previewJob.summary && (
+              <div className="export-auto-summary">
+                <h3>What changed</h3>
+                <p>{previewJob.summary.changes.join(" · ")}</p>
+                <p>
+                  {duration(previewJob.summary.sourceDuration)} source →{" "}
+                  {duration(previewJob.summary.outputDuration)} finished cut
+                  {previewJob.summary.narration ? " · New narration" : ""}
+                </p>
+                {!!previewJob.notes?.length && (
+                  <ul className="job-notes">
+                    {previewJob.notes.map((note, index) => (
+                      <li key={index}>{note}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
             <div className="export-preview-footer">
               <span>Final render, with all edits applied.</span>
+              {previewJob.captionUrl && (
+                <a
+                  className="secondary-button"
+                  href={previewJob.captionUrl}
+                  download
+                >
+                  <Subtitles size={14} />
+                  SRT captions
+                </a>
+              )}
               <a
                 className="secondary-button"
                 href={previewJob.downloadUrl}
@@ -2324,36 +2580,44 @@ export default function App() {
                 <div>
                   <h3>Bring your footage</h3>
                   <p>
-                    Upload several videos at once. Select a video in the sidebar
-                    to give it its own edit.
+                    Drop several videos into the workspace at once. Auto remix
+                    is selected for you, with a vertical format for TikTok and
+                    Reels.
                   </p>
                 </div>
               </li>
               <li>
                 <span>02</span>
                 <div>
-                  <h3>Make something fresh</h3>
+                  <h3>Press Auto remix</h3>
                   <p>
-                    Change the framing, pace and color. Add an opening hook,
-                    your own audio, and SRT captions. Save favorite looks as
-                    browser presets.
+                    The studio analyzes each video, picks an excerpt, tightens
+                    the pacing and prepares a new edit. When speech is
+                    available, it adds a written hook and captions. Original
+                    audio is kept unless you choose new narration in the
+                    optional preferences.
                   </p>
                 </div>
               </li>
               <li>
                 <span>03</span>
                 <div>
-                  <h3>Export every version</h3>
+                  <h3>Review and download</h3>
                   <p>
-                    Create up to five versions per video. Switch on subtle
-                    variations for a different mix of pace, crop and color in
-                    each. Download individual MP4s or a collection ZIP.
+                    Follow the actual editing steps in Exports. Preview the
+                    finished videos, read what changed, and download individual
+                    MP4s or the whole collection as a ZIP.
                   </p>
                 </div>
               </li>
             </ol>
             <div className="guide-note">
               <h3>A couple of good things to know</h3>
+              <p>
+                Want full control? Switch to Manual for your own trim, framing,
+                color, audio, captions and saved presets. Manual settings are
+                separate from automatic edits.
+              </p>
               <p>
                 The preview approximates framing and basic color. Captions,
                 replacement audio, timed text and advanced filters are rendered

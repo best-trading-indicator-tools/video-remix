@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { Attachment, RenderJob, VideoSource } from "../shared/types.js";
 import { config, paths } from "./config.js";
@@ -12,6 +12,7 @@ export interface StoredAttachment extends Attachment {
 }
 export interface StoredJob extends RenderJob {
   outputPath: string;
+  captionPath?: string;
 }
 interface State {
   sources: StoredSource[];
@@ -41,6 +42,15 @@ export async function initStore() {
         job.error =
           "The app stopped during this render. Retry to start it again.";
         job.finishedAt = new Date().toISOString();
+        job.phase = undefined;
+        await Promise.all([
+          rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+          rm(job.outputPath, { force: true }),
+          ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
+        ]);
+        delete job.captionPath;
+        delete job.captionUrl;
+        delete job.downloadUrl;
       }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT")
@@ -71,6 +81,6 @@ export function publicSource(source: StoredSource): VideoSource {
   return value;
 }
 export function publicJob(job: StoredJob): RenderJob {
-  const { outputPath: _outputPath, ...value } = job;
+  const { outputPath: _outputPath, captionPath: _captionPath, ...value } = job;
   return value;
 }

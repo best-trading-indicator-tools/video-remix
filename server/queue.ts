@@ -1,7 +1,8 @@
-import { mkdir, rm, stat } from "node:fs/promises";
+import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
 import { renderVideo } from "./engine.js";
+import { prepareAutoRemix } from "./auto.js";
 import { saveStore, state, type StoredJob } from "./store.js";
 const running = new Map<string, AbortController>();
 let stopped = false;
@@ -12,7 +13,16 @@ export function pumpQueue() {
   if (stopped) return;
   while (running.size < config.concurrency) {
     const job = state.jobs.find(
-      (item) => item.status === "queued" && !running.has(item.id),
+      (item) =>
+        item.status === "queued" &&
+        !running.has(item.id) &&
+        (!item.auto ||
+          !state.jobs.some(
+            (other) =>
+              other.status === "processing" &&
+              other.auto &&
+              other.sourceId === item.sourceId,
+          )),
     );
     if (!job) break;
     const controller = new AbortController();
@@ -46,23 +56,47 @@ async function run(job: StoredJob, controller: AbortController) {
     if (job.settings.subtitleId && !subtitle)
       throw new Error("Subtitle file is no longer available. Attach it again.");
     await mkdir(workDir, { recursive: true });
+    let audioPath = audio?.filePath;
+    let subtitlePath = subtitle?.filePath;
+    if (job.auto) {
+      const prepared = await prepareAutoRemix({
+        source,
+        job,
+        workDir,
+        signal: controller.signal,
+        onPhase: (phase, progress) => {
+          job.phase = phase;
+          job.progress = Math.max(job.progress, Math.round(progress));
+        },
+      });
+      job.settings = prepared.settings;
+      job.summary = prepared.summary;
+      job.notes = prepared.notes;
+      audioPath = prepared.audioPath;
+      subtitlePath = prepared.subtitlePath;
+      await saveStore();
+    }
     await renderVideo({
       input: source.filePath,
       output: job.outputPath,
       source,
       settings: job.settings,
-      audioPath: audio?.filePath,
-      subtitlePath: subtitle?.filePath,
+      audioPath,
+      subtitlePath,
       workDir,
       signal: controller.signal,
       onProgress: (progress) => {
         job.progress = Math.max(
           job.progress,
-          Math.min(99, Math.round(progress)),
+          Math.min(99, Math.round(job.auto ? 65 + progress * 0.34 : progress)),
         );
       },
     });
     if (controller.signal.aborted) throw new Error("Cancelled");
+    if (job.auto && subtitlePath) {
+      job.captionPath = path.join(paths.outputs, `${job.id}.srt`);
+      await copyFile(subtitlePath, job.captionPath);
+    }
     outputSize = (await stat(job.outputPath)).size;
     status = "completed";
   } catch (error) {
@@ -76,18 +110,25 @@ async function run(job: StoredJob, controller: AbortController) {
     // share this work directory or output path with cleanup from the prior run.
     await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
     if (controller.signal.aborted) status = "cancelled";
-    if (status !== "completed")
+    if (status !== "completed") {
       await rm(job.outputPath, { force: true }).catch(() => undefined);
+      if (job.captionPath)
+        await rm(job.captionPath, { force: true }).catch(() => undefined);
+      delete job.captionPath;
+    }
     if (controller.signal.aborted) status = "cancelled";
     job.status = status;
+    job.phase = status === "completed" ? "Ready" : undefined;
     job.error = status === "failed" ? errorMessage : undefined;
     if (status === "completed") {
       job.outputSize = outputSize;
       job.progress = 100;
       job.downloadUrl = `/api/jobs/${job.id}/download`;
+      if (job.captionPath) job.captionUrl = `/api/jobs/${job.id}/captions`;
     } else {
       delete job.outputSize;
       delete job.downloadUrl;
+      delete job.captionUrl;
     }
     job.finishedAt = new Date().toISOString();
     running.delete(job.id);
@@ -155,10 +196,15 @@ export async function cleanupExpired() {
   if (!jobs.length && !sources.length && !attachments.length) return;
   await saveStore();
   await Promise.all([
-    ...jobs.map((job) => rm(job.outputPath, { force: true })),
+    ...jobs.flatMap((job) => [
+      rm(job.outputPath, { force: true }),
+      rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+      ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
+    ]),
     ...sources.flatMap((source) => [
       rm(source.filePath, { force: true }),
       rm(source.thumbnailPath, { force: true }),
+      rm(path.join(paths.analysis, `${source.id}.json`), { force: true }),
     ]),
     ...attachments.map((attachment) =>
       rm(attachment.filePath, { force: true }),

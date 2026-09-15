@@ -24,6 +24,7 @@ let directory: string;
 let landscape: string;
 let portrait: string;
 let audio: string;
+let scenes: string;
 
 function ffmpeg(args: string[]): Promise<Buffer> {
   return new Promise((resolve, reject) => {
@@ -64,6 +65,7 @@ before(async () => {
   landscape = path.join(directory, "source ' with spaces.mp4");
   portrait = path.join(directory, "portrait.mp4");
   audio = path.join(directory, "voice.wav");
+  scenes = path.join(directory, "three-scenes.mp4");
   await ffmpeg([
     "-f",
     "lavfi",
@@ -106,6 +108,26 @@ before(async () => {
     "-i",
     "sine=frequency=880:sample_rate=48000:duration=0.3",
     audio,
+  ]);
+  await ffmpeg([
+    "-f",
+    "lavfi",
+    "-i",
+    "color=red:s=320x180:r=30:d=1[r];color=lime:s=320x180:r=30:d=1[g];color=blue:s=320x180:r=30:d=1[b];[r][g][b]concat=n=3:v=1:a=0",
+    "-f",
+    "lavfi",
+    "-i",
+    "aevalsrc=0.12*sin(2*PI*if(lt(t\\,1)\\,440\\,if(lt(t\\,2)\\,880\\,1320))*t):s=48000:d=3",
+    "-c:v",
+    "libx264",
+    "-threads",
+    "2",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-shortest",
+    scenes,
   ]);
 });
 
@@ -434,6 +456,8 @@ test("rejects invalid trim/settings and cancellation removes partial output", as
           speed: 0.5,
           noise: 1,
           frameBlend: 0.5,
+          segments: [{ start: 0.2, end: 1.8 }],
+          callouts: [{ text: "Cancel this edit", start: 0, end: 1 }],
         },
         workDir: path.join(directory, "cancel-work"),
         signal: controller.signal,
@@ -442,7 +466,208 @@ test("rejects invalid trim/settings and cancellation removes partial output", as
       { name: "AbortError" },
     );
     await assert.rejects(stat(output), { code: "ENOENT" });
+    assert.deepEqual(await readdir(path.join(directory, "cancel-work")), []);
   } finally {
     clearTimeout(timer);
   }
+});
+
+test("ordered source clips remove gaps, repeat overlapping footage, and keep source audio aligned after speed changes", async () => {
+  const { output, info } = await render(
+    "ordered-clips",
+    {
+      segments: [
+        { start: 2.2, end: 2.8 },
+        { start: 0.2, end: 0.8 },
+        { start: 1.2, end: 1.8 },
+        { start: 0.4, end: 0.7 },
+      ],
+      speed: 1.5,
+      trimStart: 2,
+      trimEnd: 2.1,
+      timeShift: 5,
+    },
+    { input: scenes },
+  );
+  assert.ok(
+    Math.abs(info.duration - 1.4) <= 0.04,
+    `Expected 1.4s edit; got ${info.duration}`,
+  );
+  const sound = await samples(output);
+  for (const [time, dominant, tone] of [
+    [0.1, 2, 1320],
+    [0.5, 0, 440],
+    [0.9, 1, 880],
+    [1.3, 0, 440],
+  ]) {
+    const pixel = await ffmpeg([
+      "-ss",
+      String(time),
+      "-i",
+      output,
+      "-frames:v",
+      "1",
+      "-vf",
+      "scale=1:1",
+      "-pix_fmt",
+      "rgb24",
+      "-f",
+      "rawvideo",
+      "pipe:1",
+    ]);
+    assert.ok(
+      pixel[dominant!]! > 180,
+      `Clip at ${time}s has expected RGB channel ${dominant}`,
+    );
+    for (let channel = 0; channel < 3; channel++)
+      if (channel !== dominant) assert.ok(pixel[channel]! < 60);
+    const measured = frequency(
+      sound.subarray(
+        Math.round((time! - 0.035) * 48000),
+        Math.round((time! + 0.035) * 48000),
+      ),
+    );
+    assert.ok(
+      Math.abs(measured - tone!) < 35,
+      `Audio at ${time}s should be ${tone}Hz, got ${measured}`,
+    );
+  }
+});
+
+test("blur framing fills portrait bars while timed callouts and automatic motion remain renderable", async () => {
+  const { output, info } = await render(
+    "blur-auto",
+    {
+      aspect: "9:16",
+      fit: "blur",
+      autoMotion: true,
+      normalizeAudio: true,
+      segments: [{ start: 0, end: 1 }],
+      callouts: [
+        {
+          text: "A new angle: 'quotes' %{localtime} \\ [safe]",
+          start: 0.3,
+          end: 0.8,
+        },
+      ],
+    },
+    { input: scenes },
+  );
+  assert.deepEqual([info.width, info.height, info.hasAudio], [320, 568, true]);
+  const first = await ffmpeg([
+    "-i",
+    output,
+    "-frames:v",
+    "1",
+    "-pix_fmt",
+    "rgb24",
+    "-f",
+    "rawvideo",
+    "pipe:1",
+  ]);
+  assert.ok(
+    first[0]! > 60,
+    "Blur fill retains scene color instead of black bars",
+  );
+  const center =
+    (Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * 3;
+  assert.ok(
+    first[center]! > 180,
+    "The centered source retains its full picture",
+  );
+  const baseline = await render(
+    "callout-baseline",
+    { segments: [{ start: 0, end: 1 }], muted: true },
+    { input: scenes },
+  );
+  const callout = await render(
+    "callout-timing",
+    {
+      segments: [{ start: 0, end: 1 }],
+      muted: true,
+      callouts: [{ text: "A visible caption", start: 0.3, end: 0.8 }],
+    },
+    { input: scenes },
+  );
+  const frame = (file: string, time: number) =>
+    ffmpeg([
+      "-ss",
+      String(time),
+      "-i",
+      file,
+      "-frames:v",
+      "1",
+      "-pix_fmt",
+      "rgb24",
+      "-f",
+      "rawvideo",
+      "pipe:1",
+    ]);
+  for (const time of [0.1, 0.5, 0.9]) {
+    const [plain, captioned] = await Promise.all([
+      frame(baseline.output, time),
+      frame(callout.output, time),
+    ]);
+    const different = plain.reduce(
+      (sum, value, index) =>
+        sum + (Math.abs(value - captioned[index]!) > 35 ? 1 : 0),
+      0,
+    );
+    if (time === 0.5)
+      assert.ok(different > 500, "Callout is visible within its time window");
+    else
+      assert.ok(different < 100, "Callout is absent outside its time window");
+  }
+});
+
+test("normalization raises quiet audio and cuts also support replacement audio or silent inputs", async () => {
+  const normal = await render("normalize-base");
+  const normalized = await render("normalize-enabled", {
+    normalizeAudio: true,
+    autoMotion: true,
+  });
+  const [beforeSamples, afterSamples] = await Promise.all([
+    samples(normal.output),
+    samples(normalized.output),
+  ]);
+  assert.ok(
+    rms(afterSamples) > rms(beforeSamples) * 1.3,
+    "Loudness normalization raises the quiet source toward -16 LUFS",
+  );
+  const silent = await render(
+    "silent-cuts",
+    {
+      segments: [
+        { start: 1, end: 1.8 },
+        { start: 0.1, end: 0.5 },
+      ],
+    },
+    { input: portrait },
+  );
+  assert.equal(silent.info.hasAudio, false);
+  const replacement = await render(
+    "replacement-cuts",
+    {
+      segments: [
+        { start: 1, end: 1.8 },
+        { start: 0.1, end: 0.5 },
+      ],
+      speed: 2,
+      normalizeAudio: true,
+    },
+    { input: portrait, audioPath: audio },
+  );
+  assert.ok(Math.abs(replacement.info.duration - 0.6) < 0.05);
+  assert.ok(
+    Math.abs(frequency(await samples(replacement.output)) - 880) < 30,
+    "Replacement track stays on final timeline at its original pitch",
+  );
+  await assert.rejects(
+    render("invalid-cuts", { segments: [{ start: 0, end: 5 }] }),
+    /within the video/,
+  );
+  await assert.rejects(
+    render("empty-cuts", { segments: [] }),
+    /valid source clips/,
+  );
 });

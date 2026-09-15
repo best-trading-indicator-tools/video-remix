@@ -21,7 +21,9 @@ import type {
 const directory = await mkdtemp(path.join(os.tmpdir(), "video-remix-queue-"));
 process.env.DATA_DIR = directory;
 const { config, paths } = await import("../server/config.js");
-const { initStore, saveStore, state } = await import("../server/store.js");
+const { initStore, publicJob, saveStore, state } = await import(
+  "../server/store.js"
+);
 const { cancelJob, cleanupExpired, isRunning, pumpQueue, stopQueue } =
   await import("../server/queue.js");
 await initStore();
@@ -142,6 +144,13 @@ test("cleanup claims expired records immediately and protects queued source and 
     createdAt: oldDate(),
     finishedAt: oldDate(),
   });
+  completed.captionPath = path.join(paths.outputs, `${completed.id}.srt`);
+  const expiredWork = path.join(paths.work, completed.id);
+  const activeWork = path.join(paths.work, active.id);
+  await Promise.all([
+    mkdir(path.join(expiredWork, "transcription"), { recursive: true }),
+    mkdir(activeWork, { recursive: true }),
+  ]);
   state.sources.push(protectedSource, removedSource, freshSource);
   state.attachments.push(protectedAudio, removedAudio);
   state.jobs.push(active, completed);
@@ -150,11 +159,16 @@ test("cleanup claims expired records immediately and protects queued source and 
     removedSource.thumbnailPath,
     removedAudio.filePath,
     completed.outputPath,
+    completed.captionPath,
+    path.join(expiredWork, "transcription", "partial.wav"),
+    path.join(paths.analysis, `${removedSource.id}.json`),
   ];
   const protectedFiles = [
     protectedSource.filePath,
     protectedSource.thumbnailPath,
     protectedAudio.filePath,
+    path.join(activeWork, "active-captions.srt"),
+    path.join(paths.analysis, `${protectedSource.id}.json`),
   ];
   await Promise.all(
     [...removedFiles, ...protectedFiles].map((file) =>
@@ -179,6 +193,8 @@ test("cleanup claims expired records immediately and protects queued source and 
   for (const file of removedFiles)
     await assert.rejects(access(file), { code: "ENOENT" });
   for (const file of protectedFiles) await access(file);
+  await assert.rejects(access(expiredWork), { code: "ENOENT" });
+  await access(activeWork);
   const saved = JSON.parse(
     await readFile(path.join(directory, "state.json"), "utf8"),
   );
@@ -190,4 +206,104 @@ test("cleanup claims expired records immediately and protects queued source and 
     saved.sources.map((item: StoredSource) => item.id),
     [protectedSource.id, freshSource.id],
   );
+});
+
+test("startup recovery removes interrupted auto-edit artifacts, preserves completed exports, and hides internal paths", async () => {
+  const summary = {
+    title: "A complete spoken idea",
+    changes: ["Trimmed pauses", "Automatic captions"],
+    sourceDuration: 45,
+    outputDuration: 30,
+    transcriptAvailable: true,
+    usedAI: false,
+    narration: false,
+  };
+  const interrupted = job({
+    status: "processing",
+    progress: 84,
+    phase: "Rendering your edit",
+    auto: { aspect: "9:16", targetDuration: 30, narration: false },
+    summary,
+    notes: ["The hook was taken from the selected speech."],
+  });
+  interrupted.captionPath = path.join(paths.outputs, `${interrupted.id}.srt`);
+  interrupted.captionUrl = `/api/jobs/${interrupted.id}/captions`;
+  interrupted.downloadUrl = `/api/jobs/${interrupted.id}/download`;
+  const completed = job({
+    status: "completed",
+    progress: 100,
+    finishedAt: new Date().toISOString(),
+    summary,
+  });
+  completed.captionPath = path.join(paths.outputs, `${completed.id}.srt`);
+  completed.captionUrl = `/api/jobs/${completed.id}/captions`;
+  completed.downloadUrl = `/api/jobs/${completed.id}/download`;
+  const interruptedWork = path.join(paths.work, interrupted.id);
+  await mkdir(path.join(interruptedWork, "transcribe-audio"), {
+    recursive: true,
+  });
+  await Promise.all([
+    writeFile(interrupted.outputPath, "partial video"),
+    writeFile(interrupted.captionPath, "partial captions"),
+    writeFile(
+      path.join(interruptedWork, "transcribe-audio", "audio.wav"),
+      "scratch audio",
+    ),
+    writeFile(
+      path.join(interruptedWork, "narration.txt"),
+      "unfinished narration",
+    ),
+    writeFile(completed.outputPath, "finished video"),
+    writeFile(completed.captionPath, "finished captions"),
+  ]);
+  state.jobs.push(interrupted, completed);
+  await saveStore();
+  state.jobs = [];
+
+  await initStore();
+  const recovered = state.jobs.find((item) => item.id === interrupted.id)!;
+  assert.equal(recovered.status, "failed");
+  assert.match(recovered.error!, /app stopped during this render/i);
+  assert.ok(recovered.finishedAt);
+  assert.equal(recovered.phase, undefined);
+  assert.equal(recovered.captionPath, undefined);
+  assert.equal(recovered.captionUrl, undefined);
+  assert.equal(recovered.downloadUrl, undefined);
+  assert.deepEqual(
+    recovered.summary,
+    summary,
+    "The useful editing summary survives recovery",
+  );
+  assert.deepEqual(recovered.notes, interrupted.notes);
+  assert.deepEqual(
+    recovered.auto,
+    interrupted.auto,
+    "Retry still knows this was an automatic edit",
+  );
+  for (const file of [
+    interruptedWork,
+    interrupted.outputPath,
+    interrupted.captionPath!,
+  ])
+    await assert.rejects(access(file), { code: "ENOENT" });
+
+  const ready = state.jobs.find((item) => item.id === completed.id)!;
+  assert.equal(ready.status, "completed");
+  assert.equal(await readFile(ready.outputPath, "utf8"), "finished video");
+  assert.equal(await readFile(ready.captionPath!, "utf8"), "finished captions");
+  const publicReady = publicJob(ready);
+  assert.equal("outputPath" in publicReady, false);
+  assert.equal("captionPath" in publicReady, false);
+  assert.equal(publicReady.captionUrl, completed.captionUrl);
+  assert.deepEqual(publicReady.summary, summary);
+  const saved = JSON.parse(
+    await readFile(path.join(directory, "state.json"), "utf8"),
+  );
+  const savedRecovery = saved.jobs.find(
+    (item: StoredJob) => item.id === interrupted.id,
+  );
+  assert.equal(savedRecovery.status, "failed");
+  assert.equal(savedRecovery.captionPath, undefined);
+  assert.equal(savedRecovery.downloadUrl, undefined);
+  assert.deepEqual(savedRecovery.summary, summary);
 });

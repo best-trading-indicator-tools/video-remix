@@ -14,6 +14,9 @@ export const config = {
   maxFiles: numberEnv("MAX_FILES", 30, 1, 100),
   concurrency: numberEnv("RENDER_CONCURRENCY", 2, 1, 4),
   retentionMs: numberEnv("RETENTION_HOURS", 24, 1, 720) * 3600000,
+  ollamaUrl: process.env.OLLAMA_URL || "http://127.0.0.1:11434",
+  ollamaModel: process.env.OLLAMA_MODEL || "llama3.2",
+  localAI: process.env.AUTO_LOCAL_AI !== "false",
 };
 export const paths = {
   uploads: path.join(config.dataDir, "uploads"),
@@ -21,4 +24,5 @@ export const paths = {
   attachments: path.join(config.dataDir, "attachments"),
   outputs: path.join(config.dataDir, "outputs"),
   work: path.join(config.dataDir, "work"),
+  analysis: path.join(config.dataDir, "analysis"),
 };

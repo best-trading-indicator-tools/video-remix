@@ -2,6 +2,7 @@ import { createApp } from "./app.js";
 import { config } from "./config.js";
 import { cleanupExpired, pumpQueue, stopQueue } from "./queue.js";
 import { initStore } from "./store.js";
+import { stopIntelligence } from "./intelligence.js";
 await initStore();
 await cleanupExpired();
 const app = createApp();
@@ -32,6 +33,7 @@ async function shutdown() {
   clearInterval(cleanup);
   server.close();
   await stopQueue();
+  stopIntelligence();
   server.closeAllConnections();
 }
 process.on("SIGTERM", () => {

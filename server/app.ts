@@ -11,7 +11,8 @@ import {
   probeAudio,
   probeMedia,
 } from "./engine.js";
-import { batchSchema } from "./schema.js";
+import { autoBatchSchema, batchSchema } from "./schema.js";
+import { getAutoCapabilities } from "./auto.js";
 import {
   publicJob,
   publicSource,
@@ -21,7 +22,7 @@ import {
   type StoredSource,
 } from "./store.js";
 import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
-import { randomizeSettings } from "../shared/types.js";
+import { DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
 
 class HttpError extends Error {
   constructor(
@@ -115,11 +116,9 @@ export function createApp() {
       try {
         if (!hosts.has(new URL(origin).hostname)) throw new Error("Origin");
       } catch {
-        return res
-          .status(403)
-          .json({
-            error: "This request did not come from your local workspace.",
-          });
+        return res.status(403).json({
+          error: "This request did not come from your local workspace.",
+        });
       }
     }
     res.setHeader("X-Content-Type-Options", "nosniff");
@@ -148,6 +147,62 @@ export function createApp() {
   app.get("/api/sources", (_req, res) =>
     res.json({ sources: state.sources.map(publicSource) }),
   );
+  app.get("/api/auto/capabilities", async (_req, res) =>
+    res.json(await getAutoCapabilities()),
+  );
+  app.post("/api/auto/jobs", async (req, res) => {
+    const parsed = autoBatchSchema.safeParse(req.body);
+    if (!parsed.success)
+      throw new HttpError(
+        400,
+        `Check automatic edit options: ${parsed.error.issues
+          .map((issue) => issue.message)
+          .slice(0, 3)
+          .join("; ")}`,
+      );
+    const { sourceIds, variants, options } = parsed.data;
+    const available = await binaries;
+    if (!available.ffmpeg || !available.ffprobe)
+      throw new HttpError(503, "Install FFmpeg and ffprobe before exporting.");
+    const uniqueIds = [...new Set(sourceIds)];
+    if (state.jobs.filter(isActive).length + uniqueIds.length * variants > 300)
+      throw new HttpError(
+        429,
+        "Your render queue is full. Wait for some exports to finish.",
+      );
+    const sources = uniqueIds.map((id) =>
+      state.sources.find((source) => source.id === id),
+    );
+    if (sources.some((source) => !source))
+      throw new HttpError(
+        404,
+        "A source video has expired or been removed. Upload it again.",
+      );
+    const batchId = randomUUID();
+    const jobs: StoredJob[] = sources.flatMap((source) =>
+      Array.from({ length: variants }, (_, index) => {
+        const id = randomUUID();
+        return {
+          id,
+          batchId,
+          sourceId: source!.id,
+          sourceName: source!.name,
+          variant: index + 1,
+          auto: { ...options },
+          settings: { ...DEFAULT_SETTINGS },
+          status: "queued",
+          phase: "Waiting to edit",
+          progress: 0,
+          createdAt: new Date().toISOString(),
+          outputPath: path.join(paths.outputs, `${id}.mp4`),
+        };
+      }),
+    );
+    state.jobs.push(...jobs);
+    await saveStore();
+    res.status(201).json({ batchId, jobs: jobs.map(publicJob) });
+    pumpQueue();
+  });
   app.post("/api/sources", (req, res, next) => {
     if (inflightUploads >= 2)
       return next(
@@ -216,19 +271,17 @@ export function createApp() {
           }
         }
         await saveStore();
-        res
-          .status(sources.length ? 201 : 400)
-          .json({
-            sources: sources.map(publicSource),
-            errors,
-            ...(sources.length
-              ? {}
-              : {
-                  error: errors
-                    .map((item) => `${item.name}: ${item.error}`)
-                    .join(" "),
-                }),
-          });
+        res.status(sources.length ? 201 : 400).json({
+          sources: sources.map(publicSource),
+          errors,
+          ...(sources.length
+            ? {}
+            : {
+                error: errors
+                  .map((item) => `${item.name}: ${item.error}`)
+                  .join(" "),
+              }),
+        });
       })()
         .catch(next)
         .finally(release);
@@ -262,6 +315,7 @@ export function createApp() {
     await Promise.all([
       rm(source.filePath, { force: true }),
       rm(source.thumbnailPath, { force: true }),
+      rm(path.join(paths.analysis, `${source.id}.json`), { force: true }),
     ]);
     res.json({ ok: true });
   });
@@ -303,13 +357,11 @@ export function createApp() {
       };
       state.attachments.push(attachment);
       await saveStore();
-      res
-        .status(201)
-        .json({
-          id: attachment.id,
-          name: attachment.name,
-          kind: attachment.kind,
-        });
+      res.status(201).json({
+        id: attachment.id,
+        name: attachment.name,
+        kind: attachment.kind,
+      });
     } catch (error) {
       await rm(file.path, { force: true });
       throw error;
@@ -350,6 +402,15 @@ export function createApp() {
           "A source video has expired or been removed. Upload it again.",
         );
       const end = item.settings.trimEnd ?? source.duration;
+      if (
+        item.settings.segments?.some(
+          (segment) => segment.end > source.duration + 0.001,
+        )
+      )
+        throw new HttpError(
+          400,
+          `${source.name}: selected cuts must stay within the source video.`,
+        );
       if (end > source.duration + 0.05 || item.settings.trimStart >= end - 0.05)
         throw new HttpError(
           400,
@@ -430,6 +491,11 @@ export function createApp() {
     delete job.finishedAt;
     delete job.downloadUrl;
     delete job.outputSize;
+    delete job.phase;
+    delete job.summary;
+    delete job.notes;
+    delete job.captionPath;
+    delete job.captionUrl;
     await saveStore();
     res.json(publicJob(job));
     pumpQueue();
@@ -441,6 +507,18 @@ export function createApp() {
     res.download(job.outputPath, outputName(job), (error) => {
       if (error) next(error);
     });
+  });
+  app.get("/api/jobs/:id/captions", (req, res, next) => {
+    const job = state.jobs.find((item) => item.id === req.params.id);
+    if (!job || job.status !== "completed" || !job.captionPath)
+      throw new HttpError(404, "Captions are not available for this export.");
+    res.download(
+      job.captionPath,
+      outputName(job).replace(/\.mp4$/, ".srt"),
+      (error) => {
+        if (error) next(error);
+      },
+    );
   });
   app.get("/api/jobs/:id/video", (req, res, next) => {
     const job = state.jobs.find((item) => item.id === req.params.id);
@@ -471,11 +549,15 @@ export function createApp() {
       archive.abort();
     });
     archive.pipe(res);
-    jobs.forEach((job, index) =>
+    jobs.forEach((job, index) => {
       archive.file(job.outputPath, {
         name: `${String(index + 1).padStart(2, "0")}-${outputName(job)}`,
-      }),
-    );
+      });
+      if (job.captionPath)
+        archive.file(job.captionPath, {
+          name: `${String(index + 1).padStart(2, "0")}-${outputName(job).replace(/\.mp4$/, ".srt")}`,
+        });
+    });
     archive.append(JSON.stringify(jobs.map(publicJob), null, 2), {
       name: "export-settings.json",
     });
@@ -492,7 +574,13 @@ export function createApp() {
     const ids = new Set(jobs.map((job) => job.id));
     state.jobs = state.jobs.filter((job) => !ids.has(job.id));
     await saveStore();
-    await Promise.all(jobs.map((job) => rm(job.outputPath, { force: true })));
+    await Promise.all(
+      jobs.flatMap((job) => [
+        rm(job.outputPath, { force: true }),
+        rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+        ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
+      ]),
+    );
     res.json({ ok: true });
   });
   app.use("/api", (_req, res) =>
@@ -515,14 +603,12 @@ export function createApp() {
   const handleError: ErrorRequestHandler = (error, _req, res, next) => {
     if (res.headersSent) return next(error);
     if (error instanceof multer.MulterError) {
-      res
-        .status(400)
-        .json({
-          error:
-            error.code === "LIMIT_FILE_SIZE"
-              ? `The file is too large. Videos allow up to ${config.maxFileSize / 1024 / 1024} MB; audio attachments allow up to 100 MB.`
-              : `Upload could not be completed: ${error.code === "LIMIT_UNEXPECTED_FILE" || error.code === "LIMIT_FILE_COUNT" ? `choose at most ${config.maxFiles} videos at once` : error.message}.`,
-        });
+      res.status(400).json({
+        error:
+          error.code === "LIMIT_FILE_SIZE"
+            ? `The file is too large. Videos allow up to ${config.maxFileSize / 1024 / 1024} MB; audio attachments allow up to 100 MB.`
+            : `Upload could not be completed: ${error.code === "LIMIT_UNEXPECTED_FILE" || error.code === "LIMIT_FILE_COUNT" ? `choose at most ${config.maxFiles} videos at once` : error.message}.`,
+      });
       return;
     }
     const status =
@@ -534,14 +620,12 @@ export function createApp() {
             ? 404
             : 500;
     if (status === 500) console.error("Request failed:", error);
-    res
-      .status(status)
-      .json({
-        error:
-          status === 500
-            ? "Something went wrong. Check the app terminal and try again."
-            : error.message || "Request failed.",
-      });
+    res.status(status).json({
+      error:
+        status === 500
+          ? "Something went wrong. Check the app terminal and try again."
+          : error.message || "Request failed.",
+    });
   };
   app.use(handleError);
   return app;

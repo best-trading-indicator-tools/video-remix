@@ -9,3 +9,5 @@ output/
 !.env.example
 .DS_Store
 *.log
+.venv/
+__pycache__/

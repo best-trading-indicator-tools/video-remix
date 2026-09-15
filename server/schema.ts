@@ -20,7 +20,7 @@ export const settingsSchema = z
     timeShift: n(-5, 5),
     mirror: z.boolean(),
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]),
-    fit: z.enum(["crop", "contain"]),
+    fit: z.enum(["crop", "contain", "blur"]),
     resolution: z.enum(["source", "720", "1080"]),
     fps: z.enum(["source", "24", "30", "60"]),
     trimStart: n(0, 86400),
@@ -34,6 +34,35 @@ export const settingsSchema = z
       .regex(/^[\p{L}\p{N} .()_-]*$/u),
     audioId: z.string().uuid().nullable(),
     subtitleId: z.string().uuid().nullable(),
+    segments: z
+      .array(
+        z
+          .object({ start: n(0, 86400), end: n(0, 86400) })
+          .refine(
+            (value) => value.end > value.start + 0.04,
+            "Cut end must follow its start",
+          ),
+      )
+      .min(1)
+      .max(60)
+      .optional(),
+    callouts: z
+      .array(
+        z
+          .object({
+            text: z.string().max(120),
+            start: n(0, 172800),
+            end: n(0, 172800),
+          })
+          .refine(
+            (value) => value.end > value.start,
+            "Callout end must follow its start",
+          ),
+      )
+      .max(5)
+      .optional(),
+    normalizeAudio: z.boolean().optional(),
+    autoMotion: z.boolean().optional(),
   })
   .strict();
 export const batchSchema = z
@@ -53,3 +82,20 @@ export const normalizedSettings = (input: unknown) =>
     ...DEFAULT_SETTINGS,
     ...(typeof input === "object" && input ? input : {}),
   });
+export const autoBatchSchema = z
+  .object({
+    sourceIds: z.array(z.string().uuid()).min(1).max(100),
+    variants: z.number().int().min(1).max(5).default(1),
+    options: z
+      .object({
+        aspect: z
+          .enum(["original", "9:16", "1:1", "4:5", "16:9"])
+          .default("9:16"),
+        targetDuration: z
+          .union([z.literal(30), z.literal(45), z.literal(60)])
+          .default(45),
+        narration: z.boolean().default(false),
+      })
+      .default({ aspect: "9:16", targetDuration: 45, narration: false }),
+  })
+  .strict();

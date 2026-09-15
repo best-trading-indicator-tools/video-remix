@@ -1,4 +1,47 @@
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
+export interface EditSegment {
+  start: number;
+  end: number;
+}
+export interface TimedCallout {
+  text: string;
+  start: number;
+  end: number;
+}
+export interface AutoOptions {
+  aspect: Aspect;
+  targetDuration: 30 | 45 | 60;
+  narration: boolean;
+}
+export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
+  aspect: "9:16",
+  targetDuration: 45,
+  narration: false,
+};
+export interface TranscriptWord {
+  start: number;
+  end: number;
+  word: string;
+  probability?: number;
+}
+export interface TranscriptSegment {
+  start: number;
+  end: number;
+  text: string;
+  words: TranscriptWord[];
+}
+export interface Transcript {
+  language: string;
+  duration: number;
+  segments: TranscriptSegment[];
+}
+export interface AutoCapabilities {
+  transcription: boolean;
+  model: string;
+  intelligence: boolean;
+  narration: boolean;
+  message?: string;
+}
 export interface RemixSettings {
   speed: number;
   volume: number;
@@ -17,7 +60,7 @@ export interface RemixSettings {
   timeShift: number;
   mirror: boolean;
   aspect: Aspect;
-  fit: "crop" | "contain";
+  fit: "crop" | "contain" | "blur";
   resolution: "source" | "720" | "1080";
   fps: "source" | "24" | "30" | "60";
   trimStart: number;
@@ -28,6 +71,10 @@ export interface RemixSettings {
   device: string;
   audioId: string | null;
   subtitleId: string | null;
+  segments?: EditSegment[];
+  callouts?: TimedCallout[];
+  normalizeAudio?: boolean;
+  autoMotion?: boolean;
 }
 export const DEFAULT_SETTINGS: RemixSettings = {
   speed: 1,
@@ -78,7 +125,11 @@ export interface Attachment {
   kind: "audio" | "subtitle";
 }
 export type JobStatus =
-  "queued" | "processing" | "completed" | "failed" | "cancelled";
+  | "queued"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "cancelled";
 export interface RenderJob {
   id: string;
   sourceId: string;
@@ -93,6 +144,19 @@ export interface RenderJob {
   error?: string;
   downloadUrl?: string;
   outputSize?: number;
+  auto?: AutoOptions;
+  phase?: string;
+  summary?: {
+    title: string;
+    changes: string[];
+    sourceDuration: number;
+    outputDuration: number;
+    transcriptAvailable: boolean;
+    usedAI: boolean;
+    narration: boolean;
+  };
+  notes?: string[];
+  captionUrl?: string;
 }
 export interface Health {
   ok: boolean;

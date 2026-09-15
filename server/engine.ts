@@ -7,6 +7,7 @@ import {
   realpath,
   rm,
   stat,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -297,6 +298,7 @@ function validateSettings(settings: RemixSettings): void {
       throw new Error(`Invalid ${key} setting`);
   }
   if (
+    !settings.segments &&
     settings.trimEnd !== null &&
     (!Number.isFinite(settings.trimEnd) ||
       settings.trimEnd <= settings.trimStart)
@@ -304,7 +306,7 @@ function validateSettings(settings: RemixSettings): void {
     throw new Error("Trim end must be after trim start");
   if (
     !["original", "9:16", "1:1", "4:5", "16:9"].includes(settings.aspect) ||
-    !["crop", "contain"].includes(settings.fit) ||
+    !["crop", "contain", "blur"].includes(settings.fit) ||
     !["source", "720", "1080"].includes(settings.resolution) ||
     !["source", "24", "30", "60"].includes(settings.fps)
   )
@@ -321,6 +323,40 @@ function validateSettings(settings: RemixSettings): void {
     settings.device.includes("\0")
   )
     throw new Error("Invalid device metadata");
+  if (
+    settings.segments !== undefined &&
+    (!Array.isArray(settings.segments) ||
+      settings.segments.length === 0 ||
+      settings.segments.length > 60 ||
+      settings.segments.some(
+        (segment) =>
+          !Number.isFinite(segment.start) ||
+          !Number.isFinite(segment.end) ||
+          segment.start < 0 ||
+          segment.end - segment.start < 0.04,
+      ))
+  )
+    throw new Error("Choose 1–60 valid source clips of at least 0.04 seconds");
+  if (
+    settings.callouts !== undefined &&
+    (!Array.isArray(settings.callouts) ||
+      settings.callouts.length > 60 ||
+      settings.callouts.some(
+        (callout) =>
+          typeof callout.text !== "string" ||
+          callout.text.length > 200 ||
+          callout.text.includes("\0") ||
+          !Number.isFinite(callout.start) ||
+          !Number.isFinite(callout.end) ||
+          callout.start < 0 ||
+          callout.end <= callout.start,
+      ))
+  )
+    throw new Error("Callouts need valid text and start/end times");
+  for (const key of ["normalizeAudio", "autoMotion"] as const) {
+    if (settings[key] !== undefined && typeof settings[key] !== "boolean")
+      throw new Error(`Invalid ${key} setting`);
+  }
 }
 
 function geometry(
@@ -333,7 +369,7 @@ function geometry(
     settings.aspect === "original"
       ? width / height
       : ratio(settings.aspect, ":");
-  if (settings.fit === "contain") {
+  if (settings.fit === "contain" || settings.fit === "blur") {
     if (width / height > target) height = width / target;
     else width = height * target;
   } else {
@@ -455,21 +491,45 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
   await mkdir(workDir, { recursive: true });
   await mkdir(path.dirname(output), { recursive: true });
   const sourceEnd = Math.min(s.trimEnd ?? source.duration, source.duration);
-  const clipLength = sourceEnd - s.trimStart;
+  const segments = s.segments;
+  if (segments?.some((segment) => segment.end > source.duration + 0.001))
+    throw new Error("Every source clip must be within the video duration");
+  const clipLength = segments
+    ? segments.reduce((sum, segment) => sum + segment.end - segment.start, 0)
+    : sourceEnd - s.trimStart;
   if (!Number.isFinite(clipLength) || clipLength <= 0.04)
     throw new Error("Select at least 0.04 seconds inside the source video");
   // Shift the whole trim window, maintaining its duration and clamping to the source.
-  const start = clamp(
-    s.trimStart + s.timeShift,
-    0,
-    Math.max(0, source.duration - clipLength),
-  );
+  const start = segments
+    ? 0
+    : clamp(
+        s.trimStart + s.timeShift,
+        0,
+        Math.max(0, source.duration - clipLength),
+      );
   const duration = clipLength / s.speed;
   const fps = s.fps === "source" ? source.fps : Number(s.fps);
   const { width, height } = geometry(source, s);
   const temporary: string[] = [];
   try {
+    // The concat demuxer seeks each requested interval in order. Its frame
+    // metadata lets select/aselect discard keyframe preroll without another
+    // encoding pass or dozens of simultaneously buffered decoder branches.
+    let editList: string | undefined;
+    if (segments) {
+      const sourceName = `edit-source-${randomUUID()}.media`;
+      const sourceLink = path.join(workDir, sourceName);
+      editList = path.join(workDir, `edit-${randomUUID()}.ffconcat`);
+      temporary.push(sourceLink, editList);
+      await symlink(input, sourceLink);
+      await writeFile(
+        editList,
+        `ffconcat version 1.0\n${segments.map((segment) => `file ${sourceName}\ninpoint ${decimal(segment.start)}\noutpoint ${decimal(segment.end)}\nduration ${decimal(segment.end - segment.start)}`).join("\n")}\n`,
+        "utf8",
+      );
+    }
     const filters = [
+      ...(segments ? ["select=concatdec_select"] : []),
       `trim=duration=${decimal(clipLength)}`,
       `setpts=(PTS-STARTPTS)/${s.speed}`,
       // Work in display pixels so anamorphic and autorotated inputs export correctly.
@@ -481,7 +541,12 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         `crop=w='trunc(iw/${s.zoom}/2)*2':h='trunc(ih/${s.zoom}/2)*2'`,
       );
     if (s.mirror) filters.push("hflip");
-    if (s.fit === "contain")
+    const motion = `zoompan=z='1+0.04*min(on/${decimal(Math.max(1, duration * fps - 1))},1)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${width}x${height}:fps=${decimal(fps)}`;
+    if (s.fit === "blur")
+      filters.push(
+        `fps=${decimal(fps)},split=2[blurback][blurfront];[blurback]scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${width}:${height},gblur=sigma=${decimal(Math.max(8, Math.min(40, Math.min(width, height) * 0.045)))}:steps=2,eq=brightness=-0.12${s.autoMotion ? `,${motion}` : ""}[blurfill];[blurfront]scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2[blurpicture];[blurfill][blurpicture]overlay=x=(W-w)/2:y=(H-h)/2:shortest=1`,
+      );
+    else if (s.fit === "contain")
       filters.push(
         `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2`,
         `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`,
@@ -492,6 +557,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         `crop=${width}:${height}`,
       );
     filters.push("setsar=1", `fps=${decimal(fps)}`, "format=yuv420p");
+    if (s.autoMotion && s.fit !== "blur") filters.push(motion);
     if (
       s.brightness !== 0 ||
       s.contrast !== 1 ||
@@ -537,6 +603,18 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         `drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.08:fix_bounds=1:enable='lt(t,${decimal(Math.min(s.hookDuration, duration))})'`,
       );
     }
+    for (const callout of s.callouts ?? []) {
+      if (!callout.text.trim() || callout.start >= duration) continue;
+      const filename = `callout-${randomUUID()}.txt`;
+      const filePath = path.join(workDir, filename);
+      temporary.push(filePath);
+      const size = Math.max(10, Math.round(Math.min(width, height) * 0.047));
+      const columns = Math.max(8, Math.floor((width * 0.84) / (size * 0.64)));
+      await writeFile(filePath, wrapHook(callout.text, columns), "utf8");
+      filters.push(
+        `drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.70:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.24:fix_bounds=1:enable='gte(t,${decimal(callout.start)})*lt(t,${decimal(Math.min(callout.end, duration))})'`,
+      );
+    }
     if (options.subtitlePath) {
       const filename = `captions-${randomUUID()}.srt`;
       const filePath = path.join(workDir, filename);
@@ -558,14 +636,33 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       "-y",
       "-threads",
       "2",
-      ...SAFE_INPUT,
-      "-ss",
-      decimal(start),
-      "-t",
-      decimal(clipLength),
-      "-i",
-      input,
     ];
+    if (editList)
+      args.push(
+        "-copyts",
+        "-protocol_whitelist",
+        "file,pipe",
+        "-format_whitelist",
+        `concat,${FORMATS}`,
+        "-f",
+        "concat",
+        "-safe",
+        "1",
+        "-segment_time_metadata",
+        "1",
+        "-i",
+        editList,
+      );
+    else
+      args.push(
+        ...SAFE_INPUT,
+        "-ss",
+        decimal(start),
+        "-t",
+        decimal(clipLength),
+        "-i",
+        input,
+      );
     const replacementAudio = !!options.audioPath && !s.muted;
     if (replacementAudio)
       args.push(
@@ -592,10 +689,14 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       const audioFilters = replacementAudio
         ? ["asetpts=PTS-STARTPTS"]
         : [
+            ...(segments
+              ? ["aselect=concatdec_select", "aresample=async=1:first_pts=0"]
+              : []),
             `atrim=duration=${decimal(clipLength)}`,
             "asetpts=PTS-STARTPTS",
             `atempo=${s.speed}`,
           ];
+      if (s.normalizeAudio) audioFilters.push("loudnorm=I=-16:TP=-1.5:LRA=11");
       audioFilters.push(
         `volume=${s.volume}`,
         "apad",
