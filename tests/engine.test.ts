@@ -780,6 +780,32 @@ test("blur framing fills portrait bars while timed callouts and automatic motion
   }
 });
 
+test("normal-speed AAC cuts finish with normalized audio on FFmpeg 6", { timeout: 20000 }, async () => {
+  const input = path.join(directory, "normal-speed-aac.mp4");
+  const output = path.join(directory, "normal-speed-normalized.mp4");
+  await ffmpeg([
+    "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=12",
+    "-f", "lavfi", "-i", "sine=frequency=660:sample_rate=48000:duration=12",
+    "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p",
+    "-c:a", "aac", "-shortest", input,
+  ]);
+  await renderVideo({
+    input, output, source: await probeMedia(input),
+    settings: { ...DEFAULT_SETTINGS, fps: "30", normalizeAudio: true,
+      segments: [{ start: 0, end: 12 }] },
+    workDir: path.join(directory, "normal-speed-aac-work"),
+    onProgress: () => undefined, signal: AbortSignal.timeout(15000),
+  });
+  const media = await probeMedia(output);
+  assert.ok(Math.abs(media.duration - 12) < 0.05);
+  assert.equal(media.hasAudio, true);
+  const [beforeSamples, afterSamples] = await Promise.all([samples(input), samples(output)]);
+  assert.ok(rms(afterSamples) > rms(beforeSamples) * 1.3,
+    "The compatibility fix must preserve loudness normalization");
+  assert.ok(rms(afterSamples.subarray(afterSamples.length - 12000)) > 0.01,
+    "Normalized sound must continue through the end of the selected cut");
+});
+
 test("normalization raises quiet audio and cuts also support replacement audio or silent inputs", async () => {
   const normal = await render("normalize-base");
   const normalized = await render("normalize-enabled", {

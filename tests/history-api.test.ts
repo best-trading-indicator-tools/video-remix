@@ -353,8 +353,10 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       const ids = new Set(queued.map((job) => job.id));
       const deadline = Date.now() + 60000;
       let complete: RenderJob[] = [];
+      let current: RenderJob[] = [];
       while (Date.now() < deadline) {
-        const current = (await jobs()).filter((job) => ids.has(job.id));
+        current = (await jobs()).filter((job) => ids.has(job.id));
+        assert.equal(current.length, 2, "Both concurrent jobs must remain in the queue");
         assert.ok(current.filter((job) => job.status === "processing").length <= 1,
           "The two-slot queue must serialize equivalent source content across different source IDs");
         if (current.every((job) => !["queued", "processing"].includes(job.status))) {
@@ -363,7 +365,8 @@ test("export history survives new batches, renamed reuploads, deletion and expir
         }
         await sleep(50);
       }
-      assert.deepEqual(complete.map((job) => job.status).sort(), ["completed", "skipped"]);
+      assert.deepEqual(complete.map((job) => job.status).sort(), ["completed", "skipped"],
+        `Duplicate-import jobs did not finish: ${JSON.stringify(current)}\n${processLog}`);
       assert.equal((await history(first.id)).length, 1);
       assert.equal((await history(second.id)).length, 1);
       assert.equal((await history()).length, 4);

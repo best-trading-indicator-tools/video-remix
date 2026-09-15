@@ -773,7 +773,9 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
               : []),
             `atrim=duration=${decimal(clipLength)}`,
             "asetpts=PTS-STARTPTS",
-            `atempo=${s.speed}`,
+            // FFmpeg 6 can stall when the identity tempo filter feeds loudnorm.
+            // At normal speed it adds buffering without changing the audio.
+            ...(s.speed === 1 ? [] : [`atempo=${s.speed}`]),
           ];
       if (s.normalizeAudio) audioFilters.push("loudnorm=I=-16:TP=-1.5:LRA=11");
       audioFilters.push(
