@@ -3,7 +3,6 @@ import {
   Check,
   Film,
   LoaderCircle,
-  Plus,
   RefreshCw,
   Tag,
   Trash2,
@@ -234,12 +233,8 @@ export default function BrollPanel({
         </button>
       </div>
       <p className="broll-description">
-        Add clips you own or have licensed.{" "}
-        {aiMatching
-          ? "AI reads sample frames to match what your video says."
-          : "Matching uses their filenames and tags."}{" "}
-        Relevant clips briefly cover the picture while your main video's audio
-        keeps playing.
+        Upload footage you own or have licensed. Select the clips this video can
+        use.
       </p>
       <input
         ref={uploadInput}
@@ -357,10 +352,7 @@ export default function BrollPanel({
         ))}
       </div>
       {!loading && !assets.length && !error && (
-        <p className="broll-empty">
-          Your library is empty. Add clips, then select the ones this video can
-          use.
-        </p>
+        <p className="broll-empty">Your selected clips will appear here.</p>
       )}
       {assets.length > 0 && !selectedIds.length && (
         <p className="broll-empty">

@@ -27,3 +27,15 @@ Existing uncommitted stock/B-roll work is the starting point and must be preserv
 - AI is for semantic search and visual relevance. Motion/geometry checks run locally.
 - No platform acceptance score or guarantee.
 - User subsequently requested committing and pushing directly to main, without a pull request.
+
+## Studio polish and manual controls
+
+1. [x] Refresh every screen with a shared graphite palette, readable text, filled secondary buttons, consistent fields, larger typography, responsive navigation, and quieter Auto preferences. Validate before publishing.
+2. [ ] Improve manual controls against the Topyappers reference: preserve unrelated settings when applying looks, expose precise values and individual resets, make the full filter set discoverable, and improve preview/framing/audio controls.
+3. [x] Verify local credentials: DeepSeek and Pixabay keys exist in ignored `.env` with mode 0600; the backend loads them and the frontend does not receive them.
+
+### UI validation
+
+- Build/typecheck and all 147 tests pass. Isolated real API/FFmpeg exports and a browser-created caption revision pass output checks; selected B-roll stays locked during caption correction.
+- Browser review covers Auto, B-roll library, all Manual tabs, exports, result editor, captions, history, expanded publication/review/comparison forms, and quick guide. Desktop/tablet/phone layouts checked at 1440/768/390/360px; measured text contrast and horizontal-overflow checks used alongside screenshots. No browser errors or warnings.
+- Screenshots and isolated test data are generated under ignored output/temporary directories. No customer media or paid API calls were used for these UI checks.

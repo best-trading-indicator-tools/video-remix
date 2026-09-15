@@ -1,5 +1,4 @@
 import {
-  AudioLines,
   Check,
   ChevronDown,
   Clapperboard,
@@ -8,7 +7,6 @@ import {
   LoaderCircle,
   Scissors,
   Sparkles,
-  Subtitles,
 } from "lucide-react";
 import type {
   AutoCapabilities,
@@ -16,6 +14,7 @@ import type {
   VideoSource,
 } from "../shared/types";
 import BrollPanel from "./BrollPanel";
+import "./auto-panel.css";
 
 export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
   "9:16": "TikTok & Reels",
@@ -64,16 +63,16 @@ export default function AutoPanel({
       <div className="panel-heading">
         <h2>
           <Sparkles size={16} />
-          Your automatic edit
+          Auto editor
         </h2>
-        <span className="auto-badge">AUTO</span>
+        <span className="auto-badge">Guided edit</span>
       </div>
       <div className="auto-panel-body">
         <div className="auto-scope">
           <label htmlFor="auto-source">
             {sources.length
-              ? "Settings for this video"
-              : "Settings for new imports"}
+              ? "Editing preferences for"
+              : "Starting preferences"}
           </label>
           {sources.length > 0 && (
             <select
@@ -91,18 +90,17 @@ export default function AutoPanel({
           )}
           <p>
             {sources.length
-              ? "Choose a video to adjust its output. Other videos keep their settings."
-              : "Set your starting preferences, then add your footage."}
+              ? "These preferences belong to the selected video."
+              : "Add footage when you're ready. These preferences will apply to new videos."}
           </p>
           {sources.length > 1 && (
             <button type="button" disabled={libraryBusy} onClick={onApplyAll}>
-              <Copy size={14} /> Apply to all {sources.length} videos
+              <Copy size={14} /> Use for all {sources.length} videos
             </button>
           )}
           {sources.length > 1 && (
             <small>
-              Copies every Auto setting, including B-roll and maximum versions.
-              Also used for new imports.
+              Includes B-roll and version count. Also applies to new imports.
             </small>
           )}
           {libraryBusy && (
@@ -110,61 +108,6 @@ export default function AutoPanel({
               Finish the B-roll update before switching videos.
             </small>
           )}
-        </div>
-        <div className="auto-promise">
-          <span className="auto-promise-icon">
-            <Wand />
-          </span>
-          <h2>
-            You bring the footage.
-            <br />
-            <span>We'll find the edit.</span>
-          </h2>
-          <p>
-            Every video gets its own cut. Just upload your batch and press Auto
-            remix.
-          </p>
-        </div>
-        <div className="auto-pipeline">
-          <div>
-            <span>
-              <AudioLines size={15} />
-            </span>
-            <div>
-              <h3>Find the story</h3>
-              <p>
-                {capabilities?.transcription
-                  ? "Transcribe speech and pick a focused excerpt."
-                  : "Analyze timing and select an excerpt."}
-              </p>
-            </div>
-          </div>
-          <div>
-            <span>
-              <Scissors size={15} />
-            </span>
-            <div>
-              <h3>Make the cut</h3>
-              <p>
-                {capabilities?.transcription
-                  ? "Tighten pauses and build an opening hook."
-                  : "Build visual cuts and reframe your footage."}
-              </p>
-            </div>
-          </div>
-          <div>
-            <span>
-              <Subtitles size={15} />
-            </span>
-            <div>
-              <h3>Give it a fresh finish</h3>
-              <p>
-                {capabilities?.transcription
-                  ? "Add captions, callouts and optional supporting visuals."
-                  : "Reframe footage and balance the source audio."}
-              </p>
-            </div>
-          </div>
         </div>
         <div className="auto-output-summary">
           <div>
@@ -184,16 +127,15 @@ export default function AutoPanel({
             </span>
           </div>
         </div>
-        <details className="auto-preferences">
+        <details className="auto-preferences" open>
           <summary>
-            Adjust output{" "}
+            Output preferences{" "}
             <span>
-              Optional
               <ChevronDown size={13} />
             </span>
           </summary>
           <div className="auto-preferences-content">
-            <label>
+            <label className="auto-output-field">
               Format
               <select
                 value={options.aspect}
@@ -211,7 +153,7 @@ export default function AutoPanel({
                 ))}
               </select>
             </label>
-            <label>
+            <label className="auto-output-field">
               Target length
               <select
                 value={options.targetDuration}
@@ -229,7 +171,7 @@ export default function AutoPanel({
                 <option value={60}>Up to 60 seconds</option>
               </select>
             </label>
-            <label>
+            <label className="auto-output-field">
               Maximum versions
               <select
                 value={variants}
@@ -245,8 +187,7 @@ export default function AutoPanel({
               </select>
             </label>
             <p className="auto-preferences-note">
-              Per source video. Cuts that repeat another version too closely are
-              skipped, so your batch may contain fewer exports.
+              Per video. Similar cuts are skipped, so you may get fewer versions.
             </p>
             <label
               className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}
@@ -255,8 +196,8 @@ export default function AutoPanel({
                 <strong>New narration</strong>
                 <small>
                   {capabilities?.narration
-                    ? "Replace the original voice with a fresh scripted read."
-                    : "Narration is unavailable on this engine. Original audio is kept."}
+                    ? "Replace the original voice with a scripted read."
+                    : "Unavailable on this engine. Original audio is kept."}
                 </small>
               </span>
               <input
@@ -270,7 +211,7 @@ export default function AutoPanel({
             </label>
             <div className="supporting-visuals">
               <label htmlFor="supporting-visuals">
-                Supporting visuals · optional
+                Supporting visuals
               </label>
               <select
                 id="supporting-visuals"
@@ -285,7 +226,7 @@ export default function AutoPanel({
                   })
                 }
               >
-                <option value="off">Off</option>
+                <option value="off">Original footage only</option>
                 <option value="stock">Stock B-roll · Pixabay</option>
                 <option value="library">My B-roll videos</option>
                 <option
@@ -299,8 +240,8 @@ export default function AutoPanel({
                 </option>
               </select>
               <p className="auto-preferences-note">
-                Add up to three brief cutaways at relevant moments. Your main
-                audio continues underneath.
+                Optional cutaways at relevant moments. Your main audio continues
+                underneath.
               </p>
               {options.supportingVisuals === "stock" && (
                 <div className="broll-matching">
@@ -330,8 +271,9 @@ export default function AutoPanel({
                     >
                       Pixabay
                     </a>{" "}
-                    using your edited speech. Moving shots are checked in the output crop. Unmatched moments
-                    keep your original picture. No clips to upload.
+                    using your speech. Each selected interval is checked for
+                    motion and crop suitability. If nothing fits, your original
+                    picture stays.
                   </p>
                   {!capabilities?.stockBroll && (
                     <p className="auto-preferences-note" role="status">
@@ -343,8 +285,8 @@ export default function AutoPanel({
                       >
                         Pixabay API key
                       </a>{" "}
-                      configured as PIXABAY_API_KEY on the server. Until then,
-                      exports keep your original footage.
+                      configured on the server. Until then, exports keep your
+                      original footage.
                     </p>
                   )}
                 </div>
@@ -353,7 +295,7 @@ export default function AutoPanel({
                 options.supportingVisuals === "both") && (
                 <p className="auto-preferences-note">
                   Animated text cards turn key points from your video's speech
-                  into supporting visuals. Rendered locally with HyperFrames.
+                  into supporting visuals.
                 </p>
               )}
               {!capabilities?.motionGraphics &&
@@ -386,7 +328,7 @@ export default function AutoPanel({
                           : "Filename & tags · local"}
                       </option>
                       <option value="ai" disabled={!capabilities?.brollAI}>
-                        AI meaning &amp; visual matching · DeepSeek
+                        Meaning &amp; visual matching · DeepSeek
                       </option>
                     </select>
                     {options.brollMatching === "ai" ? (
@@ -394,8 +336,8 @@ export default function AutoPanel({
                         Sends sampled B-roll frames and transcript excerpts to
                         DeepSeek.{" "}
                         {options.supportingVisuals === "stock"
-                          ? "Uses neighboring speech to search by meaning, then inspects up to six stock candidates. Descriptions are cached."
-                          : "Analyzes up to 20 selected clips per edit; descriptions are reused."}
+                          ? "Uses surrounding speech to find relevant shots. Previous inspections are reused."
+                          : "Checks selected clips for a relevant match. Previous inspections are reused."}
                       </p>
                     ) : (
                       <p className="auto-preferences-note">
@@ -409,7 +351,7 @@ export default function AutoPanel({
                       <p className="auto-preferences-note">
                         {options.brollMatching === "ai"
                           ? "AI matching is unavailable. Original footage will be kept until a key is configured."
-                          : "AI matching needs DEEPSEEK_API_KEY configured on the server."}
+                          : "Add a DeepSeek API key on the server to enable AI matching."}
                       </p>
                     )}
                   </div>
@@ -428,12 +370,16 @@ export default function AutoPanel({
                 </>
               )}
             </div>
-            <p className="auto-preferences-note">
-              Shorter videos stay short. Automatic edits use their own settings;
-              manual edits are kept in Manual mode.
-            </p>
           </div>
         </details>
+        <div className="auto-workflow-note">
+          <Scissors size={16} />
+          <p>
+            {capabilities?.transcription
+              ? "Auto selects an excerpt and adds captions. You can refine the cut, text, and visuals after rendering."
+              : "Auto selects and reframes footage. You can refine the cut and visuals after rendering."}
+          </p>
+        </div>
         {capabilities === null ? (
           <div className="auto-capability-note">
             <LoaderCircle size={12} className="spin" />
@@ -456,8 +402,4 @@ export default function AutoPanel({
       </div>
     </aside>
   );
-}
-
-function Wand() {
-  return <Sparkles size={22} strokeWidth={1.6} />;
 }

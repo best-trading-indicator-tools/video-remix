@@ -1110,14 +1110,14 @@ export default function App() {
           <div>
             <div className="eyebrow">
               <span />
-              YOUR FOOTAGE. MORE POSSIBILITIES.
+              REMIX STUDIO / YOUR CREATIVE WORKSPACE
             </div>
             <h1>
               {view === "studio" ? (
                 <>
                   {mode === "auto" ? (
                     <>
-                      Your footage. <span>Automatically reimagined.</span>
+                      Good footage. <span>A sharper story.</span>
                     </>
                   ) : (
                     <>
@@ -1126,7 +1126,7 @@ export default function App() {
                   )}
                 </>
               ) : view === "history" ? (
-                <>Remember your <span>earlier edits.</span></>
+                <>Your work, <span>in perspective.</span></>
               ) : (
                 <>
                   Ready for your <span>next post.</span>
@@ -1136,8 +1136,8 @@ export default function App() {
             <p>
               {view === "studio"
                 ? mode === "auto"
-                  ? "Upload your videos. One click finds the story, makes the cuts, and prepares every remix."
-                  : "Fresh edits, new formats, endless creative possibilities. All in one batch."
+                  ? "Find a focused excerpt, shape the edit, and refine every detail before your next post."
+                  : "Shape the frame, dial in your look, and make every version your own."
                 : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>

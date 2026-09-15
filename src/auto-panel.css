@@ -1,0 +1,426 @@
+/* Auto uses the same surfaces and control hierarchy as the editing workspace. */
+.auto-panel.panel .auto-panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+  padding: 22px;
+}
+
+.auto-panel.panel .auto-badge {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-raised);
+  color: var(--subtle);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.auto-panel.panel .auto-scope {
+  margin: 0;
+  padding: 0 0 20px;
+  border-bottom: 1px solid var(--line);
+}
+
+.auto-panel.panel .auto-scope > label,
+.auto-panel.panel .broll-matching > label,
+.auto-panel.panel .supporting-visuals > label {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.auto-panel.panel select,
+.auto-panel.panel .broll-tag-editor input {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background-color: var(--field);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+}
+
+.auto-panel.panel .auto-scope > p,
+.auto-panel.panel .auto-scope > small,
+.auto-panel.panel .auto-preferences-note,
+.auto-panel.panel .broll-description,
+.auto-panel.panel .broll-footnote,
+.auto-panel.panel .broll-empty {
+  margin: 8px 0 0;
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.auto-panel.panel button {
+  min-height: 36px;
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 550;
+  line-height: 1.4;
+  box-shadow: none;
+  transition: background-color 150ms, border-color 150ms;
+}
+
+.auto-panel.panel button:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: #566274;
+  color: var(--text);
+}
+
+.auto-panel.panel .auto-scope > button {
+  min-height: 40px;
+  margin-top: 14px;
+}
+
+.auto-panel.panel a {
+  color: var(--accent);
+  text-underline-offset: 3px;
+}
+
+.auto-panel.panel .auto-output-summary {
+  display: flex;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+  grid-column: auto;
+}
+
+.auto-panel.panel .auto-output-summary > div {
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.auto-panel.panel .auto-output-summary > div > svg {
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.auto-panel.panel .auto-output-summary strong {
+  padding: 3px 6px;
+  border-color: var(--line);
+  border-radius: 5px;
+  background: var(--surface-raised);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.auto-panel.panel .auto-original-voice {
+  display: inline;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.auto-panel.panel .auto-preferences {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  grid-column: auto;
+}
+
+.auto-panel.panel .auto-preferences summary {
+  min-height: 32px;
+  gap: 12px;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.auto-panel.panel .auto-preferences summary > span {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.auto-panel.panel .auto-preferences summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+  border-radius: 3px;
+}
+
+.auto-panel.panel .auto-preferences summary svg {
+  width: 16px;
+  height: 16px;
+}
+
+.auto-panel.panel .auto-preferences-content {
+  gap: 16px;
+  padding-top: 14px;
+}
+
+.auto-panel.panel .auto-output-field {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  color: var(--subtle);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.auto-panel.panel .auto-preferences-content > .auto-preferences-note {
+  margin: -7px 0 0;
+}
+
+.auto-panel.panel .auto-narration-toggle {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 2px;
+  padding: 18px 0 2px;
+  border-color: var(--line);
+  opacity: 1;
+}
+
+.auto-panel.panel .auto-narration-toggle > span {
+  gap: 5px;
+}
+
+.auto-panel.panel .auto-narration-toggle strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auto-panel.panel .auto-narration-toggle small {
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.auto-panel.panel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+}
+
+.auto-panel.panel .supporting-visuals {
+  padding-top: 20px;
+  border-color: var(--line);
+}
+
+.auto-panel.panel .broll-matching {
+  margin-top: 18px;
+}
+
+.auto-panel.panel .auto-workflow-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  color: var(--subtle);
+}
+
+.auto-panel.panel .auto-workflow-note > svg {
+  flex-shrink: 0;
+  margin-top: 3px;
+  color: var(--accent);
+}
+
+.auto-panel.panel .auto-workflow-note p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.auto-panel.panel .auto-capability-note {
+  gap: 8px;
+  margin: 0;
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.auto-panel.panel .auto-capability-note svg {
+  color: var(--green);
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+}
+
+.auto-panel.panel .broll-library {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-color: var(--line);
+}
+
+.auto-panel.panel .broll-heading h3 {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auto-panel.panel .broll-heading > button {
+  width: 36px;
+  padding: 8px;
+  flex-shrink: 0;
+}
+
+.auto-panel.panel .broll-upload {
+  margin-top: 14px;
+  padding: 16px 13px;
+  gap: 5px 10px;
+  border: 1px dashed #697688;
+  background: var(--field);
+}
+
+.auto-panel.panel .broll-upload.dragging {
+  border-color: var(--accent);
+  background: var(--accent-dark);
+}
+
+.auto-panel.panel .broll-upload > span {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.auto-panel.panel .broll-upload > small {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.auto-panel.panel .broll-progress {
+  height: 4px;
+  background: var(--surface-hover);
+}
+
+.auto-panel.panel .broll-cancel {
+  margin-top: 9px;
+}
+
+.auto-panel.panel .broll-selection-heading {
+  gap: 10px;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.auto-panel.panel .broll-assets {
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.auto-panel.panel .broll-asset {
+  padding: 12px;
+  border-color: var(--line);
+  border-radius: 10px;
+  background: var(--field);
+}
+
+.auto-panel.panel .broll-asset.selected {
+  border-color: #aa8268;
+  background: var(--surface-raised);
+}
+
+.auto-panel.panel .broll-asset-row > label {
+  gap: 10px;
+}
+
+.auto-panel.panel .broll-asset-row img {
+  width: 42px;
+  height: 54px;
+  border-radius: 6px;
+  background: var(--canvas);
+}
+
+.auto-panel.panel .broll-asset-row strong {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.auto-panel.panel .broll-asset-row small {
+  color: var(--subtle);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.auto-panel.panel .broll-remove {
+  min-width: 34px;
+  padding: 8px;
+}
+
+.auto-panel.panel .broll-remove:hover:not(:disabled) {
+  border-color: #8c514f;
+  background: #3c2529;
+  color: #ffb9b3;
+}
+
+.auto-panel.panel .broll-tag-row {
+  margin-top: 12px;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.auto-panel.panel .broll-tag-editor {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-color: var(--line);
+}
+
+.auto-panel.panel .broll-tag-editor > label {
+  gap: 9px;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.auto-panel.panel .broll-tag-editor > button {
+  align-self: stretch;
+}
+
+.auto-panel.panel .broll-error,
+.auto-panel.panel .broll-notice {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.auto-panel.panel .broll-error {
+  color: #ffb9b3;
+}
+
+.auto-panel.panel .broll-notice {
+  color: var(--green);
+}
+
+@media (max-width: 680px) {
+  .auto-panel.panel .auto-panel-body {
+    padding: 18px;
+  }
+
+  .auto-panel.panel select,
+  .auto-panel.panel .broll-tag-editor input {
+    min-height: 46px;
+    font-size: 16px;
+  }
+
+  .auto-panel.panel button {
+    min-height: 42px;
+  }
+}
