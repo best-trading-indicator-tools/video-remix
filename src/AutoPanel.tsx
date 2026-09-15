@@ -223,7 +223,8 @@ export default function AutoPanel({
                 <option value="off">Off</option>
               </select>
             </label>
-            <p className="auto-preferences-note">Checks the opening, meaning, and ending using the local model and original transcript. Repair mode can try up to two corrections, keeping proposals only when the follow-up check reports fewer issues. Models can miss problems; review the finished short.</p>
+            <p className="auto-preferences-note">DeepSeek checks the opening, meaning, and ending against the original transcript. Repair mode can try up to two corrections, keeping proposals only when the follow-up check reports fewer issues. Models can miss problems; review the finished short.</p>
+            <p className="auto-preferences-note">When available, AI selection, checks, and repairs use {capabilities?.intelligenceModel ? `DeepSeek · ${capabilities.intelligenceModel}` : "DeepSeek"}. Bounded transcript excerpts, captions, headings, and edit metadata are sent to DeepSeek. Transcription and rendering stay on this computer.</p>
             <label
               className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}
             >

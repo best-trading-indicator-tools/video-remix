@@ -60,7 +60,7 @@ globalThis.fetch = async (input, init) => {
 };`);
     server = spawn(process.execPath, ["--import", preload, "--import", "tsx", "server/index.ts"], {
       cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATA_DIR: path.join(directory, "data"),
-        AUTO_LOCAL_AI: "false", WHISPER_CACHE_DIR: path.join(directory, "no-model"),
+        AUTO_AI: "false", WHISPER_CACHE_DIR: path.join(directory, "no-model"),
         DEEPSEEK_API_KEY: "test-private-prompt-key", PIXABAY_API_KEY: "", RENDER_CONCURRENCY: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     });

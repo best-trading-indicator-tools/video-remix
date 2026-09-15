@@ -66,6 +66,8 @@ export interface AutoCapabilities {
   transcription: boolean;
   model: string;
   intelligence: boolean;
+  intelligenceProvider?: "deepseek";
+  intelligenceModel?: string;
   narration: boolean;
   motionGraphics?: boolean;
   brollAI?: boolean;

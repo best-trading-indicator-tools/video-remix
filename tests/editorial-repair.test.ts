@@ -42,8 +42,10 @@ const run = (overrides: Partial<Parameters<typeof repairEditorialPlan>[0]> = {})
 });
 
 test("bounded editorial repair accepts independently verified improvements and preserves the best previous edit", async t => {
-  const configured = config.localAI;
-  config.localAI = true;
+  const configured = config.aiEnabled;
+  const savedEnvironment = { DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL };
+  config.aiEnabled = true;
+  Object.assign(process.env, { DEEPSEEK_API_KEY: "editorial-repair-test-key", DEEPSEEK_TEXT_MODEL: "editorial-test-model" });
   try {
     await t.test("source-grounded hook correction stays immutable and does not create a user revision", async () => {
       const plan = edit(), original = structuredClone(plan), transcript = source(), originalTranscript = structuredClone(transcript);
@@ -229,7 +231,7 @@ test("bounded editorial repair accepts independently verified improvements and p
       assert.equal(bounded.repairLog.attempts.length, 0); assert.match(bounded.repairLog.stopReason, /bounded model context/u);
       assert.equal(proposals, 0);
     });
-    await t.test("local proposal failure and overall timeout retain the reviewed plan without retry storms", async () => {
+    await t.test("DeepSeek proposal failure and overall timeout retain the reviewed plan without retry storms", async () => {
       const failure = await run({ proposer: async () => { throw new DOMException("private server path", "TimeoutError"); } });
       assert.deepEqual(failure.plan, edit()); assert.equal(failure.repairLog.attempts.length, 1);
       assert.equal(failure.repairLog.attempts[0]!.outcome, "unavailable");
@@ -248,5 +250,10 @@ test("bounded editorial repair accepts independently verified improvements and p
       await assert.rejects(running, { name: "AbortError" });
       await assert.rejects(run({ signal: controller.signal }), { name: "AbortError" });
     });
-  } finally { config.localAI = configured; }
+  } finally {
+    config.aiEnabled = configured;
+    for (const [key, value] of Object.entries(savedEnvironment)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 });

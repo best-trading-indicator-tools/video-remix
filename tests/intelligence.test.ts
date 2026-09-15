@@ -10,31 +10,33 @@ const candidates: Candidate[] = [
 ];
 type Reply = { value?: unknown; status?: number; raw?: string; fail?: Error; abort?: AbortController };
 type RequestBody = {
-  prompt: string; context?: unknown; messages?: unknown; format: { properties: Record<string, unknown> };
-  options: { seed: number; temperature: number }; model: string;
+  prompt: string; messages: { role: string; content: string }[]; format: { properties: Record<string, unknown> };
+  temperature: number; model: string;
 };
 const packaging = (hook: string, narration = "") => ({ hook, callouts: [], narration });
 
 test("creative editing separates candidate selection from grounded excerpt packaging", async (t) => {
   const oldFetch = globalThis.fetch;
-  const oldLocalAI = config.localAI, oldUrl = config.ollamaUrl;
-  config.localAI = true;
-  config.ollamaUrl = "http://127.0.0.1:11439";
+  const oldEnabled = config.aiEnabled;
+  const savedEnvironment = { DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL };
+  config.aiEnabled = true;
+  Object.assign(process.env, { DEEPSEEK_API_KEY: "creative-test-key", DEEPSEEK_TEXT_MODEL: "editorial-test-model" });
   let replies: Reply[] = [];
   let requests: RequestBody[] = [];
-  let availabilityCalls = 0;
   const run = (responses: Reply[], narration = false, signal = new AbortController().signal) => {
     replies = [...responses]; requests = [];
     return writeCreativePlan(candidates, 3, "fr", narration, signal);
   };
   globalThis.fetch = async (input, init) => {
     const url = String(input);
-    if (url === `${config.ollamaUrl}/api/tags`) {
-      availabilityCalls++;
-      return Response.json({ models: [{ name: config.ollamaModel }] });
-    }
-    assert.equal(url, `${config.ollamaUrl}/api/generate`, "No other local or cloud service may be called");
-    requests.push(JSON.parse(String(init?.body)) as RequestBody);
+    assert.equal(url, "https://api.deepseek.com/chat/completions", "No alternate service may be called");
+    assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer creative-test-key");
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.model, "editorial-test-model");
+    assert.equal(body.response_format.type, "json_object");
+    assert.deepEqual(body.messages.map((message: { role: string }) => message.role), ["system", "user"]);
+    const supplied = JSON.parse(body.messages[1].content);
+    requests.push({ ...body, prompt: JSON.stringify(supplied.input), format: supplied.outputSchema } as RequestBody);
     const reply = replies.shift();
     assert.ok(reply, "The editing workflow made an unexpected extra model call");
     if (reply.abort) {
@@ -42,7 +44,7 @@ test("creative editing separates candidate selection from grounded excerpt packa
       throw init?.signal?.reason;
     }
     if (reply.fail) throw reply.fail;
-    return Response.json({ response: reply.raw ?? JSON.stringify(reply.value) }, { status: reply.status ?? 200 });
+    return Response.json({ choices: [{ finish_reason: "stop", message: { content: reply.raw ?? JSON.stringify(reply.value) } }] }, { status: reply.status ?? 200 });
   };
   try {
     await t.test("the headline request sees only the selected excerpt, with no earlier response context", async () => {
@@ -59,9 +61,8 @@ test("creative editing separates candidate selection from grounded excerpt packa
       assert.ok(!("candidates" in headline));
       assert.doesNotMatch(requests[1]!.prompt, /kitten|Pet owners|carpenter|wood grain/u);
       assert.match(requests[1]!.prompt, /language \(fr\)|version 3/u);
-      assert.equal(requests[1]!.options.seed, 51);
-      assert.equal(requests[1]!.context, undefined);
-      assert.equal(requests[1]!.messages, undefined);
+      assert.equal(requests[1]!.temperature, 0.45);
+      assert.deepEqual(requests[1]!.messages.map(message => message.role), ["system", "user"], "Packaging cannot inherit earlier assistant responses");
       assert.ok(!("windowIndex" in requests[1]!.format.properties), "Packaging cannot change the selected cut");
     });
 
@@ -118,7 +119,7 @@ test("creative editing separates candidate selection from grounded excerpt packa
         assert.doesNotMatch(request.prompt, /kitten|carpenter/u);
       }
       assert.match(requests[2]!.prompt, /prior narration copied/u);
-      assert.equal(requests[2]!.options.seed, 52);
+      assert.equal(requests[2]!.temperature, 0.65);
     });
 
     await t.test("a second copied narration is discarded while retaining that excerpt's valid headline", async () => {
@@ -153,14 +154,23 @@ test("creative editing separates candidate selection from grounded excerpt packa
     });
 
     await t.test("empty candidate lists never call the model", async () => {
-      requests = []; const before = availabilityCalls;
+      requests = [];
       assert.equal(await writeCreativePlan([], 1, "en", false, new AbortController().signal), null);
       assert.equal(requests.length, 0);
-      assert.equal(availabilityCalls, before);
+    });
+
+    await t.test("disabled AI and missing credentials cannot call DeepSeek or fall back to another provider", async () => {
+      config.aiEnabled = false;
+      assert.equal(await run([]), null); assert.equal(requests.length, 0);
+      config.aiEnabled = true; process.env.DEEPSEEK_API_KEY = "";
+      assert.equal(await run([]), null); assert.equal(requests.length, 0);
+      process.env.DEEPSEEK_API_KEY = "creative-test-key";
     });
   } finally {
     globalThis.fetch = oldFetch;
-    config.localAI = oldLocalAI;
-    config.ollamaUrl = oldUrl;
+    config.aiEnabled = oldEnabled;
+    for (const [key, value] of Object.entries(savedEnvironment)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
   }
 });

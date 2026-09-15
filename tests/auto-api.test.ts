@@ -139,7 +139,7 @@ test(
           HOST: "127.0.0.1",
           DATA_DIR: dataDirectory,
           RENDER_CONCURRENCY: "1",
-          AUTO_LOCAL_AI: "false",
+          AUTO_AI: "false",
           WHISPER_CACHE_DIR: path.join(directory, "model-not-installed"),
           MAX_FILES: "4",
           MAX_FILE_SIZE_MB: "2",

@@ -43,6 +43,8 @@ export interface EditorialReport {
   policyVersion: string;
   /** Configured model identifier; an immutable weight digest is not implied. */
   modelVersion: string | null;
+  /** Present only when a configured provider review was attempted. */
+  provider?: "deepseek";
   checks: EditorialCheck[];
   issues: EditorialIssue[];
   coverage: EditorialCoverage;
@@ -63,5 +65,5 @@ export interface EditorialReviewRequest {
   callouts?: { start: number; end: number; text: string }[];
   checks: SemanticEditorialCheck[];
 }
-/** Test injection uses the same untrusted reply validation as the local model. */
+/** Test injection uses the same untrusted reply validation as the provider. */
 export type EditorialReviewer = (request: EditorialReviewRequest, signal: AbortSignal) => Promise<unknown>;

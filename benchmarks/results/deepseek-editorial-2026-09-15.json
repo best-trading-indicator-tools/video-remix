@@ -1,0 +1,473 @@
+{
+  "date": "2026-09-15",
+  "provider": "deepseek",
+  "model": "deepseek-flash",
+  "scope": "Authored text examples and live planning/repair calls; no human acceptance study or rendered-video model evaluation.",
+  "initialReviewRun": [
+    {
+      "model": "deepseek-flash",
+      "provider": "deepseek",
+      "available": true
+    },
+    {
+      "fixture": "complete-camera-advice",
+      "expected": "pass",
+      "expectedIssues": [],
+      "actual": "needs-review",
+      "semanticCoverage": "complete",
+      "detected": [
+        "hook-supported"
+      ],
+      "expectedStatusMatched": false,
+      "missedExpectedIssues": [],
+      "seconds": 1.91,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “A tripod keeps the camera steady.”. Subject or question: How to keep the camera steady. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “Use a timer to avoid shaking it when you press the shutter.”. Point: Using a timer prevents camera shake when pressing the shutter. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "issue",
+          "explanation": "On screen: “Keep your camera steady” (All camera use, unconditionally; absolute). Selected source: A tripod keeps the camera steady. Use a timer to avoid shaking it when you press the shutter. (Camera steadiness achieved via tripod and timer; absolute)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "pass",
+          "explanation": "Selected: A tripod keeps the camera steady. Use a timer to avoid shaking it when you press the shutter.. Original: A tripod keeps the camera steady. Use a timer to avoid shaking it when you press the shutter.. No meaning change identified."
+        }
+      ]
+    },
+    {
+      "fixture": "omitted-caveat-universal-hook",
+      "expected": "needs-review",
+      "expectedIssues": [
+        "hook-supported",
+        "meaning-preserved"
+      ],
+      "actual": "needs-review",
+      "semanticCoverage": "complete",
+      "detected": [
+        "opening-context",
+        "ending-complete",
+        "hook-supported",
+        "meaning-preserved"
+      ],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 2.3,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "issue",
+          "explanation": "Opening: “Using a tripod reduces camera shake.”. Subject or question: Whether using a tripod reduces camera shake. Missing setup: It does not prevent a moving subject from blurring.."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "issue",
+          "explanation": "Ending: “Using a tripod reduces camera shake.”. Point: Tripods reduce camera shake. Unresolved: The hook promises tripods prevent all blur, but the short ends without addressing subject-motion blur.."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "issue",
+          "explanation": "On screen: “Tripods prevent all blur” (all blur, universally; absolute). Selected source: Using a tripod reduces camera shake. (camera shake only; unspecified)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "issue",
+          "explanation": "Selected: Using a tripod reduces camera shake.. Original: Using a tripod reduces camera shake. It does not prevent a moving subject from blurring.. Change: The original limits the benefit to camera shake and explicitly denies preventing subject-motion blur; the short omits that qualification.."
+        }
+      ]
+    },
+    {
+      "fixture": "retained-paper-qualification-captions",
+      "expected": "pass",
+      "expectedIssues": [],
+      "actual": "pass",
+      "semanticCoverage": "complete",
+      "detected": [],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 2.13,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “The blue sorting bin holds paper.”. Subject or question: Which bin holds paper. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “Put clean paper in it, but keep wet paper out.”. Point: Clean paper belongs in the blue bin, while wet paper should be kept out.. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "pass",
+          "explanation": "On screen: “Clean paper goes in the blue bin” (Clean paper and the blue bin; absolute). Selected source: The blue sorting bin holds paper; put clean paper in it, but keep wet paper out. (Paper, clean paper, and wet paper in relation to the blue sorting bin; absolute)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "pass",
+          "explanation": "Selected: Put clean paper in the blue bin, but keep wet paper out.. Original: Put clean paper in it, but keep wet paper out.. No meaning change identified."
+        },
+        {
+          "check": "captions-supported",
+          "verdict": "pass",
+          "explanation": "Caption: “The blue sorting bin holds paper.”. Speech: “The blue sorting bin holds paper.”. No unsupported wording identified."
+        }
+      ]
+    },
+    {
+      "fixture": "removed-archive-negation",
+      "expected": "needs-review",
+      "expectedIssues": [
+        "meaning-preserved"
+      ],
+      "actual": "unavailable",
+      "semanticCoverage": "unavailable",
+      "detected": [],
+      "failure": "provider-or-evidence-validation-failed",
+      "expectedStatusMatched": false,
+      "missedExpectedIssues": [
+        "meaning-preserved"
+      ],
+      "seconds": 2.06,
+      "findings": []
+    },
+    {
+      "calls": 4,
+      "limitation": "Four authored textual examples; this does not measure human acceptance, audio, visuals or platform eligibility."
+    }
+  ],
+  "diagnosticReplay": {
+    "calls": 1,
+    "fixture": "removed-archive-negation",
+    "outcome": "Validated meaning-preserved issue; response reliability differed from the initial call."
+  },
+  "afterGeneralPromptRefinement": [
+    {
+      "model": "deepseek-flash",
+      "provider": "deepseek",
+      "available": true
+    },
+    {
+      "fixture": "complete-camera-advice",
+      "expected": "pass",
+      "expectedIssues": [],
+      "actual": "pass",
+      "semanticCoverage": "complete",
+      "detected": [],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 2.63,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “A tripod keeps the camera steady.”. Subject or question: The opening identifies the subject: using a tripod to keep the camera steady, followed by advice to use a timer to avoid shaking when pressing the shutter.. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “Use a timer to avoid shaking it when you press the shutter.”. Point: The speech gives two complete pieces of camera-steadiness advice: a tripod steadies the camera, and a timer prevents shake when pressing the shutter.. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "pass",
+          "explanation": "On screen: “Keep your camera steady” (A general imperative to keep the camera steady, not a factual assertion about a specific method or guaranteed result.; unspecified). Selected source: A tripod keeps the camera steady. Use a timer to avoid shaking it when you press the shutter. (Advice about using a tripod and a timer to keep the camera steady and avoid shaking when pressing the shutter.; unspecified)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "pass",
+          "explanation": "Selected: A tripod keeps the camera steady, and using a timer avoids shaking the camera when pressing the shutter.. Original: A tripod keeps the camera steady, and using a timer avoids shaking the camera when pressing the shutter.. No meaning change identified."
+        }
+      ]
+    },
+    {
+      "fixture": "omitted-caveat-universal-hook",
+      "expected": "needs-review",
+      "expectedIssues": [
+        "hook-supported",
+        "meaning-preserved"
+      ],
+      "actual": "needs-review",
+      "semanticCoverage": "complete",
+      "detected": [
+        "hook-supported",
+        "meaning-preserved"
+      ],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 2.23,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “Using a tripod reduces camera shake.”. Subject or question: The subject is the effect of using a tripod on camera shake.. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “Using a tripod reduces camera shake.”. Point: Using a tripod reduces camera shake; the statement is a complete assertion with no pending question.. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "issue",
+          "explanation": "On screen: “Tripods prevent all blur” (All blur, universally, in all situations.; absolute). Selected source: Using a tripod reduces camera shake. (Camera shake only, and only a reduction.; conditional)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "issue",
+          "explanation": "Selected: Using a tripod reduces camera shake.. Original: Using a tripod reduces camera shake, but it does not prevent a moving subject from blurring.. Change: The original limitation that a tripod does not prevent a moving subject from blurring is omitted, so the selected speech implies tripods address blur more broadly than the source states.."
+        }
+      ]
+    },
+    {
+      "fixture": "retained-paper-qualification-captions",
+      "expected": "pass",
+      "expectedIssues": [],
+      "actual": "pass",
+      "semanticCoverage": "complete",
+      "detected": [],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 3.21,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “The blue sorting bin holds paper.”. Subject or question: Which bin holds paper and what goes in it. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “Put clean paper in it, but keep wet paper out.”. Point: The blue bin is for paper, and clean paper should go in while wet paper should be kept out.. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "pass",
+          "explanation": "On screen: “Clean paper goes in the blue bin” (Clean paper and the blue bin; unspecified). Selected source: Put clean paper in the blue sorting bin, but keep wet paper out. (Clean paper and the blue sorting bin, excluding wet paper; conditional)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "pass",
+          "explanation": "Selected: The blue sorting bin holds paper; put clean paper in it, but keep wet paper out.. Original: The blue sorting bin holds paper; put clean paper in it, but keep wet paper out.. No meaning change identified."
+        },
+        {
+          "check": "captions-supported",
+          "verdict": "pass",
+          "explanation": "Caption: “The blue sorting bin holds paper.”. Speech: “The blue sorting bin holds paper.”. No unsupported wording identified."
+        }
+      ]
+    },
+    {
+      "fixture": "removed-archive-negation",
+      "expected": "needs-review",
+      "expectedIssues": [
+        "meaning-preserved"
+      ],
+      "actual": "needs-review",
+      "semanticCoverage": "complete",
+      "detected": [
+        "meaning-preserved"
+      ],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 1.95,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “The archive is”. Subject or question: The subject is the archive and its opening days; the assembled opening states the archive is open on Sundays.. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “open on Sundays.”. Point: The archive is open on Sundays, a complete assertion about the archive's opening day.. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "pass",
+          "explanation": "On screen: “Archive opening days” (A topic label about the archive's opening days, not an asserted schedule.; unspecified). Selected source: The archive is open on Sundays. (The archive's opening day, stated as Sunday.; absolute)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "issue",
+          "explanation": "Selected: The archive is open on Sundays.. Original: The archive is not open on Sundays; it opens on Mondays.. Change: The original negation 'not' was removed, reversing the archive's Sunday status, and the original Monday opening was omitted.."
+        }
+      ]
+    },
+    {
+      "fixture": "heldout-seedling-topic",
+      "expected": "pass",
+      "expectedIssues": [],
+      "actual": "unavailable",
+      "semanticCoverage": "unavailable",
+      "detected": [],
+      "failure": "provider-or-evidence-validation-failed",
+      "expectedStatusMatched": false,
+      "missedExpectedIssues": [],
+      "seconds": 2.19,
+      "findings": []
+    },
+    {
+      "fixture": "heldout-unsupported-daily-instruction",
+      "expected": "needs-review",
+      "expectedIssues": [
+        "hook-supported"
+      ],
+      "actual": "needs-review",
+      "semanticCoverage": "complete",
+      "detected": [
+        "hook-supported"
+      ],
+      "expectedStatusMatched": true,
+      "missedExpectedIssues": [],
+      "seconds": 2.09,
+      "findings": [
+        {
+          "check": "opening-context",
+          "verdict": "pass",
+          "explanation": "Opening: “Before watering a seedling, check whether the soil is dry.”. Subject or question: When to water a seedling: check soil dryness first.. No missing setup identified."
+        },
+        {
+          "check": "ending-complete",
+          "verdict": "pass",
+          "explanation": "Ending: “Add a little water only when the soil feels dry.”. Point: Water seedlings only when the soil is dry, and then only a little.. No unresolved promise identified."
+        },
+        {
+          "check": "hook-supported",
+          "verdict": "issue",
+          "explanation": "On screen: “Water seedlings every day” (Watering seedlings daily, unconditionally.; absolute). Selected source: Add a little water only when the soil feels dry. (Watering seedlings only when the soil feels dry.; conditional)."
+        },
+        {
+          "check": "meaning-preserved",
+          "verdict": "pass",
+          "explanation": "Selected: Before watering a seedling, check whether the soil is dry; add a little water only when the soil feels dry.. Original: Before watering a seedling, check whether the soil is dry; add a little water only when the soil feels dry.. No meaning change identified."
+        }
+      ]
+    },
+    {
+      "calls": 6,
+      "limitation": "Authored textual examples; this does not measure human acceptance, audio, visuals or platform eligibility."
+    }
+  ],
+  "pipelineRun": [
+    {
+      "provider": "deepseek",
+      "model": "deepseek-flash",
+      "available": true,
+      "maxRequests": 8,
+      "maxRuntimeSeconds": 180,
+      "authoredTextOnly": true
+    },
+    {
+      "stage": "discovery",
+      "fixture": "complete-camera-advice",
+      "calls": 1,
+      "status": "validated-source-proposals",
+      "coverage": {
+        "totalUnits": 2,
+        "reviewedUnits": 2,
+        "full": true,
+        "intervals": [
+          {
+            "start": 0,
+            "end": 5.71
+          }
+        ]
+      },
+      "candidateCount": 1,
+      "sourceAnchorsValidated": true,
+      "ideas": [
+        {
+          "kind": "explanation",
+          "summary": "Explains that a tripod steadies the camera and that using the timer prevents shake caused by pressing the shutter.",
+          "firstUnit": 0,
+          "lastUnit": 1,
+          "start": 0,
+          "end": 5.89
+        }
+      ]
+    },
+    {
+      "stage": "selection-and-packaging",
+      "calls": 2,
+      "status": "validated-model-output",
+      "selectedIdea": {
+        "kind": "explanation",
+        "summary": "Explains that a tripod steadies the camera and that using the timer prevents shake caused by pressing the shutter.",
+        "firstUnit": 0,
+        "lastUnit": 1
+      },
+      "packagingSource": {
+        "start": 0,
+        "end": 5.89,
+        "text": "A tripod keeps the camera steady. Use a timer to avoid shaking it when you press the shutter."
+      },
+      "sourceAnchorsValidated": true,
+      "hook": "Keep Your Camera Steady: Tripod and Timer",
+      "callouts": [
+        "Tripod keeps camera steady",
+        "Use timer to avoid shaking"
+      ],
+      "limitation": "Validated source selection and output structure do not prove the heading preserves meaning."
+    },
+    {
+      "stage": "grounded-hook-repair",
+      "fixture": "authored-complete-qualification",
+      "calls": 3,
+      "expectedBehaviorObserved": true,
+      "initialStatus": "needs-review",
+      "initialSemanticCoverage": "complete",
+      "initialIssueCodes": [
+        "hook-supported"
+      ],
+      "finalStatus": "pass",
+      "finalSemanticCoverage": "complete",
+      "finalIssueCodes": [],
+      "attempts": [
+        {
+          "attempt": 1,
+          "outcome": "accepted",
+          "targetCodes": [
+            "hook-supported"
+          ],
+          "followUpStatus": "pass"
+        }
+      ],
+      "attemptsKept": 1,
+      "sourceSpeechUnchanged": true,
+      "correctedHookIsSourceQuote": true,
+      "originalHook": "This method always works",
+      "finalHook": "This method does not always work",
+      "stopReason": "The independently checked edit has no remaining findings."
+    },
+    {
+      "calls": 6,
+      "refusedCalls": 0,
+      "seconds": 7.8,
+      "planningExpectedBehaviorObserved": true,
+      "repairExpectedBehaviorObserved": true,
+      "outcome": "expected-authored-behavior-observed",
+      "limitation": "Two authored text scenarios; no video rendered, human acceptance measured, or platform outcome established."
+    }
+  ],
+  "conclusion": {
+    "originalExamplesMatched": 4,
+    "originalExamples": 4,
+    "additionalExamplesMatched": 1,
+    "additionalExamples": 2,
+    "remainingUnavailableExample": "heldout-seedling-topic",
+    "unverifiedRepairsApplied": false,
+    "pipelineExpectedBehaviorObserved": true,
+    "totalLiveDeepSeekRequests": 17,
+    "limitation": "This small sample is diagnostic, not a measured general accuracy or creator acceptance rate."
+  }
+}

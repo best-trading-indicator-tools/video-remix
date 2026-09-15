@@ -51,7 +51,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       env: {
         ...process.env,
         PORT: String(port), HOST: "127.0.0.1", DATA_DIR: dataDirectory,
-        RENDER_CONCURRENCY: "1", AUTO_LOCAL_AI: "false",
+        RENDER_CONCURRENCY: "1", AUTO_AI: "false",
         WHISPER_CACHE_DIR: path.join(directory, "model-not-installed"),
         DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: mockStock ? "isolated-test-key" : "", MAX_FILES: "4", MAX_FILE_SIZE_MB: "3",
       },

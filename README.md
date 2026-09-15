@@ -1,6 +1,6 @@
 # Remix Studio
 
-A private video repurposing workspace with **Auto remix** selected by default. Import your videos, start the batch, and download fresh edits as MP4s or a ZIP. Editing, speech recognition, and optional language-model planning can all run locally without an API key.
+A private video repurposing workspace with **Auto remix** selected by default. Import your videos, start the batch, and download fresh edits as MP4s or a ZIP. Editing, speech recognition, and rendering run locally. Auto's AI selection, writing, editorial checks, and repairs use DeepSeek through the existing private API key; built-in selection remains available without it.
 
 ## Import long recordings
 
@@ -23,7 +23,7 @@ Select a source video to change **only that video's Auto settings**, including f
 
 The version count is a **maximum**. Auto skips an extra version when it would repeat an already completed edit from the same batch. Short sources normally produce one worthwhile cut; a different headline or color treatment does not make an extra version necessary. Skipped jobs explain the reason and do not create duplicate downloads.
 
-With the local speech model ready, Auto transcribes speech, selects a focused excerpt, tightens longer pauses, and prepares an opening hook and timed captions. Automatic framing and audio balancing finish the cut. Optional Ollama planning helps choose the excerpt and write hooks and callouts from the transcript. Callouts are shown when their words match the edited speech; unmatched ideas are omitted. Auto preserves the source's color and does not add arbitrary noise, speed changes, or mirroring.
+With the local speech model ready, Auto transcribes speech, selects a focused excerpt, tightens longer pauses, and prepares an opening hook and timed captions. Automatic framing and audio balancing finish the cut. DeepSeek planning helps choose the excerpt and write hooks and callouts from the transcript. Callouts are shown when their words match the edited speech; unmatched ideas are omitted. Auto preserves the source's color and does not add arbitrary noise, speed changes, or mirroring.
 
 If speech or the speech model is unavailable, Auto falls back to scene and timing edits using the source footage. Captions require a usable transcript. The export notes explain which tools were used and any fallback.
 
@@ -32,12 +32,12 @@ Use your own footage or footage you have permission to repurpose. Review the res
 ### Complete-idea selection
 
 Auto considers shorter sentence-aligned ideas and their neighboring context,
-including questions, answers, and qualifications. With the configured local
-Ollama model, a separate discovery pass proposes contiguous source-unit ranges;
+including questions, answers, and qualifications. With the configured DeepSeek
+text model, a separate discovery pass proposes contiguous source-unit ranges;
 the app validates their original timestamps and duration before selecting a short.
 The heading is then written from only the selected excerpt.
 
-Discovery makes at most three local requests within a 120-second budget and
+Discovery makes at most three DeepSeek requests within a 120-second budget and
 caches results by source transcript, language, model, and duration preference.
 Long recordings may be sampled across opening, middle, and ending sections; export
 notes disclose that coverage. An empty sampled result never dismisses the whole
@@ -56,8 +56,8 @@ the source meaning is preserved, and captions match the selected speech. Finding
 include validated source quotes and timestamps. Exports, the editor, and durable
 History show the report separately from technical media checks and human verdicts.
 
-The checker uses the configured Ollama model and makes one bounded request. It
-never treats a missing model, missing source evidence, malformed response, or an
+The checker uses the configured DeepSeek text model and makes one bounded request. It
+never treats unavailable AI, missing source evidence, a malformed response, or an
 uncertain judgment as a pass. Partial transcript coverage is disclosed. It does
 not inspect picture content or listen to the rendered audio; narration and
 replacement audio need manual review. An edited draft has no current report until
@@ -68,15 +68,21 @@ miss problems or agree with an earlier mistake. A passing report is advisory and
 never records human acceptance or approval to publish. Real-model smoke checks and
 human review measure judgment quality separately from the automated software tests.
 
-Run the optional authored-text check with
-`npx tsx benchmarks/editorial-smoke.ts --run-local`. It makes at most four calls to
-an already installed model on a loopback Ollama endpoint, using no user media.
-The 2026-09-15 run with the installed `llama3.2` produced three unavailable reports
-and one uncertain report; neither deliberately misleading edit received a
-validated issue finding. This model has **not** demonstrated reliable editorial
-judgment. The app keeps those results for manual review and skips unverified
-repairs. Evaluate your configured model and real creator acceptance before relying
-on automatic judgments.
+Run `npx tsx benchmarks/editorial-smoke.ts --run-deepseek` for the optional
+authored-text smoke test. The explicit flag permits at most four paid DeepSeek
+calls on synthetic examples, using no user media. Add `--held-out` to include two
+additional examples, for at most six calls. Without `--run-deepseek`, it lists the
+fixtures without contacting the provider.
+
+The 2026-09-15 `deepseek-flash` run initially flagged a valid heading and returned
+an unavailable result for a removed-negation example. After a general prompt
+refinement, all four original examples matched their expected checks. Of two
+held-out examples, an unsupported daily-watering instruction was correctly flagged,
+while a valid seedling-topic heading returned **unavailable**. That is **5 of 6
+expected outcomes observed in that run**, including a remaining failure to obtain
+a usable judgment; it is not a general accuracy estimate. The production build
+and all **340 software tests** passed separately. Initial and final observations
+are saved in the [authored DeepSeek results](benchmarks/results/deepseek-editorial-2026-09-15.json).
 
 ### Bounded automatic repair
 
@@ -109,6 +115,17 @@ policy/model, automatic attempt outcomes, and revision relationships alongside y
 verdict and correction time. Missing verdicts remain unknown. These measurements
 can compare reviewed outputs; real creator reviews are still required to establish
 acceptance rates, missed useful moments, and platform performance.
+
+Run `npx tsx benchmarks/editorial-pipeline-smoke.ts --run-deepseek` to exercise
+discovery, selection/packaging, and grounded repair with authored text. This opt-in
+runner allows at most **8 paid requests / 180 seconds**, uses a temporary discovery
+cache, and does not read user media or render a video. Without the flag it makes
+no calls. The recorded live run used six requests: camera-advice discovery and
+packaging succeeded, and one repair changed “This method always works” to
+“This method does not always work”. The separate follow-up check passed and the
+source cuts stayed unchanged. These are observations on two authored scenarios;
+they do not measure creator acceptance or rendered-video quality. See the
+[saved pipeline results](benchmarks/results/deepseek-editorial-2026-09-15.json).
 
 ## Optional B-roll and animated cards
 
@@ -291,17 +308,34 @@ npm start
 
 Open **http://127.0.0.1:8787**. The backend serves the built frontend and API together.
 
-## Optional local planning and narration
+## DeepSeek planning and optional local narration
 
-Install and open [Ollama](https://docs.ollama.com/quickstart), then download the configured local planning model:
+Auto reuses `DEEPSEEK_API_KEY` from the project's existing private `.env`, also used
+by prompt editing and optional AI B-roll matching. No local language-model setup is
+required. The text model is `DEEPSEEK_TEXT_MODEL`, then `DEEPSEEK_MODEL` if unset,
+then `deepseek-flash`. Selection, hook/callout and narration writing, editorial
+checks, and repair proposals use the fixed DeepSeek API endpoint. There is no local
+language-model fallback.
 
-```sh
-ollama pull llama3.2
-```
+These paid text requests send bounded **transcript excerpts, captions, headings,
+and edit metadata** to DeepSeek. They do not upload source audio or full videos.
+Transcription, rendering, and voice synthesis remain local. Optional AI B-roll
+matching has its separate sampled-frame disclosure above. The backend keeps the
+API key out of browser responses and exported review data.
 
-[Llama 3.2](https://ollama.com/library/llama3.2) helps select an excerpt and draft its hook, callouts, and optional narration. The app checks the local Ollama service and can start an installed `ollama` command at the default address. It never downloads a planning model during an export. If planning is unavailable, Auto uses its built-in selection and transcript-derived text.
+Auto AI is enabled with `AUTO_AI=true` by default. Set `AUTO_AI=false` to disable
+Auto AI planning, editorial checks, and repairs.
+Without enabled AI and a usable key, Auto uses built-in candidates and
+transcript-derived text; editorial judgment remains for manual review. Provider
+failures also retain a usable fallback instead of granting an editorial pass.
+This switch does not disable separately requested prompt edits or AI B-roll matching.
 
-With local transcription and Ollama ready, **macOS** Auto edits can optionally replace the original voice with a new scripted read using an installed `say` voice. Enable **New narration** in the output preferences when available. A matching voice for the transcript language is required. This uses system voices; it does not clone the original speaker. Linux and Docker retain the original audio because macOS `say` is unavailable.
+With local transcription and DeepSeek ready, **macOS** Auto edits can optionally
+replace the original voice with a new scripted read using an installed `say`
+voice. Enable **New narration** in the output preferences when available. A matching
+voice for the transcript language is required. DeepSeek writes the script; the
+installed system voice reads it locally without cloning the original speaker.
+Linux and Docker retain the original audio because macOS `say` is unavailable.
 
 ## Configuration
 
@@ -319,9 +353,10 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `RETENTION_HOURS`    | `24`                     | Retention window for finished jobs and source files; accepts 1–720.  |
 | `WHISPER_MODEL`      | `small`                  | Local speech model; run setup for the chosen model before use.       |
 | `WHISPER_CACHE_DIR`  | `DATA_DIR/models`        | Persistent speech-model cache.                                       |
-| `AUTO_LOCAL_AI`      | `true`                   | Set exactly `false` to disable optional Ollama planning.             |
-| `OLLAMA_URL`         | `http://127.0.0.1:11434` | Ollama service address; keep local for private processing.           |
-| `OLLAMA_MODEL`       | `llama3.2`               | Installed Ollama model used for planning and writing.                |
+| `AUTO_AI`            | `true`                   | Set exactly `false` to disable Auto AI selection, writing, checks, and repairs. |
+| `DEEPSEEK_API_KEY`   | Unset                    | Existing private API key for Auto AI, prompt edits, and optional AI B-roll matching. |
+| `DEEPSEEK_MODEL`     | `deepseek-flash`          | DeepSeek model for vision matching and the default text model.       |
+| `DEEPSEEK_TEXT_MODEL` | `DEEPSEEK_MODEL`         | Optional text override for Auto AI, prompt edits, and B-roll search briefs. |
 | `PIXABAY_API_KEY`    | Unset                    | Optional free stock video search; only used for Stock B-roll.        |
 
 For example:
@@ -364,8 +399,7 @@ Open **http://127.0.0.1:8787**. The named volume keeps uploaded files, manifests
 To override settings:
 
 ```sh
-cp .env.example .env
-# Set HOST=0.0.0.0 and DATA_DIR=/app/data in .env for Docker.
+# Use your existing private .env; set HOST=0.0.0.0 and DATA_DIR=/app/data for Docker.
 # For a different WHISPER_MODEL, run the setup command with that same env file first.
 docker run --rm --name remix-studio \
   --env-file .env \
@@ -374,7 +408,9 @@ docker run --rm --name remix-studio \
   remix-studio
 ```
 
-Ollama is optional and is not bundled in this image. For container-based planning, point `OLLAMA_URL` at an Ollama service reachable from the container, with the chosen model already installed. macOS narration is available when running the app directly on macOS, not inside Docker.
+For DeepSeek planning in Docker, pass the existing private `.env` with
+`--env-file .env` as above. macOS narration is available when running the app
+directly on macOS, not inside Docker.
 
 ## Development and checks
 
@@ -394,7 +430,7 @@ The frontend uses React, TypeScript, and Vite. The Express API validates uploads
 - **Render failed:** inspect the error shown on the job. Confirm the input is a playable video and any uploaded subtitles use SRT format.
 - **Speech editing unavailable:** run `npm run setup:auto` with the same `WHISPER_MODEL` and cache path used to start the app. Allow a few seconds for capability checks to refresh.
 - **No Auto captions:** the source may contain no detectable speech. Check the export notes; a visual fallback still produces an edit.
-- **Planning unavailable:** confirm Ollama is reachable and `ollama list` includes the configured model. Auto continues with its built-in planning.
+- **Planning unavailable:** confirm the backend loads `DEEPSEEK_API_KEY`, `AUTO_AI` is not `false`, and the configured DeepSeek text model is available. Restart after changing `.env`. Auto continues with built-in selection; unavailable editorial checks require manual review.
 - **Narration unavailable:** run directly on macOS with an installed voice for the source language; the export notes describe any narration fallback.
 - **Text or subtitles fail:** check your FFmpeg build includes `drawtext` and `subtitles`, and install a system font. The Docker image includes these dependencies.
 - **Slow exports:** reduce resolution, frame rate, or render concurrency. Encoding speed depends on clip duration, effects, and available CPU.

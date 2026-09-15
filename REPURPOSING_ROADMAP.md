@@ -2,16 +2,68 @@
 
 Date: 2026-09-15. Status: the authorized four-feature implementation is complete. It covers complete-idea selection, advisory editorial checks, bounded repair, and measured human acceptance. Each feature is verified, committed, and pushed to `main` separately. Real creator acceptance and reliable model judgment remain to be established; the broader follow-up roadmap below is not yet implemented.
 
+Current provider update: Auto selection, writing, editorial checks, and repair
+proposals now use DeepSeek through the existing private `.env` key, with
+`DEEPSEEK_TEXT_MODEL` → `DEEPSEEK_MODEL` → `deepseek-flash` model precedence.
+Transcription, voice synthesis, and rendering remain local. The production build
+and all **340 software tests** passed. Live authored-text checks and the planning/
+repair pipeline were also run; the remaining unavailable held-out result is
+recorded below. Real creator acceptance remains unmeasured.
+
 ## Implementation progress
 
 | Feature | Status |
 | --- | --- |
-| Whole-short human acceptance | Complete. Explicit verdicts, issue categories, unknown-safe rates, median correction time, and durable CSV/JSON export extend the existing History review. Production build passed; all 274 tests covered successfully (two optional speech cases rerun with the installed local model); desktop/mobile browser review passed. |
-| Complete-idea selection | Complete. Shorter context-aware candidates, bounded cached local idea discovery, validated source anchors, and indexed history/transcript lookup. Production build and all 288 tests passed. |
-| Independent editorial checks | Complete as an advisory check. Separate source-cited comparisons, conservative unavailable states, actual-plan integration, and durable reports. Production build, all 307 tests, and desktop/mobile browser checks passed. The installed llama3.2 yielded only one validated (uncertain) report in four authored examples; reliable model judgment remains unproven. The opt-in smoke runner records this separately from software tests. |
-| Bounded automatic repair | Complete. At most two grounded proposals, independent rechecks, conservative rollback, manual-edit protection, final-plan rendering, durable attempt logs, and separate human acceptance. Final production build and all 330 tests passed, including 20 repair/queue cases and real rendered-frame comparisons. Eleven browser checks passed, including mobile, settings persistence, and stale-report prevention. Unverified repairs are skipped and unresolved uncertainty stays for human review; model quality remains a measured limitation. |
+| Whole-short human acceptance | Complete. Explicit verdicts, issue categories, unknown-safe rates, median correction time, and durable CSV/JSON export extend the existing History review. Production build passed; all 274 tests covered successfully (two optional speech cases rerun with the installed speech model); desktop/mobile browser review passed. |
+| Complete-idea selection | Complete. Shorter context-aware candidates, bounded cached idea discovery, validated source anchors, and indexed history/transcript lookup. The original implementation's production build and all 288 tests passed. The DeepSeek live pipeline selected and packaged the authored camera-advice example with validated source anchors. |
+| Independent editorial checks | Complete as an advisory check. Separate source-cited comparisons, conservative unavailable states, actual-plan integration, and durable reports. The original implementation's production build, all 307 tests, and desktop/mobile browser checks passed. After general prompt refinement, DeepSeek matched all four original authored examples and one of two held-out examples; the valid held-out topic returned unavailable. The 5/6 observation is not a general accuracy estimate. |
+| Bounded automatic repair | Complete. At most two grounded proposals, independent rechecks, conservative rollback, manual-edit protection, final-plan rendering, durable attempt logs, and separate human acceptance. The original implementation's production build and all 330 tests passed, including 20 repair/queue cases and real rendered-frame comparisons. Eleven browser checks passed, including mobile, settings persistence, and stale-report prevention. The DeepSeek live pipeline kept one source-quoted hook correction after a passing independent recheck, preserving the source cuts. Unverified repairs are skipped and unresolved uncertainty stays for human review. |
 
 The sections below retain the audit rationale and broader follow-up roadmap. Product targets remain unmeasured until real human reviews are collected.
+
+### AI provider and validation scope
+
+Auto sends bounded transcript excerpts, captions, headings, and edit metadata to
+the fixed DeepSeek API endpoint. It shares the existing API key with prompt edits
+and optional AI B-roll matching; no additional key or local language model is
+required. Auto does not upload source audio or full videos. Optional B-roll still
+uses existing moving footage, with a separate opt-in for sending sampled stock
+frames to the visual matcher.
+
+`AUTO_AI=false` disables Auto AI planning, checks, and repairs. Missing credentials
+or unavailable AI preserve built-in candidate selection and leave editorial
+judgment to human review. There is no fallback to the retired local language-model
+provider. Original speech remains the default; optional narration is scripted by
+DeepSeek and spoken locally by an installed macOS voice.
+
+The opt-in `npx tsx benchmarks/editorial-smoke.ts --run-deepseek` runner makes at
+most four paid requests using authored text only. Add `--held-out` for two extra
+examples, increasing the limit to six calls. It records whether expected issues
+were detected, including missing or uncertain findings. Without the explicit
+`--run-deepseek` flag, the runner lists its fixtures and makes no calls.
+
+The recorded 2026-09-15 DeepSeek diagnostic run initially flagged a valid heading
+and failed to obtain a usable judgment on removed negation. After a general prompt
+refinement, the four original examples matched all their expected checks. Two
+held-out examples then produced one correct unsupported-instruction finding and
+one **unavailable** judgment on a valid seedling-topic heading. This **5/6 observed
+match** includes the unavailable case in the denominator; it does not establish
+general model accuracy. Initial diagnostics and final observations remain in the
+[authored results](benchmarks/results/deepseek-editorial-2026-09-15.json).
+
+The separate `npx tsx benchmarks/editorial-pipeline-smoke.ts --run-deepseek` runner
+allows at most **8 paid requests / 180 seconds**, uses a temporary discovery cache,
+and makes no calls without the explicit flag. Its live run used six requests:
+discovery and selection/packaging succeeded on the camera-advice fixture; an
+unsupported hook was corrected from “This method always works” to “This method
+does not always work”. A separate recheck passed, and source cuts stayed unchanged.
+The [same results file](benchmarks/results/deepseek-editorial-2026-09-15.json) retains
+the attempt and stop reason. No user media was read or video rendered by these
+smoke runners; human acceptance, visual/audio quality, and platform outcomes remain
+outside their scope.
+
+The historical 2026-09-15 `llama3.2` comparison yielded three unavailable reports
+and one uncertain report. It describes the previous provider only.
 
 ## Objective
 
@@ -50,7 +102,7 @@ Begin measuring whole-short acceptance before changing selection. Then improve s
 
 ### Capabilities to build on
 
-The app already has word-timed transcription and cuts, pause removal, captions, optional local editorial AI, optional stock search and visual matching, motion-validated B-roll, editable Auto plans and immutable revisions, reviewable prompt edits with last-prompt undo, per-cut framing, technical output checks, durable export history, review metrics, large resumable imports, and a manual short-sequence editor. Manual prompts and sequence-aware rendered previews are available; their source context is settings/metadata rather than semantic analysis of the recording.
+The app already has word-timed transcription and cuts, pause removal, captions, optional DeepSeek editorial AI, optional stock search and visual matching, motion-validated B-roll, editable Auto plans and immutable revisions, reviewable prompt edits with last-prompt undo, per-cut framing, technical output checks, durable export history, review metrics, large resumable imports, and a manual short-sequence editor. Manual prompts and sequence-aware rendered previews are available; their source context is settings/metadata rather than semantic analysis of the recording.
 
 These are working foundations. The proposed improvements focus on their remaining limits.
 
@@ -238,7 +290,10 @@ For dependable unattended batches:
 - Cache source analysis once; inspect promising candidate/stock windows before expensive rendering.
 - Show stage time and cost per accepted short.
 
-Keep the existing local/provider boundaries. Compare configured editorial-model options on the benchmark before changing defaults; select by measured quality, latency, and cost. A model-name upgrade alone is not evidence of better editing.
+Keep transcription and rendering local, and disclose the bounded text sent to
+DeepSeek for selection and editorial decisions. Benchmark the configured text
+model for quality, latency, and cost after provider or prompt changes. A model-name
+upgrade alone is not evidence of better editing.
 
 ## Distribution, duplicate flags, and platform limits
 

@@ -1,12 +1,11 @@
-/** Opt-in semantic smoke, never part of CI: npx tsx benchmarks/editorial-smoke.ts --run-local
- * Four authored text fixtures; no user media, cloud calls, model downloads or retries.
+/** Opt-in semantic smoke, never part of CI: npx tsx benchmarks/editorial-smoke.ts --run-deepseek
+ * Four authored text fixtures; up to four paid DeepSeek calls (six with --held-out), no user media or model downloads.
  * Results are observations on these examples, not human acceptance or model accuracy.
  */
 import { pathToFileURL } from "node:url";
 import { DEFAULT_SETTINGS, type EditPlan, type Transcript } from "../shared/types.js";
-import { config } from "../server/config.js";
-import { intelligenceAvailable } from "../server/intelligence.js";
-import { editorialReplySchema, localEditorialReviewer } from "../server/editorial-model.js";
+import { editorialAIConfigured, editorialModel } from "../server/editorial-provider.js";
+import { editorialReplySchema, deepseekEditorialReviewer } from "../server/editorial-model.js";
 import { reviewEditorialPlan } from "../server/editorial-review.js";
 
 function speech(text: string, start: number): Transcript["segments"][number] {
@@ -24,7 +23,7 @@ function fixture(id: string, segments: Transcript["segments"], cuts: EditPlan["c
     cuts, captions, visuals: [], media: [], narration: false };
   return { id, expected, expectedIssues, transcript: { language: "en", duration: sourceDuration, segments } as Transcript, plan };
 }
-export function editorialSmokeFixtures() {
+export function editorialSmokeFixtures(includeHeldOut = false) {
   const camera = speech("A tripod keeps the camera steady. Use a timer to avoid shaking it when you press the shutter.", 0);
   const tripod = speech("Using a tripod reduces camera shake.", 0);
   const caveat = speech("It does not prevent a moving subject from blurring.", tripod.end + 0.4);
@@ -32,7 +31,7 @@ export function editorialSmokeFixtures() {
   const limitation = speech("Put clean paper in it, but keep wet paper out.", bin.end + 0.4);
   const archive = speech("The archive is not open on Sundays.", 0);
   const monday = speech("It opens on Mondays.", archive.end + 0.4);
-  return [
+  const fixtures = [
     fixture("complete-camera-advice", [camera], [{ start: 0, end: camera.end + 0.3 }], "Keep your camera steady", "pass", []),
     fixture("omitted-caveat-universal-hook", [tripod, caveat], [{ start: 0, end: tripod.end + 0.15 }],
       "Tripods prevent all blur", "needs-review", ["hook-supported", "meaning-preserved"]),
@@ -46,27 +45,34 @@ export function editorialSmokeFixtures() {
       { start: archive.words[4]!.start - 0.025, end: archive.end + 0.1 },
     ], "Archive opening days", "needs-review", ["meaning-preserved"]),
   ];
+  if (includeHeldOut) {
+    const seedlings = speech("Before watering a seedling, check whether the soil is dry. Add a little water only when the soil feels dry.", 0);
+    const allSpeech = [{ start: 0, end: seedlings.end + 0.3 }];
+    fixtures.push(
+      fixture("heldout-seedling-topic", [seedlings], allSpeech, "Watering indoor seedlings", "pass", []),
+      fixture("heldout-unsupported-daily-instruction", [seedlings], allSpeech, "Water seedlings every day", "needs-review", ["hook-supported"]),
+    );
+  }
+  return fixtures;
 }
 
-export async function runEditorialSmoke() {
-  const endpoint = new URL(config.ollamaUrl);
-  const localEndpoint = ["127.0.0.1", "localhost", "[::1]"].includes(endpoint.hostname) &&
-    ["http:", "https:"].includes(endpoint.protocol) && !endpoint.username && !endpoint.password;
-  if (!localEndpoint || !config.localAI) {
-    console.log(JSON.stringify({ available: false, reason: "A local enabled Ollama endpoint is required", calls: 0 }));
+export async function runEditorialSmoke(includeHeldOut = false) {
+  const available = editorialAIConfigured();
+  console.log(JSON.stringify({ model: editorialModel(), provider: "deepseek", available }));
+  if (!available) {
+    console.log(JSON.stringify({ reason: "Enable AUTO_AI and configure the existing DeepSeek API key and text model", calls: 0 }));
+    process.exitCode = 1;
     return;
   }
-  const available = await intelligenceAvailable();
-  console.log(JSON.stringify({ model: config.ollamaModel, available, localEndpoint }));
-  if (!available) return;
-  let calls = 0;
-  for (const item of editorialSmokeFixtures()) {
+  let calls = 0, matched = 0;
+  const fixtures = editorialSmokeFixtures(includeHeldOut);
+  for (const item of fixtures) {
     const start = Date.now();
     let reply: unknown, failure: string | undefined;
-    const report = await reviewEditorialPlan({ plan: item.plan, transcript: item.transcript, localAI: true,
+    const report = await reviewEditorialPlan({ plan: item.plan, transcript: item.transcript, aiEnabled: true,
       signal: new AbortController().signal, reviewer: async (request, signal) => {
-        if (++calls > 4) throw new Error("Authored smoke call budget exhausted");
-        try { reply = await localEditorialReviewer(request, signal); return reply; }
+        if (++calls > fixtures.length) throw new Error("Authored smoke call budget exhausted");
+        try { reply = await deepseekEditorialReviewer(request, signal); return reply; }
         catch (error) {
           // Never print provider messages, stacks, endpoint URLs or environment values.
           failure = error instanceof Error && error.name === "ZodError" ? "invalid-structured-response" :
@@ -76,6 +82,7 @@ export async function runEditorialSmoke() {
       } });
     const parsed = editorialReplySchema.safeParse(reply);
     const detected = report.issues.filter(issue => issue.origin === "semantic").map(issue => issue.code);
+    if (report.status === item.expected && item.expectedIssues.every(code => detected.includes(code))) matched++;
     console.log(JSON.stringify({ fixture: item.id, expected: item.expected, expectedIssues: item.expectedIssues,
       actual: report.status, semanticCoverage: report.coverage.semantic, detected, failure,
       expectedStatusMatched: item.expected === report.status,
@@ -83,11 +90,12 @@ export async function runEditorialSmoke() {
       seconds: Number(((Date.now() - start) / 1000).toFixed(2)),
       findings: parsed.success ? parsed.data.checks.map(({ check, verdict, explanation }) => ({ check, verdict, explanation })) : [] }));
   }
-  console.log(JSON.stringify({ calls, limitation: "Four authored textual examples; this does not measure human acceptance, audio, visuals or platform eligibility." }));
+  console.log(JSON.stringify({ calls, matched, total: fixtures.length, limitation: "Authored textual examples; this does not measure human acceptance, audio, visuals or platform eligibility." }));
+  if (matched !== fixtures.length) process.exitCode = 1;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  if (process.argv.includes("--run-local")) await runEditorialSmoke();
-  else console.log(JSON.stringify({ usage: "npx tsx benchmarks/editorial-smoke.ts --run-local", calls: 0,
+  if (process.argv.includes("--run-deepseek")) await runEditorialSmoke(process.argv.includes("--held-out"));
+  else console.log(JSON.stringify({ usage: "npx tsx benchmarks/editorial-smoke.ts --run-deepseek", calls: 0,
     fixtures: editorialSmokeFixtures().map(({ id, expected, expectedIssues }) => ({ id, expected, expectedIssues })) }, null, 2));
 }

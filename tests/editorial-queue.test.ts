@@ -2,8 +2,6 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
-import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -32,26 +30,27 @@ const transcript = (): Transcript => ({ language: "en", duration: 8, segments: [
   ] },
 ] });
 
-// Exercise the actual queue, local-model transport, state file, caption sidecar
+// Exercise the actual queue, DeepSeek request transport, state file, caption sidecar
 // and FFmpeg export. The synthetic transcript is a fixture, not an ASR-quality
-// claim; no speech model, external API, credential or real Ollama is used.
+// claim. Every provider request is intercepted with a fake key; no network or
+// speech model is used.
 test("the queue renders only verified repairs, protects manual edits, and retains its retry budget", { timeout: 120000 }, async t => {
   const directory = await mkdtemp(path.join(tmpdir(), "remix-editorial-queue-"));
   let scenario: "repair" | "manual" | "rollback" = "repair";
   let reviews = 0, proposals = 0;
   const modelErrors: unknown[] = [];
-  const model = createServer(async (request, response) => {
+  const oldFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) => {
     try {
-      response.setHeader("Content-Type", "application/json");
-      if (request.url === "/api/tags") {
-        response.end(JSON.stringify({ models: [{ name: "editorial-test-model" }] }));
-        return;
-      }
-      assert.equal(request.url, "/api/generate");
-      let body = "";
-      for await (const chunk of request) body += chunk.toString();
-      const envelope = JSON.parse(body) as { prompt: string };
-      const input = JSON.parse(envelope.prompt) as EditorialReviewRequest | { input: EditorialRepairRequest };
+      assert.equal(String(url), "https://api.deepseek.com/chat/completions", "Only the fixed DeepSeek endpoint may be requested");
+      assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer editorial-queue-test-key");
+      const envelope = JSON.parse(String(init?.body)) as { messages: { role: string; content: string }[]; model: string; response_format: { type: string } };
+      assert.equal(envelope.model, "editorial-test-model");
+      assert.equal(envelope.response_format.type, "json_object");
+      assert.deepEqual(envelope.messages.map(message => message.role), ["system", "user"]);
+      const prompt = JSON.parse(envelope.messages[1]!.content) as { input: EditorialReviewRequest | { input: EditorialRepairRequest }; outputSchema: unknown };
+      assert.ok(prompt.outputSchema, "The provider must receive the required reply schema");
+      const input = prompt.input;
       let result: unknown;
       if ("input" in input) {
         proposals++;
@@ -97,24 +96,21 @@ test("the queue renders only verified repairs, protects manual edits, and retain
             additionalEvidence: check === "meaning-preserved" && issue ? [{ sourceId: context.sourceId, quote: context.quote }] : [] }];
         })) };
       }
-      response.end(JSON.stringify({ done: true, done_reason: "stop", response: JSON.stringify(result) }));
+      return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(result) } }] });
     } catch (error) {
       modelErrors.push(error);
-      response.statusCode = 500;
-      response.end(JSON.stringify({ error: "Invalid isolated fixture request" }));
+      return Response.json({ error: "Invalid isolated fixture request" }, { status: 500 });
     }
-  });
-  await new Promise<void>(resolve => model.listen(0, "127.0.0.1", resolve));
-  const savedEnvironment = { DATA_DIR: process.env.DATA_DIR, AUTO_LOCAL_AI: process.env.AUTO_LOCAL_AI,
-    OLLAMA_URL: process.env.OLLAMA_URL, OLLAMA_MODEL: process.env.OLLAMA_MODEL, RENDER_CONCURRENCY: process.env.RENDER_CONCURRENCY };
-  Object.assign(process.env, { DATA_DIR: path.join(directory, "data"), AUTO_LOCAL_AI: "true",
-    OLLAMA_URL: `http://127.0.0.1:${(model.address() as AddressInfo).port}`, OLLAMA_MODEL: "editorial-test-model", RENDER_CONCURRENCY: "1" });
+  };
+  const savedEnvironment = { DATA_DIR: process.env.DATA_DIR, AUTO_AI: process.env.AUTO_AI,
+    DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL, RENDER_CONCURRENCY: process.env.RENDER_CONCURRENCY };
+  Object.assign(process.env, { DATA_DIR: path.join(directory, "data"), AUTO_AI: "true",
+    DEEPSEEK_API_KEY: "editorial-queue-test-key", DEEPSEEK_TEXT_MODEL: "editorial-test-model", RENDER_CONCURRENCY: "1" });
   const { paths } = await import("../server/config.js");
   const { initStore, saveStore, state, publicJob } = await import("../server/store.js");
   const { pumpQueue, stopQueue } = await import("../server/queue.js");
   const { renderVideo, probeMedia } = await import("../server/engine.js");
   const { captionCuesSrt } = await import("../server/edit-plan.js");
-  const { stopIntelligence } = await import("../server/intelligence.js");
   try {
     await initStore();
     const sourcePath = path.join(paths.uploads, "source.mp4");
@@ -235,9 +231,7 @@ test("the queue renders only verified repairs, protects manual edits, and retain
     });
   } finally {
     await stopQueue();
-    stopIntelligence();
-    model.closeAllConnections();
-    await new Promise<void>(resolve => model.close(() => resolve()));
+    globalThis.fetch = oldFetch;
     for (const [key, value] of Object.entries(savedEnvironment)) {
       if (value === undefined) delete process.env[key]; else process.env[key] = value;
     }

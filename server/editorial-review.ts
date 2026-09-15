@@ -4,8 +4,8 @@ import {
   type EditorialCheck, type EditorialCoverage, type EditorialEvidence, type EditorialIssue,
   type EditorialReport, type EditorialReviewer, type EditorialReviewRequest, type EditorialSourceExcerpt,
 } from "../shared/editorial.js";
-import { config } from "./config.js";
-import { editorialReplySchema, localEditorialReviewer } from "./editorial-model.js";
+import { editorialAIConfigured, editorialAIEnabled, editorialModel } from "./editorial-provider.js";
+import { editorialReplySchema, deepseekEditorialReviewer } from "./editorial-model.js";
 
 const MAX_EXCERPTS = 80;
 const MAX_EVIDENCE_CHARS = 12_000;
@@ -175,8 +175,8 @@ export function buildEditorialReviewContext(plan: EditPlan, transcript?: Transcr
       narration: plan.narration, outputDuration: plan.outputDuration, excerpts, captions, callouts, checks: semanticChecks } };
 }
 
-export async function reviewEditorialPlan({ plan, transcript, signal, reviewer = localEditorialReviewer, localAI = config.localAI }: {
-  plan: EditPlan; transcript?: Transcript; signal: AbortSignal; reviewer?: EditorialReviewer; localAI?: boolean;
+export async function reviewEditorialPlan({ plan, transcript, signal, reviewer = deepseekEditorialReviewer, aiEnabled = editorialAIEnabled() }: {
+  plan: EditPlan; transcript?: Transcript; signal: AbortSignal; reviewer?: EditorialReviewer; aiEnabled?: boolean;
 }): Promise<EditorialReport> {
   signal.throwIfAborted();
   const context = buildEditorialReviewContext(plan, transcript);
@@ -191,8 +191,10 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
   };
   if (!context.validPlan) return unavailable("Correct the saved timeline before editorial review.");
   if (!context.request.excerpts.some(excerpt => excerpt.role === "selected")) return unavailable("A transcript of the selected speech is required for editorial review.");
-  if (!config.localAI || !localAI) return unavailable("Local editorial review is disabled. Review this short manually.");
-  report.modelVersion = config.ollamaModel;
+  if (!editorialAIEnabled() || !aiEnabled) return unavailable("AI editorial review is disabled. Review this short manually.");
+  if (!editorialAIConfigured()) return unavailable("Configure a DeepSeek API key and valid model identifier for editorial review.");
+  report.modelVersion = editorialModel();
+  report.provider = "deepseek";
   try {
     const budget = AbortSignal.any([signal, AbortSignal.timeout(50_000)]);
     const raw = await new Promise<unknown>((resolve, reject) => {
@@ -236,6 +238,6 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
     return report;
   } catch {
     signal.throwIfAborted();
-    return unavailable("The local reviewer was unavailable or returned incomplete or unsupported findings. Review the short manually.");
+    return unavailable("The DeepSeek reviewer was unavailable or returned incomplete or unsupported findings. Review the short manually.");
   }
 }

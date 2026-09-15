@@ -39,6 +39,7 @@ import { brollAIConfigured } from "./broll-ai.js";
 import { stockBrollConfigured } from "./stock-broll.js";
 import { geometry } from "./engine.js";
 import { discoverSourceIdeas, novelIdeaCandidates } from "./source-ideas.js";
+import { editorialModel } from "./editorial-provider.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   const [transcription, intelligence, voice, motionGraphics] =
@@ -51,6 +52,8 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   return {
     transcription,
     intelligence,
+    intelligenceProvider: "deepseek",
+    intelligenceModel: editorialModel(),
     narration: transcription && intelligence && voice,
     motionGraphics,
     brollAI: brollAIConfigured(),
@@ -65,7 +68,7 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
       : !intelligence
         ? {
             message:
-              "Local captions and automatic cuts are ready. Hooks use your spoken words; install Ollama with llama3.2 for rewritten hooks.",
+              "Local captions and automatic cuts are ready. Enable Auto AI and configure DeepSeek in the server .env file for idea selection, rewritten hooks, and editorial checks.",
           }
         : {}),
   };

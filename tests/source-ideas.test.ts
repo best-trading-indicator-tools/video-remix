@@ -41,22 +41,29 @@ test("source context covers ordinary material and bounds sampled sections across
   }
 });
 
-test("local idea discovery uses validated source anchors, bounded requests, caching and honest fallbacks", async t => {
+test("DeepSeek idea discovery uses validated source anchors, bounded requests, caching and honest fallbacks", async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "source-ideas-"));
-  const oldConfig = { localAI: config.localAI, ollamaUrl: config.ollamaUrl, ollamaModel: config.ollamaModel };
-  config.localAI = true; config.ollamaUrl = "http://127.0.0.1:11439";
+  const oldEnabled = config.aiEnabled;
+  const savedEnvironment = { DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY, DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL };
+  config.aiEnabled = true;
+  Object.assign(process.env, { DEEPSEEK_API_KEY: "source-ideas-test-key", DEEPSEEK_TEXT_MODEL: "editorial-test-model" });
   let replies: unknown[] = [];
-  let calls: { prompt: string; options: { num_predict: number }; model: string }[] = [];
+  let calls: { prompt: string; max_tokens: number; model: string }[] = [];
   let interrupt: AbortController | undefined;
   let fail = false;
-  const mocked = t.mock.method(globalThis, "fetch", async (input, init) => {
-    if (String(input) === `${config.ollamaUrl}/api/tags`) return Response.json({ models: [{ name: config.ollamaModel }] });
-    assert.equal(input, `${config.ollamaUrl}/api/generate`, "Discovery never calls a cloud provider");
-    calls.push(JSON.parse(String(init?.body)));
+  const mocked = t.mock.method(globalThis, "fetch", async (input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => {
+    assert.equal(String(input), "https://api.deepseek.com/chat/completions", "Discovery uses only the fixed DeepSeek endpoint");
+    assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer source-ideas-test-key");
+    const body = JSON.parse(String(init?.body));
+    assert.equal(body.response_format.type, "json_object");
+    assert.deepEqual(body.messages.map((message: { role: string }) => message.role), ["system", "user"]);
+    const supplied = JSON.parse(body.messages[1].content);
+    assert.ok(supplied.outputSchema, "The request carries the strict response contract");
+    calls.push({ ...body, prompt: JSON.stringify(supplied.input) });
     if (interrupt) { interrupt.abort(); init?.signal?.throwIfAborted(); }
     if (fail) throw new Error("Test provider unavailable");
-    assert.ok(replies.length, "Exceeded the planned local model budget");
-    return Response.json({ response: JSON.stringify(replies.shift()), done: true, done_reason: "stop" });
+    assert.ok(replies.length, "Exceeded the planned model request budget");
+    return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(replies.shift()) } }] });
   });
   const options = (name: string) => ({ transcript, sourceDuration: 40, targetDuration: 15,
     signal: new AbortController().signal, cacheDir: path.join(directory, name) });
@@ -81,7 +88,7 @@ test("local idea discovery uses validated source anchors, bounded requests, cach
       const prompt = JSON.parse(calls[0]!.prompt);
       assert.equal(prompt.units.length, 6);
       assert.match(calls[0]!.prompt, /qualification|payoff|unanswered question/u);
-      assert.ok(calls[0]!.options.num_predict <= 1800);
+      assert.ok(calls[0]!.max_tokens <= 1800);
       const cached = await discoverSourceIdeas(options("grounded"));
       assert.deepEqual(cached, result);
       assert.equal(calls.length, 1, "The source analysis is reused across edits");
@@ -100,10 +107,11 @@ test("local idea discovery uses validated source anchors, bounded requests, cach
       const changed = structuredClone(transcript); changed.segments[2]!.text = "The replacement source explains a different claim.";
       const changedResult = await discoverSourceIdeas({ ...args, transcript: changed });
       assert.match(changedResult.candidates[0]!.text, /replacement source/u);
-      config.ollamaModel = "another-local-test-model";
+      process.env.DEEPSEEK_TEXT_MODEL = "another-editorial-test-model";
       await discoverSourceIdeas(args);
       assert.equal(calls.length, 5);
-      config.ollamaModel = oldConfig.ollamaModel;
+      assert.equal(calls.at(-1)!.model, "another-editorial-test-model");
+      process.env.DEEPSEEK_TEXT_MODEL = "editorial-test-model";
     });
 
     await t.test("invalid IDs, omitted anchor spans, excessive durations and hallucinated timestamps never become cuts", async () => {
@@ -149,13 +157,16 @@ test("local idea discovery uses validated source anchors, bounded requests, cach
       assert.equal(calls.length, 3);
     });
 
-    await t.test("local AI disabled, provider failure and cancellation keep their different meanings", async () => {
-      config.localAI = false; calls = [];
+    await t.test("AI disabled, missing credentials, provider failure and cancellation keep their different meanings", async () => {
+      config.aiEnabled = false; calls = [];
       const unavailable = await discoverSourceIdeas(options("disabled"));
       assert.equal(calls.length, 0);
       assert.equal(unavailable.noCompleteIdea, false);
       assert.match(unavailable.notes.join(" "), /unavailable/u);
-      config.localAI = true; fail = true;
+      config.aiEnabled = true; process.env.DEEPSEEK_API_KEY = "";
+      const unconfigured = await discoverSourceIdeas(options("unconfigured"));
+      assert.equal(calls.length, 0); assert.equal(unconfigured.analyzed, false); assert.equal(unconfigured.noCompleteIdea, false);
+      process.env.DEEPSEEK_API_KEY = "source-ideas-test-key"; fail = true;
       const failed = await discoverSourceIdeas(options("failure"));
       assert.equal(failed.analyzed, false);
       assert.equal(failed.noCompleteIdea, false);
@@ -171,7 +182,10 @@ test("local idea discovery uses validated source anchors, bounded requests, cach
       interrupt = undefined;
     });
   } finally {
-    mocked.mock.restore(); Object.assign(config, oldConfig);
+    mocked.mock.restore(); config.aiEnabled = oldEnabled;
+    for (const [key, value] of Object.entries(savedEnvironment)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
     await rm(directory, { recursive: true, force: true });
   }
 });
