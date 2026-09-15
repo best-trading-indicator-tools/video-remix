@@ -448,6 +448,14 @@ before this feature cannot be reconstructed. Deleting a batch or automatic media
 expiry keeps the history. Publication dates and links are local records of posts you
 have already published; the app does not post them.
 
+History cards retain a small preview frame from each completed export in
+`data/history-thumbnails`, separately from video retention. Click the frame to
+play an available video, or open the saved image after its video expires. Startup
+also fills missing previews for older entries: it uses the export when available,
+or the recorded excerpt from a matching source, labeled **Source frame**. If both
+are gone, the card shows **Preview unavailable**. Preview creation uses local
+FFmpeg and does not call an AI service.
+
 ### Framing and export review
 
 Open **Edit this result** to set the focal point of each source cut or unlocked

@@ -40,9 +40,33 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     const result = await response.json() as { entries: ExportHistoryEntry[] };
     const serialized = JSON.stringify(result);
     assert.ok(!serialized.includes(directory));
-    for (const field of ["filePath", "outputPath", "planFiles", "captionPath", "apiKey"])
+    for (const field of ["filePath", "outputPath", "planFiles", "captionPath", "thumbnailPath", "apiKey"])
       assert.ok(!serialized.includes(`"${field}"`), `History must not expose ${field}`);
     return result.entries;
+  };
+  const thumbnailBytes = async (entry: ExportHistoryEntry, kind: "export" | "source" = "export") => {
+    assert.equal(entry.thumbnailUrl, `/api/history/${encodeURIComponent(entry.id)}/thumbnail`);
+    assert.equal(entry.thumbnailKind, kind);
+    const response = await fetch(`${base}${entry.thumbnailUrl}`);
+    assert.equal(response.status, 200, await response.clone().text());
+    assert.match(response.headers.get("content-type") || "", /^image\/jpeg(?:;|$)/u);
+    assert.match(response.headers.get("cache-control") || "", /private/u);
+    const image = Buffer.from(await response.arrayBuffer());
+    assert.deepEqual([...image.subarray(0, 3)], [0xff, 0xd8, 0xff], "The endpoint returns JPEG bytes, not a video or JSON response");
+    assert.deepEqual([...image.subarray(-2)], [0xff, 0xd9]);
+    assert.ok(image.length > 100 && image.length < 512 * 1024, "History keeps a small preview rather than the original media");
+    return image;
+  };
+  const retainedThumbnails = new Map<string, Buffer>();
+  const clearLegacyThumbnails = async () => {
+    const statePath = path.join(dataDirectory, "state.json");
+    const saved = JSON.parse(await readFile(statePath, "utf8")) as { history: ExportHistoryEntry[] };
+    for (const entry of saved.history) {
+      delete entry.thumbnailUrl;
+      delete entry.thumbnailKind;
+    }
+    await rm(path.join(dataDirectory, "history-thumbnails"), { recursive: true, force: true });
+    await writeFile(statePath, JSON.stringify(saved));
   };
   const start = async () => {
     processLog = "";
@@ -158,6 +182,20 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       (original.supportingVisuals![0]!.end - original.supportingVisuals![0]!.start)) < 0.01);
     assert.deepEqual(await history(source.id), initialHistory);
 
+    await t.test("completed exports expose a small retained JPEG and unknown or traversal IDs cannot retrieve files", async () => {
+      const image = await thumbnailBytes(entry);
+      retainedThumbnails.set(entry.id, image);
+      const preview = path.join(directory, "history-preview.jpg");
+      await writeFile(preview, image);
+      const inspected = await exec("ffprobe", ["-v", "error", "-show_entries", "stream=codec_name,width,height", "-of", "json", preview]);
+      const frame = JSON.parse(inspected.stdout).streams[0];
+      assert.equal(frame.codec_name, "mjpeg");
+      assert.ok(frame.width <= 480 && frame.height <= 480);
+      assert.ok(Math.abs(frame.width / frame.height - 16 / 9) < 0.02);
+      for (const id of [randomUUID(), "..%2Fstate.json", "%2E%2E%5Cstate.json", "%2Fetc%2Fpasswd"])
+        assert.equal((await fetch(`${base}/api/history/${id}/thumbnail`)).status, 404);
+    });
+
     await t.test("fresh batches skip completed source excerpts while explicit corrections remain renderable", async () => {
       const fresh = await auto(source.id, asset.id);
       assert.notEqual(fresh.batchId, original.batchId);
@@ -181,6 +219,10 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.deepEqual(revisedEntry.stockShots, entry.stockShots);
       assert.deepEqual(revisedEntry.cuts, entry.cuts);
       assert.deepEqual(revisedEntry.corrections, { captionCorrections: 0, brollChanges: 0, seconds: 45 });
+      const revisedThumbnail = await thumbnailBytes(revisedEntry);
+      assert.notDeepEqual(revisedThumbnail, retainedThumbnails.get(entry.id),
+        "A changed rendered hook must change the preview instead of reusing the source thumbnail");
+      retainedThumbnails.set(revisedEntry.id, revisedThumbnail);
       assert.equal((await history()).length, 2);
     });
 
@@ -199,6 +241,8 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.equal(changed.previousExports, 0);
       assert.deepEqual(await history(changed.id), []);
       different = await finished((await auto(changed.id)).id, "completed");
+      const differentEntry = (await history()).find(item => item.jobId === different.id)!;
+      retainedThumbnails.set(differentEntry.id, await thumbnailBytes(differentEntry));
       assert.equal((await history(changed.id)).length, 1);
       assert.equal((await history()).length, 3);
     });
@@ -294,6 +338,19 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.deepEqual((await history()).find(item => item.id === entry.id)!.measurements, measurements);
     });
 
+    await t.test("startup backfills legacy history previews from available exports without changing reviews or publications", async () => {
+      await stop();
+      await clearLegacyThumbnails();
+      await start();
+      const restored = await history();
+      assert.equal(restored.length, 3);
+      for (const item of restored)
+        assert.deepEqual(await thumbnailBytes(item), retainedThumbnails.get(item.id), "Backfill captures the same completed export frame");
+      const reviewed = restored.find(item => item.id === entry.id)!;
+      assert.deepEqual(reviewed.measurements, measurements);
+      assert.deepEqual(reviewed.publications, publications);
+    });
+
     await t.test("deleting exports removes media while retaining the ledger and publication record", async () => {
       assert.equal((await request(`/api/batches/${original.batchId}`, "DELETE")).status, 200);
       assert.equal((await fetch(`${base}${original.downloadUrl}`)).status, 404);
@@ -306,17 +363,37 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.deepEqual(retained.publications, publications);
       assert.deepEqual(retained.measurements, measurements);
       assert.equal(retained.sourceText, entry.sourceText);
+      assert.deepEqual(await thumbnailBytes(retained), retainedThumbnails.get(entry.id));
       assert.equal((await history(renamed.id)).length, 2);
       assert.equal((await history()).length, 3);
       assert.equal((await request(`/api/sources/${source.id}`, "DELETE")).status, 200);
       await stop();
       await start();
       assert.deepEqual((await history()).find((item) => item.id === entry.id), retained);
+      assert.deepEqual(await thumbnailBytes(retained), retainedThumbnails.get(entry.id), "Deleting the source and restarting cannot remove the retained preview");
       const reimport = await sourceUpload(sourcePath, "yesterdays source again.mp4");
       assert.equal(reimport.previousExports, 2);
       assert.deepEqual((await history(reimport.id)).find((item) => item.id === entry.id), retained);
       await finished((await auto(reimport.id)).id, "skipped");
       assert.equal((await history()).length, 3);
+    });
+
+    await t.test("legacy deleted-export previews fall back to the matching reuploaded source and are labeled as source frames", async () => {
+      await stop();
+      await clearLegacyThumbnails();
+      await start();
+      const restored = await history();
+      assert.equal(restored.length, 3);
+      for (const item of restored) {
+        const kind = item.jobId === different.id ? "export" : "source";
+        retainedThumbnails.set(item.id, await thumbnailBytes(item, kind));
+      }
+      const reviewed = restored.find(item => item.id === entry.id)!;
+      assert.equal(reviewed.available, false);
+      assert.equal(reviewed.sourceId, source.id, "Source fallback does not rewrite the original source identity");
+      assert.deepEqual(reviewed.cuts, entry.cuts);
+      assert.deepEqual(reviewed.measurements, measurements);
+      assert.deepEqual(reviewed.publications, publications);
     });
 
     await t.test("normal retention cleanup expires jobs and source files while preserving reusable history", async () => {
@@ -339,12 +416,32 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.ok(retained.every((item) => item.available === false));
       assert.deepEqual(retained.find((item) => item.id === entry.id)!.publications, publications);
       assert.deepEqual(retained.find((item) => item.id === entry.id)!.measurements, measurements);
+      for (const item of retained)
+        assert.deepEqual(await thumbnailBytes(item, item.jobId === different.id ? "export" : "source"), retainedThumbnails.get(item.id),
+          "Retention removes full media but preserves every retained history preview");
       const reimport = await sourceUpload(sourcePath, "after all media expired.mp4");
       assert.equal(reimport.fingerprint, source.fingerprint);
       assert.equal(reimport.previousExports, 2);
       assert.equal((await history(reimport.id)).length, 2);
       await finished((await auto(reimport.id)).id, "skipped");
       assert.equal((await history()).length, 3);
+    });
+
+    await t.test("legacy history without a remaining export or matching source leaves the preview absent", async () => {
+      await stop();
+      await clearLegacyThumbnails();
+      await start();
+      const restored = await history();
+      const missing = restored.find(item => item.jobId === different.id)!;
+      assert.equal(missing.available, false);
+      assert.equal(missing.thumbnailUrl, undefined);
+      assert.equal(missing.thumbnailKind, undefined);
+      assert.equal((await fetch(`${base}/api/history/${missing.id}/thumbnail`)).status, 404);
+      assert.equal(restored.length, 3, "A missing preview never removes the history record");
+      const reviewed = restored.find(item => item.id === entry.id)!;
+      await thumbnailBytes(reviewed, "source");
+      assert.deepEqual(reviewed.measurements, measurements);
+      assert.deepEqual(reviewed.publications, publications);
     });
 
     await t.test("concurrent fresh uploads with identical fingerprints cannot both render before history is recorded", async () => {

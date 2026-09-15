@@ -234,7 +234,9 @@ export async function createThumbnail(
   inputPath: string,
   outputPath: string,
   signal?: AbortSignal,
+  seekSeconds = 0,
 ): Promise<void> {
+  if (!Number.isFinite(seekSeconds) || seekSeconds < 0) throw new Error("Invalid thumbnail time");
   const input = await localFile(inputPath);
   await mkdir(path.dirname(path.resolve(outputPath)), { recursive: true });
   await run(
@@ -248,6 +250,7 @@ export async function createThumbnail(
       "-threads",
       "2",
       ...SAFE_INPUT,
+      ...(seekSeconds ? ["-ss", String(seekSeconds)] : []),
       "-i",
       input,
       "-map",

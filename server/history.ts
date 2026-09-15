@@ -101,7 +101,10 @@ export function upsertHistory(entries: ExportHistoryEntry[], entry: ExportHistor
   const distinctPublications = publications.filter((item, index) => !publications.slice(0, index).some(previous =>
     previous.platform === item.platform && previous.publishedAt === item.publishedAt && previous.url === item.url));
   const measurements = prior.find(item => item.measurements)?.measurements ?? entry.measurements;
-  const updated = structuredClone({ ...entry, publications: distinctPublications, ...(measurements ? { measurements } : {}) });
+  const thumbnailUrl = entry.thumbnailUrl ?? prior.find(item => item.thumbnailUrl)?.thumbnailUrl;
+  const thumbnailKind = entry.thumbnailKind ?? prior.find(item => item.thumbnailUrl)?.thumbnailKind;
+  const updated = structuredClone({ ...entry, publications: distinctPublications, ...(measurements ? { measurements } : {}),
+    ...(thumbnailUrl ? { thumbnailUrl, ...(thumbnailKind ? { thumbnailKind } : {}) } : {}) });
   const result: ExportHistoryEntry[] = [];
   let inserted = false;
   for (const existing of entries) {

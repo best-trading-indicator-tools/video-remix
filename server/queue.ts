@@ -8,6 +8,7 @@ import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
 import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan } from "./plan-storage.js";
 import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
+import { historyThumbnailPath, retainHistoryThumbnail, type HistoryThumbnail } from "./history-thumbnails.js";
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
 import { reviewEditorialPlan } from "./editorial-review.js";
@@ -56,6 +57,7 @@ async function run(job: StoredJob, controller: AbortController) {
   let status: "completed" | "failed" | "cancelled" | "skipped" = "failed";
   let errorMessage: string | undefined;
   let outputSize: number | undefined;
+  let thumbnail: HistoryThumbnail | undefined;
   const savedRepair = job.editorialRepair;
   delete job.qualityReport;
   delete job.editorialReport;
@@ -235,9 +237,15 @@ async function run(job: StoredJob, controller: AbortController) {
     // Keep the job processing until its old files are gone. A retry must never
     // share this work directory or output path with cleanup from the prior run.
     await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
+    if (status === "completed" && !controller.signal.aborted) {
+      const source = state.sources.find(item => item.id === job.sourceId);
+      const entry = source && historyEntry(source, { ...job, status: "completed" });
+      if (entry) thumbnail = await retainHistoryThumbnail(entry, job.outputPath, controller.signal);
+    }
     if (controller.signal.aborted) status = "cancelled";
     if (status !== "completed") {
       await rm(job.outputPath, { force: true }).catch(() => undefined);
+      await rm(historyThumbnailPath(job.id), { force: true }).catch(() => undefined);
       if (job.captionPath)
         await rm(job.captionPath, { force: true }).catch(() => undefined);
       delete job.captionPath;
@@ -264,6 +272,7 @@ async function run(job: StoredJob, controller: AbortController) {
     job.finishedAt = new Date().toISOString();
     const source = state.sources.find(item => item.id === job.sourceId);
     const entry = source && historyEntry(source, job);
+    if (entry && thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
     if (entry) state.history = upsertHistory(state.history, entry);
     running.delete(job.id);
     await saveStore().catch((error) =>

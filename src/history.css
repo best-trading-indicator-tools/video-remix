@@ -10,16 +10,24 @@
 .history-source-filter span { color: var(--subtle); font-size: 13px; overflow-wrap: anywhere; }
 .history-list { display: grid; gap: 20px; }
 .history-card { border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: var(--surface); min-width: 0; }
-.history-card-top, .history-card-title { display: flex; align-items: flex-start; gap: 16px; }
+.history-card-top, .history-card-title { display: flex; align-items: flex-start; gap: 22px; }
 .history-card-top { justify-content: space-between; }
-.history-card-title { min-width: 0; }
+.history-card-title { min-width: 0; flex: 1; }
 .history-card-title > div { min-width: 0; }
-.history-entry-icon { background: var(--surface-raised); color: var(--accent); padding: 13px; border: 1px solid var(--line); border-radius: 10px; display: flex; flex-shrink: 0; }
+.history-thumbnail { position: relative; display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 208px; max-width: 100%; height: 180px; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); text-decoration: none; }
+.history-thumbnail img { display: block; width: 100%; height: 100%; object-fit: contain; }
+a.history-thumbnail { transition: border-color 150ms; }
+a.history-thumbnail:hover { border-color: var(--accent); }
+a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.history-thumbnail-action { position: absolute; bottom: 9px; left: 9px; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% - 18px); padding: 6px 8px; border: 1px solid #ffffff30; border-radius: 6px; background: #0c1018e8; color: #f4f6fa; font-size: 11px; font-weight: 550; line-height: 1.4; pointer-events: none; }
+.history-thumbnail-action svg { flex-shrink: 0; }
+.history-thumbnail.is-unavailable { flex-direction: column; gap: 10px; padding: 18px; text-align: center; color: var(--subtle); font-size: 12px; line-height: 1.6; }
+.history-thumbnail.is-unavailable svg { color: var(--muted); }
 .history-card h3 { font-size: 16px; line-height: 1.5; font-weight: 650; overflow-wrap: anywhere; }
 .history-card-title p { font-size: 13px; line-height: 1.65; color: var(--subtle); margin-top: 5px; overflow-wrap: anywhere; }
 .history-status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--subtle); border-radius: 6px; padding: 6px 9px; font-size: 12px; font-weight: 500; flex-shrink: 0; line-height: 1.4; }
 .history-status.published { border-color: #365447; color: var(--green); background: #192a23; }
-.history-entry-meta { display: flex; gap: 8px 20px; flex-wrap: wrap; font-size: 12px; color: var(--muted); margin: 20px 0 14px; line-height: 1.6; }
+.history-entry-meta { display: flex; gap: 8px 20px; flex-wrap: wrap; font-size: 12px; color: var(--subtle); margin: 16px 0 0; line-height: 1.6; }
 .history-excerpts { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .history-excerpts summary { cursor: pointer; font-size: 14px; color: var(--subtle); padding: 8px 0; font-weight: 500; line-height: 1.5; }
 .history-detail-label { font-size: 12px; color: var(--muted); margin: 16px 0 10px; }
@@ -118,8 +126,8 @@
   .history-toolbar > .secondary-button { padding-left: 12px; padding-right: 12px; }
   .history-card { padding: 18px; }
   .history-card-top { flex-wrap: wrap; gap: 14px; }
-  .history-card-title { gap: 12px; }
-  .history-entry-icon { padding: 10px; }
+  .history-card-title { flex-direction: column; flex-basis: 100%; gap: 16px; }
+  .history-thumbnail { width: 100%; height: 200px; }
   .history-card h3 { font-size: 16px; }
   .history-publication-fields, .measurement-fields { grid-template-columns: minmax(0, 1fr); }
   .measurement-issues > div { grid-template-columns: minmax(0, 1fr); }
@@ -138,7 +146,6 @@
 @media (max-width: 380px) {
   .history-panel { padding: 16px; }
   .history-card { padding: 14px; }
-  .history-entry-icon { display: none; }
   .history-toolbar { flex-wrap: wrap; }
   .history-search { flex-basis: 100%; }
   .history-form-actions .secondary-button { flex: 1 1 100%; }

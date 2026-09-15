@@ -31,6 +31,7 @@ import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js
 import { stockBrollConfigured } from "./stock-broll.js";
 import { brollAIConfigured } from "./broll-ai.js";
 import { fingerprintFile, publicationChangesSchema } from "./history.js";
+import { historyThumbnailExists, historyThumbnailPath, historyThumbnailUrl } from "./history-thumbnails.js";
 import { correctionRecord, measurementsCsv, measurementsSchema, measurementSummary } from "./measurements.js";
 import { installManualPreviewRoutes } from "./manual-preview.js";
 import { assertLinkedSourceUnchanged, ImportError, installMediaImportRoutes } from "./media-imports.js";
@@ -164,9 +165,18 @@ export function createApp() {
     res.json({ sources: state.sources.map(publicSource) }),
   );
   const publicHistory = () => state.history.map(entry => ({ ...entry,
+    thumbnailUrl: entry.thumbnailUrl ? historyThumbnailUrl(entry.id) : undefined,
     available: state.jobs.some(job => job.id === entry.jobId && job.status === "completed"),
   })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   app.get("/api/history", (_req, res) => res.json({ entries: publicHistory() }));
+  app.get("/api/history/:id/thumbnail", async (req, res, next) => {
+    const entry = state.history.find(item => item.id === req.params.id);
+    if (!entry || !await historyThumbnailExists(entry.id)) throw new HttpError(404, "History preview is unavailable.");
+    res.type("image/jpeg").setHeader("Cache-Control", "private, max-age=86400");
+    res.sendFile(historyThumbnailPath(entry.id), (error) => {
+      if (error && !res.headersSent) { res.setHeader("Cache-Control", "no-store"); next(error); }
+    });
+  });
   app.get("/api/measurements", (_req, res) => res.json(measurementSummary(state.history)));
   app.get("/api/measurements/export", (req, res) => {
     if (req.query.format === "csv") {

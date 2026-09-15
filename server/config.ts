@@ -28,6 +28,7 @@ export const config = {
 export const paths = {
   uploads: path.join(config.dataDir, "uploads"),
   thumbnails: path.join(config.dataDir, "thumbnails"),
+  historyThumbnails: path.join(config.dataDir, "history-thumbnails"),
   attachments: path.join(config.dataDir, "attachments"),
   outputs: path.join(config.dataDir, "outputs"),
   work: path.join(config.dataDir, "work"),

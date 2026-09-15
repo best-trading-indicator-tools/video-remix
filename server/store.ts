@@ -12,6 +12,7 @@ import type {
 import { config, paths } from "./config.js";
 import { fingerprintFile, historyEntry, upsertHistory } from "./history.js";
 import { migrateLegacyPlanResolutions } from "./plan-migrations.js";
+import { retainHistoryThumbnail } from "./history-thumbnails.js";
 export interface StoredSource extends VideoSource {
   filePath: string;
   thumbnailPath: string;
@@ -105,6 +106,22 @@ export async function initStore() {
       if (entry) state.history = upsertHistory(state.history, entry);
     }
   }
+  // Backfill available legacy exports before startup retention removes them.
+  // Two workers bound local media work; retained frames need no source/video file.
+  const completedJobs = new Map(state.jobs.filter(job => job.status === "completed").map(job => [job.id, job]));
+  let nextPreview = 0;
+  await Promise.all(Array.from({ length: Math.min(2, state.history.length) }, async () => {
+    while (nextPreview < state.history.length) {
+      const entry = state.history[nextPreview++]!;
+      const source = state.sources.find(item => item.fingerprint === entry.sourceFingerprint);
+      const cut = entry.cuts[0];
+      const sourceFrame = source && cut && cut.end <= source.duration
+        ? { filePath: source.filePath, start: cut.start, end: cut.end, fileSignature: source.fileSignature } : undefined;
+      const thumbnail = await retainHistoryThumbnail(entry, completedJobs.get(entry.jobId)?.outputPath, undefined, sourceFrame);
+      if (thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
+      else { delete entry.thumbnailUrl; delete entry.thumbnailKind; }
+    }
+  }));
   await saveStore();
 }
 export function saveStore() {

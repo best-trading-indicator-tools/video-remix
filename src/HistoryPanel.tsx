@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import EditorialReportSummary from "./EditorialReportSummary";
-import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, Image, LoaderCircle, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import type { ExportHistoryEntry, ExportMeasurements, ExportReview, PostMetrics, VideoSource } from "../shared/types";
 import "./history.css";
 
@@ -199,6 +199,21 @@ function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[]
   </details>;
 }
 
+function HistoryThumbnail({ entry }: { entry: ExportHistoryEntry }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [entry.thumbnailUrl]);
+  const title = entry.title || entry.sourceName;
+  const sourceFrame = entry.thumbnailKind === "source";
+  if (!entry.thumbnailUrl || failed) return <div className="history-thumbnail is-unavailable">
+    <Film size={24} aria-hidden="true" /><span>Preview unavailable</span>
+  </div>;
+  return <a className="history-thumbnail" href={entry.available ? `/api/jobs/${encodeURIComponent(entry.jobId)}/video` : entry.thumbnailUrl}
+    target="_blank" rel="noreferrer" aria-label={entry.available ? `Preview video: ${title}` : `Open ${sourceFrame ? "source" : "saved"} preview frame: ${title}`}>
+    <img src={entry.thumbnailUrl} alt={`${sourceFrame ? "Source" : "Preview"} frame from ${title}`} loading="lazy" decoding="async" onError={() => setFailed(true)} />
+    <span className="history-thumbnail-action" aria-hidden="true">{entry.available && !sourceFrame ? <Play size={13} /> : <Image size={13} />}{sourceFrame ? "Source frame" : entry.available ? "Preview video" : "Saved frame"}</span>
+  </a>;
+}
+
 function HistoryCard({ entry, stockUses, onSaved }: {
   entry: ExportHistoryEntry;
   stockUses: Map<string, number>;
@@ -241,14 +256,15 @@ function HistoryCard({ entry, stockUses, onSaved }: {
   };
   return <article className="history-card" aria-label={`History for ${entry.title || entry.sourceName}`}>
     <div className="history-card-top">
-      <div className="history-card-title"><span className="history-entry-icon"><Film size={20} /></span>
-        <div><h3>{entry.title || entry.sourceName}</h3><p>{entry.sourceName}</p></div>
+      <div className="history-card-title"><HistoryThumbnail entry={entry} />
+        <div><h3>{entry.title || entry.sourceName}</h3>{entry.title && entry.title !== entry.sourceName && <p>{entry.sourceName}</p>}
+          <div className="history-entry-meta"><span>Exported {dateText(entry.createdAt)}</span><span>{timeText(entry.outputDuration)} video</span>{entry.parentJobId && <span>Revision {entry.revision}</span>}</div>
+        </div>
       </div>
       <span className={`history-status ${entry.publications.length ? "published" : ""}`}>
         {entry.publications.length ? <Check size={13} /> : <Clock3 size={13} />}{entry.publications.length ? "Published" : "Exported"}
       </span>
     </div>
-    <div className="history-entry-meta"><span>Exported {dateText(entry.createdAt)}</span><span>{timeText(entry.outputDuration)} video</span>{entry.parentJobId && <span>Revision {entry.revision}</span>}</div>
     <details className="history-excerpts">
       <summary>Source excerpts &amp; stock footage</summary>
       <p className="history-detail-label">Intervals used from the original source</p>

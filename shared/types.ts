@@ -292,6 +292,9 @@ export interface ExportHistoryEntry {
   stockShots: { identity: string; name: string; sourceStart: number; duration: number }[];
   publications: { platform: "instagram" | "tiktok"; publishedAt: string; url?: string }[];
   available?: boolean;
+  /** A retained frame of this export, independent of the temporary video file. */
+  thumbnailUrl?: string;
+  thumbnailKind?: "export" | "source";
   measurements?: ExportMeasurements;
   corrections?: CorrectionRecord;
   editorialReport?: EditorialReport;
