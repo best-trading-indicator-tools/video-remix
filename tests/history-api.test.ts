@@ -231,7 +231,7 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     });
 
     const measurements = {
-      review: { benchmarkCase: "editorial-work-shutdown", approach: "Comparison", openingClear: true, endingComplete: false,
+      review: { verdict: "rejected", issueReasons: ["ending"], benchmarkCase: "editorial-work-shutdown", approach: "Comparison", openingClear: true, endingComplete: false,
         brollReviewed: 2, brollAccepted: 1, captionCorrections: 3, correctionSeconds: 95, notes: "The ending needs its final example." },
       posts: [
         { platform: "instagram", measuredAt: "2026-09-15T10:00:00.000Z", views: 100, averageWatchSeconds: 5, completionPercent: 50, saves: 1, shares: 2 },
@@ -240,6 +240,9 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     };
     await t.test("review results validate, aggregate latest observations and survive startup reconciliation", async () => {
       for (const invalid of [
+        { review: { verdict: "approved" } },
+        { review: { verdict: "rejected", issueReasons: ["meaning", "meaning"] } },
+        { review: { issueReasons: ["unsupported"] } },
         { review: { brollReviewed: 1, brollAccepted: 2 } },
         { review: { correctionSeconds: -2 } },
         { posts: [{ platform: "tiktok", measuredAt: "invalid" }] },
@@ -250,23 +253,39 @@ test("export history survives new batches, renamed reuploads, deletion and expir
         assert.equal(rejected.status, 400, await rejected.clone().text());
         assert.equal((await history()).find(item => item.id === entry.id)!.measurements, undefined);
       }
+      const jobsBeforeReview = (await jobs()).map(job => job.id).sort();
+      const accepted = await request(`/api/history/${entry.id}/measurements`, "PATCH", { review: { verdict: "accepted-unchanged" } });
+      assert.equal(accepted.status, 200, await accepted.clone().text());
+      const acceptedEntry = await accepted.json() as ExportHistoryEntry;
+      assert.deepEqual(acceptedEntry.measurements, { review: { verdict: "accepted-unchanged" } });
+      assert.equal(acceptedEntry.revision, entry.revision);
+      assert.deepEqual((await jobs()).map(job => job.id).sort(), jobsBeforeReview, "A human verdict never creates a render or revision");
+      const acceptedSummary = await (await fetch(`${base}/api/measurements`)).json();
+      assert.equal(acceptedSummary.totals.acceptedUnchanged, 1);
+      assert.equal(acceptedSummary.totals.acceptanceRate, 1);
       const response = await request(`/api/history/${entry.id}/measurements`, "PATCH", measurements);
       assert.equal(response.status, 200, await response.clone().text());
       assert.deepEqual((await response.json() as ExportHistoryEntry).measurements, measurements);
       const summary = await (await fetch(`${base}/api/measurements`)).json();
       const group = summary.groups.find((item: { approach: string }) => item.approach === "Comparison");
       assert.equal(group.exports, 1);
+      assert.equal(group.verdictReviews, 1);
+      assert.equal(group.rejected, 1);
+      assert.equal(group.acceptanceRate, 0);
+      assert.equal(group.unchangedAcceptanceRate, 0);
       assert.equal(group.brollAcceptanceRate, 0.5);
       assert.equal(group.totalViews, 200, "Metric snapshots do not double-count cumulative post views");
       assert.equal(group.averageWatchSeconds, 8);
       assert.equal(group.completionPercent, 75);
       assert.equal(group.averageCorrectionSeconds, 95);
+      assert.equal(group.medianCorrectionSeconds, 95);
       const csv = await fetch(`${base}/api/measurements/export?format=csv`);
       assert.equal(csv.status, 200);
       assert.match(csv.headers.get("content-disposition") || "", /attachment/u);
       assert.match(await csv.text(), /Comparison/u);
       const exported = await (await fetch(`${base}/api/measurements/export?format=json`)).json();
       assert.equal(exported.version, 1);
+      assert.equal(exported.totals.rejected, 1);
       assert.deepEqual(exported.entries.find((item: ExportHistoryEntry) => item.id === entry.id).measurements, measurements);
       assert.ok(!JSON.stringify(exported).includes(dataDirectory));
       assert.equal((await fetch(`${base}/api/measurements/export?format=xml`)).status, 400);

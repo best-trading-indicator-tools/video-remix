@@ -18,9 +18,20 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return result as T;
 }
 
-type ReviewDraft = { [Key in keyof Required<ExportReview>]: string };
+type ReviewDraft = { [Key in keyof Omit<Required<ExportReview>, "issueReasons">]: string } & { issueReasons: NonNullable<ExportReview["issueReasons"]> };
 type PostDraft = { [Key in keyof Required<PostMetrics>]: string };
+const verdictLabels = {
+  "accepted-unchanged": "Accepted unchanged",
+  "accepted-after-correction": "Accepted after correction",
+  rejected: "Rejected",
+} satisfies Record<NonNullable<ExportReview["verdict"]>, string>;
+const issueLabels = {
+  opening: "Opening lacks context", ending: "Ending is incomplete", meaning: "Meaning changed or misleading",
+  hook: "Opening title or hook", captions: "Captions", framing: "Framing", broll: "B-roll relevance", other: "Other",
+} satisfies Record<NonNullable<ExportReview["issueReasons"]>[number], string>;
 const draftReview = (review: ExportReview = {}): ReviewDraft => ({
+  verdict: review.verdict && Object.hasOwn(verdictLabels, review.verdict) ? review.verdict : "",
+  issueReasons: Array.isArray(review.issueReasons) ? review.issueReasons.filter(reason => Object.hasOwn(issueLabels, reason)) : [],
   benchmarkCase: review.benchmarkCase || "", approach: review.approach || "",
   openingClear: typeof review.openingClear !== "boolean" ? "" : review.openingClear ? "yes" : "no",
   endingComplete: typeof review.endingComplete !== "boolean" ? "" : review.endingComplete ? "yes" : "no",
@@ -58,6 +69,8 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
       setError("Enter both the reviewed and accepted shot counts, or leave both blank. Accepted shots cannot exceed reviewed shots."); return;
     }
     const updated: ExportReview = {
+      ...(review.verdict ? { verdict: review.verdict as ExportReview["verdict"] } : {}),
+      ...(review.issueReasons.length ? { issueReasons: review.issueReasons } : {}),
       ...(review.benchmarkCase.trim() ? { benchmarkCase: review.benchmarkCase.trim() } : {}),
       ...(review.approach.trim() ? { approach: review.approach.trim() } : {}),
       ...(review.openingClear ? { openingClear: review.openingClear === "yes" } : {}),
@@ -84,12 +97,27 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
     if (await save({ ...entry.measurements, posts: [...(entry.measurements?.posts || []), snapshot] }, "Platform results saved.")) { setPost(draftPost()); setAddingPost(false); }
   };
   return <details className="history-measurements" onToggle={(event) => { if (event.currentTarget.open) { setReview(draftReview(entry.measurements?.review)); setError(""); setSaved(""); } }}>
-    <summary>Record review &amp; results{entry.measurements?.review?.approach && <span>{entry.measurements.review.approach}</span>}</summary>
+    <summary>Record review &amp; results{entry.measurements?.review?.verdict && <span>{verdictLabels[entry.measurements.review.verdict]}</span>}{entry.measurements?.review?.approach && <span>{entry.measurements.review.approach}</span>}</summary>
     <p className="measurement-note">Use the same benchmark case for comparable footage and an approach name for the editing idea. Leave unknown results blank.</p>
     {entry.corrections && <p className="measurement-auto-counts">Saved revision: {entry.corrections.captionCorrections} caption corrections · {entry.corrections.brollChanges} B-roll changes{entry.corrections.seconds !== undefined ? ` · ${entry.corrections.seconds}s active correction time` : ""}</p>}
     <form onSubmit={saveReview}>
       <fieldset disabled={saving}><legend>Editorial review</legend>
         <div className="measurement-fields">
+          <label className="measurement-wide">Whole-short verdict
+            <select value={review.verdict} onChange={(event) => setReview({ ...review, verdict: event.target.value })}>
+              <option value="">Not decided</option>
+              {Object.entries(verdictLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <span>Judge the whole short after watching it. You can accept an unchanged export here without making a revision. Leave undecided work as “Not decided”.</span>
+          </label>
+          <fieldset className="measurement-wide measurement-issues"><legend>Issues found <span>(optional)</span></legend>
+            <div>{Object.entries(issueLabels).map(([value, label]) => {
+              const reason = value as NonNullable<ExportReview["issueReasons"]>[number];
+              return <label key={reason}><input type="checkbox" checked={review.issueReasons.includes(reason)} onChange={(event) => setReview({ ...review,
+                issueReasons: event.target.checked ? [...review.issueReasons, reason] : review.issueReasons.filter(item => item !== reason),
+              })} />{label}</label>;
+            })}</div>
+          </fieldset>
           <label>Benchmark case<input type="text" maxLength={80} placeholder="E.g. talking head, 45 seconds" value={review.benchmarkCase} onChange={(event) => setReview({ ...review, benchmarkCase: event.target.value })} /></label>
           <label>Editorial approach<input type="text" maxLength={80} placeholder="E.g. problem → example → takeaway" value={review.approach} onChange={(event) => setReview({ ...review, approach: event.target.value })} /></label>
           <label>Opening makes sense<select value={review.openingClear} onChange={(event) => setReview({ ...review, openingClear: event.target.value })}><option value="">Not reviewed</option><option value="yes">Yes</option><option value="no">No</option></select></label>
@@ -100,7 +128,7 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
           ] as const).map(([field, label]) => <label key={field}>{label}<input type="number" min={0} max={field === "correctionSeconds" ? 86400 : 100000} step={field === "correctionSeconds" ? "any" : 1} placeholder="Not recorded" value={review[field]} onChange={(event) => setReview({ ...review, [field]: event.target.value })} /></label>)}
           <label className="measurement-wide">Review notes<textarea rows={2} maxLength={500} value={review.notes} placeholder="What worked, what needed correction, or what you want to test next" onChange={(event) => setReview({ ...review, notes: event.target.value })} /></label>
         </div>
-        <p className="measurement-note">Leave correction fields blank to use the saved revision measurements.</p>
+        <p className="measurement-note">Leave correction fields blank to use the saved revision measurements. If no time was recorded, it stays unknown; enter 0 only when no correction time was needed.</p>
         <div className="history-form-actions"><button type="submit" className="secondary-button">{saving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}Save review</button></div>
       </fieldset>
     </form>
@@ -132,10 +160,12 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
 
 interface MeasurementGroup {
   approach: string | null; benchmarkCase: string | null; exports: number; reviewedExports: number;
+  verdictReviews: number; unknownAcceptanceExports: number; acceptedUnchanged: number; acceptedAfterCorrection: number; rejected: number;
+  acceptanceRate: number | null; unchangedAcceptanceRate: number | null;
   openingReviews: number; openingClear: number; endingReviews: number; endingComplete: number;
   brollReviewExports: number; brollReviewed: number; brollAccepted: number; brollAcceptanceRate: number | null;
   captionMeasuredExports: number; captionCorrections: number | null;
-  correctionTimeExports: number; averageCorrectionSeconds: number | null;
+  correctionTimeExports: number; averageCorrectionSeconds: number | null; medianCorrectionSeconds: number | null;
 }
 function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[] | null; entries: ExportHistoryEntry[] }) {
   const latest = entries.flatMap((entry) => (["instagram", "tiktok"] as const).flatMap((platform) => {
@@ -145,10 +175,20 @@ function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[]
   }));
   return <details className="measurement-comparison">
     <summary>Compare recorded results</summary>
-    <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Counts show how much evidence was recorded; an empty field remains unknown.</p>
+    <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Acceptance rates use only explicit whole-short verdicts, including rejections. Undecided exports stay outside that denominator. Each export is counted separately, including revisions.</p>
     <div className="measurement-downloads"><a className="secondary-button" href="/api/measurements/export?format=csv" download><Download size={13} />Download all measurements · CSV</a><a className="secondary-button" href="/api/measurements/export?format=json" download><Download size={13} />JSON</a></div>
-    {groups?.length ? <><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Editorial approach comparison"><table className="measurement-table"><thead><tr><th>Approach / case</th><th>Exports reviewed</th><th>B-roll accepted / reviewed</th><th>Clear openings</th><th>Complete endings</th><th>Caption corrections</th><th>Average correction time</th></tr></thead><tbody>
-      {groups.map((group, index) => <tr key={`${group.approach}-${group.benchmarkCase}-${index}`}><th>{group.approach || "Approach not recorded"}<small>{group.benchmarkCase || "Case not recorded"}</small></th><td>{group.reviewedExports} / {group.exports}</td><td>{group.brollReviewExports ? `${group.brollAccepted} / ${group.brollReviewed}${group.brollAcceptanceRate === null ? "" : ` (${Math.round(group.brollAcceptanceRate * 100)}%)`}` : "—"}</td><td>{group.openingReviews ? `${group.openingClear} / ${group.openingReviews}` : "—"}</td><td>{group.endingReviews ? `${group.endingComplete} / ${group.endingReviews}` : "—"}</td><td>{group.captionMeasuredExports === 0 || group.captionCorrections === null ? "—" : group.captionCorrections}<small>{group.captionMeasuredExports} exports measured</small></td><td>{group.averageCorrectionSeconds === null ? "—" : `${group.averageCorrectionSeconds.toFixed(1)}s`}<small>{group.correctionTimeExports} exports timed</small></td></tr>)}
+    {groups?.length ? <><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Editorial approach comparison"><table className="measurement-table"><thead><tr><th>Approach / case</th><th>Whole-short verdicts</th><th>Accepted unchanged</th><th>Accepted overall</th><th>Exports reviewed</th><th>B-roll accepted / reviewed</th><th>Clear openings</th><th>Complete endings</th><th>Caption corrections</th><th>Median correction time</th></tr></thead><tbody>
+      {groups.map((group, index) => <tr key={`${group.approach}-${group.benchmarkCase}-${index}`}>
+        <th>{group.approach || "Approach not recorded"}<small>{group.benchmarkCase || "Case not recorded"}</small></th>
+        <td>{group.verdictReviews} / {group.exports}<small>{group.unknownAcceptanceExports} undecided</small></td>
+        <td>{group.unchangedAcceptanceRate === null ? "—" : `${group.acceptedUnchanged} / ${group.verdictReviews} (${Math.round(group.unchangedAcceptanceRate * 100)}%)`}</td>
+        <td>{group.acceptanceRate === null ? "—" : `${group.acceptedUnchanged + group.acceptedAfterCorrection} / ${group.verdictReviews} (${Math.round(group.acceptanceRate * 100)}%)`}<small>{group.acceptedAfterCorrection} after correction · {group.rejected} rejected</small></td>
+        <td>{group.reviewedExports} / {group.exports}</td>
+        <td>{group.brollReviewExports ? `${group.brollAccepted} / ${group.brollReviewed}${group.brollAcceptanceRate === null ? "" : ` (${Math.round(group.brollAcceptanceRate * 100)}%)`}` : "—"}</td>
+        <td>{group.openingReviews ? `${group.openingClear} / ${group.openingReviews}` : "—"}</td><td>{group.endingReviews ? `${group.endingComplete} / ${group.endingReviews}` : "—"}</td>
+        <td>{group.captionMeasuredExports === 0 || group.captionCorrections === null ? "—" : group.captionCorrections}<small>{group.captionMeasuredExports} exports measured</small></td>
+        <td>{measuredNumber(group.medianCorrectionSeconds, "s")}<small>{group.correctionTimeExports} exports timed · Average {measuredNumber(group.averageCorrectionSeconds, "s")}</small></td>
+      </tr>)}
     </tbody></table></div></> : <p className="measurement-note">{groups === null ? "Comparison data is not available yet." : "Record reviews on the exports below to start comparing approaches."}</p>}
     {!!latest.length && <><h3>Latest platform results for listed exports</h3><p className="measurement-note">One latest snapshot per export and platform. Compare similar cases measured after similar amounts of time.</p><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Latest platform results"><table className="measurement-table"><thead><tr><th>Export / approach</th><th>Platform / measured</th><th>Views</th><th>Average watch</th><th>Completion</th><th>Saves</th><th>Shares</th><th>Platform notice</th></tr></thead><tbody>{latest.map(({ entry, snapshot }) => <tr key={`${entry.id}-${snapshot.platform}`}><th>{entry.title || entry.sourceName}<small>{entry.measurements?.review?.approach || "Approach not recorded"} · {entry.measurements?.review?.benchmarkCase || "Case not recorded"}</small></th><td>{platformName(snapshot.platform)}<small>{dateText(snapshot.measuredAt)}</small></td><td>{measuredNumber(snapshot.views)}</td><td>{measuredNumber(snapshot.averageWatchSeconds, "s")}</td><td>{measuredNumber(snapshot.completionPercent, "%")}</td><td>{measuredNumber(snapshot.saves)}</td><td>{measuredNumber(snapshot.shares)}</td><td>{snapshot.platformNotice || "—"}</td></tr>)}</tbody></table></div></>}
   </details>;

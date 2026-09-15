@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_SETTINGS, type EditPlan, type ExportHistoryEntry, type PostMetrics } from "../shared/types.js";
+import { DEFAULT_SETTINGS, type EditPlan, type ExportHistoryEntry, type ExportReview, type PostMetrics } from "../shared/types.js";
 import { correctionRecord, measurementSummary, measurementsCsv, measurementsSchema } from "../server/measurements.js";
 
 const firstTime = "2026-09-01T09:00:00.000Z";
@@ -56,6 +56,74 @@ test("measurement documents enforce bounded counts, complete review pairs, plain
     { posts: [{ platform: "instagram", measuredAt: lastTime, revenue: 1 }] },
     { posts: Array.from({ length: 21 }, () => ({ platform: "tiktok", measuredAt: lastTime })) },
   ]) assert.equal(measurementsSchema.safeParse(invalid).success, false, JSON.stringify(invalid));
+});
+
+test("whole-short verdicts and issue reasons are optional, bounded and validated", () => {
+  for (const verdict of ["accepted-unchanged", "accepted-after-correction", "rejected"] as const) {
+    assert.deepEqual(measurementsSchema.parse({ review: { verdict } }), { review: { verdict } });
+  }
+  const reasons = ["opening", "ending", "meaning", "hook", "captions", "framing", "broll", "other"];
+  assert.deepEqual(measurementsSchema.parse({ review: { verdict: "rejected", issueReasons: reasons } }),
+    { review: { verdict: "rejected", issueReasons: reasons } });
+  assert.deepEqual(measurementsSchema.parse({ review: { issueReasons: [] } }), { review: { issueReasons: [] } });
+  for (const review of [
+    { verdict: "accepted" }, { verdict: "" }, { verdict: null }, { verdict: true }, { verdict: ["rejected"] },
+    { issueReasons: "meaning" }, { issueReasons: null }, { issueReasons: ["unknown"] }, { issueReasons: [null] },
+    { issueReasons: ["opening", "opening"] }, { issueReasons: [...reasons, "other"] },
+  ]) assert.equal(measurementsSchema.safeParse({ review }).success, false, JSON.stringify(review));
+});
+
+test("acceptance rates use explicit whole-short verdicts, including rejections, and never infer acceptance", () => {
+  const entries = [
+    entry("unchanged", { measurements: { review: { verdict: "accepted-unchanged", approach: "A" } } }),
+    entry("corrected", { revision: 2, measurements: { review: { verdict: "accepted-after-correction", approach: "A", issueReasons: ["captions"] } } }),
+    entry("rejected", { measurements: { review: { verdict: "rejected", approach: "A", issueReasons: ["meaning", "ending"] } } }),
+    entry("legacy-positive", { measurements: { review: { openingClear: true, endingComplete: true, brollReviewed: 2, brollAccepted: 2 } } }),
+    entry("automatic", { corrections: { captionCorrections: 0, brollChanges: 0, seconds: 0 } }),
+    entry("issues-only", { measurements: { review: { issueReasons: ["hook"] } } }),
+    entry("blank"),
+    entry("malformed-legacy", { measurements: { review: { verdict: "approved", issueReasons: null } as unknown as ExportReview } }),
+  ];
+  const original = structuredClone(entries);
+  const summary = measurementSummary(entries);
+  assert.equal(summary.totals.verdictReviews, 3);
+  assert.equal(summary.totals.unknownAcceptanceExports, 5);
+  assert.equal(summary.totals.acceptedUnchanged, 1);
+  assert.equal(summary.totals.acceptedAfterCorrection, 1);
+  assert.equal(summary.totals.rejected, 1);
+  assert.equal(summary.totals.acceptanceRate, 2 / 3);
+  assert.equal(summary.totals.unchangedAcceptanceRate, 1 / 3);
+  assert.equal(summary.totals.reviewedExports, 5);
+  const group = summary.groups.find(item => item.approach === "A")!;
+  assert.equal(group.verdictReviews, 3);
+  assert.equal(group.unknownAcceptanceExports, 0);
+  assert.equal(group.acceptanceRate, 2 / 3);
+  const unknown = summary.groups.find(item => item.approach === null)!;
+  assert.equal(unknown.acceptanceRate, null);
+  assert.equal(unknown.unchangedAcceptanceRate, null);
+  const rejectedOnly = measurementSummary([entries[2]!]).totals;
+  assert.equal(rejectedOnly.acceptanceRate, 0);
+  assert.equal(rejectedOnly.unchangedAcceptanceRate, 0);
+  assert.equal(measurementSummary([]).totals.acceptanceRate, null);
+  assert.equal(measurementSummary([]).totals.unknownAcceptanceExports, 0);
+  assert.deepEqual(entries, original);
+});
+
+test("median correction time includes measured zero and manual overrides but excludes unknowns", () => {
+  const measured = [
+    entry("zero", { measurements: { review: { verdict: "accepted-unchanged", correctionSeconds: 0 } } }),
+    entry("override", { corrections: { captionCorrections: 0, brollChanges: 0, seconds: 500 }, measurements: { review: { correctionSeconds: 10 } } }),
+    entry("saved", { corrections: { captionCorrections: 0, brollChanges: 0, seconds: 100 } }),
+    entry("unchanged-unknown", { measurements: { review: { verdict: "accepted-unchanged" } } }),
+    entry("unknown"),
+  ];
+  const stats = measurementSummary(measured).totals;
+  assert.equal(stats.correctionTimeExports, 3);
+  assert.equal(stats.medianCorrectionSeconds, 10);
+  assert.equal(stats.averageCorrectionSeconds, 110 / 3);
+  assert.equal(measurementSummary(measured.slice(0, 2)).totals.medianCorrectionSeconds, 5);
+  assert.equal(measurementSummary(measured.slice(3)).totals.medianCorrectionSeconds, null);
+  assert.equal(measurementSummary([]).totals.medianCorrectionSeconds, null);
 });
 
 test("correction records count content edits and shot changes once while preserving both plans", () => {
@@ -291,4 +359,28 @@ test("CSV preserves quoted multiline text, exports latest observations, and prev
   assert.ok(!csv.includes("Old notice"));
   assert.equal(csvRows(measurementsCsv([])).length, 1);
   assert.deepEqual(entries, original);
+});
+
+test("CSV exports verdicts and structured reasons while leaving legacy and malformed decisions blank", () => {
+  const entries = [
+    entry("unchanged", { measurements: { review: { verdict: "accepted-unchanged" } } }),
+    entry("corrected", { measurements: { review: { verdict: "accepted-after-correction", issueReasons: ["captions", "framing"] } } }),
+    entry("rejected", { measurements: { review: { verdict: "rejected", issueReasons: ["meaning", "ending"] } } }),
+    entry("legacy", { measurements: { review: { openingClear: true } } }),
+    entry("malformed", { measurements: { review: { verdict: "=1+1", issueReasons: "meaning" } as unknown as ExportReview } }),
+  ];
+  const [header, ...rows] = csvRows(measurementsCsv(entries));
+  const column = (name: string) => header!.indexOf(name);
+  assert.ok(column("verdict") >= 0 && column("issue_reasons") >= 0);
+  assert.ok(rows.every(row => row.length === header!.length));
+  assert.equal(rows[0]![column("verdict")], "accepted-unchanged");
+  assert.equal(rows[0]![column("correction_seconds")], "", "Acceptance does not invent a zero correction time");
+  assert.equal(rows[1]![column("verdict")], "accepted-after-correction");
+  assert.equal(rows[1]![column("issue_reasons")], "captions;framing");
+  assert.equal(rows[2]![column("verdict")], "rejected");
+  assert.equal(rows[2]![column("issue_reasons")], "meaning;ending");
+  for (const row of rows.slice(3)) {
+    assert.equal(row[column("verdict")], "");
+    assert.equal(row[column("issue_reasons")], "");
+  }
 });

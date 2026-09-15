@@ -6,7 +6,13 @@ const corrections = z.number().finite().int().min(0).max(100_000);
 const seconds = z.number().finite().min(0).max(86_400);
 const text = (maximum: number) => z.string().trim().max(maximum)
   .refine(value => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value), "Use plain text without control characters");
+const verdictSchema = z.enum(["accepted-unchanged", "accepted-after-correction", "rejected"]);
+const issueReasonSchema = z.enum(["opening", "ending", "meaning", "hook", "captions", "framing", "broll", "other"]);
+const issueReasonsSchema = z.array(issueReasonSchema).max(8)
+  .refine(reasons => new Set(reasons).size === reasons.length, "Record each issue reason once");
 const reviewSchema = z.object({
+  verdict: verdictSchema.optional(),
+  issueReasons: issueReasonsSchema.optional(),
   benchmarkCase: text(80).optional(),
   approach: text(80).optional(),
   openingClear: z.boolean().optional(),
@@ -95,6 +101,14 @@ export interface PostMeasurementStats {
 export interface MeasurementStats extends PostMeasurementStats {
   exports: number;
   reviewedExports: number;
+  verdictReviews: number;
+  unknownAcceptanceExports: number;
+  acceptedUnchanged: number;
+  acceptedAfterCorrection: number;
+  rejected: number;
+  /** Only explicit whole-short verdicts form the denominator for both rates. */
+  acceptanceRate: number | null;
+  unchangedAcceptanceRate: number | null;
   openingReviews: number;
   openingClear: number;
   openingClearRate: number | null;
@@ -113,6 +127,7 @@ export interface MeasurementStats extends PostMeasurementStats {
   correctionTimeExports: number;
   correctionSeconds: number;
   averageCorrectionSeconds: number | null;
+  medianCorrectionSeconds: number | null;
   platforms: (PostMeasurementStats & { platform: PostMetrics["platform"] })[];
 }
 export interface MeasurementSummary {
@@ -185,15 +200,27 @@ function summarizePosts(posts: PostMetrics[]): PostMeasurementStats {
 function summarize(entries: ExportHistoryEntry[]): MeasurementStats {
   const stats: MeasurementStats = {
     exports: entries.length, reviewedExports: 0, openingReviews: 0, openingClear: 0, openingClearRate: null,
+    verdictReviews: 0, unknownAcceptanceExports: entries.length, acceptedUnchanged: 0, acceptedAfterCorrection: 0, rejected: 0,
+    acceptanceRate: null, unchangedAcceptanceRate: null,
     endingReviews: 0, endingComplete: 0, endingCompleteRate: null,
     brollReviewExports: 0, brollReviewed: 0, brollAccepted: 0, brollAcceptanceRate: null,
     captionMeasuredExports: 0, captionCorrections: 0, averageCaptionCorrections: null,
-    brollChangedExports: 0, brollChanges: 0, correctionTimeExports: 0, correctionSeconds: 0, averageCorrectionSeconds: null,
+    brollChangedExports: 0, brollChanges: 0, correctionTimeExports: 0, correctionSeconds: 0, averageCorrectionSeconds: null, medianCorrectionSeconds: null,
     ...summarizePosts([]), platforms: [],
   };
+  const correctionTimes: number[] = [];
   for (const entry of entries) {
     const review = entry.measurements?.review;
-    if (review && (typeof review.openingClear === "boolean" || typeof review.endingComplete === "boolean" ||
+    const verdict = verdictSchema.safeParse(review?.verdict);
+    const issues = issueReasonsSchema.safeParse(review?.issueReasons);
+    if (verdict.success) {
+      stats.verdictReviews++;
+      stats.unknownAcceptanceExports--;
+      if (verdict.data === "accepted-unchanged") stats.acceptedUnchanged++;
+      else if (verdict.data === "accepted-after-correction") stats.acceptedAfterCorrection++;
+      else stats.rejected++;
+    }
+    if (review && (verdict.success || (issues.success && issues.data.length > 0) || typeof review.openingClear === "boolean" || typeof review.endingComplete === "boolean" ||
       whole(review.brollReviewed) || whole(review.captionCorrections) || nonnegative(review.correctionSeconds, 86400) || label(review.notes))) stats.reviewedExports++;
     if (typeof review?.openingClear === "boolean") {
       stats.openingReviews++;
@@ -220,6 +247,7 @@ function summarize(entries: ExportHistoryEntry[]): MeasurementStats {
     if (correction.seconds !== undefined) {
       stats.correctionTimeExports++;
       stats.correctionSeconds += correction.seconds;
+      correctionTimes.push(correction.seconds);
     }
   }
   const posts = entries.flatMap(latestPosts);
@@ -228,11 +256,17 @@ function summarize(entries: ExportHistoryEntry[]): MeasurementStats {
     platform, ...summarizePosts(posts.filter(post => post.platform === platform)),
   }));
   const ratio = (value: number, denominator: number) => denominator > 0 ? value / denominator : null;
+  stats.acceptanceRate = ratio(stats.acceptedUnchanged + stats.acceptedAfterCorrection, stats.verdictReviews);
+  stats.unchangedAcceptanceRate = ratio(stats.acceptedUnchanged, stats.verdictReviews);
   stats.openingClearRate = ratio(stats.openingClear, stats.openingReviews);
   stats.endingCompleteRate = ratio(stats.endingComplete, stats.endingReviews);
   stats.brollAcceptanceRate = ratio(stats.brollAccepted, stats.brollReviewed);
   stats.averageCaptionCorrections = ratio(stats.captionCorrections, stats.captionMeasuredExports);
   stats.averageCorrectionSeconds = ratio(stats.correctionSeconds, stats.correctionTimeExports);
+  correctionTimes.sort((a, b) => a - b);
+  const middle = Math.floor(correctionTimes.length / 2);
+  stats.medianCorrectionSeconds = correctionTimes.length === 0 ? null : correctionTimes.length % 2
+    ? correctionTimes[middle]! : (correctionTimes[middle - 1]! + correctionTimes[middle]!) / 2;
   return stats;
 }
 
@@ -263,16 +297,20 @@ function csvCell(value: unknown): string {
 /** One row per latest platform observation; unposted exports receive one blank-platform row. */
 export function measurementsCsv(entries: ExportHistoryEntry[]): string {
   const columns = ["history_id", "job_id", "source_name", "source_fingerprint", "title", "created_at", "approach", "benchmark_case",
+    "verdict", "issue_reasons",
     "opening_clear", "ending_complete", "broll_reviewed", "broll_accepted", "caption_corrections", "broll_changes", "correction_seconds", "review_notes",
     "platform", "measured_at", "views", "average_watch_seconds", "completion_percent", "saves", "shares", "platform_notice"];
   const rows: unknown[][] = [columns];
   for (const entry of entries) {
     const review = entry.measurements?.review;
+    const verdict = verdictSchema.safeParse(review?.verdict);
+    const issues = issueReasonsSchema.safeParse(review?.issueReasons);
     const correction = measuredCorrections(entry);
     const posts = latestPosts(entry);
     for (const post of posts.length ? posts : [undefined]) rows.push([
       entry.id, entry.jobId, entry.sourceName, entry.sourceFingerprint, entry.title, entry.createdAt,
       label(review?.approach), label(review?.benchmarkCase),
+      verdict.success ? verdict.data : undefined, issues.success ? issues.data.join(";") : undefined,
       typeof review?.openingClear === "boolean" ? review.openingClear : undefined,
       typeof review?.endingComplete === "boolean" ? review.endingComplete : undefined,
       whole(review?.brollReviewed) ? review.brollReviewed : undefined,

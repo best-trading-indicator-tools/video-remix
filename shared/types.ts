@@ -240,6 +240,9 @@ export interface PromptEditResponse {
 export interface ManualPromptEditRequest { prompt: string; settings: RemixSettings }
 export interface ManualPromptEditResponse { settings: RemixSettings; summary: string[]; clarification?: string }
 export interface ExportReview {
+  /** Human judgment of the whole short; absence means no acceptance decision was recorded. */
+  verdict?: "accepted-unchanged" | "accepted-after-correction" | "rejected";
+  issueReasons?: ("opening" | "ending" | "meaning" | "hook" | "captions" | "framing" | "broll" | "other")[];
   benchmarkCase?: string;
   approach?: string;
   openingClear?: boolean;

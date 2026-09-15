@@ -352,6 +352,16 @@ not assess editorial quality or platform eligibility.
 
 ### Measure and compare edits
 
+In **History → Record review & results**, give each whole short a verdict:
+**Accept unchanged**, **Accept after correction**, or **Reject**. You can record
+acceptance without rendering a revision. Optional issue categories identify
+problems with the opening, ending, meaning, heading, captions, framing, or B-roll.
+Comparisons show explicit verdict counts, acceptance without changes, overall
+acceptance, and the number of undecided exports. Only recorded verdicts enter the
+acceptance-rate denominator; a technical pass is never counted as human approval.
+Each export/revision is counted separately. Median correction time accompanies
+the existing average; missing times remain unknown, and an explicit zero counts.
+
 In **History**, record whether the opening and ending work, how many B-roll shots
 were accepted, caption corrections, and correction time. Use the same benchmark
 case and a distinct editorial approach label when comparing versions. New editor
