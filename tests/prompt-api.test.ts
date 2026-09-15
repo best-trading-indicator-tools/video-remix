@@ -8,6 +8,7 @@ import net from "node:net";
 import { promisify } from "node:util";
 import { test } from "node:test";
 import type { EditPlan, PromptEditResponse, RenderJob } from "../shared/types.js";
+import { DEFAULT_SETTINGS } from "../shared/types.js";
 
 const exec = promisify(execFile);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -170,6 +171,49 @@ globalThis.fetch = async (input, init) => {
       assert.deepEqual(await planOf(parent.id), plan);
       assert.equal(digest(new Uint8Array(await (await fetch(`${base}${parent.downloadUrl}`)).arrayBuffer())), digest(parentBytes));
       assert.ok(child.outputSize! > 1000);
+    });
+    await t.test("manual prompts propose exact settings and render only through the existing export action", async () => {
+      const count = (await jobs()).length;
+      const settings = { ...DEFAULT_SETTINGS, contrast: 1.17, saturation: 0.9 };
+      await writeFile(replyPath, JSON.stringify({ patch: { speed: 1.25, temperature: 0.2, muted: true,
+        aspect: "9:16", resolution: "1080", trimStart: 1, trimEnd: 6 } }));
+      const response = await request(`/api/sources/${source.id}/edit-prompt`, { settings,
+        prompt: "Use source seconds 1 to 6, 1.25x speed, warmer, mute audio, and portrait 1080p." });
+      assert.equal(response.status, 200, await response.clone().text());
+      const proposal = await response.json();
+      assert.equal(proposal.settings.contrast, 1.17);
+      assert.equal(proposal.settings.saturation, 0.9);
+      assert.equal(proposal.settings.trimStart, 1);
+      assert.equal(proposal.settings.trimEnd, 6);
+      assert.equal(proposal.settings.resolution, "1080");
+      assert.equal(proposal.settings.muted, true);
+      assert.ok(proposal.summary.length >= 5);
+      assert.equal((await jobs()).length, count);
+      const render = await request("/api/jobs", { items: [{ sourceId: source.id, settings: proposal.settings, title: "Prompt fixture" }], variants: 1, randomize: false });
+      assert.equal(render.status, 201, await render.clone().text());
+      const job = await completed((await render.json()).jobs[0].id);
+      const output = path.join(directory, "manual-prompt.mp4");
+      await writeFile(output, new Uint8Array(await (await fetch(`${base}${job.downloadUrl}`)).arrayBuffer()));
+      const metadata = JSON.parse((await exec("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type,width,height:format=duration", "-of", "json", output])).stdout);
+      assert.ok(metadata.streams.some((stream: { width: number; height: number }) => stream.width === 1080 && stream.height === 1920));
+      assert.ok(!metadata.streams.some((stream: { codec_type: string }) => stream.codec_type === "audio"));
+      assert.ok(Math.abs(Number(metadata.format.duration) - 4) < 0.1);
+    });
+    await t.test("manual clarification and invalid settings do not queue exports or lose existing choices", async () => {
+      const count = (await jobs()).length;
+      await writeFile(replyPath, JSON.stringify({ patch: { muted: true }, clarification: "Which color style do you want?" }));
+      const route = `/api/sources/${source.id}/edit-prompt`;
+      const response = await request(route, { settings: DEFAULT_SETTINGS, prompt: "Make it look better" });
+      assert.equal(response.status, 200);
+      const proposal = await response.json();
+      assert.ok(proposal.clarification);
+      assert.deepEqual(proposal.settings, DEFAULT_SETTINGS);
+      const callCount = (await calls()).length;
+      for (const settings of [{ ...DEFAULT_SETTINGS, speed: 9 }, { ...DEFAULT_SETTINGS, filePath: "/etc/passwd" }, { ...DEFAULT_SETTINGS, trimEnd: 900 }])
+        assert.equal((await request(route, { settings, prompt: "Make it brighter" })).status, 400);
+      assert.equal((await request(`/api/sources/${randomUUID()}/edit-prompt`, { settings: DEFAULT_SETTINGS, prompt: "Brighter" })).status, 404);
+      assert.equal((await calls()).length, callCount);
+      assert.equal((await jobs()).length, count);
     });
   } finally {
     if (server && server.exitCode === null) {

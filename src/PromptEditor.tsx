@@ -4,26 +4,39 @@ import type { PromptEditResponse } from "../shared/types";
 import "./prompt-editor.css";
 
 export type PromptProposal = PromptEditResponse;
+export interface ReviewablePrompt { summary: string[]; clarification?: string }
+export interface PromptExample { label: string; prompt: string }
 
-const examples = [
+const savedEditExamples: PromptExample[] = [
   { label: "Smaller captions", prompt: "Make captions smaller and move them up." },
   { label: "Keep the first 20s", prompt: "Shorten this to the first 20 seconds." },
   { label: "Remove B-roll", prompt: "Remove the B-roll." },
 ];
 
 /** Generates a reviewable proposal. Applying it never starts a render. */
-export default function PromptEditor({ contextKey, disabled = false, onSuggest, onApply, onUndo, canUndo = false, applied = false }: {
+export default function PromptEditor<T extends ReviewablePrompt = PromptProposal>({ contextKey, disabled = false, onSuggest, onApply, onUndo, canUndo = false, applied = false,
+  examples = savedEditExamples, scope = "Hooks, captions, cut points, framing and B-roll. You can keep using the controls below.",
+  placeholder = "e.g. Make captions smaller and move them up", description = "Describe a change. Review it before rendering.",
+  appliedMessage = "Prompt applied to your draft. Render this revision when ready.",
+  undoBlockedMessage = "Your manual changes are newer. Reset changes to return to the saved export.",
+}: {
   contextKey: string;
   disabled?: boolean;
-  onSuggest: (prompt: string, signal: AbortSignal) => Promise<PromptProposal>;
-  onApply: (proposal: PromptProposal) => void;
+  onSuggest: (prompt: string, signal: AbortSignal) => Promise<T>;
+  onApply: (proposal: T) => void;
   onUndo: () => void;
   canUndo?: boolean;
   applied?: boolean;
+  examples?: PromptExample[];
+  scope?: string;
+  placeholder?: string;
+  description?: string;
+  appliedMessage?: string;
+  undoBlockedMessage?: string;
 }) {
   const id = useId();
   const [prompt, setPrompt] = useState("");
-  const [proposal, setProposal] = useState<{ value: PromptProposal; context: string; prompt: string } | null>(null);
+  const [proposal, setProposal] = useState<{ value: T; context: string; prompt: string } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -92,11 +105,11 @@ export default function PromptEditor({ contextKey, disabled = false, onSuggest, 
   return <section className="prompt-editor" aria-labelledby={`${id}-title`}>
     <div className="prompt-editor-heading">
       <span className="prompt-editor-icon" aria-hidden="true"><MessageSquareText size={19} /></span>
-      <div><h3 id={`${id}-title`}>Edit with a prompt</h3><p>Describe a change. Review it before rendering.</p></div>
+      <div><h3 id={`${id}-title`}>Edit with a prompt</h3><p>{description}</p></div>
     </div>
     <label className="prompt-editor-label" htmlFor={`${id}-input`}>Describe your edit</label>
     <textarea ref={textarea} id={`${id}-input`} rows={3} maxLength={2000} value={prompt} disabled={disabled}
-      placeholder="e.g. Make captions smaller and move them up"
+      placeholder={placeholder}
       aria-describedby={`${id}-scope`} onChange={(event) => changePrompt(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void suggest(); }
@@ -112,7 +125,7 @@ export default function PromptEditor({ contextKey, disabled = false, onSuggest, 
       }}><X size={14} />Cancel</button> : <button type="button" className="primary-button" disabled={disabled || !prompt.trim()}
         onClick={() => void suggest()}><ArrowUp size={15} />Suggest edits</button>}
     </div>
-    <p id={`${id}-scope`} className="prompt-editor-scope">Hooks, captions, cut points, framing and B-roll. You can keep using the controls below.</p>
+    <p id={`${id}-scope`} className="prompt-editor-scope">{scope}</p>
     {loading && <p className="prompt-editor-status" role="status"><LoaderCircle className="spin" size={15} />Working out your changes…</p>}
     {error && <p className="prompt-editor-error" role="alert">{error}</p>}
     {notice && <p className="prompt-editor-status" role="status">{notice}</p>}
@@ -129,9 +142,9 @@ export default function PromptEditor({ contextKey, disabled = false, onSuggest, 
         <button type="button" className="secondary-button" disabled={disabled} onClick={() => { setProposal(null); textarea.current?.focus(); }}>Discard</button>
       </div>
     </div>}
-    {applied && !currentProposal && <div className="prompt-editor-applied" role="status"><p><Check size={15} />Prompt applied to your draft. Render this revision when ready.</p>
+    {applied && !currentProposal && <div className="prompt-editor-applied" role="status"><p><Check size={15} />{appliedMessage}</p>
       <button type="button" className="secondary-button" disabled={disabled || !canUndo} onClick={onUndo}><RotateCcw size={14} />Undo last prompt</button>
-      {!canUndo && <small>Your manual changes are newer. Reset changes to return to the saved export.</small>}
+      {!canUndo && <small>{undoBlockedMessage}</small>}
     </div>}
   </section>;
 }

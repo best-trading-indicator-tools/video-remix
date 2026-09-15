@@ -8,6 +8,9 @@ import { state } from "./store.js";
 import { brollAIConfigured } from "./broll-ai.js";
 import { stockBrollConfigured } from "./stock-broll.js";
 import { proposePromptEdit, PromptEditError } from "./prompt-edit.js";
+import { proposeManualPrompt } from "./manual-prompt.js";
+import { settingsSchema } from "./schema.js";
+import { manualPreviewSettings } from "./manual-preview.js";
 
 const requestSchema = z.object({
   revision: z.number().int().nonnegative(),
@@ -15,6 +18,7 @@ const requestSchema = z.object({
   draft: editPlanChangesSchema.optional(),
 }).strict();
 const differs = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
+const manualRequestSchema = z.object({ prompt: z.string().trim().min(1).max(2000), settings: settingsSchema }).strict();
 
 /** Keep automatic retiming implicit so a cut change can also request fresh stock. */
 export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?: Transcript, refreshBroll?: boolean): EditPlanChanges {
@@ -38,6 +42,35 @@ export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?:
 /** Suggestions are read-only. The existing revision route remains the sole renderer. */
 export function installPromptEditRoutes(app: Express) {
   const pending = new Map<string, AbortController>();
+  app.post("/api/sources/:id/edit-prompt", async (req, res) => {
+    const parsed = manualRequestSchema.safeParse(req.body);
+    if (!parsed.success) return void res.status(400).json({ error: "Describe your edit in 1–2,000 characters and check the current video settings." });
+    const source = state.sources.find(item => item.id === req.params.id);
+    if (!source) return void res.status(404).json({ error: "This source is no longer available. Import it again to make edits." });
+    const key = `source:${source.id}`;
+    if (pending.has(key) || pending.size >= 2)
+      return void res.status(429).json({ error: "Another edit suggestion is still running. Cancel it or wait for it to finish." });
+    const controller = new AbortController();
+    const disconnect = () => { if (!res.writableEnded) controller.abort(); };
+    res.once("close", disconnect); pending.set(key, controller);
+    try {
+      try { manualPreviewSettings(parsed.data.settings, source); }
+      catch (error) { throw new PromptEditError(400, error instanceof Error ? error.message : "Check the current trim and source settings."); }
+      const proposal = await proposeManualPrompt({ settings: parsed.data.settings, source,
+        prompt: parsed.data.prompt, signal: controller.signal });
+      controller.signal.throwIfAborted();
+      if (!state.sources.includes(source)) return void res.status(409).json({ error: "This source was removed while preparing the suggestion. Select a source again." });
+      res.json(proposal);
+    } catch (error) {
+      if (controller.signal.aborted || res.destroyed) return;
+      res.status(error instanceof PromptEditError ? error.status : 502).json({
+        error: error instanceof PromptEditError ? error.message : "The edit suggestion could not be prepared. Try a simpler request.",
+      });
+    } finally {
+      res.off("close", disconnect);
+      if (pending.get(key) === controller) pending.delete(key);
+    }
+  });
   app.post("/api/jobs/:id/edit-prompt", async (req, res) => {
     const parsed = requestSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: "Describe your edit in 1–2,000 characters and use a valid saved draft." });

@@ -231,6 +231,8 @@ export interface PromptEditResponse {
   summary: string[];
   clarification?: string;
 }
+export interface ManualPromptEditRequest { prompt: string; settings: RemixSettings }
+export interface ManualPromptEditResponse { settings: RemixSettings; summary: string[]; clarification?: string }
 export interface ExportReview {
   benchmarkCase?: string;
   approach?: string;

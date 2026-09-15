@@ -115,6 +115,26 @@ export function manualPreviewInterval(
   return { start, end: start + clipLength, sourceDuration: clipLength, outputDuration: clipLength / settings.speed };
 }
 
+/** Validate the complete sequence; Live shows its first cut, rendered samples join the cuts. */
+export function manualSequencePreview(settings: RemixSettings, sourceDuration: number): {
+  cuts: NonNullable<RemixSettings["segments"]>;
+  first: ManualPreviewInterval;
+  outputDuration: number;
+} | null {
+  const cuts = settings.segments;
+  if (!cuts?.length || cuts.length > 60 || !Number.isFinite(sourceDuration) || sourceDuration <= 0 ||
+    !Number.isFinite(settings.speed) || settings.speed <= 0 || cuts.some(cut =>
+      !Number.isFinite(cut.start) || !Number.isFinite(cut.end) || cut.start < 0 ||
+      cut.end <= cut.start + 0.04 || cut.end > sourceDuration + 0.001)) return null;
+  const first = cuts[0]!;
+  const length = first.end - first.start;
+  return {
+    cuts,
+    first: { start: first.start, end: first.end, sourceDuration: length, outputDuration: length / settings.speed },
+    outputDuration: cuts.reduce((sum, cut) => sum + cut.end - cut.start, 0) / settings.speed,
+  };
+}
+
 // CSS object-position percentages describe the available crop travel, whereas
 // a focal point describes a position in the whole source. Translate between the
 // two so portrait crops retain the requested subject and stop at source edges.

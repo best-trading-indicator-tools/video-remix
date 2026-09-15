@@ -117,6 +117,7 @@ or change saved exports; those actions happen through the existing render flow.
 
 Switch to **Manual** for direct control. Its saved settings are separate from Auto edits.
 
+- Use **Edit with a prompt** for the selected video: for example, “Use 01:10 to 01:35, make it a little warmer, and mute the audio” or “Portrait 9:16 at 1080p with a blurred background.” Review the exact values, then **Apply to draft**. Preview or render through the normal controls; **Undo last prompt** restores the previous settings until you make another manual change. **Apply to all** copies the reviewed settings to other sources when wanted.
 - Upload multiple videos together and preview each source.
 - Apply shared settings, then customize individual videos.
 - Open **All controls** for the complete adjustment surface, or use the focused Essentials, Color & feel, and Advanced tabs.
@@ -129,7 +130,9 @@ Switch to **Manual** for direct control. Its saved settings are separate from Au
 - Strip file metadata for privacy. Device impersonation has been removed; legacy device-profile settings are ignored.
 - Generate variants, track render progress, cancel jobs, and download completed videos individually or together.
 
-The **Live** preview follows the effective trim and time shift, and approximates framing and basic color. **Render 5s preview** renders the first five edited seconds through FFmpeg, including image effects, camera movement, uploaded captions, hooks and audio. Samples use up to 720p/60 fps and do not create export/history entries. Full exports remain the final check, especially for effects or audio balancing influenced by resolution or content outside the short sample.
+Manual prompts support color, texture, speed, audio controls, framing, source timestamps, cut sequences, literal opening headings, and caption style. They use the same private DeepSeek configuration as saved-result prompts, sending settings and basic source metadata without uploading video or attachment IDs. This workspace does not analyze speech: provide exact heading text, and use saved-result editing for transcript corrections or B-roll changes. Unsupported or ambiguous requests leave the settings unchanged.
+
+The **Live** preview follows the effective trim and time shift, and approximates framing and basic color. For a prompted sequence it shows the first cut; **Render 5s preview** follows the selected cuts in order, rendering the first five edited seconds through FFmpeg, including image effects, camera movement, uploaded captions, hooks and audio. Samples use up to 720p/60 fps and do not create export/history entries. Full exports remain the final check, especially for effects or audio balancing influenced by resolution or content outside the short sample.
 
 Changing settings hides an outdated sample and cancels a preview still in progress. Only one preview renders at a time; requests time out after 60 seconds. Up to 12 samples are cached locally for 30 minutes, and restart discards the cache. Auto shows the original source until its finished export is ready.
 

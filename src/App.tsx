@@ -58,8 +58,9 @@ import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
 import LongFormPanel from "./LongFormPanel";
+import ManualPromptEditor from "./ManualPromptEditor";
 import { compactBrollNotes } from "../shared/broll-notes";
-import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualCropPosition } from "../shared/manual";
+import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 
 type Preset = { id: string; name: string; settings: RemixSettings };
 type AutoPreset = { options: AutoOptions; variants: number };
@@ -364,8 +365,9 @@ export default function App() {
   const previewSignature = JSON.stringify({ sourceId: selected?.id, settings });
   const previewCurrent = renderedPreview?.signature === previewSignature;
   const usingRendered = mode === "manual" && !original && showRendered && previewCurrent;
-  const liveInterval = selected && (settings.trimEnd === null || settings.trimEnd <= selected.duration)
-    ? manualPreviewInterval(settings, selected.duration) : null;
+  const sequencePreview = selected ? manualSequencePreview(settings, selected.duration) : null;
+  const liveInterval = sequencePreview?.first ?? (selected && (settings.trimEnd === null || settings.trimEnd <= selected.duration)
+    ? manualPreviewInterval(settings, selected.duration) : null);
   const pending = jobs.filter(
     (job) => job.status === "queued" || job.status === "processing",
   );
@@ -815,13 +817,13 @@ export default function App() {
     if (!targets.length) return;
     for (const source of targets) {
       const value = settingsById[source.id] || defaultSettings;
-      if (
+      if (value.segments ? !manualSequencePreview(value, source.duration) : (
         value.trimStart >= source.duration ||
         (value.trimEnd !== null &&
           (value.trimEnd <= value.trimStart || value.trimEnd > source.duration))
-      ) {
+      )) {
         notify(
-          `Check the trim points for ${source.name}. The end must follow the start and fit within the video.`,
+          `Check the ${value.segments ? "source cuts" : "trim points"} for ${source.name}. Each end must follow its start and fit within the video.`,
           "error",
         );
         return;
@@ -1312,7 +1314,7 @@ export default function App() {
                     <>
                       <div className="preview-label">
                         <span />
-                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : "LIVE PREVIEW"}
+                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
                       </div>
                       <div
                         className="video-frame"
@@ -1369,7 +1371,7 @@ export default function App() {
                               : settings.fit === "crop"
                                 ? "cover"
                                 : "contain",
-                            objectPosition: sourcePreview || usingRendered || settings.fit !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, settings.aspect === "original" ? selected.width / selected.height : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]), settings.focalPoint ?? { x: 0.5, y: 0.5 }),
+                            objectPosition: sourcePreview || usingRendered || settings.fit !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, settings.aspect === "original" ? selected.width / selected.height : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]), sequencePreview?.cuts[0]?.focalPoint ?? settings.focalPoint ?? { x: 0.5, y: 0.5 }),
                             filter: usingRendered ? "none" : previewFilter,
                             transform: sourcePreview || usingRendered
                               ? "none"
@@ -1457,6 +1459,7 @@ export default function App() {
                           {mode === "auto"
                             ? "Your original source. The finished remix will be ready to preview in Exports."
                             : usingRendered ? "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
+                            : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing and basic color. Render a short sample to see every effect, text and audio."}
                         </span>
                       </div>
@@ -1562,6 +1565,8 @@ export default function App() {
                     role="tabpanel"
                     aria-labelledby={`tab-${tab}`}
                   >
+                    {selected && <ManualPromptEditor key={selected.id} sourceId={selected.id} settings={settings}
+                      disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}
                     {(tab === "essentials" || tab === "all") && (
                       <>
                         <Section
@@ -1909,6 +1914,7 @@ export default function App() {
                               Start (seconds)
                               <input
                                 type="number"
+                                disabled={!!settings.segments}
                                 min={0}
                                 max={selected?.duration}
                                 step={0.1}
@@ -1927,6 +1933,7 @@ export default function App() {
                               End (seconds)
                               <input
                                 type="number"
+                                disabled={!!settings.segments}
                                 min={0}
                                 max={selected?.duration}
                                 step={0.1}
@@ -1948,10 +1955,16 @@ export default function App() {
                             </label>
                           </div>
                           <p className="field-hint">
-                            Leave the end blank to keep the rest of the video.
+                            {settings.segments ? "This edit uses a sequence of source cuts. Describe new timestamps in your prompt to change the sequence." : "Leave the end blank to keep the rest of the video."}
                           </p>
-                          {selected && <p className={`manual-trim-summary ${liveInterval ? "" : "invalid"}`} role="status">{liveInterval ? `${liveInterval.start.toFixed(1)}–${liveInterval.end.toFixed(1)}s of source · ${liveInterval.outputDuration.toFixed(1)}s export` : "Choose a trim with its end after its start, within this video."}</p>}
-                          <Slider
+                          {selected && <p className={`manual-trim-summary ${liveInterval ? "" : "invalid"}`} role="status">{sequencePreview
+                            ? `${sequencePreview.cuts.length} source cuts: ${sequencePreview.cuts.map(cut => `${cut.start.toFixed(1)}–${cut.end.toFixed(1)}s`).join(", then ")} · ${sequencePreview.outputDuration.toFixed(1)}s export`
+                            : liveInterval ? `${liveInterval.start.toFixed(1)}–${liveInterval.end.toFixed(1)}s of source · ${liveInterval.outputDuration.toFixed(1)}s export`
+                              : settings.segments ? "Each source cut must end after its start and stay within this video." : "Choose a trim with its end after its start, within this video."}</p>}
+                          {settings.segments && <button type="button" className="secondary-button" onClick={() => updateSettings({
+                            segments: undefined, trimStart: sequencePreview?.first.start ?? 0, trimEnd: sequencePreview?.first.end ?? null, timeShift: 0,
+                          })}>Use first cut as a single trim</button>}
+                          {!settings.segments && <Slider
                             label="Time shift"
                             value={settings.timeShift}
                             defaultValue={DEFAULT_SETTINGS.timeShift}
@@ -1963,7 +1976,7 @@ export default function App() {
                               updateSettings({ timeShift })
                             }
                             hint="Move the trimmed window earlier or later, keeping its length. Set a trim first."
-                          />
+                          />}
                           <Slider
                             label="Blend"
                             value={settings.blend}

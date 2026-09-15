@@ -30,6 +30,12 @@
 .prompt-editor-applied p { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 1.7; color: var(--green); margin-bottom: 13px; }
 .prompt-editor-applied p svg { margin-top: 4px; }
 .prompt-editor-applied small { display: block; margin-top: 9px; color: var(--subtle); font-size: 12px; line-height: 1.6; }
+.manual-prompt-editor { min-width: 0; padding-top: 20px; grid-column: 1 / -1; }
+.manual-prompt-editor .prompt-editor { padding: 18px; margin-bottom: 8px; }
+.manual-prompt-editor .prompt-editor-heading { margin-bottom: 18px; }
+.manual-prompt-editor .prompt-editor-heading h3 { font-size: 17px; }
+.manual-all-controls .manual-prompt-editor { padding-top: 0; }
+.manual-all-controls .manual-prompt-editor .prompt-editor { margin-bottom: 0; }
 @media (max-width: 680px) {
   .prompt-editor { padding: 17px; }
   .prompt-editor > textarea { font-size: 16px; }
@@ -37,4 +43,5 @@
   .prompt-editor-examples button { min-height: 40px; }
   .prompt-editor-actions button, .prompt-editor-review-actions button { min-height: 44px; }
   .prompt-editor-proposal { padding: 14px; }
+  .manual-all-controls .manual-prompt-editor { padding-top: 20px; }
 }

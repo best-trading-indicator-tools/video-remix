@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { normalizedSettings } from "../server/schema.js";
 import { DEFAULT_SETTINGS, type RemixSettings } from "../shared/types.js";
-import { activeColorLook, applyColorLook, COLOR_LOOK_KEYS, coerceManualNumber, MANUAL_LOOKS, manualPreviewInterval, manualCropPosition } from "../shared/manual.js";
+import { activeColorLook, applyColorLook, COLOR_LOOK_KEYS, coerceManualNumber, MANUAL_LOOKS, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual.js";
 
 const settings = (patch: Partial<RemixSettings> = {}): RemixSettings => ({ ...DEFAULT_SETTINGS, ...patch });
 
@@ -92,6 +92,19 @@ test("invalid and discontinuous selections do not produce a misleading single pr
   ]) assert.equal(manualPreviewInterval(settings(patch), 20), null, JSON.stringify(patch));
   for (const duration of [0, -1, Number.NaN, Number.POSITIVE_INFINITY])
     assert.equal(manualPreviewInterval(settings(), duration), null);
+});
+
+test("manual sequence previews keep source order, use the first cut live, and validate every cut", () => {
+  const cuts = [{ start: 12, end: 18, focalPoint: { x: 0.8, y: 0.4 } }, { start: 2, end: 6 }];
+  const input = settings({ segments: cuts, speed: 2, trimStart: 9, trimEnd: 10, timeShift: 5 });
+  assert.deepEqual(manualSequencePreview(input, 20), {
+    cuts, first: { start: 12, end: 18, sourceDuration: 6, outputDuration: 3 }, outputDuration: 5,
+  }, "Dormant trim and time shift do not alter ordered source sequences");
+  assert.equal(manualSequencePreview(settings(), 20), null);
+  for (const segments of [[], [cuts[0]!, { start: 19, end: 21 }], [{ start: 0, end: 0.04 }], [{ start: -1, end: 2 }], [{ start: 1, end: Number.NaN }]])
+    assert.equal(manualSequencePreview(settings({ segments }), 20), null);
+  assert.equal(manualSequencePreview({ ...input, speed: 0 }, 20), null);
+  assert.equal(manualSequencePreview(input, Number.POSITIVE_INFINITY), null);
 });
 
 test("manual crop positioning keeps the focal point centered until the source edges prevent it", () => {
