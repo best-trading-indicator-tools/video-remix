@@ -160,6 +160,58 @@ test("source transcript regenerates newly included speech while preserving corre
   assert.deepEqual(next.visuals, [], "A shot anchored to excluded speech is removed");
 });
 
+const captionPolicyTranscript: Transcript = {
+  language: "en", duration: 30, segments: [
+    { start: 1, end: 2, text: "Original phrase.", words: [
+      { start: 1, end: 1.5, word: "Original" }, { start: 1.5, end: 2, word: "phrase." },
+    ] },
+    { start: 16, end: 17, text: "New example.", words: [
+      { start: 16, end: 16.5, word: "New" }, { start: 16.5, end: 17, word: "example." },
+    ] },
+  ],
+};
+
+test("Auto caption omission survives saved-plan reloads and recuts despite available speech", () => {
+  const plan = makePlan();
+  plan.captions = [];
+  plan.captionMode = "off";
+  const saved: EditPlan = JSON.parse(JSON.stringify(plan));
+  const next = applyEditPlanChanges(saved, { revision: saved.revision,
+    cuts: [{ start: 0, end: 5 }, { start: 15, end: 20 }],
+  }, captionPolicyTranscript);
+  assert.deepEqual(next.captions, [], "Newly selected speech must not put a second caption layer over the source");
+  assert.equal(next.captionMode, "off");
+  const reordered = applyEditPlanChanges(next, { revision: next.revision,
+    cuts: [{ start: 15, end: 20 }, { start: 0, end: 5 }],
+  }, captionPolicyTranscript);
+  assert.deepEqual(reordered.captions, []);
+  assert.equal(reordered.captionMode, "off");
+  assert.deepEqual(saved, plan, "Applying changes must preserve the saved omission decision");
+});
+
+test("removing all captions persists through recuts until an explicit caption addition re-enables them", () => {
+  const plan = makePlan();
+  plan.captionMode = "generated";
+  const removed = applyEditPlanChanges(plan, { revision: plan.revision, captions: [] }, captionPolicyTranscript);
+  assert.equal(removed.captionMode, "off");
+  const recut = applyEditPlanChanges(removed, { revision: removed.revision,
+    cuts: [{ start: 0, end: 5 }, { start: 15, end: 20 }],
+  }, captionPolicyTranscript);
+  assert.deepEqual(recut.captions, []);
+  assert.equal(recut.captionMode, "off");
+  const correctedCue = { id: "explicit-caption", start: 1, end: 2, text: "A user-corrected phrase." };
+  const added = applyEditPlanChanges(recut, { revision: recut.revision, captions: [correctedCue] }, captionPolicyTranscript);
+  assert.equal(added.captionMode, "generated");
+  const extended = applyEditPlanChanges(added, { revision: added.revision,
+    cuts: [{ start: 0, end: 5 }, { start: 15, end: 21 }],
+  }, captionPolicyTranscript);
+  assert.deepEqual(extended.captions[0], correctedCue, "An explicit correction remains authoritative");
+  assert.deepEqual(extended.captions.map(({ start, end, text }) => ({ start, end, text })), [
+    { start: 1, end: 2, text: correctedCue.text }, { start: 6, end: 7, text: "New example." },
+  ]);
+  assert.equal(extended.captionMode, "generated");
+});
+
 test("transcript regrouping preserves a complete corrected cue and fills only uncovered timed words", () => {
   const plan = makePlan();
   plan.captions = [{ id: "manual-phrase", start: 1, end: 2, text: "My corrected words" }];

@@ -10,7 +10,7 @@ FROM node:22-bookworm-slim AS runner
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-       ffmpeg fonts-dejavu-core python3 python3-venv libgomp1 ca-certificates chromium \
+       ffmpeg fonts-dejavu-core tesseract-ocr python3 python3-venv libgomp1 ca-certificates chromium \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

@@ -60,6 +60,8 @@ export default function AutoPanel({
   maxFileSize?: number;
 }) {
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
+  const keepOriginalCaptions = options.captions === "keep";
+  const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions;
   const brollCount = options.brollCount ?? DEFAULT_BROLL_COUNT;
   const [brollCountInput, setBrollCountInput] = useState(String(brollCount));
   useEffect(() => setBrollCountInput(String(brollCount)), [brollCount, selectedId]);
@@ -142,7 +144,7 @@ export default function AutoPanel({
             <Clapperboard size={14} />
             <span>Up to {options.targetDuration} seconds</span>
             <span className="auto-original-voice">
-              {options.narration && capabilities?.narration
+              {options.narration && narrationAvailable
                 ? "New narration"
                 : "Original voice"}
             </span>
@@ -216,6 +218,22 @@ export default function AutoPanel({
               1–{MAX_AUTO_VERSIONS} per video. Similar cuts are skipped, so you may get fewer versions.
             </p>
             <label className="auto-output-field">
+              Captions
+              <select value={options.captions ?? "auto"} aria-describedby="auto-captions-note"
+                onChange={(event) => onChange({ ...options, captions: event.target.value as AutoOptions["captions"] })}>
+                <option value="auto">Auto · avoid duplicates</option>
+                <option value="add">Add new captions</option>
+                <option value="keep">Keep original · add none</option>
+              </select>
+            </label>
+            <p id="auto-captions-note" className="auto-preferences-note">
+              {options.captions === "keep"
+                ? "Keeps the original voice and captions. Adds no captions, hook or callouts."
+                : options.captions === "add"
+                  ? "Adds captions from speech. Any captions already in the original picture remain visible."
+                  : "Auto checks for captions baked into the selected footage. If found or uncertain, it keeps the original voice and adds no captions, hook or callouts."}
+            </p>
+            <label className="auto-output-field">
               Editorial review
               <select value={options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
                 <option value="repair">Check and repair · up to 2 attempts</option>
@@ -226,20 +244,24 @@ export default function AutoPanel({
             <p className="auto-preferences-note">DeepSeek checks the opening, meaning, and ending against the original transcript. Repair mode can try up to two corrections, keeping proposals only when the follow-up check reports fewer issues. Models can miss problems; review the finished short.</p>
             <p className="auto-preferences-note">When available, AI selection, checks, and repairs use {capabilities?.intelligenceModel ? `DeepSeek · ${capabilities.intelligenceModel}` : "DeepSeek"}. Bounded transcript excerpts, captions, headings, and edit metadata are sent to DeepSeek. Transcription and rendering stay on this computer.</p>
             <label
-              className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}
+              className={`auto-narration-toggle ${!narrationAvailable ? "unavailable" : ""}`}
             >
               <span>
                 <strong>New narration</strong>
                 <small>
-                  {capabilities?.narration
-                    ? "Replace the original voice with a scripted read."
-                    : "Unavailable on this engine. Original audio is kept."}
+                  {keepOriginalCaptions
+                    ? "Keep original preserves the source voice to match its captions."
+                    : !capabilities?.narration
+                      ? "Unavailable on this engine. Original audio is kept."
+                      : options.captions !== "add"
+                        ? "Replace the voice with a scripted read. Auto keeps the original voice if source captions are found or detection is uncertain."
+                        : "Replace the original voice with a scripted read."}
                 </small>
               </span>
               <input
                 type="checkbox"
-                disabled={!capabilities?.narration}
-                checked={options.narration && !!capabilities?.narration}
+                disabled={!narrationAvailable}
+                checked={options.narration && narrationAvailable}
                 onChange={(event) =>
                   onChange({ ...options, narration: event.target.checked })
                 }

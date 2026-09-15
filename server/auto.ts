@@ -40,6 +40,7 @@ import { stockBrollConfigured } from "./stock-broll.js";
 import { geometry } from "./engine.js";
 import { discoverSourceIdeas, novelIdeaCandidates } from "./source-ideas.js";
 import { editorialModel } from "./editorial-provider.js";
+import { inspectSourceCaptions, type SourceCaptionInspection } from "./source-captions.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   const [transcription, intelligence, voice, motionGraphics] =
@@ -155,6 +156,31 @@ export class AutoSkipError extends Error {
   override name = "AutoSkipError";
 }
 
+function captionProtectionNote(status: SourceCaptionInspection["status"]): string {
+  return status === "detected"
+    ? "Captions already visible in the source were kept. No new captions were added."
+    : status === "uncertain"
+      ? "The source may already contain captions. No new captions were added; choose Add new captions if needed."
+      : "Existing-caption detection was unavailable. No new captions were added; choose Add new captions if needed.";
+}
+
+/** Check final cuts on every render, including revisions and interrupted-check retries. Unchanged selections use the OCR cache. */
+export async function protectFinalAutoCaptions({ job, source, signal }: {
+  job: StoredJob; source: StoredSource; signal: AbortSignal;
+}): Promise<boolean> {
+  const plan = job.editPlan;
+  if (!plan || !job.auto || plan.narration || !plan.captions.length ||
+    (job.auto.captions && job.auto.captions !== "auto")) return false;
+  const result = await inspectSourceCaptions({ source, cuts: plan.cuts, transcript: job.sourceTranscript, signal });
+  if (result.status === "not-detected") return false;
+  plan.captions = [];
+  plan.captionMode = "off";
+  plan.settings.hookText = "";
+  plan.settings.callouts = [];
+  job.notes = [...new Set([...(job.notes || []), captionProtectionNote(result.status)])];
+  return true;
+}
+
 export async function prepareAutoRemix({
   source,
   job,
@@ -175,6 +201,8 @@ export async function prepareAutoRemix({
   const options = job.auto!;
   const notes: string[] = [];
   const changes: string[] = [];
+  let keepSourceCaptions = options.captions === "keep";
+  if (keepSourceCaptions) notes.push("Original captions were kept. No new captions were added.");
   const variant = job.variant - 1;
   const siblings = completedAutoSiblings(job, previous);
   const avoidSiblings = job.allowRepeatedFootage ? [] : siblings;
@@ -289,11 +317,20 @@ export async function prepareAutoRemix({
     const removedPauses = candidate.end - candidate.start - cutsDuration(cuts);
     if (removedPauses > 0.3)
       changes.push(`Trimmed ${removedPauses.toFixed(1)}s of pauses`);
-    if (!hookRewritten)
-      notes.push(
-        "The hook was taken from the selected speech because AI rewriting did not finish for this version.",
-      );
-    if (options.narration) {
+    if (!options.captions || options.captions === "auto") {
+      onPhase("Checking for captions already in the footage", 43);
+      const inspection = await inspectSourceCaptions({ source, cuts, transcript, signal });
+      keepSourceCaptions = inspection.status !== "not-detected";
+      if (inspection.status === "detected") {
+        changes.push("Existing captions kept");
+      }
+      if (keepSourceCaptions) notes.push(captionProtectionNote(inspection.status));
+    }
+    if (!hookRewritten && !keepSourceCaptions)
+      notes.push("The hook was taken from the selected speech because AI rewriting did not finish for this version.");
+    if (options.narration && keepSourceCaptions)
+      notes.push("Original speech was kept so it stays consistent with captions in the source.");
+    if (options.narration && !keepSourceCaptions) {
       if (creative?.narration.trim() && (await narrationAvailable())) {
         try {
           onPhase("Recording new narration", 46);
@@ -392,12 +429,12 @@ export async function prepareAutoRemix({
     resolution: "1080",
     fps: "30",
     segments: cuts,
-    hookText: hook,
+    hookText: keepSourceCaptions ? "" : hook,
     hookDuration: Math.min(3.5, duration),
     normalizeAudio: true,
     autoMotion: false,
     device: "none",
-    callouts: captionTranscript
+    callouts: captionTranscript && !keepSourceCaptions
       ? alignCallouts(callouts, captionTranscript, duration)
       : [],
   };
@@ -406,10 +443,10 @@ export async function prepareAutoRemix({
   const native = geometry(source, { ...settings, resolution: "source" });
   if (Math.min(source.width, source.height) < 1080 && Math.min(native.width, native.height) < 1080)
     settings.resolution = "source";
-  if (hook) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
+  if (settings.hookText) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
   if (settings.callouts?.length) changes.push("Key-point overlays");
   let subtitlePath: string | undefined;
-  if (captionTranscript) {
+  if (captionTranscript && !keepSourceCaptions) {
     onPhase("Adding timed captions", 61);
     const srt = captionsSrt(captionTranscript);
     if (srt.trim()) {

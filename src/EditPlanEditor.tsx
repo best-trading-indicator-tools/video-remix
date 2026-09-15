@@ -338,7 +338,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   focalPoint={activeCut.focalPoint || focalPoint} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
                     {draft.settings.hookText && previewOutputTime < draft.settings.hookDuration && <div className="edit-framing-hook" style={{ fontSize: `${height * Math.min(1, draft.settings.aspect === "original" ? 1 : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])) * 0.054}px` }}>{draft.settings.hookText}</div>}
                     {(draft.settings.callouts || []).filter((callout) => callout.start <= previewOutputTime && callout.end > previewOutputTime).map((callout, index) => <div className="edit-framing-callout" key={index} style={{ fontSize: `${height * 0.026}px` }}>{callout.text}</div>)}
-                    <div className="edit-framing-caption" style={{ bottom: `${captionStyle.bottomPercent}%`, fontSize: `${captionStyle.fontSize / 288 * height}px` }}>{activeCaption?.text || draft.captions[0]?.text || "Caption placement preview"}</div>
+                    {!!draft.captions.length && <div className="edit-framing-caption" style={{ bottom: `${captionStyle.bottomPercent}%`, fontSize: `${captionStyle.fontSize / 288 * height}px` }}>{activeCaption?.text || draft.captions[0]?.text}</div>}
                     {platformGuide !== "off" && <div className={`edit-platform-guide ${platformGuide}`} aria-hidden="true"><span className="guide-top">App header</span><span className="guide-right" style={{ width: `${guideRight}%`, bottom: `${guideBottom}%` }}>Actions</span><span className="guide-bottom" style={{ height: `${guideBottom}%` }}>Post text &amp; navigation</span></div>}
                   </>} />
                 <label className="edit-plan-field edit-guide-field">Platform interface guide
@@ -348,7 +348,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   <label className="edit-framing-slider"><span>Bottom occupied area<output>{guideBottom}%</output></span><input type="range" aria-label="Guide bottom occupied area" min={5} max={40} step={1} value={guideBottom} onChange={(event) => setGuideBottom(event.target.valueAsNumber)} /></label>
                   <label className="edit-framing-slider"><span>Right occupied area<output>{guideRight}%</output></span><input type="range" aria-label="Guide right occupied area" min={5} max={30} step={1} value={guideRight} onChange={(event) => setGuideRight(event.target.valueAsNumber)} /></label>
                 </div>}
-                <p className="edit-plan-note">Approximate framing and text preview. Guides appear only here; app controls vary by device. A sample caption appears when no line is active.</p>
+                <p className="edit-plan-note">Approximate framing and text preview. Guides appear only here; app controls vary by device.{!!draft.captions.length && " A sample caption appears when no line is active."}</p>
               </>}
               <h3>{previewMode === "export" ? "Current export" : "Draft framing"}</h3><p>{previewMode === "export" ? "Review this version as you make corrections. Render to see your updated video." : "Adjust the crop and captions against the source footage. Render your revision to review the final result."}</p>
               <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
@@ -388,10 +388,14 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               </fieldset>
               <details open className="edit-plan-section">
                 <summary>Captions <span>{draft.captions.length}</span></summary>
+                <p className="edit-plan-note">Removing added captions keeps any captions already baked into the original video.</p>
                 {cutTimingsChanged && <p className="edit-plan-note">Render your new cut points first. Caption and B-roll timings will follow the revised cuts automatically.</p>}
                 <fieldset disabled={saving || cutTimingsChanged}>
                   <legend className="visually-hidden">Caption corrections</legend>
-                  {!draft.captions.length && <p className="edit-plan-empty">This export has no saved captions.</p>}
+                  {!!draft.captions.length && <button type="button" className="secondary-button edit-plan-remove-all-captions" onClick={() => {
+                    setDraft({ ...draft, captions: [] }); setPreviewMode("framing"); setError("");
+                  }}><X size={14} />Remove added captions</button>}
+                  {!draft.captions.length && <p className="edit-plan-empty">This draft has no added captions.</p>}
                   {draft.captions.map((cue, index) => <div className="edit-plan-caption" key={cue.id}>
                     <label className="edit-plan-field">Caption {index + 1}
                       <textarea rows={2} required maxLength={500} value={cue.text} onChange={(event) => setDraft({ ...draft, captions: draft.captions.map((item) => item.id === cue.id ? { ...item, text: event.target.value } : item) })} />

@@ -27,6 +27,29 @@ With the local speech model ready, Auto transcribes speech, selects a focused ex
 
 If speech or the speech model is unavailable, Auto falls back to scene and timing edits using the source footage. Captions require a usable transcript. The export notes explain which tools were used and any fallback.
 
+### Captions already in the footage
+
+**Captions → Auto · avoid duplicates** is the default. Before adding captions,
+Auto samples up to 12 frames from the selected source intervals and uses local
+Tesseract OCR to look for changing text that matches the nearby speech. When
+captions are detected, Auto keeps the original text and voice, omits additional
+captions, hooks and callouts, and continues the B-roll workflow. The check uses no
+paid API and does not blur, erase or reconstruct any source pixels.
+
+Choose **Keep original · add none** to skip all added captions, or **Add new
+captions** to explicitly generate them. These choices are saved per source video.
+Detection is sampled and can miss text; if OCR is unavailable, the matching
+language model is missing, or the evidence is uncertain, Auto adds no captions
+and explains the result. Install the matching Tesseract language data for footage
+in languages other than English. Results are cached by source, selected cuts and
+transcript in `data/analysis/source-captions`.
+
+For an earlier double-caption export, open **Edit this result → Captions → Remove
+added captions**, then render the revision. This removes only the app's added
+captions; text baked into the source remains. The saved decision survives later
+cut changes and automatic editorial corrections. Clean removal of baked-in text
+would require reconstructing the image behind it and is not part of this feature.
+
 Use your own footage or footage you have permission to repurpose. Review the resulting cut and captions before posting. Editing or changing file metadata does **not** guarantee that TikTok, Instagram, or another platform will classify a video as original, recommend it, or permit monetization.
 
 ### Complete-idea selection
@@ -268,14 +291,14 @@ Requirements: **Node.js 22.12 or newer**, npm, and **FFmpeg / ffprobe** on your 
 On macOS with Homebrew:
 
 ```sh
-brew install node ffmpeg python@3.12
+brew install node ffmpeg tesseract python@3.12
 ```
 
 On Debian/Ubuntu, install Node.js 22.12+ using your preferred method, then:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y ffmpeg fonts-dejavu-core python3 python3-venv
+sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr python3 python3-venv
 ```
 
 Install dependencies, prepare local transcription, and start development servers:

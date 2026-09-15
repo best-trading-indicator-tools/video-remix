@@ -2,7 +2,7 @@ import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
 import { geometry, renderVideo } from "./engine.js";
-import { AutoSkipError, prepareAutoRemix } from "./auto.js";
+import { AutoSkipError, prepareAutoRemix, protectFinalAutoCaptions } from "./auto.js";
 import { prepareSupportingVisuals } from "./supporting-plan.js";
 import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
@@ -168,15 +168,23 @@ async function run(job: StoredJob, controller: AbortController) {
             finalReport: structuredClone(job.editorialReport),
             stopReason: "The saved edit was checked again for this render. No additional automatic corrections were attempted." };
         }
-        // Rebuild every render input from the final reviewed plan. This also writes
-        // retimed captions, so a verified boundary/hook fix reaches the actual MP4.
-        const saved = await renderInputsFromPlan(job, workDir);
-        audioPath = saved.audioPath;
-        subtitlePath = saved.subtitlePath;
-        supportingVisuals = saved.supportingVisuals;
-        if (job.summary && job.editPlan.settings.hookText) job.summary.title = job.editPlan.settings.hookText;
-        job.phase = "Rendering the reviewed edit";
       } else delete job.editorialRepair;
+      // This also runs when editorial review is off or a saved plan is retried.
+      // A cancelled check must never make the saved cuts appear already inspected.
+      const protectedCaptions = await protectFinalAutoCaptions({ job, source, signal: controller.signal });
+      if (protectedCaptions && mode !== "off") {
+        job.editorialReport = await reviewEditorialPlan({ plan: job.editPlan,
+          transcript: job.sourceTranscript, signal: controller.signal });
+        if (job.editorialRepair) job.editorialRepair.finalReport = structuredClone(job.editorialReport);
+      }
+      // Rebuild every render input from the final reviewed plan. This also writes
+      // retimed captions, so a verified boundary/hook fix reaches the actual MP4.
+      const saved = await renderInputsFromPlan(job, workDir);
+      audioPath = saved.audioPath;
+      subtitlePath = saved.subtitlePath;
+      supportingVisuals = saved.supportingVisuals;
+      if (job.summary && job.editPlan.settings.hookText) job.summary.title = job.editPlan.settings.hookText;
+      job.phase = mode === "off" ? "Rendering your saved edit" : "Rendering the reviewed edit";
       await saveStore();
     }
     await renderVideo({

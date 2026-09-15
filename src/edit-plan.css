@@ -25,6 +25,7 @@
 .edit-plan-caption, .edit-plan-cut { margin-top: 16px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
 .edit-plan-cut > strong { font-size: 14px; }
 .edit-plan-remove-caption, .edit-plan-add-caption { margin-top: 14px; }
+.edit-plan-remove-all-captions { margin-top: 12px; }
 .edit-plan-visual { margin-top: 18px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); }
 .edit-plan-visual.is-removed { border-style: dashed; background: var(--surface); }
 .edit-plan-visual-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }

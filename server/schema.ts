@@ -96,6 +96,7 @@ export const autoOptionsSchema = z
       .union([z.literal(30), z.literal(45), z.literal(60)])
       .default(45),
     narration: z.boolean().default(false),
+    captions: z.enum(["auto", "add", "keep"]).optional(),
     supportingVisuals: z
       .enum(["off", "stock", "library", "graphics", "both"])
       .optional(),

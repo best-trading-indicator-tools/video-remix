@@ -86,6 +86,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         ? options!.targetDuration
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
+      captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
       supportingVisuals: [
         "off",

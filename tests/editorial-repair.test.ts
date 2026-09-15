@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS, type EditPlan, type Transcript } from "../shared/type
 import type { EditorialReviewer, EditorialReviewRequest } from "../shared/editorial.js";
 import type { EditorialRepairProposer, EditorialRepairRequest } from "../shared/editorial-repair.js";
 import { repairEditorialPlan } from "../server/editorial-repair.js";
+import { applyEditPlanChanges } from "../server/edit-plan.js";
 import { config } from "../server/config.js";
 
 const source = (): Transcript => ({ language: "en", duration: 8, segments: [
@@ -76,6 +77,55 @@ test("bounded editorial repair accepts independently verified improvements and p
       assert.deepEqual(result.plan.cuts, [{ start: 2, end: 8 }]); assert.equal(result.plan.revision, 7);
       assert.ok(result.plan.captions.some(caption => caption.text.includes("Because")), "Existing retiming fills newly included source speech");
       assert.ok(result.repairLog.attempts.every(attempt => attempt.outcome === "accepted"));
+    });
+    await t.test("accepted boundary repairs preserve Auto caption omission and explicit caption removal", async () => {
+      const auto = edit(); auto.captions = []; auto.captionMode = "off";
+      const removed = applyEditPlanChanges(edit(), { revision: 7, captions: [] }, source());
+      for (const plan of [auto, removed]) {
+        plan.settings.hookText = "";
+        const original = structuredClone(plan);
+        let reviews = 0;
+        const result = await run({ plan,
+          reviewer: async request => {
+            reviews++;
+            assert.deepEqual(request.captions, [], "Repair verification must not silently regain generated captions");
+            return verdicts(request, request.outputDuration < 6 ? ["ending-complete"] : []);
+          },
+          proposer: async request => ({ targetCodes: ["ending-complete"], summary: "Keep the complete explanation.",
+            extensions: [{ cutIndex: 0, end: 8, evidence: [quote(request, "context-2")] }],
+          }),
+        });
+        assert.equal(reviews, 2, "The boundary repair must reach independent verification");
+        assert.equal(result.repairLog.attempts[0]!.outcome, "accepted");
+        assert.equal(result.report.status, "pass");
+        assert.deepEqual(result.plan.cuts, [{ start: 2, end: 8 }]);
+        assert.equal(result.plan.outputDuration, 6);
+        assert.deepEqual(result.plan.captions, []);
+        assert.equal(result.plan.captionMode, "off");
+        assert.equal(result.plan.revision, plan.revision);
+        assert.deepEqual(plan, original);
+      }
+    });
+    await t.test("a boundary repair cannot introduce an omitted hook even when its wording is source-supported", async () => {
+      const plan = edit(); plan.settings.hookText = ""; plan.captions = []; plan.captionMode = "off";
+      const original = structuredClone(plan);
+      let reviews = 0;
+      const result = await run({ plan,
+        reviewer: async request => {
+          reviews++;
+          return verdicts(request, request.outputDuration < 6 ? ["ending-complete"] : []);
+        },
+        proposer: async request => ({ targetCodes: ["ending-complete"], summary: "Extend the explanation and add its heading.",
+          extensions: [{ cutIndex: 0, end: 8, evidence: [quote(request, "context-2")] }],
+          hook: { text: "This method does not always work", evidence: [quote(request)] },
+        }),
+      });
+      assert.equal(reviews, 1, "The omitted-heading guard must reject the patch before semantic verification");
+      assert.deepEqual(result.plan, original);
+      assert.deepEqual(plan, original);
+      assert.equal(result.report.status, "needs-review");
+      assert.equal(result.repairLog.attempts.length, 2);
+      assert.ok(result.repairLog.attempts.every(attempt => attempt.outcome === "rejected"));
     });
     await t.test("a new meaning error rolls back the proposed hook even when the targeted issue disappears", async () => {
       let reviews = 0, proposals = 0;

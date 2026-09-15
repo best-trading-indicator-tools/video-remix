@@ -139,7 +139,7 @@ function retimedCaptions(plan: EditPlan, cuts: EditSegment[], sourceTranscript?:
   })));
   // Existing repeated source passages can point to the same new occurrence.
   const distinct = mapped.filter((cue, index) => !mapped.slice(0, index).some(previous => Math.abs(previous.start - cue.start) < epsilon && Math.abs(previous.end - cue.end) < epsilon));
-  if (!sourceTranscript) return distinct.sort((a, b) => a.start - b.start);
+  if (!sourceTranscript || plan.captionMode === "off") return distinct.sort((a, b) => a.start - b.start);
   const transcript = retimeTranscript(sourceTranscript, cuts);
   const authoritative = distinct.sort((a, b) => a.start - b.start);
   const duration = transcript.duration / plan.settings.speed;
@@ -198,7 +198,10 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
   }
   if (changes.hookText !== undefined) next.settings.hookText = changes.hookText;
   if (changes.framing) Object.assign(next.settings, structuredClone(changes.framing));
-  if (changes.captions !== undefined) next.captions = structuredClone(changes.captions);
+  if (changes.captions !== undefined) {
+    next.captions = structuredClone(changes.captions);
+    next.captionMode = changes.captions.length ? "generated" : "off";
+  }
   if (changes.visuals !== undefined) {
     const original = new Map(plan.visuals.map(visual => [visual.id, visual]));
     const retimed = new Map(next.visuals.map(visual => [visual.id, visual]));

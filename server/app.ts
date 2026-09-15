@@ -561,7 +561,11 @@ export function createApp() {
     const job: StoredJob = {
       id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
       variant: parent.variant, parentJobId: parent.id,
-      auto: parsed.data.brollCount !== undefined ? { ...parent.auto!, brollCount: parsed.data.brollCount } : parent.auto,
+      auto: parent.auto ? { ...parent.auto,
+        ...(parsed.data.brollCount !== undefined ? { brollCount: parsed.data.brollCount } : {}),
+        // Explicit caption edits belong to the user; final Auto checks must preserve them.
+        ...(parsed.data.captions?.length ? { captions: "add" as const } : {}),
+      } : undefined,
       status: "queued", progress: 0, createdAt: new Date().toISOString(),
       outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
       sourceTranscript: parent.sourceTranscript,

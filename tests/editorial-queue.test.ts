@@ -130,7 +130,9 @@ test("the queue renders only verified repairs, protects manual edits, and retain
       return { id, sourceId: source.id, sourceName: source.name, batchId: randomUUID(), variant: 1,
         status: "queued", progress: 0, createdAt: plan.createdAt, outputPath: path.join(paths.outputs, `${id}.mp4`),
         settings: structuredClone(plan.settings), editPlan: plan, sourceTranscript: transcript(), planFiles: {},
-        auto: { aspect: "16:9", targetDuration: 30, narration: false, editorialMode: "repair", supportingVisuals: "off" },
+        // This synthetic transcript tests caption repair, so captions are explicitly
+        // enabled; real OCR protection has its own source-caption fixtures.
+        auto: { aspect: "16:9", targetDuration: 30, narration: false, captions: "add", editorialMode: "repair", supportingVisuals: "off" },
         summary: { title: "Everyone succeeds", changes: [], sourceDuration: 8, outputDuration: 4, transcriptAvailable: true, usedAI: false, narration: false },
         ...(manual ? { parentJobId: randomUUID(), corrections: { captionCorrections: 1, brollChanges: 0, seconds: 17 } } : {}) };
     };

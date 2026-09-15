@@ -22,6 +22,8 @@ export interface AutoOptions {
   aspect: Aspect;
   targetDuration: 30 | 45 | 60;
   narration: boolean;
+  /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
+  captions?: "auto" | "add" | "keep";
   supportingVisuals?: "off" | "stock" | "library" | "graphics" | "both";
   stockVideoType?: "all" | "animation";
   brollIds?: string[];
@@ -35,6 +37,7 @@ export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
   targetDuration: 45,
   narration: false,
+  captions: "auto",
   editorialMode: "repair",
 };
 export interface AutoBatchItem {
@@ -215,6 +218,8 @@ export interface EditPlan {
   settings: RemixSettings;
   cuts: EditSegment[];
   captions: CaptionCue[];
+  /** Prevent cut changes or automatic repairs from restoring deliberately omitted captions. */
+  captionMode?: "generated" | "off";
   visuals: EditPlanVisual[];
   media: EditPlanMedia[];
   audioMediaId?: string;

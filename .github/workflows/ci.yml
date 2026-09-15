@@ -21,7 +21,7 @@ jobs:
       - name: Install media dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg fonts-dejavu-core
+          sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr
       - run: npm ci
       - run: npm run build
       - run: npm test

@@ -156,7 +156,8 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
       sourceDuration: source.duration, outputDuration: job.summary!.outputDuration,
       createdAt: new Date().toISOString(), settings: structuredClone(job.settings),
       cuts: structuredClone(job.settings.segments || [{ start: job.settings.trimStart, end: job.settings.trimEnd ?? source.duration }]),
-      captions, visuals: plannedVisuals, media, narration: job.summary!.narration, audioMediaId };
+      captions, captionMode: captions.length ? "generated" : "off",
+      visuals: plannedVisuals, media, narration: job.summary!.narration, audioMediaId };
     job.planFiles = files;
     job.sourceTranscript = sourceTranscript;
     delete job.brollCandidates;
@@ -187,6 +188,13 @@ export async function clonePlanFiles(parent: StoredJob, job: StoredJob) {
 export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
   const plan = job.editPlan!;
   job.settings = structuredClone(plan.settings);
+  // A later explicit caption addition supersedes the automatic omission notice.
+  if (plan.captions.length && job.notes) job.notes = job.notes.filter(note => ![
+    "Original captions were kept. No new captions were added.",
+    "Captions already visible in the source were kept. No new captions were added.",
+    "The source may already contain captions. No new captions were added; choose Add new captions if needed.",
+    "Existing-caption detection was unavailable. No new captions were added; choose Add new captions if needed.",
+  ].includes(note));
   const supportingVisuals: SupportingVisual[] = plan.visuals.filter(item => item.enabled).map(item => {
     const media = plan.media.find(media => media.id === item.mediaId)!;
     return { path: planMediaPath(job, item.mediaId), start: item.start, end: item.end,
@@ -204,6 +212,7 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
     const cards = job.supportingVisuals.filter(item => item.kind === "graphic").length;
     if (plan.settings.hookText) changes.push("Edited opening hook");
     if (plan.captions.length) changes.push("Saved captions");
+    else if (job.notes?.some(note => /^Captions already visible in the source were kept/u.test(note))) changes.push("Existing captions kept");
     if (broll) changes.push(`${broll} B-roll cutaway${broll === 1 ? "" : "s"}`);
     if (cards) changes.push(`${cards} animated card${cards === 1 ? "" : "s"}`);
     if (job.settings.callouts?.length) changes.push("Key-point overlays");

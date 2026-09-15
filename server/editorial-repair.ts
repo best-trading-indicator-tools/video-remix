@@ -88,6 +88,8 @@ export function compileEditorialRepair(plan: EditPlan, original: EditPlan, trans
   if (plan.narration || plan.audioMediaId || plan.settings.audioId || plan.settings.muted || plan.settings.volume === 0)
     throw new Error("Audio and narration decisions are locked for automatic repair.");
   const proposal = editorialRepairProposalSchema.parse(input);
+  if (proposal.hook && !plan.settings.hookText.trim())
+    throw new Error("Automatic correction cannot add an opening hook that this edit omitted.");
   if (new Set(proposal.targetCodes).size !== proposal.targetCodes.length || proposal.targetCodes.some(code => !request.findings.some(issue => issue.code === code)))
     throw new Error("The proposal does not target the supplied concrete findings.");
   if (proposal.extensions && proposal.captions) throw new Error("Boundary and caption corrections must be checked in separate attempts.");

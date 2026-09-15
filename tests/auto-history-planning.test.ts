@@ -78,7 +78,9 @@ test("Auto treats previous batches as a preference while preserving same-batch r
     const jobFor = (source: StoredSource, changes: Partial<StoredJob> = {}): StoredJob => ({
       id: randomUUID(), batchId: "current-batch", sourceId: source.id, sourceName: source.name, variant: 1,
       status: "queued", progress: 0, settings: { ...DEFAULT_SETTINGS },
-      auto: { ...DEFAULT_AUTO_OPTIONS, targetDuration: 30, supportingVisuals: "off" },
+      // This fixture exercises editorial selection with a synthetic transcript;
+      // actual source-caption detection has separate real-media coverage.
+      auto: { ...DEFAULT_AUTO_OPTIONS, captions: "add", targetDuration: 30, supportingVisuals: "off" },
       createdAt: new Date().toISOString(), outputPath: path.join(directory, `${randomUUID()}.mp4`), ...changes,
     });
     const prepare = async (source: StoredSource, historyPlans: EditorialPlan[] = [], previous: StoredJob[] = [], overrides: Partial<StoredJob> = {}) => {

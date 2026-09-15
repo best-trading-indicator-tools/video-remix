@@ -209,6 +209,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       revised = await completed(queued.id);
       revisedPlan = await planOf(revised.id);
       assert.equal(revised.revision, 2);
+      assert.equal(revised.auto?.captions, "add", "Explicit nonempty caption corrections opt into added captions");
       assert.deepEqual(revised.corrections, { captionCorrections: 1, brollChanges: 0, seconds: 73 });
       assert.equal(revisedPlan.revision, 2);
       assert.equal(revisedPlan.settings.hookText, "A clearer opening");
@@ -264,6 +265,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.equal((await jobs()).length, count + 1);
       const trimmed = await completed(queued.id);
       const trimmedPlan = await planOf(trimmed.id);
+      assert.equal(trimmed.auto?.captions, "add", "A cuts-only revision retains the manual caption choice after restart");
       assert.equal(trimmedPlan.revision, 3);
       assert.deepEqual(trimmedPlan.cuts, [{ start: 0, end: 10 }]);
       assert.deepEqual(trimmedPlan.captions, revisedPlan.captions);
