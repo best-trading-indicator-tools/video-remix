@@ -148,6 +148,8 @@ Timestamps accept seconds, `MM:SS.mmm`, or `HH:MM:SS.mmm`. Mark points from play
 
 The default portrait export is **1080 × 1920**, including from a 1920 × 1080 landscape recording. Use framing controls to crop around the subject or keep the full picture with background fill. A portrait crop uses only part of a landscape frame: an HD output canvas does not recover missing original detail. Five-second rendered samples use up to 720p for faster review; full exports use the selected resolution. If a browser cannot play the original codec, source timestamps and rendered samples remain usable.
 
+**Crop zoom** creates room to reposition the frame. At 1×, a landscape-to-portrait crop already keeps the full source height, so vertical positioning is disabled until you zoom in. Position controls use 0–100% of the available travel, update the crop outline immediately, and apply to every sequence. Zoom and position are saved with the short and used by previews and exports. Choosing a full-shot background resets crop zoom.
+
 ### Free cleanup and optional paid restoration
 
 **Clean up video** applies mild local noise reduction and sharpening before resizing. It uses FFmpeg on your computer and has no API charge. It can improve noisy footage; it cannot reconstruct detail that was never captured. Compare a rendered sample before enabling it on every clip.

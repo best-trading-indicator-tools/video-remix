@@ -78,6 +78,11 @@
 .shorts-workspace .shorts-settings-grid select { font-size: 12px; padding-left: 8px; padding-right: 24px; }
 .shorts-full-width { grid-column: 1 / -1; }
 .shorts-focal-controls { margin: 20px 0; display: grid; gap: 15px; }
+.shorts-framing-scope { margin: 0; font-size: 12px; color: var(--muted); }
+.shorts-focal-controls .slider-field { margin-top: 0; }
+.shorts-focal-controls .is-disabled input { cursor: not-allowed; }
+.shorts-focal-controls .is-disabled input[type="range"] { opacity: 0.45; }
+.shorts-focal-controls .is-disabled .slider-number-wrap { border-color: var(--line); }
 .shorts-workspace .shorts-focal-controls label { display: block; font-size: 12px; }
 .shorts-workspace .slider-number-wrap input { min-height: 28px; padding: 5px 6px; border: 0; background: transparent; width: 55px; font-size: 12px; }
 .shorts-workspace .slider-number-wrap { min-width: 56px; }

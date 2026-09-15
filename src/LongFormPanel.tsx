@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronRight, Clapperboard, Copy, Link2, LoaderCircle, Play, Plus, Scissors, Trash2, X } from "lucide-react";
 import { DEFAULT_SETTINGS, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
-import { createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUTS, MAX_SHORTS, parseSourceClock, reconnectShortDraft, restoreShortDrafts, SHORT_DRAFT_STORAGE, validateShortDraft, type ShortCut, type ShortDraft } from "../shared/shorts";
+import { createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUTS, MAX_SHORTS, parseSourceClock, reconnectShortDraft, restoreShortDrafts, shortCropGuide, SHORT_DRAFT_STORAGE, validateShortDraft, type ShortCut, type ShortDraft } from "../shared/shorts";
 import Slider from "./Slider";
 import "./shorts.css";
 
@@ -173,14 +173,26 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     onNotice(`“${item.title}” reconnected to ${chosenSource.name}. Check its timestamps before rendering.`, "info");
   };
   const sourceAspect = source ? source.width / source.height : 16 / 9;
-  const outputAspect = draft?.aspect === "original" ? sourceAspect : draft?.aspect ? Number(draft.aspect.split(":")[0]) / Number(draft.aspect.split(":")[1]) : 9 / 16;
-  const cropWidth = Math.min(1, outputAspect / sourceAspect);
-  const cropHeight = Math.min(1, sourceAspect / outputAspect);
   const focalPoint = currentCut?.focalPoint || draft?.focalPoint || { x: 0.5, y: 0.5 };
+  const crop = shortCropGuide(draftSource ?? source ?? { width: 1920, height: 1080 }, draft?.aspect ?? "9:16", draft?.zoom ?? 1, focalPoint, draft?.resolution ?? "1080");
+  const travelPercent = (value: number, min: number, max: number) => max > min
+    ? Math.round(Math.max(0, Math.min(1, (value - min) / (max - min))) * 100) : 50;
+  const positionX = crop.canMoveX ? travelPercent(focalPoint.x, crop.minX, crop.maxX) : 50;
+  const positionY = crop.canMoveY ? travelPercent(focalPoint.y, crop.minY, crop.maxY) : 50;
+  const positionSubject = (axis: "x" | "y", percent: number) => {
+    if (!draft) return;
+    if (axis === "x" ? !crop.canMoveX : !crop.canMoveY) return;
+    const min = axis === "x" ? crop.minX : crop.minY;
+    const max = axis === "x" ? crop.maxX : crop.maxY;
+    if (max <= min) return;
+    const point = { ...focalPoint, [axis]: min + percent / 100 * (max - min) };
+    // These controls frame the whole short. An old per-cut override must not
+    // silently take priority over the setting the user just changed.
+    updateDraft({ focalPoint: point, cuts: draft.cuts.map(({ focalPoint: _point, ...cut }) => cut) });
+  };
   const guideStyle = {
-    width: `${cropWidth * 100}%`, height: `${cropHeight * 100}%`,
-    left: `${Math.max(0, Math.min(1 - cropWidth, focalPoint.x - cropWidth / 2)) * 100}%`,
-    top: `${Math.max(0, Math.min(1 - cropHeight, focalPoint.y - cropHeight / 2)) * 100}%`,
+    width: `${crop.width * 100}%`, height: `${crop.height * 100}%`,
+    left: `${crop.left * 100}%`, top: `${crop.top * 100}%`,
   };
 
   return <div className="shorts-workspace" hidden={!active}>
@@ -230,8 +242,17 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
         <button className="secondary-button shorts-add-sequence" disabled={!draftSource || draft.cuts.length >= MAX_SHORT_CUTS} onClick={addCut}><Plus size={14} />Add sequence at playhead</button>
         <details className="shorts-output-settings" open>
           <summary>Frame &amp; quality<span>{draft.aspect === "original" ? "Original" : draft.aspect} · {draft.resolution === "source" ? "Source" : `${draft.resolution}p`}</span></summary>
-          <div className="shorts-settings-grid"><label>Format<select value={draft.aspect} onChange={event => updateDraft({ aspect: event.target.value as ShortDraft["aspect"] })}><option value="9:16">Portrait · 9:16</option><option value="1:1">Square · 1:1</option><option value="4:5">Portrait · 4:5</option><option value="16:9">Landscape · 16:9</option><option value="original">Original format</option></select></label><label>Export quality<select value={draft.resolution} onChange={event => updateDraft({ resolution: event.target.value as ShortDraft["resolution"] })}><option value="1080">1080p · Full HD</option><option value="720">720p · HD</option><option value="source">Source resolution</option></select></label><label className="shorts-full-width">Fit the frame<select value={draft.fit} onChange={event => updateDraft({ fit: event.target.value as ShortDraft["fit"] })}><option value="crop">Fill frame · crop sides</option><option value="blur">Keep full shot · blurred background</option><option value="contain">Keep full shot · black background</option></select></label></div>
-          {draft.fit === "crop" && <div className="shorts-focal-controls"><Slider label="Subject left / right" min={0} max={1} step={0.01} value={draft.focalPoint.x} defaultValue={0.5} onChange={x => updateDraft({ focalPoint: { ...draft.focalPoint, x } })} /><Slider label="Subject up / down" min={0} max={1} step={0.01} value={draft.focalPoint.y} defaultValue={0.5} onChange={y => updateDraft({ focalPoint: { ...draft.focalPoint, y } })} /><p className="shorts-helper">The outlined area shows the crop for this short. Preview the render to check the framing.</p></div>}
+          <div className="shorts-settings-grid"><label>Format<select value={draft.aspect} onChange={event => updateDraft({ aspect: event.target.value as ShortDraft["aspect"] })}><option value="9:16">Portrait · 9:16</option><option value="1:1">Square · 1:1</option><option value="4:5">Portrait · 4:5</option><option value="16:9">Landscape · 16:9</option><option value="original">Original format</option></select></label><label>Export quality<select value={draft.resolution} onChange={event => updateDraft({ resolution: event.target.value as ShortDraft["resolution"] })}><option value="1080">1080p · Full HD</option><option value="720">720p · HD</option><option value="source">Source resolution</option></select></label><label className="shorts-full-width">Fit the frame<select value={draft.fit} onChange={event => updateDraft({ fit: event.target.value as ShortDraft["fit"], ...(event.target.value !== "crop" ? { zoom: 1 } : {}) })}><option value="crop">Fill frame · crop sides</option><option value="blur">Keep full shot · blurred background</option><option value="contain">Keep full shot · black background</option></select></label></div>
+          {draft.fit === "crop" && <div className="shorts-focal-controls">
+            <p className="shorts-framing-scope">Position changes apply to every sequence.</p>
+            <Slider label="Crop zoom" min={1} max={2} step={0.01} unit="×" value={draft.zoom ?? 1} defaultValue={1} onChange={zoom => updateDraft({ zoom })}
+              hint="Zoom in to leave room to move the frame. More zoom keeps less of the original picture." />
+            <Slider label="Subject left / right" min={0} max={100} step={1} unit="%" value={positionX} defaultValue={50} disabled={!crop.canMoveX}
+              onChange={percent => positionSubject("x", percent)} hint={crop.canMoveX ? "0% selects the left edge; 100% selects the right edge." : "The full width is already visible. Increase Crop zoom to move left or right."} />
+            <Slider label="Subject up / down" min={0} max={100} step={1} unit="%" value={positionY} defaultValue={50} disabled={!crop.canMoveY}
+              onChange={percent => positionSubject("y", percent)} hint={crop.canMoveY ? "0% selects the top edge; 100% selects the bottom edge." : "The full height is already visible. Increase Crop zoom to move up or down."} />
+            <p className="shorts-helper">The outlined area updates as you adjust the frame. Preview this short to see the cropped result.</p>
+          </div>}
           <label className="shorts-check-option"><input type="checkbox" checked={draft.normalizeAudio} onChange={event => updateDraft({ normalizeAudio: event.target.checked })} /><span><strong>Even out audio</strong><small>Normalize the selected sequences.</small></span></label>
           <label className="shorts-check-option"><input type="checkbox" checked={draft.qualityCleanup} onChange={event => updateDraft({ qualityCleanup: event.target.checked })} /><span><strong>Gentle cleanup <em>Free</em></strong><small>Reduce noise and sharpen lightly on your computer.</small></span></label>
           <p className="shorts-helper">1080p portrait exports are 1080 × 1920. Enlarging or cleaning up footage cannot restore missing detail.</p>

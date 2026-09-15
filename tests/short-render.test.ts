@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { promisify } from "node:util";
 import { DEFAULT_SETTINGS, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types.js";
 import { geometry } from "../server/engine.js";
+import { createShortDraft, validateShortDraft } from "../shared/shorts.js";
 
 const exec = promisify(execFile);
 const sleep = (milliseconds: number) => new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -185,6 +186,39 @@ test("timestamp shorts preserve distant sequence order, names, portrait resoluti
       assert.ok(Math.abs(job.summary!.outputDuration - expected) < 0.001);
       const { file } = await download(job);
       assert.ok(Math.abs(Number((await probe(file)).format.duration) - expected) < 0.1);
+    });
+
+    await t.test("short draft zoom enables vertical framing when a portrait crop already uses the full source height", async () => {
+      const stripedFile = path.join(directory, "top-red-bottom-blue.mp4");
+      await ffmpeg(["-f", "lavfi", "-i", "color=red:s=320x180:r=12:d=1,drawbox=x=0:y=90:w=iw:h=90:c=blue:t=fill",
+        "-c:v", "libx264", "-preset", "ultrafast", "-threads", "1", "-pix_fmt", "yuv420p", stripedFile]);
+      const striped = await upload(stripedFile);
+      const items = [1, 2].map(zoom => {
+        const draft = createShortDraft(striped, `zoom-${zoom}`, `top-${zoom}`);
+        draft.title = `Vertical framing at ${zoom}x`; draft.zoom = zoom;
+        draft.cuts = [
+          { id: `top-${zoom}`, start: "0", end: "0.5", focalPoint: { x: 0.5, y: 0 } },
+          { id: `bottom-${zoom}`, start: "0.5", end: "1", focalPoint: { x: 0.5, y: 1 } },
+        ];
+        const result = validateShortDraft(draft, striped);
+        assert.deepEqual(result.errors, []);
+        return { title: draft.title, settings: result.settings! };
+      });
+      const { jobs } = await batch(striped, items);
+      const [fullHeight, zoomed] = await Promise.all(jobs.map(download));
+      const unchangedTop = await colorAt(fullHeight!.file, 0.2);
+      const unchangedBottom = await colorAt(fullHeight!.file, 0.7);
+      assert.ok(unchangedTop.every((channel, index) => Math.abs(channel - unchangedBottom[index]!) <= 3),
+        `Without zoom, vertical framing cannot move a full-height crop: ${unchangedTop} vs ${unchangedBottom}`);
+      const top = await colorAt(zoomed!.file, 0.2), bottom = await colorAt(zoomed!.file, 0.7);
+      assert.ok(top[0]! > 220 && top[1]! < 25 && top[2]! < 25, `Zoomed upper framing should retain the red subject: ${top}`);
+      assert.ok(bottom[2]! > 220 && bottom[0]! < 25 && bottom[1]! < 25, `Zoomed lower framing should retain the blue subject: ${bottom}`);
+      for (const output of [fullHeight!, zoomed!]) {
+        const metadata = await probe(output.file);
+        const video = metadata.streams.find(stream => stream.codec_type === "video")!;
+        assert.deepEqual([video.width, video.height], [1080, 1920], "Zoom changes framing without lowering export resolution");
+        assert.ok(Math.abs(Number(metadata.format.duration) - 1) < 0.08);
+      }
     });
 
     await t.test("optional local cleanup reduces temporal grain without changing the selected duration", async () => {

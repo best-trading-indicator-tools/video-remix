@@ -14,12 +14,53 @@ export interface ShortDraft {
   aspect: RemixSettings["aspect"];
   fit: RemixSettings["fit"];
   resolution: RemixSettings["resolution"];
+  zoom: number;
   focalPoint: FocalPoint;
   normalizeAudio: boolean;
   qualityCleanup: boolean;
   updatedAt: string;
 }
 export interface ShortDraftStore { version: 1; drafts: ShortDraft[] }
+
+/** Crop bounds use source coordinates and the renderer's even-pixel crop sizing. */
+export function shortCropGuide(
+  source: Pick<VideoSource, "width" | "height">,
+  aspect: RemixSettings["aspect"],
+  zoom: number,
+  focalPoint: FocalPoint,
+  resolution: RemixSettings["resolution"] = "1080",
+): { width: number; height: number; left: number; top: number; minX: number; maxX: number; minY: number; maxY: number; canMoveX: boolean; canMoveY: boolean } {
+  const even = (value: number) => Math.max(2, Math.floor(value / 2) * 2);
+  const sourceWidth = even(source.width), sourceHeight = even(source.height);
+  const [across, down] = aspect === "original" ? [source.width, source.height] : aspect.split(":").map(Number);
+  const requestedAspect = across! / down!;
+  // Output geometry is rounded before its ratio is written into FFmpeg's crop
+  // expression. Using the requested aspect directly can select two extra pixels.
+  let outputWidth = source.width, outputHeight = source.height;
+  if (resolution !== "source") {
+    const edge = Number(resolution);
+    outputWidth = requestedAspect >= 1 ? even(edge * requestedAspect) : edge;
+    outputHeight = requestedAspect >= 1 ? edge : even(edge / requestedAspect);
+  } else {
+    if (source.width / source.height > requestedAspect) outputWidth = source.height * requestedAspect;
+    else outputHeight = source.width / requestedAspect;
+    outputWidth = even(outputWidth); outputHeight = even(outputHeight);
+  }
+  const targetAspect = Number((outputWidth / outputHeight).toFixed(8));
+  const scale = Number.isFinite(zoom) ? Math.max(1, Math.min(2, zoom)) : 1;
+  const cropWidth = even(Math.min(sourceWidth, sourceHeight * targetAspect) / scale);
+  const cropHeight = even(Math.min(sourceHeight, sourceWidth / targetAspect) / scale);
+  const width = cropWidth / sourceWidth, height = cropHeight / sourceHeight;
+  return {
+    width, height,
+    left: Math.max(0, Math.min(1 - width, focalPoint.x - width / 2)),
+    top: Math.max(0, Math.min(1 - height, focalPoint.y - height / 2)),
+    minX: width / 2, maxX: 1 - width / 2,
+    minY: height / 2, maxY: 1 - height / 2,
+    // An even-pixel rounding sliver does not offer useful positioning travel.
+    canMoveX: sourceWidth - cropWidth > 2, canMoveY: sourceHeight - cropHeight > 2,
+  };
+}
 
 /** Source clocks accept seconds, MM:SS or HH:MM:SS, with millisecond precision. */
 export function parseSourceClock(input: string): number | null {
@@ -43,7 +84,7 @@ export function createShortDraft(source: VideoSource, id: string, cutId: string,
   return {
     id, sourceId: source.id, sourceFingerprint: source.fingerprint, sourceName: source.name,
     title: `Short ${index}`, cuts: [{ id: cutId, start: formatSourceClock(position), end: formatSourceClock(Math.min(source.duration, position + 30)) }],
-    aspect: "9:16", fit: "crop", resolution: "1080", focalPoint: { x: 0.5, y: 0.5 },
+    aspect: "9:16", fit: "crop", resolution: "1080", zoom: 1, focalPoint: { x: 0.5, y: 0.5 },
     normalizeAudio: false, qualityCleanup: false, updatedAt: new Date().toISOString(),
   };
 }
@@ -54,6 +95,8 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   if (/[\u0000-\u001f\u007f]/.test(draft.title)) errors.push("Use a short name without control characters.");
   if (draft.title.length > 100) errors.push("Short names can contain up to 100 characters.");
   if (!draft.cuts.length || draft.cuts.length > MAX_SHORT_CUTS) errors.push(`Choose between 1 and ${MAX_SHORT_CUTS} sequences.`);
+  const zoom = draft.zoom ?? 1;
+  if (!Number.isFinite(zoom) || zoom < 1 || zoom > 2) errors.push("Zoom must be between 1 and 2.");
   const segments = draft.cuts.flatMap((cut, index) => {
     const start = parseSourceClock(cut.start), end = parseSourceClock(cut.end);
     if (start === null || end === null) { errors.push(`Sequence ${index + 1}: enter valid start and end timestamps.`); return []; }
@@ -63,7 +106,7 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   });
   const duration = segments.reduce((sum, cut) => sum + Math.max(0, cut.end - cut.start), 0);
   const settings: RemixSettings = {
-    ...DEFAULT_SETTINGS, aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution,
+    ...DEFAULT_SETTINGS, aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
     segments, focalPoint: draft.focalPoint, normalizeAudio: draft.normalizeAudio, qualityCleanup: draft.qualityCleanup,
   };
   return { errors, duration, settings: errors.length ? null : settings };
@@ -99,6 +142,7 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       aspect: (["original", "9:16", "1:1", "4:5", "16:9"].includes(String(value.aspect)) ? value.aspect : "9:16") as ShortDraft["aspect"],
       fit: (["crop", "contain", "blur"].includes(String(value.fit)) ? value.fit : "crop") as ShortDraft["fit"],
       resolution: (["source", "720", "1080"].includes(String(value.resolution)) ? value.resolution : "1080") as ShortDraft["resolution"],
+      zoom: typeof value.zoom === "number" && Number.isFinite(value.zoom) && value.zoom >= 1 && value.zoom <= 2 ? value.zoom : 1,
       focalPoint: focal(value.focalPoint) ? value.focalPoint : { x: 0.5, y: 0.5 },
       normalizeAudio: value.normalizeAudio === true, qualityCleanup: value.qualityCleanup === true,
       updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString(),
