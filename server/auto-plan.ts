@@ -41,7 +41,7 @@ function reliable(segment: TranscriptSegment): boolean {
   );
 }
 
-function spokenUnits(transcript: Transcript, target: number): Candidate[] {
+export function spokenUnits(transcript: Transcript, target: number): Candidate[] {
   const units: Candidate[] = [];
   let pending: TranscriptWord[] = [];
   const flush = () => {
@@ -88,6 +88,78 @@ function spokenUnits(transcript: Transcript, target: number): Candidate[] {
   return units;
 }
 
+/** Source-only words and gap-bounded padding; context is evidence, never added speech. */
+export function candidateFromUnits(units: Candidate[], first: number, last: number, sourceDuration: number): Candidate {
+  const selected = units.slice(first, last + 1);
+  return {
+    start: Math.max(0, Math.min(units[first - 1]?.end ?? 0, selected[0]!.start), selected[0]!.start - 0.12),
+    end: Math.min(sourceDuration, Math.max(units[last + 1]?.start ?? sourceDuration, selected.at(-1)!.end), selected.at(-1)!.end + 0.18),
+    text: clean(selected.map(unit => unit.text).join(" ")),
+    context: { before: clean(units.slice(Math.max(0, first - 2), first).map(unit => unit.text).join(" ")).slice(-1200),
+      after: clean(units.slice(last + 1, last + 3).map(unit => unit.text).join(" ")).slice(0, 1200) },
+  };
+}
+
+const dependentOpening = /^(?:and|but|so|because|which|that(?:'s| is)? why|these|those|it|they|he|she|therefore|yes|no|exactly|however)\b/iu;
+const qualification = /^(?:but|however|except|unless|although|yet|only if|in fact|to be clear|that said|this does not|this doesn['’]t|not everyone)\b/iu;
+const setup = /(?:here['’]?s why|let me explain|for example|the reason is|there are \w+ reasons|watch what happens)[.!:]?$/iu;
+
+function boundaryScore(units: Candidate[], first: number, last: number, candidate: Candidate, target: number): number {
+  const selected = units.slice(first, last + 1);
+  const opening = selected[0]!.text, ending = selected.at(-1)!.text;
+  const words = candidate.text.split(/\s+/u).length;
+  const speech = selected.reduce((sum, unit) => sum + unit.end - unit.start, 0);
+  // These are ordering hints, never an eligibility/confidence score. Semantic
+  // discovery handles discourse and other languages; punctuation alone cannot
+  // prove that an idea is complete.
+  return (terminal(ending) ? 1 : 0) + (dependentOpening.test(opening) ? -0.65 : 0.25) +
+    (first && !terminal(units[first - 1]!.text) ? -0.45 : 0) +
+    (/\?["'”’)]*$/u.test(ending) ? -0.8 : 0) +
+    (/\?["'”’)]*$/u.test(opening) && selected.length > 1 && !/\?["'”’)]*$/u.test(ending) ? 0.7 : 0) +
+    (setup.test(ending) ? -0.6 : 0) +
+    (units[last + 1] && qualification.test(units[last + 1]!.text) ? -0.9 : 0) +
+    Math.min(1, words / 12) * 0.3 + (words < 4 && candidate.text.length < 20 ? -0.8 : 0) +
+    Math.min(1, speech / Math.min(5, target)) * 0.15 +
+    0.12 / selected.length - Math.max(0, selected.length - 4) * 0.08;
+}
+
+/** Prefix maxima support overlapping transcript intervals without scanning the source per candidate. */
+function intervalLookup<T extends { start: number; end: number }>(items: T[]) {
+  const sorted = [...items].sort((a, b) => a.start - b.start);
+  const starts = sorted.map(item => item.start);
+  const ends: number[] = [];
+  sorted.forEach((item, index) => { ends.push(Math.max(ends[index - 1] ?? -Infinity, item.end)); });
+  const lowerBound = (values: number[], value: number, inclusive: boolean) => {
+    let left = 0, right = values.length;
+    while (left < right) {
+      const middle = Math.floor((left + right) / 2);
+      if (inclusive ? values[middle]! <= value : values[middle]! < value) left = middle + 1;
+      else right = middle;
+    }
+    return left;
+  };
+  return (start: number, end: number): T[] =>
+    sorted.slice(lowerBound(ends, start, true), lowerBound(starts, end, false)).filter(item => item.end > start);
+}
+
+/** Build once when comparing many candidate edits with source-based history. */
+export function createSpeechCutSelector(transcript: Transcript): (candidate: Candidate) => EditSegment[] {
+  const segments = intervalLookup(transcript.segments);
+  return candidate => selectSpeechCuts({ ...transcript, segments: segments(candidate.start, candidate.end) }, candidate);
+}
+
+export function createCandidateNoveltyCheck(transcript: Transcript, previous: EditorialPlan[]): (candidate: Candidate) => boolean {
+  if (!previous.length) return () => true;
+  const historical = intervalLookup(previous.flatMap(plan => plan.cuts
+    .filter(cut => validTime(cut.start, cut.end)).map(cut => ({ start: cut.start, end: cut.end, plan }))));
+  const selectCuts = createSpeechCutSelector(transcript);
+  return candidate => {
+    const overlapping = [...new Set(historical(candidate.start, candidate.end).map(item => item.plan))];
+    if (!overlapping.length) return true;
+    return !isRepeatedPlan({ cuts: selectCuts(candidate), text: candidate.text }, overlapping);
+  };
+}
+
 export function buildCandidates(
   transcript: Transcript,
   sourceDuration: number,
@@ -103,53 +175,26 @@ export function buildCandidates(
   )
     return [];
   const units = spokenUnits(transcript, targetDuration).filter(
-    (unit) => unit.start < sourceDuration && unit.end > 0,
+    (unit) => unit.start < sourceDuration && unit.end > 0 && unit.end <= sourceDuration + 0.001,
   );
   if (!units.length) return [];
-  const novel = (candidate: Candidate) =>
-    !isRepeatedPlan(
-      { cuts: selectSpeechCuts(transcript, candidate), text: candidate.text },
-      previous,
-    );
-  if (sourceDuration <= targetDuration) {
-    const candidate = {
-      start: 0,
-      end: sourceDuration,
-      text: clean(units.map((unit) => unit.text).join(" ")),
-    };
-    return novel(candidate) ? [candidate] : [];
-  }
+  const novel = createCandidateNoveltyCheck(transcript, previous);
   const pool: { candidate: Candidate; score: number }[] = [];
+  const rank = (a: typeof pool[number], b: typeof pool[number]) => b.score - a.score ||
+    (a.candidate.end - a.candidate.start) - (b.candidate.end - b.candidate.start) || a.candidate.start - b.candidate.start;
   for (let index = 0; index < units.length; index++) {
-    const first = units[index]!;
-    const start = Math.max(0, first.start - 0.12);
-    let last = index;
-    while (
-      last + 1 < units.length &&
-      units[last + 1]!.end + 0.18 - start <= targetDuration
-    )
-      last++;
-    const end = Math.min(sourceDuration, units[last]!.end + 0.18);
-    if (end - start > targetDuration || end <= start) continue;
-    const selected = units.slice(index, last + 1);
-    const speech = selected.reduce(
-      (sum, item) => sum + item.end - item.start,
-      0,
-    );
-    const candidate = {
-      start,
-      end,
-      text: clean(selected.map((item) => item.text).join(" ")),
-    };
-    const score =
-      Math.min(1, (end - start) / targetDuration) * 0.5 +
-      Math.min(1, speech / (end - start)) * 0.3 +
-      (terminal(selected.at(-1)!.text) ? 0.2 : 0);
-    pool.push({ candidate, score });
+    // Consider shorter endings too. Bound work per opening; long unpunctuated
+    // speech still retains the word-bounded fallback supplied by spokenUnits.
+    for (let last = index; last < Math.min(units.length, index + 24); last++) {
+      const candidate = candidateFromUnits(units, index, last, sourceDuration);
+      if (candidate.end - candidate.start > targetDuration) break;
+      if (candidate.end <= candidate.start || !novel(candidate)) continue;
+      pool.push({ candidate, score: boundaryScore(units, index, last, candidate, targetDuration) });
+    }
+    // Every source opening is considered, including later unused material.
+    if (pool.length > 1024) { pool.sort(rank); pool.length = 512; }
   }
-  pool.sort(
-    (a, b) => b.score - a.score || a.candidate.start - b.candidate.start,
-  );
+  pool.sort(rank);
   const chosen: Candidate[] = [];
   for (const { candidate } of pool) {
     // Exclude completed edits before choosing the limited pool seen by the

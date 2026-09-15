@@ -74,6 +74,19 @@ test("creative editing separates candidate selection from grounded excerpt packa
       assert.equal(requests.length, 1);
     });
 
+    await t.test("neighboring evidence informs selection but cannot enter the selected-excerpt packaging request", async () => {
+      candidates[1]!.context = { before: "Earlier discussion explains the question.", after: "A later qualification must not become a new headline claim." };
+      candidates[1]!.idea = { kind: "explanation", summary: "A source-grounded laboratory explanation", firstUnit: 8, lastUnit: 10 };
+      try {
+        await run([{ value: { windowIndex: 1 } }, { value: packaging("Measuring raw materials") }]);
+        const selecting = JSON.parse(requests[0]!.prompt);
+        assert.deepEqual(selecting.candidates[1].neighboringContext, candidates[1]!.context);
+        assert.match(requests[0]!.prompt, /shorter complete idea/u);
+        assert.doesNotMatch(requests[1]!.prompt, /Earlier discussion|later qualification|source-grounded laboratory/u);
+        assert.equal(JSON.parse(requests[1]!.prompt).selectedExcerpt.transcript, candidates[1]!.text);
+      } finally { delete candidates[1]!.context; delete candidates[1]!.idea; }
+    });
+
     await t.test("packaging errors keep the chosen cut and use its own speech as the fallback headline", async () => {
       for (const failure of [
         { status: 503, value: {} }, { raw: "{broken" }, { value: {} },

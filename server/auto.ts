@@ -38,6 +38,7 @@ import { brollAIConfigured } from "./broll-ai.js";
 
 import { stockBrollConfigured } from "./stock-broll.js";
 import { geometry } from "./engine.js";
+import { discoverSourceIdeas, novelIdeaCandidates } from "./source-ideas.js";
 
 export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   const [transcription, intelligence, voice, motionGraphics] =
@@ -217,7 +218,7 @@ export async function prepareAutoRemix({
         : undefined,
     };
   })];
-  const candidates = transcript
+  let candidates = transcript
     ? buildCandidates(
         transcript,
         source.duration,
@@ -226,6 +227,21 @@ export async function prepareAutoRemix({
         previousPlans,
       )
     : [];
+  if (transcript?.segments.length) {
+    onPhase("Finding complete spoken ideas", 36);
+    const ideas = await discoverSourceIdeas({ transcript, sourceDuration: source.duration,
+      targetDuration: options.targetDuration, signal });
+    notes.push(...ideas.notes);
+    if (ideas.noCompleteIdea)
+      throw new AutoSkipError("No complete, self-contained spoken idea fit this duration. No additional short was created. Try a longer duration or choose an excerpt in the editor.");
+    if (ideas.analyzed && ideas.candidates.length) {
+      const novel = novelIdeaCandidates(ideas.candidates, transcript, previousPlans, variant);
+      if (novel.length) candidates = novel;
+      else if (ideas.coverage.full)
+        throw new AutoSkipError("The complete spoken ideas found in this source repeat earlier exports. No additional short was created. Open History to review the existing excerpts.");
+      else notes.push("The ideas found in sampled sections were already used. Remaining sentence-based alternatives were considered.");
+    }
+  }
   if (
     transcript &&
     previousPlans.length &&
@@ -258,6 +274,7 @@ export async function prepareAutoRemix({
       signal,
     );
     const candidate = candidates[creative?.windowIndex ?? 0]!;
+    if (candidate.idea) notes.push(`Selected idea: ${candidate.idea.summary}`);
     cuts = selectSpeechCuts(transcript, candidate);
     captionTranscript = retimeTranscript(transcript, cuts);
     hook = creative?.hook || fallbackHook(captionTranscript);

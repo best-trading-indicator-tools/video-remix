@@ -29,6 +29,23 @@ If speech or the speech model is unavailable, Auto falls back to scene and timin
 
 Use your own footage or footage you have permission to repurpose. Review the resulting cut and captions before posting. Editing or changing file metadata does **not** guarantee that TikTok, Instagram, or another platform will classify a video as original, recommend it, or permit monetization.
 
+### Complete-idea selection
+
+Auto considers shorter sentence-aligned ideas and their neighboring context,
+including questions, answers, and qualifications. With the configured local
+Ollama model, a separate discovery pass proposes contiguous source-unit ranges;
+the app validates their original timestamps and duration before selecting a short.
+The heading is then written from only the selected excerpt.
+
+Discovery makes at most three local requests within a 120-second budget and
+caches results by source transcript, language, model, and duration preference.
+Long recordings may be sampled across opening, middle, and ending sections; export
+notes disclose that coverage. An empty sampled result never dismisses the whole
+recording. Unavailable or invalid model responses use sentence-based selection.
+Valid complete-source assessments can return fewer shorts when no standalone idea
+fits. Model proposals still need editorial review; their source anchors establish
+where the words came from, not that the model's judgment is correct.
+
 ## Optional B-roll and animated cards
 
 Use **Output preferences → Supporting visuals** in Auto mode:

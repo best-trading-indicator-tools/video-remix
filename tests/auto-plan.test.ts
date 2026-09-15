@@ -17,6 +17,7 @@ import {
   sceneCuts,
   selectSpeechCuts,
   alignCallouts,
+  createSpeechCutSelector,
 } from "../server/auto-plan.js";
 import {
   completedAutoSiblings,
@@ -81,13 +82,82 @@ test("candidate windows end at actual sentence boundaries, fit the target, and p
     new Set(otherVariant.map((candidate) => candidate.start)),
   );
   assert.deepEqual(buildCandidates(transcript([]), 10, 5, 0), []);
-  assert.deepEqual(
-    buildCandidates(input, 100, 120, 0).map(({ start, end }) => ({
-      start,
-      end,
-    })),
-    [{ start: 0, end: 100 }],
-  );
+  const shortSource = buildCandidates(input, 100, 120, 0);
+  assert.ok(shortSource.length > 1, "A source below the duration cap can still contain several focused ideas");
+  assert.ok(shortSource.every(candidate => candidate.start >= 0 && candidate.end <= 100));
+  assert.ok(shortSource[0]!.end - shortSource[0]!.start < 100, "Do not fill the cap with unrelated sentences");
+});
+
+test("a complete question and answer outrank the answer alone or an unanswered opening", () => {
+  const input = transcript([
+    { start: 0, end: 2, text: "How do you prevent blurry photographs?", words: [] },
+    { start: 2.5, end: 6, text: "Use a faster shutter speed to freeze the moving subject.", words: [] },
+    { start: 8, end: 10, text: "That is why it works.", words: [] },
+    { start: 15, end: 17, text: "Thank you for watching.", words: [] },
+  ], 22);
+  const candidates = buildCandidates(input, 22, 12, 0);
+  assert.match(candidates[0]!.text, /^How do you prevent.*Use a faster shutter/su);
+  assert.ok(!candidates[0]!.text.endsWith("?"));
+  assert.ok(candidates[0]!.end < 12, "A complete answer does not need to fill the duration");
+});
+
+test("nearby qualifications stay with the claim and context identifies excluded neighboring speech", () => {
+  const input = transcript([
+    { start: 0, end: 4, text: "The treatment improved symptoms in our small trial.", words: [] },
+    { start: 4.5, end: 8, text: "However, the result has not been tested in children.", words: [] },
+    { start: 15, end: 20, text: "Moving on to a different subject.", words: [] },
+  ], 30);
+  const candidate = buildCandidates(input, 30, 12, 0)[0]!;
+  assert.match(candidate.text, /^The treatment.*However/su);
+  assert.ok(candidate.end < 12);
+  assert.match(candidate.context!.after, /different subject/u);
+  assert.ok(!candidate.text.includes("different subject"));
+});
+
+test("padding never splits adjacent words and unknown-language or unpunctuated speech retains a fallback", () => {
+  const input = transcript([speech(0, ["First", "sentence.", "Second", "sentence.", "Third", "sentence."])], 8);
+  for (const candidate of buildCandidates(input, 8, 2, 0))
+    for (const word of input.segments[0]!.words) {
+      assert.ok(!(word.start < candidate.start && candidate.start < word.end));
+      assert.ok(!(word.start < candidate.end && candidate.end < word.end));
+    }
+  const french = transcript([{ start: 1, end: 5, text: "Cette méthode fonctionne dans certains cas", words: [] }], 10);
+  french.language = "fr";
+  assert.ok(buildCandidates(french, 10, 8, 0).length, "English discourse hints cannot block other languages");
+});
+
+test("long-source candidate discovery reads transcript bounds linearly with and without history", () => {
+  const count = 5000;
+  let timestampReads = 0;
+  const segments = Array.from({ length: count }, (_, index): TranscriptSegment => ({
+    get start() { timestampReads++; return index * 3; },
+    get end() { timestampReads++; return index * 3 + 2; },
+    text: `Topic${index} explains a specific practical lesson.`, words: [],
+  }));
+  const source: Transcript = { language: "en", duration: count * 3, segments };
+  const earlier: EditorialPlan[] = [{ cuts: [{ start: 0, end: 8.18 }],
+    text: segments.slice(0, 3).map(segment => segment.text).join(" ") }];
+  for (const history of [[], earlier]) {
+    timestampReads = 0;
+    const candidates = buildCandidates(source, source.duration, 15, 0, history);
+    assert.ok(candidates.length > 0);
+    assert.ok(timestampReads < count * 40,
+      `Expected bounded source indexing, saw ${timestampReads} timestamp reads for ${count} segments`);
+    for (const candidate of candidates)
+      assert.equal(isRepeatedPlan({ cuts: selectSpeechCuts(source, candidate), text: candidate.text }, history), false);
+  }
+});
+
+test("indexed speech lookup preserves overlapping coarse segments and exactly matches direct cuts", () => {
+  const source = transcript([
+    { start: 0, end: 20, text: "A coarse overlapping transcript interval.", words: [] },
+    speech(2, ["First", "specific", "idea."]),
+    speech(8, ["Second", "specific", "idea."]),
+    speech(23, ["A", "later", "idea."]),
+  ], 30);
+  const indexed = createSpeechCutSelector(source);
+  for (const candidate of [{ start: 8, end: 10, text: "" }, { start: 22, end: 27, text: "" }, { start: 29, end: 30, text: "" }])
+    assert.deepEqual(indexed(candidate), selectSpeechCuts(source, candidate));
 });
 
 test("exceptionally long sentences are split only between real words and coarse timings stay intact", () => {

@@ -7,7 +7,7 @@ Date: 2026-09-15. Status: implementation in progress. The authorized first deliv
 | Feature | Status |
 | --- | --- |
 | Whole-short human acceptance | Complete. Explicit verdicts, issue categories, unknown-safe rates, median correction time, and durable CSV/JSON export extend the existing History review. Production build passed; all 274 tests covered successfully (two optional speech cases rerun with the installed local model); desktop/mobile browser review passed. |
-| Complete-idea selection | In progress. |
+| Complete-idea selection | Complete. Shorter context-aware candidates, bounded cached local idea discovery, validated source anchors, and indexed history/transcript lookup. Production build and all 288 tests passed. |
 | Independent editorial checks | In progress. |
 | Bounded automatic repair | Next, using the validated edit-plan operations. |
 
@@ -56,7 +56,7 @@ These are working foundations. The proposed improvements focus on their remainin
 
 ### Findings that determine the order
 
-| Current behavior | Why it limits automatic quality | Evidence |
+| Behavior at the original audit | Why it limited automatic quality | Evidence |
 | --- | --- | --- |
 | Candidate score weights duration utilization 50%, speech density 30%, and sentence punctuation 20%; only eight candidates reach editorial AI. | A dense 45-second fragment can outrank a complete 24-second insight. | `server/auto-plan.ts`, candidate scoring and selection around lines 144–170 |
 | Editorial AI receives excerpts, without a structured map of surrounding questions, claims, examples, and qualifications. | An opening can lose its referent, or an answer can lose the question that gives it meaning. | `server/intelligence.ts`, `writeCreativePlan` prompts |

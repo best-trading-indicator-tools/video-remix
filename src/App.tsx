@@ -2600,7 +2600,7 @@ export default function App() {
                                 </button>
                               ) : job.status === "skipped" ? (
                                 <span className="skipped-reason">
-                                  Too similar
+                                  See reason
                                 </span>
                               ) : (
                                 <IconButton
