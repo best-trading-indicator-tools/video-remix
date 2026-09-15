@@ -1,22 +1,37 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowUp, Check, LoaderCircle, MessageSquareText, RotateCcw, X } from "lucide-react";
-import type { PromptEditResponse } from "../shared/types";
+import type { EditPlan, PromptEditResponse } from "../shared/types";
+import PromptHint from "./PromptHint";
 import "./prompt-editor.css";
 
 export type PromptProposal = PromptEditResponse;
 export interface ReviewablePrompt { summary: string[]; clarification?: string }
 export interface PromptExample { label: string; prompt: string }
 
-const savedEditExamples: PromptExample[] = [
-  { label: "Smaller captions", prompt: "Make captions smaller and move them up." },
-  { label: "Keep the first 20s", prompt: "Shorten this to the first 20 seconds." },
-  { label: "Remove B-roll", prompt: "Remove the B-roll." },
-];
+export function savedEditExamples(plan: EditPlan): PromptExample[] {
+  return [
+    ...(plan.captions.length ? [
+      { label: "Smaller captions", prompt: "Make the captions a little smaller." },
+      { label: "Raise captions", prompt: "Move captions to 15% from the bottom." },
+    ] : []),
+    { label: "Fill the frame", prompt: "Fill the frame with a centered crop." },
+    { label: "Keep whole picture", prompt: "Keep the whole picture with a blurred background." },
+    ...(!plan.narration && plan.outputDuration > 20 ? [
+      { label: "First 20 seconds", prompt: "Keep only the first 20 seconds of this edit." },
+    ] : []),
+    ...(plan.visuals.some(shot => shot.enabled && plan.media.some(media => media.id === shot.mediaId && media.kind === "broll")) ? [
+      { label: "Remove B-roll", prompt: "Remove all video B-roll and show the original footage instead." },
+    ] : []),
+    { label: "Set opening title", prompt: "Change the opening title to 'Here's the key idea'." },
+    ...(plan.settings.hookText ? [{ label: "Remove heading", prompt: "Remove the opening heading." }] : []),
+    ...(plan.captions.length ? [{ label: "Remove captions", prompt: "Remove all captions." }] : []),
+  ].slice(0, 8);
+}
 
 /** Generates a reviewable proposal. Applying it never starts a render. */
 export default function PromptEditor<T extends ReviewablePrompt = PromptProposal>({ contextKey, disabled = false, onSuggest, onApply, onUndo, canUndo = false, applied = false,
-  examples = savedEditExamples, scope = "Hooks, captions, cut points, framing and B-roll. You can keep using the controls below.",
-  placeholder = "e.g. Make captions smaller and move them up", description = "Describe a change. Review it before rendering.",
+  examples = [], scope = "Hooks, captions, cut points, framing and B-roll. You can keep using the controls below.",
+  placeholder = "Describe what you’d like to change…", description = "Describe a change. Review it before rendering.",
   appliedMessage = "Prompt applied to your draft. Render this revision when ready.",
   undoBlockedMessage = "Your manual changes are newer. Reset changes to return to the saved export.",
 }: {
@@ -40,6 +55,8 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [engaged, setEngaged] = useState(false);
+  const [expandedExamples, setExpandedExamples] = useState(false);
   const active = useRef<AbortController | null>(null);
   const currentContext = useRef(contextKey);
   const currentPrompt = useRef(prompt);
@@ -101,6 +118,7 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
 
   const currentProposal = proposal?.context === contextKey && proposal.prompt === prompt ? proposal.value : null;
   const canApply = !!currentProposal && !currentProposal.clarification && currentProposal.summary.length > 0;
+  const showHint = !engaged && !prompt && !disabled && !loading;
 
   return <section className="prompt-editor" aria-labelledby={`${id}-title`}>
     <div className="prompt-editor-heading">
@@ -108,16 +126,23 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
       <div><h3 id={`${id}-title`}>Edit with a prompt</h3><p>{description}</p></div>
     </div>
     <label className="prompt-editor-label" htmlFor={`${id}-input`}>Describe your edit</label>
+    <div className={`prompt-editor-input${showHint ? " has-hint" : ""}`}>
     <textarea ref={textarea} id={`${id}-input`} rows={3} maxLength={2000} value={prompt} disabled={disabled}
       placeholder={placeholder}
+      onFocus={() => setEngaged(true)}
       aria-describedby={`${id}-scope`} onChange={(event) => changePrompt(event.target.value)}
       onKeyDown={(event) => {
         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void suggest(); }
       }} />
-    <div className="prompt-editor-examples" aria-label="Example editing prompts">
-      {examples.map((example) => <button key={example.label} type="button" disabled={disabled || loading}
+    {showHint && <PromptHint examples={examples.map(example => example.prompt)} fallback={placeholder} />}
+    </div>
+    <div id={`${id}-examples`} className="prompt-editor-examples" role="group" aria-label="Example editing prompts">
+      {(expandedExamples ? examples : examples.slice(0, 6)).map((example) => <button key={example.label} type="button" disabled={disabled || loading}
+        title={example.prompt}
         onClick={() => { changePrompt(example.prompt); textarea.current?.focus(); }}>{example.label}</button>)}
     </div>
+    {examples.length > 6 && <button type="button" className="prompt-editor-more" aria-expanded={expandedExamples} aria-controls={`${id}-examples`}
+      onClick={() => setExpandedExamples(value => !value)}>{expandedExamples ? "Fewer ideas" : "More ideas"}<span aria-hidden="true">{expandedExamples ? "−" : "+"}</span></button>}
     <div className="prompt-editor-actions">
       <span className="prompt-editor-provider">Text planning by DeepSeek</span>
       {loading ? <button type="button" className="secondary-button" onClick={() => {

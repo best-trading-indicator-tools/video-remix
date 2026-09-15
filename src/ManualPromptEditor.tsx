@@ -6,8 +6,13 @@ interface ManualPromptProposal extends ReviewablePrompt { settings: RemixSetting
 interface SettingsUndo { settings: RemixSettings; appliedIdentity: string }
 const examples: PromptExample[] = [
   { label: "Warmer, more contrast", prompt: "Make the colors a little warmer with more contrast." },
+  { label: "Portrait, 1080p", prompt: "Use 9:16 at 1080p. Keep the whole picture with a blurred background." },
+  { label: "Faster pace", prompt: "Set playback speed to 1.15x." },
+  { label: "Black & white", prompt: "Make the video black and white." },
+  { label: "Clean up image", prompt: "Enable local video cleanup with mild denoising and sharpening." },
   { label: "Mute audio", prompt: "Mute the audio." },
-  { label: "Portrait, 1080p", prompt: "Make this a portrait 9:16 video at 1080p, keeping the whole picture with a blurred background." },
+  { label: "Mirror picture", prompt: "Flip the picture horizontally." },
+  { label: "Add a title", prompt: "Show the opening title 'Here's the key idea' for 3 seconds." },
 ];
 
 /** Key by source ID so prompts and undo always belong to the selected video. */

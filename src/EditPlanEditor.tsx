@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, Lock
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
-import PromptEditor, { type PromptProposal } from "./PromptEditor";
+import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import "./edit-plan.css";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -355,6 +355,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
             </aside>
             <div className="edit-plan-fields">
               <PromptEditor contextKey={`${job.id}:${plan.revision}:${draftKey}`} disabled={saving} onSuggest={suggestEdit} onApply={applyPrompt}
+                examples={savedEditExamples(draft)}
                 applied={!!promptUndo} canUndo={!!promptUndo && promptUndo.appliedIdentity === draftKey} onUndo={() => {
                   if (!promptUndo || promptUndo.appliedIdentity !== draftKey) return;
                   setDraft(structuredClone(promptUndo.draft)); setRefreshBroll(promptUndo.refreshBroll); setPromptAnchor(promptUndo.anchor); setPromptUndo(null); setError("");
