@@ -215,6 +215,14 @@ export default function AutoPanel({
             <p id="auto-version-note" className="auto-preferences-note">
               1–{MAX_AUTO_VERSIONS} per video. Similar cuts are skipped, so you may get fewer versions.
             </p>
+            <label className="auto-output-field">
+              Editorial review
+              <select value={options.editorialMode ?? "check"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
+                <option value="check">Check the opening, meaning, and ending</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <p className="auto-preferences-note">Uses the local editing model and original transcript. Unavailable or uncertain checks are marked for your review.</p>
             <label
               className={`auto-narration-toggle ${!capabilities?.narration ? "unavailable" : ""}`}
             >

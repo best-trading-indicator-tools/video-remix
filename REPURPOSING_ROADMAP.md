@@ -8,7 +8,7 @@ Date: 2026-09-15. Status: implementation in progress. The authorized first deliv
 | --- | --- |
 | Whole-short human acceptance | Complete. Explicit verdicts, issue categories, unknown-safe rates, median correction time, and durable CSV/JSON export extend the existing History review. Production build passed; all 274 tests covered successfully (two optional speech cases rerun with the installed local model); desktop/mobile browser review passed. |
 | Complete-idea selection | Complete. Shorter context-aware candidates, bounded cached local idea discovery, validated source anchors, and indexed history/transcript lookup. Production build and all 288 tests passed. |
-| Independent editorial checks | In progress. |
+| Independent editorial checks | Complete as an advisory check. Separate source-cited comparisons, conservative unavailable states, actual-plan integration, and durable reports. Production build, all 307 tests, and desktop/mobile browser checks passed. The installed llama3.2 yielded only one validated (uncertain) report in four authored examples; reliable model judgment remains unproven. The opt-in smoke runner records this separately from software tests. |
 | Bounded automatic repair | Next, using the validated edit-plan operations. |
 
 The sections below retain the audit rationale and broader follow-up roadmap. Product targets remain unmeasured until real human reviews are collected.

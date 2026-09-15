@@ -56,6 +56,7 @@ import {
 } from "../shared/types";
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
+import EditorialReportSummary from "./EditorialReportSummary";
 import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
@@ -85,6 +86,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         ? options!.targetDuration
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
+      editorialMode: options?.editorialMode === "off" ? "off" : "check",
       supportingVisuals: [
         "off",
         "stock",
@@ -2497,6 +2499,7 @@ export default function App() {
                                 </div>
                               )}
                               <QualityReportSummary report={job.qualityReport} compact />
+                              <EditorialReportSummary report={job.editorialReport} compact />
                               {job.supportingVisuals?.some(
                                 (visual) => visual.attribution,
                               ) && (
@@ -2540,11 +2543,11 @@ export default function App() {
                                 <p className="job-error">{job.error}</p>
                               )}
                             </div>
-                            <div className={`job-status ${job.qualityReport?.status === "review" ? "quality-review" : ""}`}>
+                            <div className={`job-status ${job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "quality-review" : ""}`}>
                               {job.status === "completed" ? (
                                 <>
                                   <Check size={12} />
-                                  {job.qualityReport?.status === "review" ? "Review" : "Ready"}
+                                  {job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "Review" : "Rendered"}
                                 </>
                               ) : job.status === "processing" ? (
                                 <>
@@ -2697,6 +2700,7 @@ export default function App() {
               autoPlay
             />
             <QualityReportSummary report={previewJob.qualityReport} />
+            <EditorialReportSummary report={previewJob.editorialReport} />
             {previewJob.summary && (
               <div className="export-auto-summary">
                 <h3>What changed</h3>

@@ -4,6 +4,7 @@ import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityRepo
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
+import EditorialReportSummary from "./EditorialReportSummary";
 import "./edit-plan.css";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -352,6 +353,8 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <h3>{previewMode === "export" ? "Current export" : "Draft framing"}</h3><p>{previewMode === "export" ? "Review this version as you make corrections. Render to see your updated video." : "Adjust the crop and captions against the source footage. Render your revision to review the final result."}</p>
               <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
               <QualityReportSummary report={job.qualityReport} />
+              {changed ? <p className="editorial-coverage">Your draft changes have not received an editorial check. The saved export's findings are available in Exports and History. Render the revision to review its final result.</p>
+                : <EditorialReportSummary report={job.editorialReport} />}
             </aside>
             <div className="edit-plan-fields">
               <PromptEditor contextKey={`${job.id}:${plan.revision}:${draftKey}`} disabled={saving} onSuggest={suggestEdit} onApply={applyPrompt}

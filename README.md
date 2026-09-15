@@ -46,6 +46,37 @@ Valid complete-source assessments can return fewer shorts when no standalone ide
 fits. Model proposals still need editorial review; their source anchors establish
 where the words came from, not that the model's judgment is correct.
 
+### Independent editorial checks
+
+**Output preferences → Editorial review** enables a separate local check of the
+saved cut before rendering, or switches it off. It checks whether the opening has
+enough context, the ending finishes the idea, headings and callouts are supported,
+the source meaning is preserved, and captions match the selected speech. Findings
+include validated source quotes and timestamps. Exports, the editor, and durable
+History show the report separately from technical media checks and human verdicts.
+
+The checker uses the configured Ollama model and makes one bounded request. It
+never treats a missing model, missing source evidence, malformed response, or an
+uncertain judgment as a pass. Partial transcript coverage is disclosed. It does
+not inspect picture content or listen to the rendered audio; narration and
+replacement audio need manual review. An edited draft has no current report until
+its revision is rendered with checks enabled. Source text is treated as data.
+
+The reviewer is a separate request to the same configured model, so it can still
+miss problems or agree with an earlier mistake. A passing report is advisory and
+never records human acceptance or approval to publish. Real-model smoke checks and
+human review measure judgment quality separately from the automated software tests.
+
+Run the optional authored-text check with
+`npx tsx benchmarks/editorial-smoke.ts --run-local`. It makes at most four calls to
+an already installed model on a loopback Ollama endpoint, using no user media.
+The 2026-09-15 run with the installed `llama3.2` produced three unavailable reports
+and one uncertain report; neither deliberately misleading edit received a
+validated issue finding. This model has **not** demonstrated reliable editorial
+judgment. The app keeps those results for manual review and skips unverified
+repairs. Evaluate your configured model and real creator acceptance before relying
+on automatic judgments.
+
 ## Optional B-roll and animated cards
 
 Use **Output preferences → Supporting visuals** in Auto mode:

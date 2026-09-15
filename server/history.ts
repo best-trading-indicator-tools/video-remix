@@ -85,6 +85,7 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     stockShots,
     publications: [],
     ...(job.corrections ? { corrections: structuredClone(job.corrections) } : {}),
+    ...(job.editorialReport ? { editorialReport: structuredClone(job.editorialReport) } : {}),
   };
 }
 

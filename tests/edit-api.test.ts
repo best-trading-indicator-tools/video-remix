@@ -141,6 +141,12 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
     const originalBytes = await download(original.downloadUrl!);
     assert.equal(original.editable, true);
     assert.equal(original.revision, 1);
+    assert.equal(original.editorialReport?.status, "unavailable", "Missing speech/model must never look like an editorial pass");
+    assert.equal(original.editorialReport?.coverage.source, "missing");
+    assert.equal(original.phase, "Needs review");
+    const reviewedHistory = await (await fetch(`${base}/api/history`)).json() as { entries: { jobId: string; editorialReport?: unknown }[] };
+    assert.deepEqual(reviewedHistory.entries.find(entry => entry.jobId === original.id)?.editorialReport, original.editorialReport,
+      "Editorial findings must survive in durable history, separately from human acceptance");
     assert.equal(plan.version, 1);
     assert.equal(plan.revision, 1);
     assert.equal(plan.sourceId, source.id);

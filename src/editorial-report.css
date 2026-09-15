@@ -1,0 +1,18 @@
+.editorial-report { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px; line-height: 1.6; }
+.editorial-report summary { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.editorial-report.needs-review summary, .editorial-report.unavailable summary { color: #e7be78; }
+.editorial-report p { margin: 10px 0 0; color: var(--subtle); }
+.editorial-issues { margin: 12px 0 0; padding-left: 20px; }
+.editorial-issues > li + li { margin-top: 12px; }
+.editorial-issues blockquote { margin: 6px 0; padding-left: 10px; border-left: 2px solid var(--line); overflow-wrap: anywhere; color: var(--subtle); }
+.editorial-issues blockquote small { display: block; }
+.editorial-checks { list-style: none; margin: 12px 0 0; padding: 0; }
+.editorial-checks li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 5px 12px; padding: 5px 0; border-top: 1px solid var(--line); }
+.editorial-checks small { flex-basis: 100%; color: var(--subtle); }
+.editorial-seek { margin-left: 8px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); color: var(--accent); font-size: 12px; }
+.editorial-coverage { font-size: 12px; }
+.editorial-report.compact { max-width: 100%; }
+.status-completed .job-status.quality-review { color: #e7be78; }
+@media (max-width: 680px) {
+  .job-card .job-thumb { width: 38px; height: 52px; }
+}

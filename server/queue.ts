@@ -10,6 +10,7 @@ import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFrom
 import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
+import { reviewEditorialPlan } from "./editorial-review.js";
 import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
 import { readFile } from "node:fs/promises";
@@ -55,6 +56,7 @@ async function run(job: StoredJob, controller: AbortController) {
   let errorMessage: string | undefined;
   let outputSize: number | undefined;
   delete job.qualityReport;
+  delete job.editorialReport;
   try {
     await saveStore();
     const source = state.sources.find((item) => item.id === job.sourceId);
@@ -138,6 +140,13 @@ async function run(job: StoredJob, controller: AbortController) {
       job.phase = "Rendering your edit";
       await saveStore();
     }
+    if (job.editPlan && job.auto && job.auto.editorialMode !== "off") {
+      job.phase = "Checking the opening, meaning, and ending";
+      job.editorialReport = await reviewEditorialPlan({ plan: job.editPlan,
+        transcript: job.sourceTranscript, signal: controller.signal });
+      await saveStore();
+      job.phase = "Rendering the reviewed edit";
+    } else delete job.editorialReport;
     await renderVideo({
       input: source.filePath,
       output: job.outputPath,
@@ -207,7 +216,7 @@ async function run(job: StoredJob, controller: AbortController) {
     job.status = status;
     job.phase =
       status === "completed"
-        ? job.qualityReport?.status === "review" ? "Needs review" : "Ready to preview"
+        ? job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "Needs review" : "Ready to preview"
         : status === "skipped"
           ? "Skipped"
           : undefined;

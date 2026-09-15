@@ -1,3 +1,4 @@
+import type { EditorialReport } from "./editorial.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
 export interface FocalPoint { x: number; y: number }
 export interface CaptionStyle { fontSize: number; bottomPercent: number }
@@ -26,11 +27,14 @@ export interface AutoOptions {
   brollMatching?: "tags" | "ai";
   /** Desired cutaways per export; fewer are allowed when no suitable shots fit. */
   brollCount?: number;
+  /** Independent review of the final selected speech; unavailable checks remain visible. */
+  editorialMode?: "off" | "check";
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
   targetDuration: 45,
   narration: false,
+  editorialMode: "check",
 };
 export interface AutoBatchItem {
   sourceId: string;
@@ -286,6 +290,7 @@ export interface ExportHistoryEntry {
   available?: boolean;
   measurements?: ExportMeasurements;
   corrections?: CorrectionRecord;
+  editorialReport?: EditorialReport;
 }
 export interface Attachment {
   id: string;
@@ -313,6 +318,7 @@ export interface RenderJob {
   parentJobId?: string;
   auto?: AutoOptions;
   qualityReport?: QualityReport;
+  editorialReport?: EditorialReport;
   corrections?: CorrectionRecord;
   phase?: string;
   summary?: {

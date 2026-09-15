@@ -96,6 +96,9 @@ async function until(check: () => boolean) {
 
 test("failed runs expose retryable status only after their work and partial output are removed", async () => {
   const item = job(); // Deliberately missing source fails without launching FFmpeg.
+  item.editorialReport = { status: "pass", checkedAt: oldDate(), policyVersion: "old-review", modelVersion: "old-model",
+    checks: [], issues: [], coverage: { source: "word-timed", semantic: "complete", selectedWords: 1, totalSelectedWords: 1,
+      neighboringContext: true, omittedChecks: [], sourceVisuals: false, renderedAudio: false } };
   const workDir = path.join(paths.work, item.id);
   await mkdir(workDir);
   await writeFile(path.join(workDir, "old-captions.srt"), "old attempt");
@@ -103,6 +106,7 @@ test("failed runs expose retryable status only after their work and partial outp
   state.jobs.push(item);
   pumpQueue();
   assert.equal(item.status, "processing");
+  assert.equal(item.editorialReport, undefined, "A retry must clear stale editorial approval before any operation can fail");
   assert.equal(isRunning(item.id), true);
   await until(() => item.status === "failed");
   assert.equal(

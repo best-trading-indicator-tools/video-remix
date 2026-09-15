@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import EditorialReportSummary from "./EditorialReportSummary";
 import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, LoaderCircle, Plus, RefreshCw, Search, X } from "lucide-react";
 import type { ExportHistoryEntry, ExportMeasurements, ExportReview, PostMetrics, VideoSource } from "../shared/types";
 import "./history.css";
@@ -253,6 +254,7 @@ function HistoryCard({ entry, stockUses, onSaved }: {
         <span>{shot.name}</span><small>{timeText(shot.sourceStart)}–{timeText(shot.sourceStart + shot.duration)}{(stockUses.get(shot.identity) || 0) > 1 ? ` · Used in ${stockUses.get(shot.identity)} listed exports` : ""}</small>
       </li>)}</ul></>}
     </details>
+    <EditorialReportSummary report={entry.editorialReport} compact />
     <MeasurementEditor entry={entry} onSaved={onSaved} />
     <div className="history-publications" aria-label="Recorded publications">
       {entry.publications.map((publication, index) => <div className="history-publication" key={`${publication.platform}-${publication.publishedAt}-${index}`}>
