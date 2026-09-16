@@ -564,6 +564,9 @@ test("unidentified legacy Auto sources cannot race identical content before fing
   assert.equal(autoSourceBusy(queued, [{ ...running, status: "completed" }], [{ id: "source-a" }, { id: "source-b" }]), false);
   assert.equal(autoSourceBusy(queued, [{ ...running, auto: undefined }], [{ id: "source-a" }, { id: "source-b" }]), false);
   assert.equal(autoSourceBusy({ ...queued, auto: undefined }, [running], [{ id: "source-a" }, { id: "source-b" }]), false);
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a", fingerprint: "same" }, { id: "source-b", fingerprint: "same" }], new Set([running.id])), true);
+  assert.equal(autoSourceBusy(queued, [running], [{ id: "source-a", fingerprint: "same" }, { id: "source-b", fingerprint: "same" }], new Set()), false,
+    "Selected source cuts release the lock before stock, editorial review and rendering");
 });
 
 test("completed spoken cuts are removed before model selection while fresh long-video ideas remain", () => {

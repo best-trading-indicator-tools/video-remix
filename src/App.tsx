@@ -14,6 +14,7 @@ import {
   CheckCheck,
   ChevronDown,
   CircleHelp,
+  Clock3,
   Clapperboard,
   Copy,
   Download,
@@ -2246,7 +2247,7 @@ export default function App() {
                 </h2>
                 <p>
                   {pending.length
-                    ? `${pending.length} ${pending.length === 1 ? "video is" : "videos are"} rendering. You can keep working in the studio.`
+                    ? `${pending.filter(job => job.status === "processing").length} processing · ${pending.filter(job => job.status === "queued").length} queued${health ? ` · Up to ${health.concurrency} at once` : ""}. You can keep working in the studio.`
                     : `${completed.length} finished ${completed.length === 1 ? "video" : "videos"} in your collection.`}
                 </p>
                 <p className="retention-note">
@@ -2408,9 +2409,9 @@ export default function App() {
                                     : "MP4"}
                                 </span>
                               </div>
-                              {job.status === "processing" && job.phase && (
+                              {["processing", "queued"].includes(job.status) && job.phase && (
                                 <p className="job-phase">
-                                  <LoaderCircle size={11} className="spin" />
+                                  {job.status === "processing" ? <LoaderCircle size={11} className="spin" /> : <Clock3 size={11} />}
                                   {job.phase}
                                 </p>
                               )}

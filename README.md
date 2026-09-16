@@ -389,7 +389,7 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `MAX_FILE_SIZE_MB`   | `500`                    | B-roll and legacy multipart limit in MiB; accepts 1–2048.           |
 | `MAX_LARGE_FILE_SIZE_GB` | `50`                 | Resumable and linked source import limit in GiB; accepts 1–1024.     |
 | `MAX_FILES`          | `30`                     | Maximum files in one upload; accepts 1–100.                          |
-| `RENDER_CONCURRENCY` | `2`                      | Simultaneous renders; accepts 1–4.                                   |
+| `RENDER_CONCURRENCY` | `2`                      | Simultaneous processing jobs; accepts 1–4.                           |
 | `RETENTION_HOURS`    | `24`                     | Retention window for finished jobs and source files; accepts 1–720.  |
 | `WHISPER_MODEL`      | `small`                  | Local speech model; run setup for the chosen model before use.       |
 | `WHISPER_CACHE_DIR`  | `DATA_DIR/models`        | Persistent speech-model cache.                                       |
@@ -404,6 +404,8 @@ For example:
 ```sh
 RENDER_CONCURRENCY=1 RETENTION_HOURS=48 npm start
 ```
+
+The queue processes two videos at once by default, including multiple Auto versions of the same source. Initial analysis and clip selection for identical source content run one at a time; after cuts are chosen, B-roll searches, editorial checks and rendering can overlap. Chosen excerpts are temporarily reserved so later versions can prefer different footage. A version that has no unused alternative waits without occupying a worker until the earlier export settles; cancelled or failed exports release their reservations. Saved revisions and manual exports can run immediately when a slot is free. Export cards explain why a job is queued, and the collection header shows processing/queued counts and capacity. Increase `RENDER_CONCURRENCY` in the private `.env` (maximum 4) and restart the backend to change capacity; additional workers use more CPU and memory.
 
 Sources and queue manifests are stored on disk so they survive backend restarts. Automatic cleanup removes expired finished jobs and sources while protecting files referenced by active jobs. Download anything you want to keep before its retention period expires. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
 

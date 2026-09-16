@@ -193,6 +193,7 @@ export async function prepareAutoRemix({
   signal,
   onPhase,
   previous = [],
+  reserved = [],
   historyPlans = [],
 }: {
   source: StoredSource;
@@ -201,6 +202,8 @@ export async function prepareAutoRemix({
   signal: AbortSignal;
   onPhase: (phase: string, progress: number) => void;
   previous?: RenderJob[];
+  /** Clip selections made by other active workers, never export-history entries. */
+  reserved?: RenderJob[];
   historyPlans?: EditorialPlan[];
 }): Promise<PreparedAuto> {
   const options = job.auto!;
@@ -209,7 +212,9 @@ export async function prepareAutoRemix({
   let keepSourceCaptions = options.captions === "keep";
   if (keepSourceCaptions) notes.push("Original captions were kept. No new captions were added.");
   const variant = job.variant - 1;
-  const siblings = completedAutoSiblings(job, previous);
+  const siblings = [...completedAutoSiblings(job, previous), ...reserved.filter(other =>
+    other.id !== job.id && other.batchId === job.batchId && other.sourceId === job.sourceId &&
+    other.status === "processing" && !!other.auto)];
   const avoidSiblings = job.allowRepeatedFootage ? [] : siblings;
   signal.throwIfAborted();
   if (source.duration <= options.targetDuration && avoidSiblings.length)

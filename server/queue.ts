@@ -18,46 +18,66 @@ import { reviewEditorialPlan } from "./editorial-review.js";
 import { repairEditorialPlan } from "./editorial-repair.js";
 import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
+import { footageOverlap } from "./diversity.js";
 import { readFile } from "node:fs/promises";
 const running = new Map<string, AbortController>();
+// Only initial analysis and clip selection need exclusive access to a source.
+// Once cuts are chosen, expensive stock searches, reviews and exports can overlap.
+const selecting = new Set<string>();
+const selected = new Set<string>();
+const waitingFor = new Map<string, string[]>();
 let stopped = false;
 export const isActive = (job: StoredJob) =>
   job.status === "queued" || job.status === "processing";
 export const isRunning = (jobId: string) => running.has(jobId);
 /** An unidentified legacy source may be a reimport of any running Auto source. */
 export function autoSourceBusy(
-  job: Pick<StoredJob, "id" | "sourceId" | "auto">,
-  jobs: Pick<StoredJob, "id" | "sourceId" | "auto" | "status">[],
+  job: Pick<StoredJob, "id" | "sourceId" | "auto" | "editPlan">,
+  jobs: Pick<StoredJob, "id" | "sourceId" | "auto" | "status" | "editPlan">[],
   sources: Pick<StoredSource, "id" | "fingerprint">[],
+  selectingIds?: ReadonlySet<string>,
 ): boolean {
-  if (!job.auto) return false;
+  if (!job.auto || job.editPlan) return false;
   const fingerprints = new Map(sources.map(source => [source.id, source.fingerprint]));
   const fingerprint = fingerprints.get(job.sourceId);
   return jobs.some(other => {
     if (other.id === job.id || other.status !== "processing" || !other.auto) return false;
+    if (other.editPlan || (selectingIds && !selectingIds.has(other.id))) return false;
     const otherFingerprint = fingerprints.get(other.sourceId);
     return other.sourceId === job.sourceId || !fingerprint || !otherFingerprint || fingerprint === otherFingerprint;
   });
 }
 export function pumpQueue() {
   if (stopped) return;
+  for (const [id, dependencies] of waitingFor) {
+    if (!dependencies.some(dependency => running.has(dependency))) waitingFor.delete(id);
+  }
   while (running.size < config.concurrency) {
     const job = state.jobs.find(
       (item) =>
         item.status === "queued" &&
         !running.has(item.id) &&
-        !autoSourceBusy(item, state.jobs, state.sources),
+        !waitingFor.has(item.id) &&
+        !autoSourceBusy(item, state.jobs, state.sources, selecting),
     );
     if (!job) break;
     const controller = new AbortController();
     running.set(job.id, controller);
+    if (job.auto && !job.editPlan) selecting.add(job.id);
     job.status = "processing";
+    job.phase = "Preparing your edit";
     void run(job, controller);
+  }
+  for (const job of state.jobs.filter(item => item.status === "queued")) {
+    job.phase = waitingFor.has(job.id) ? "Waiting for another version to finish before choosing unused footage"
+      : autoSourceBusy(job, state.jobs, state.sources, selecting) ? "Waiting for another clip selection from this source"
+      : "Waiting for a processing slot";
   }
 }
 async function run(job: StoredJob, controller: AbortController) {
   const workDir = path.join(paths.work, job.id);
-  let status: "completed" | "failed" | "cancelled" | "skipped" = "failed";
+  let status: "completed" | "failed" | "cancelled" | "skipped" | "queued" = "failed";
+  let reservationIds: string[] = [];
   let errorMessage: string | undefined;
   let outputSize: number | undefined;
   let thumbnail: HistoryThumbnail | undefined;
@@ -131,12 +151,17 @@ async function run(job: StoredJob, controller: AbortController) {
       subtitlePath = saved.subtitlePath;
       supportingVisuals = saved.supportingVisuals;
     } else if (job.auto) {
+      const reservations = state.jobs.filter(other => other.id !== job.id &&
+        other.status === "processing" && other.auto && (selected.has(other.id) || other.editPlan) &&
+        other.batchId === job.batchId && other.sourceId === job.sourceId);
+      reservationIds = reservations.map(other => other.id);
       const prepared = await prepareAutoRemix({
         source,
         job,
         workDir,
         signal: controller.signal,
         previous: state.jobs,
+        reserved: reservations,
         historyPlans: previousEditorialPlans(state.history, source.fingerprint),
         onPhase: (phase, progress) => {
           job.phase = phase;
@@ -146,6 +171,12 @@ async function run(job: StoredJob, controller: AbortController) {
       job.settings = prepared.settings;
       job.summary = prepared.summary;
       job.notes = prepared.notes;
+      controller.signal.throwIfAborted();
+      // Publish selected cuts before admitting the next version. Other workers
+      // can avoid these cuts while this job searches B-roll and renders.
+      selected.add(job.id);
+      selecting.delete(job.id);
+      pumpQueue();
       audioPath = prepared.audioPath;
       subtitlePath = prepared.subtitlePath;
       supportingVisuals = await prepareSupportingVisuals({
@@ -246,7 +277,13 @@ async function run(job: StoredJob, controller: AbortController) {
     outputSize = (await stat(job.outputPath)).size;
     status = "completed";
   } catch (error) {
-    status = controller.signal.aborted
+    // Exhausted in-flight reservations are provisional. Release this worker and
+    // retry selection after those jobs settle; a failed/cancelled job reserves nothing.
+    const unsettled = reservationIds.filter(id => state.jobs.find(other => other.id === id)?.status !== "completed");
+    if (!controller.signal.aborted && error instanceof AutoSkipError && unsettled.length) {
+      waitingFor.set(job.id, unsettled.filter(id => running.has(id)));
+      status = "queued";
+    } else status = controller.signal.aborted
       ? "cancelled"
       : error instanceof AutoSkipError
         ? "skipped"
@@ -299,12 +336,24 @@ async function run(job: StoredJob, controller: AbortController) {
       delete job.downloadUrl;
       delete job.captionUrl;
     }
-    job.finishedAt = new Date().toISOString();
+    if (status === "queued") { delete job.finishedAt; job.progress = 0; }
+    else job.finishedAt = new Date().toISOString();
     const source = state.sources.find(item => item.id === job.sourceId);
+    // Concurrent duplicate imports can finish in either order. Compare again
+    // when exporting, so the later completion sees the earlier export's history.
+    if (status === "completed" && job.auto && source?.fingerprint) {
+      const cuts = job.settings.segments || [{ start: job.settings.trimStart, end: job.settings.trimEnd ?? source.duration }];
+      const earlier = previousEditorialPlans(state.history.filter(entry => entry.jobId !== job.id), source.fingerprint);
+      if (earlier.some(plan => footageOverlap(cuts, plan.cuts) >= 0.8))
+        job.notes = [...new Set([...(job.notes || []), "This edit reuses footage from an earlier export. Open History to compare."])];
+    }
     const entry = source && historyEntry(source, job);
     if (entry && thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
     if (entry) state.history = upsertHistory(state.history, entry);
     running.delete(job.id);
+    selecting.delete(job.id);
+    selected.delete(job.id);
+    if (status !== "queued") waitingFor.delete(job.id);
     await saveStore().catch((error) =>
       console.error("Unable to save render result:", error),
     );
@@ -313,6 +362,7 @@ async function run(job: StoredJob, controller: AbortController) {
 }
 export async function cancelJob(job: StoredJob) {
   if (job.status === "queued") {
+    waitingFor.delete(job.id);
     job.status = "cancelled";
     job.finishedAt = new Date().toISOString();
   } else if (job.status === "processing") {
