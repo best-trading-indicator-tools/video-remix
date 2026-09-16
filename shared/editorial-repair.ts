@@ -1,6 +1,11 @@
 import type { EditPlanChanges } from "./types.js";
 import type { EditorialEvidence, EditorialIssue, EditorialReport, EditorialReviewRequest } from "./editorial.js";
 
+export interface EditorialReviewProgress {
+  step: "review" | "propose" | "verify";
+  /** Zero for the original review, then 1 or 2 for correction attempts. */
+  attempt: number;
+}
 export const EDITORIAL_REPAIR_POLICY_VERSION = "editorial-repair-v1";
 export interface EditorialRepairProposal {
   targetCodes: string[];

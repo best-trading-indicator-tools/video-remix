@@ -17,8 +17,10 @@ import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory, r
 import { historyThumbnailPath, retainHistoryThumbnail, type HistoryThumbnail } from "./history-thumbnails.js";
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
+import { AI_REQUEST_BUDGET_MS } from "./ai-json.js";
+import type { EditorialReviewProgress } from "../shared/editorial-repair.js";
 import { reviewEditorialPlan } from "./editorial-review.js";
-import { repairEditorialPlan } from "./editorial-repair.js";
+import { repairEditorialPlan, EDITORIAL_REPAIR_BUDGET_MS } from "./editorial-repair.js";
 import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
 import { footageContainment } from "./diversity.js";
@@ -98,6 +100,20 @@ export function pumpQueue() {
     retryTimer.unref();
   }
 }
+async function trackEditorialReview<T>(job: StoredJob, budgetMs: number,
+  work: (update: (progress: EditorialReviewProgress) => void) => Promise<T>): Promise<T> {
+  const startedAt = new Date().toISOString();
+  const update = (progress: EditorialReviewProgress) => {
+    job.editorialProgress = { ...progress, startedAt, budgetMs };
+    job.phase = progress.step === "propose" ? `Preparing correction ${progress.attempt} of 2`
+      : progress.step === "verify" ? `Checking correction ${progress.attempt} of 2 against the source`
+      : "Checking the opening, meaning, and ending";
+  };
+  update({ step: "review", attempt: 0 });
+  try { return await work(update); }
+  finally { delete job.editorialProgress; }
+}
+
 async function run(job: StoredJob, controller: AbortController) {
   const workDir = path.join(paths.work, job.id);
   let status: "completed" | "failed" | "cancelled" | "skipped" | "queued" = "failed";
@@ -111,6 +127,7 @@ async function run(job: StoredJob, controller: AbortController) {
   delete job.finishedReviewReport;
   delete job.editorialReport;
   delete job.visualSearch;
+  delete job.editorialProgress;
   // Keep the saved correction history through failed retries; its budget belongs to this job.
   delete job.editorialModeApplied;
   try {
@@ -235,19 +252,16 @@ async function run(job: StoredJob, controller: AbortController) {
       const mode = job.auto.editorialMode ?? "repair";
       job.editorialModeApplied = mode;
       if (mode !== "off") {
-        job.phase = mode === "repair" && !job.parentJobId && !savedRepair
-          ? "Checking the edit and trying up to two small corrections"
-          : "Checking the opening, meaning, and ending";
         if (mode === "repair" && !savedRepair) {
-          const reviewed = await repairEditorialPlan({ plan: job.editPlan,
-            transcript: job.sourceTranscript, signal: controller.signal,
-            maxDuration: job.auto.targetDuration, protectedEdit: Boolean(job.parentJobId) });
+          const reviewed = await trackEditorialReview(job, EDITORIAL_REPAIR_BUDGET_MS, onProgress => repairEditorialPlan({ plan: job.editPlan!,
+            transcript: job.sourceTranscript, signal: controller.signal, onProgress,
+            maxDuration: job.auto!.targetDuration, protectedEdit: Boolean(job.parentJobId) }));
           job.editPlan = reviewed.plan;
           job.editorialReport = reviewed.report;
           job.editorialRepair = reviewed.repairLog;
         } else {
-          job.editorialReport = await reviewEditorialPlan({ plan: job.editPlan,
-            transcript: job.sourceTranscript, signal: controller.signal });
+          job.editorialReport = await trackEditorialReview(job, AI_REQUEST_BUDGET_MS + 5_000, () => reviewEditorialPlan({ plan: job.editPlan!,
+            transcript: job.sourceTranscript, signal: controller.signal }));
           // A retry rechecks the saved result; it does not grant another repair budget.
           if (savedRepair && mode === "repair") job.editorialRepair = { ...savedRepair,
             finalReport: structuredClone(job.editorialReport),
@@ -258,8 +272,8 @@ async function run(job: StoredJob, controller: AbortController) {
       // A cancelled check must never make the saved cuts appear already inspected.
       const protectedCaptions = await protectFinalAutoCaptions({ job, source, signal: controller.signal });
       if (protectedCaptions && mode !== "off") {
-        job.editorialReport = await reviewEditorialPlan({ plan: job.editPlan,
-          transcript: job.sourceTranscript, signal: controller.signal });
+        job.editorialReport = await trackEditorialReview(job, AI_REQUEST_BUDGET_MS + 5_000, () => reviewEditorialPlan({ plan: job.editPlan!,
+          transcript: job.sourceTranscript, signal: controller.signal }));
         if (job.editorialRepair) job.editorialRepair.finalReport = structuredClone(job.editorialReport);
       }
       // Rebuild every render input from the final reviewed plan. This also writes

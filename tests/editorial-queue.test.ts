@@ -40,6 +40,8 @@ test("the queue renders only verified repairs, protects manual edits, and retain
   let scenario: "repair" | "manual" | "rollback" = "repair";
   let reviews = 0, proposals = 0;
   const modelErrors: unknown[] = [];
+  let progressJob: StoredJob | undefined;
+  const reviewStages: { step: string; attempt: number }[] = [];
   const oldFetch = globalThis.fetch;
   globalThis.fetch = async (url, init) => {
     try {
@@ -52,6 +54,13 @@ test("the queue renders only verified repairs, protects manual edits, and retain
       const prompt = JSON.parse(envelope.messages[1]!.content) as { input: EditorialReviewRequest | { input: EditorialRepairRequest }; outputSchema: unknown };
       assert.ok(prompt.outputSchema, "The provider must receive the required reply schema");
       const input = prompt.input;
+      const progress = progressJob?.editorialProgress;
+      assert.ok(progress, "Every live provider check must publish its review stage instead of a frozen percentage");
+      assert.ok(Number.isFinite(Date.parse(progress.startedAt)));
+      assert.ok(progress.budgetMs >= 120_000 && progress.budgetMs <= 125_000);
+      assert.match(progressJob!.phase!, /Checking|Preparing correction/u);
+      assert.equal(progress.step === "propose", "input" in input);
+      reviewStages.push({ step: progress.step, attempt: progress.attempt });
       let result: unknown;
       if ("input" in input) {
         proposals++;
@@ -138,6 +147,7 @@ test("the queue renders only verified repairs, protects manual edits, and retain
         ...(manual ? { parentJobId: randomUUID(), corrections: { captionCorrections: 1, brollChanges: 0, seconds: 17 } } : {}) };
     };
     const completed = async (job: StoredJob) => {
+      progressJob = job;
       if (!state.jobs.includes(job)) state.jobs.push(job);
       await saveStore();
       pumpQueue();
@@ -145,6 +155,7 @@ test("the queue renders only verified repairs, protects manual edits, and retain
       while (["queued", "processing"].includes(job.status) && Date.now() < deadline) await sleep(30);
       assert.equal(job.status, "completed", `${job.error || job.phase}; model errors: ${modelErrors.map(String).join("; ")}`);
       assert.deepEqual(modelErrors, []);
+      assert.equal(job.editorialProgress, undefined, "The review stage must clear before rendering and completion");
       return job;
     };
     const frameDigest = async (file: string, time: number) => {
@@ -156,6 +167,10 @@ test("the queue renders only verified repairs, protects manual edits, and retain
     await t.test("corrected cuts, hook and captions reach the actual export and durable history", async () => {
       repaired = await completed(makeJob());
       assert.equal(reviews, 3); assert.equal(proposals, 2);
+      assert.deepEqual(reviewStages, [
+        { step: "review", attempt: 0 }, { step: "propose", attempt: 1 }, { step: "verify", attempt: 1 },
+        { step: "propose", attempt: 2 }, { step: "verify", attempt: 2 },
+      ]);
       assert.equal(repaired.editorialReport!.status, "pass");
       assert.equal(repaired.editPlan!.revision, 1);
       assert.deepEqual(repaired.editPlan!.cuts, [{ start: 2, end: 8 }]);

@@ -4,7 +4,7 @@ import type { VisualIdentity, HistoryMatch } from "./visual-identity.js";
 import type { PacingOptions } from "./pacing.js";
 import type { OwnFootagePlacement, OwnFootageAsset } from "./own-footage.js";
 import type { EditorialReport } from "./editorial.js";
-import type { EditorialRepairLog } from "./editorial-repair.js";
+import type { EditorialRepairLog, EditorialReviewProgress } from "./editorial-repair.js";
 import type { CaptionStyle } from "./caption-style.js";
 export type { CaptionStyle } from "./caption-style.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
@@ -378,6 +378,8 @@ export interface Attachment {
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
+  /** Provider work has no measurable completion percentage. */
+  editorialProgress?: EditorialReviewProgress & { startedAt: string; budgetMs: number };
   /** Live work counters; visual preparation has no reliable percentage or ETA. */
   visualSearch?: { startedAt: string; budgetMs: number; pass: number; maxPasses: number; requested: number; placed: number };
   finishedReviewReport?: FinishedReviewReport;

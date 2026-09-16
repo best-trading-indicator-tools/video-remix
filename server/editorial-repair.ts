@@ -4,13 +4,14 @@ import { withTrackBounds } from "../shared/focus.js";
 import type { EditorialEvidence, EditorialIssue, EditorialReport, EditorialReviewer, EditorialSourceExcerpt } from "../shared/editorial.js";
 import {
   EDITORIAL_REPAIR_POLICY_VERSION, type EditorialBoundaryChoice, type EditorialRepairLog,
-  type EditorialRepairProposal, type EditorialRepairProposer, type EditorialRepairRequest,
+  type EditorialRepairProposal, type EditorialRepairProposer, type EditorialRepairRequest, type EditorialReviewProgress,
 } from "../shared/editorial-repair.js";
 import { buildEditorialReviewContext, reviewEditorialPlan } from "./editorial-review.js";
 import { applyEditPlanChanges } from "./edit-plan.js";
 import { editorialAIEnabled, generateEditorialJSON } from "./editorial-provider.js";
 import { AIRequestError } from "./ai-errors.js";
 
+export const EDITORIAL_REPAIR_BUDGET_MS = 120_000;
 const MAX_EXTENSION = 3;
 const MAX_ADDED_SOURCE_SECONDS = 6;
 const MAX_ATTEMPTS = 2;
@@ -204,16 +205,18 @@ function abortable<T>(work: (signal: AbortSignal) => Promise<T>, signal: AbortSi
   });
 }
 
-export async function repairEditorialPlan({ plan, transcript, signal, maxDuration, protectedEdit = false, reviewer, proposer = deepseekEditorialRepairProposer }: {
+export async function repairEditorialPlan({ plan, transcript, signal, maxDuration, protectedEdit = false, reviewer, proposer = deepseekEditorialRepairProposer, onProgress }: {
   plan: EditPlan; transcript?: Transcript; signal: AbortSignal; maxDuration: number; protectedEdit?: boolean;
   reviewer?: EditorialReviewer; proposer?: EditorialRepairProposer;
+  onProgress?: (progress: EditorialReviewProgress) => void;
 }): Promise<{ plan: EditPlan; report: EditorialReport; repairLog: EditorialRepairLog }> {
   signal.throwIfAborted();
   const original = structuredClone(plan);
   let best = structuredClone(plan);
-  const budget = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
+  const budget = AbortSignal.any([signal, AbortSignal.timeout(EDITORIAL_REPAIR_BUDGET_MS)]);
   let report: EditorialReport;
   let initialTimedOut = false;
+  onProgress?.({ step: "review", attempt: 0 });
   try { report = await reviewEditorialPlan({ plan: best, transcript, signal: budget, reviewer }); }
   catch {
     signal.throwIfAborted();
@@ -246,6 +249,7 @@ export async function repairEditorialPlan({ plan, transcript, signal, maxDuratio
       previousRejections: log.attempts.filter(item => item.outcome !== "accepted").map(item => item.reason) };
     if (JSON.stringify(request).length > MAX_REQUEST_CHARACTERS)
       return finish("The correction evidence exceeds the bounded model context; the previous reviewed edit was kept for manual review.");
+    onProgress?.({ step: "propose", attempt });
     let input: unknown;
     try {
       input = await abortable(childSignal => proposer(structuredClone(request), childSignal),
@@ -263,6 +267,7 @@ export async function repairEditorialPlan({ plan, transcript, signal, maxDuratio
         reason: "The proposal exceeded allowed operations, duration or supplied source evidence.", beforeReport: before });
       continue;
     }
+    onProgress?.({ step: "verify", attempt });
     let checked: EditorialReport;
     try { checked = await reviewEditorialPlan({ plan: compiled.plan, transcript, signal: budget, reviewer }); }
     catch {

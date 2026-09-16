@@ -50,7 +50,9 @@ test("bounded editorial repair accepts independently verified improvements and p
   try {
     await t.test("source-grounded hook correction stays immutable and does not create a user revision", async () => {
       const plan = edit(), original = structuredClone(plan), transcript = source(), originalTranscript = structuredClone(transcript);
-      const result = await run({ plan, transcript });
+      const progress: { step: string; attempt: number }[] = [];
+      const result = await run({ plan, transcript, onProgress: event => progress.push(event) });
+      assert.deepEqual(progress, [{ step: "review", attempt: 0 }, { step: "propose", attempt: 1 }, { step: "verify", attempt: 1 }]);
       assert.equal(result.plan.settings.hookText, "This method does not always work");
       assert.equal(result.plan.revision, 7); assert.equal(result.report.status, "pass");
       assert.deepEqual(plan, original); assert.deepEqual(transcript, originalTranscript);

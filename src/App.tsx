@@ -64,6 +64,7 @@ import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
 import JobRecoveryNotice from "./JobRecoveryNotice";
+import JobProgress, { jobProgressLabel } from "./JobProgress";
 import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
@@ -2483,21 +2484,7 @@ export default function App() {
                                   {job.phase}
                                 </p>
                               )}
-                              {job.status === "processing" && (
-                                <div className={`job-progress${job.visualSearch ? " is-searching" : ""}`} role="progressbar"
-                                  aria-label={job.visualSearch ? "Preparing supporting visuals" : "Export progress"}
-                                  aria-valuenow={job.visualSearch ? undefined : Math.round(job.progress)}>
-                                  <span
-                                    style={job.visualSearch ? undefined : {
-                                      width: `${Math.max(1, Math.min(100, job.progress))}%`,
-                                    }}
-                                  />
-                                </div>
-                              )}
-                              {job.status === "processing" && job.visualSearch && <p className="job-search-detail">
-                                Pass {job.visualSearch.pass}/{job.visualSearch.maxPasses} · {job.visualSearch.placed}/{job.visualSearch.requested} shots placed · {duration(Math.max(0, (Date.now() - Date.parse(job.visualSearch.startedAt)) / 1000))} elapsed
-                                <span>Visual preparation can take up to {Math.round(job.visualSearch.budgetMs / 60000)} minutes. Rendering follows.</span>
-                              </p>}
+                              {job.status === "processing" && <JobProgress job={job} />}
                               {job.summary && (
                                 <div className="job-summary">
                                   {job.summary.changes.map((change, index) => (
@@ -2576,7 +2563,7 @@ export default function App() {
                               ) : job.status === "processing" ? (
                                 <>
                                   <span className="live-dot" />
-                                  {job.visualSearch ? "Finding visuals" : `${Math.round(job.progress)}%`}
+                                  {jobProgressLabel(job)}
                                 </>
                               ) : (
                                 job.status.charAt(0).toUpperCase() +
