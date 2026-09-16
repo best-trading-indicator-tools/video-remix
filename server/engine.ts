@@ -366,6 +366,8 @@ function validateSettings(settings: RemixSettings): void {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean")
       throw new Error(`Invalid ${key} setting`);
   }
+  if (settings.layout !== undefined && !["single", "split", "presentation"].includes(settings.layout)) throw new Error("Choose a supported video layout");
+  if (!validFocalPoint(settings.secondaryFocalPoint)) throw new Error("Choose a valid second subject position");
   if (!validFocalPoint(settings.focalPoint) || settings.segments?.some(segment => !validFocalPoint(segment.focalPoint)))
     throw new Error("Focal points must contain x and y coordinates between 0 and 1");
   if (settings.segments?.some(segment => segment.focusTrack !== undefined && !validFocusTrack(segment.focusTrack, segment.start, segment.end)) ||
@@ -603,21 +605,34 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     ];
     const focalX = focalExpression(s, "x");
     const focalY = focalExpression(s, "y");
-    if (s.fit === "crop") {
+    if (s.fit === "crop" && (!s.layout || s.layout === "single")) {
       const aspect = decimal(width / height);
       filters.push(focalCrop(
         `max(2,trunc(min(iw,ih*${aspect})/${s.zoom}/2)*2)`,
         `max(2,trunc(min(ih,iw/${aspect})/${s.zoom}/2)*2)`,
         focalX, focalY,
       ));
-    } else if (s.zoom !== 1) filters.push(focalCrop(
+    } else if (s.zoom !== 1 && (!s.layout || s.layout === "single")) filters.push(focalCrop(
       `max(2,trunc(iw/${s.zoom}/2)*2)`, `max(2,trunc(ih/${s.zoom}/2)*2)`, focalX, focalY,
     ));
     // Points describe subjects in the original source. Mirroring after the
     // crop keeps that same subject instead of selecting its opposite edge.
-    if (s.mirror) filters.push("hflip");
+    if (s.mirror && (!s.layout || s.layout === "single")) filters.push("hflip");
     const motion = `zoompan=z='1+0.04*min(on/${decimal(Math.max(1, (options.motionDuration ?? duration) * fps - 1))},1)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${width}x${height}:fps=${decimal(fps)}`;
-    if (s.fit === "blur")
+    if (s.layout === "split" || s.layout === "presentation") {
+      const topHeight = Math.max(2, Math.floor(height * (s.layout === "presentation" ? 0.6 : 0.5) / 2) * 2);
+      const bottomHeight = height - topHeight;
+      const panel = (panelHeight: number, x: string, y: string) => {
+        const ratio = decimal(width / panelHeight);
+        return `${focalCrop(`max(2,trunc(min(iw,ih*${ratio})/${s.zoom}/2)*2)`, `max(2,trunc(min(ih,iw/${ratio})/${s.zoom}/2)*2)`, x, y)},scale=${width}:${panelHeight}:flags=lanczos`;
+      };
+      const top = s.layout === "presentation"
+        ? `scale=${width}:${topHeight}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${topHeight}:(ow-iw)/2:(oh-ih)/2:color=black`
+        : panel(topHeight, focalX, focalY);
+      const bottom = s.layout === "presentation" ? panel(bottomHeight, focalX, focalY)
+        : panel(bottomHeight, decimal(s.secondaryFocalPoint?.x ?? 0.75), decimal(s.secondaryFocalPoint?.y ?? 0.5));
+      filters.push(`split=2[layouttop][layoutbottom];[layouttop]${top},setsar=1[layouta];[layoutbottom]${bottom},setsar=1[layoutb];[layouta][layoutb]vstack=inputs=2:shortest=1`);
+    } else if (s.fit === "blur")
       filters.push(
         `fps=${decimal(fps)},split=2[blurback][blurfront];[blurback]scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${width}:${height},gblur=sigma=${decimal(Math.max(8, Math.min(40, Math.min(width, height) * 0.045)))}:steps=2,eq=brightness=-0.12${s.autoMotion ? `,${motion}` : ""}[blurfill];[blurfront]scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2[blurpicture];[blurfill][blurpicture]overlay=x=(W-w)/2:y=(H-h)/2:shortest=1`,
       );
@@ -630,6 +645,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       filters.push(
         `scale=${width}:${height}:flags=lanczos`,
       );
+    if (s.mirror && s.layout && s.layout !== "single") filters.push("hflip");
     filters.push("setsar=1", `fps=${decimal(fps)}`, "format=yuv420p");
     if (s.autoMotion && s.fit !== "blur") filters.push(motion);
     if (

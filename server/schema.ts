@@ -74,6 +74,8 @@ export const settingsSchema = z
       .optional(),
     normalizeAudio: z.boolean().optional(),
     qualityCleanup: z.boolean().optional(),
+    layout: z.enum(["single", "split", "presentation"]).optional(),
+    secondaryFocalPoint: focalPointSchema.optional(),
     autoMotion: z.boolean().optional(),
     focalPoint: focalPointSchema.optional(),
     captionStyle: captionStyleSchema.optional(),

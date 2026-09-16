@@ -1,5 +1,6 @@
 import type { Express } from "express";
 import { z } from "zod";
+import { analyzeActiveSpeaker } from "./active-speaker.js";
 import { analyzeSpeakerFocus } from "./speaker-focus.js";
 import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
 import { state } from "./store.js";
@@ -10,6 +11,7 @@ const requestSchema = z.object({
   sourceId: z.string().uuid(),
   cuts: z.array(z.object({ start: time, end: time, focalPoint: point.optional() }).strict().refine(cut => cut.end - cut.start >= 0.04)).min(1).max(60),
   seed: point.optional(),
+  mode: z.enum(["face", "speaker"]).optional(),
 }).strict();
 
 /** Source IDs only; one bounded local analysis per workspace, cancelled on disconnect. */
@@ -26,14 +28,14 @@ export function installSpeakerFocusRoutes(app: Express, analyze = analyzeSpeaker
     busy = true;
     const controller = new AbortController();
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 150_000);
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, parsed.data.mode === "speaker" ? 11 * 60_000 : 150_000);
     timeout.unref();
     const disconnected = () => { if (!res.writableFinished) controller.abort(); };
     res.once("close", disconnected);
     try {
       await assertLinkedSourceUnchanged(source);
       controller.signal.throwIfAborted();
-      const result = await analyze({ source, cuts: parsed.data.cuts, seed: parsed.data.seed, signal: controller.signal });
+      const result = await (parsed.data.mode === "speaker" ? analyzeActiveSpeaker : analyze)({ source, cuts: parsed.data.cuts, seed: parsed.data.seed, signal: controller.signal });
       controller.signal.throwIfAborted();
       return res.json(result);
     } catch (error) {

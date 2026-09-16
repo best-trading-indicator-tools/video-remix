@@ -24,16 +24,19 @@ export interface ShortDraft {
   zoom: number;
   focalPoint: FocalPoint;
   autoFocus?: boolean;
+  focusMode?: "face" | "speaker";
   focusAnalysis?: ShortFocusAnalysis;
   normalizeAudio: boolean;
   qualityCleanup: boolean;
+  layout?: RemixSettings["layout"];
+  secondaryFocalPoint?: FocalPoint;
   updatedAt: string;
 }
 export interface ShortDraftStore { version: 1; drafts: ShortDraft[] }
 
 /** Face centers are independent of output aspect/zoom, but belong to these exact source cuts and starting point. */
 export function shortFocusSignature(draft: ShortDraft): string {
-  return JSON.stringify({ sourceId: draft.sourceId, seed: draft.focalPoint,
+  return JSON.stringify({ sourceId: draft.sourceId, mode: draft.focusMode || "face", seed: draft.focalPoint,
     cuts: draft.cuts.map(cut => ({ id: cut.id, start: cut.start, end: cut.end, focalPoint: cut.focalPoint })) });
 }
 
@@ -100,7 +103,8 @@ export function createShortDraft(source: VideoSource, id: string, cutId: string,
     id, sourceId: source.id, sourceFingerprint: source.fingerprint, sourceName: source.name,
     title: `Short ${index}`, cuts: [{ id: cutId, start: formatSourceClock(position), end: formatSourceClock(Math.min(source.duration, position + 30)) }],
     aspect: "9:16", fit: "crop", resolution: "1080", zoom: 1, focalPoint: { x: 0.5, y: 0.5 },
-    autoFocus: false, focusAnalysis: undefined,
+    autoFocus: false, focusMode: "face", focusAnalysis: undefined,
+    layout: "single", secondaryFocalPoint: undefined,
     normalizeAudio: false, qualityCleanup: false, updatedAt: new Date().toISOString(),
   };
 }
@@ -132,6 +136,7 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS, aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
     segments, focalPoint: draft.focalPoint, normalizeAudio: draft.normalizeAudio, qualityCleanup: draft.qualityCleanup,
+    layout: draft.layout, secondaryFocalPoint: draft.secondaryFocalPoint,
   };
   return { errors, duration, settings: errors.length ? null : settings };
 }
@@ -172,6 +177,7 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       zoom: typeof value.zoom === "number" && Number.isFinite(value.zoom) && value.zoom >= 1 && value.zoom <= 2 ? value.zoom : 1,
       focalPoint: focal(value.focalPoint) ? value.focalPoint : { x: 0.5, y: 0.5 },
       autoFocus: value.autoFocus === true,
+      focusMode: value.focusMode === "speaker" ? "speaker" : "face",
       focusAnalysis: record(value.focusAnalysis) && typeof value.focusAnalysis.signature === "string" && value.focusAnalysis.signature.length <= 20_000 &&
         ["tracked", "partial", "no-face", "unavailable"].includes(String(value.focusAnalysis.status)) &&
         cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) <= MAX_FOCUS_POINTS_TOTAL &&
@@ -180,6 +186,8 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
           multipleFaces: value.focusAnalysis.multipleFaces === true,
           reason: typeof value.focusAnalysis.reason === "string" ? value.focusAnalysis.reason.slice(0, 500) : undefined } : undefined,
       normalizeAudio: value.normalizeAudio === true, qualityCleanup: value.qualityCleanup === true,
+      layout: value.layout === "split" || value.layout === "presentation" ? value.layout : "single",
+      secondaryFocalPoint: focal(value.secondaryFocalPoint) ? value.secondaryFocalPoint : undefined,
       updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString(),
     }];
   });

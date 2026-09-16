@@ -73,7 +73,7 @@ def track_samples(samples, cuts, seed=None):
         for sample in selected:
             if sample["time"] - last_seen > 2:
                 previous = None
-            face = choose_face(sample["faces"], previous, cut_seed)
+            face = (sample["faces"][0] if sample["faces"] else None) if sample.get("selected") else choose_face(sample["faces"], previous, cut_seed)
             if face is not None:
                 previous = face
                 last_seen = sample["time"]

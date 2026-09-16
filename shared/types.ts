@@ -123,6 +123,8 @@ export interface RemixSettings {
   normalizeAudio?: boolean;
   /** Mild local denoising and sharpening, without a cloud service. */
   qualityCleanup?: boolean;
+  layout?: "single" | "split" | "presentation";
+  secondaryFocalPoint?: FocalPoint;
   autoMotion?: boolean;
   focalPoint?: FocalPoint;
   captionStyle?: CaptionStyle;
