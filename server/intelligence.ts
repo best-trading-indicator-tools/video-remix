@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
+import { semanticReasoning, type AIReasoning } from "./ai-json.js";
 import { editorialAIConfigured, generateEditorialJSON } from "./editorial-provider.js";
 import { probeAudio } from "./engine.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
@@ -22,13 +23,14 @@ export interface Candidate {
 
 /** A stateless DeepSeek request shared by selection and packaging. */
 export async function generateCreativeJSON({ prompt, schema, signal, maxTokens = 700,
-  temperature = 0.2, timeoutMs = 45_000 }: {
+  temperature = 0.2, timeoutMs = 45_000, reasoning }: {
   prompt: unknown; schema: z.ZodType; signal: AbortSignal; maxTokens?: number;
   temperature?: number; timeoutMs?: number;
+  reasoning?: AIReasoning;
 }): Promise<unknown> {
   signal.throwIfAborted();
   if (!(await intelligenceAvailable())) throw new Error("DeepSeek editing is unavailable.");
-  return generateEditorialJSON({ prompt, schema, signal, maxTokens, temperature, timeoutMs });
+  return generateEditorialJSON({ prompt, schema, signal, maxTokens, temperature, timeoutMs, reasoning });
 }
 const selectionSchema = z.object({
   windowIndex: z.number().int().min(0).max(15),
@@ -56,7 +58,7 @@ export async function writeCreativePlan(
   if (!available) return null;
   const generate = (prompt: unknown, schema: z.ZodType, attempt = 0, selection = false) =>
     generateCreativeJSON({ prompt, schema, signal, temperature: attempt ? 0.65 : 0.45,
-      maxTokens: selection ? 80 : 700 });
+      maxTokens: selection ? 80 : 700, reasoning: selection ? semanticReasoning() : "none" });
   let windowIndex: number;
   try {
     const result = selectionSchema.safeParse(await generate({

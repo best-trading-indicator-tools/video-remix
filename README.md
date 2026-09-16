@@ -379,6 +379,23 @@ then `deepseek-flash`. Selection, hook/callout and narration writing, editorial
 checks, and repair proposals use the fixed DeepSeek API endpoint. There is no local
 language-model fallback.
 
+DeepSeek uses **low thinking effort** for complete-idea discovery, excerpt selection,
+cross-section ranking, matching observed B-roll to speech, and editorial review.
+Prompt edits, stock search queries, frame descriptions, hook/callout writing and
+repair proposals stay in non-thinking mode. The matching decision reasons over
+inspected descriptions; it cannot improve a missed observation or invent a suitable shot.
+Set `DEEPSEEK_THINKING=false` in the private `.env` and restart to use fast mode
+for all these decisions. Discovery caches are separate for each mode.
+
+Thinking requests reserve up to 8,192 extra output tokens because the provider's token
+limit includes reasoning. Truncation retries can increase that combined limit to
+12,800 tokens. The same four-attempt maximum, 45-second per-attempt timeout and
+120-second total ceiling apply; individual workflow stages can have tighter deadlines.
+Only final JSON reaches schema/evidence validation and storage. Internal reasoning
+is discarded. Thinking adds latency and paid output tokens; it does not guarantee
+a correct answer or remove the need for review. See the
+[opt-in comparison](benchmarks/README.md#5-compare-deepseek-fast-and-thinking-modes).
+
 These paid text requests send bounded **transcript excerpts, captions, headings,
 and edit metadata** to DeepSeek. They do not upload source audio or full videos.
 Transcription, rendering, and voice synthesis remain local. Optional AI B-roll
@@ -421,6 +438,7 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `DEEPSEEK_API_KEY`   | Unset                    | Existing private API key for Auto AI, prompt edits, and optional AI B-roll matching. |
 | `DEEPSEEK_MODEL`     | `deepseek-flash`          | DeepSeek model for vision matching and the default text model.       |
 | `DEEPSEEK_TEXT_MODEL` | `DEEPSEEK_MODEL`         | Optional text override for Auto AI, prompt edits, and B-roll search briefs. |
+| `DEEPSEEK_THINKING` | `true` | Low thinking effort for editorial decisions; `false` restores fast mode. Restart after changing. |
 | `PIXABAY_API_KEY`    | Unset                    | Optional free stock video search; only used for Stock B-roll.        |
 
 For example:

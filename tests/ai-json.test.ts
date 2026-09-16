@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { AIRequestError, type AIRequestErrorCode } from "../server/ai-errors.js";
-import { jsonCompletion } from "../server/ai-json.js";
+import { jsonCompletion, semanticReasoning } from "../server/ai-json.js";
 
 const secret = "private-provider-response-and-key";
 const request = (fetcher: typeof fetch, signal = new AbortController().signal) => jsonCompletion({
@@ -18,6 +18,55 @@ const failure = (code: AIRequestErrorCode, retryable = true) => (error: unknown)
   return true;
 };
 const envelope = (content: string, finish_reason = "stop") => Response.json({ choices: [{ finish_reason, message: { content } }] });
+
+test("thinking is explicit, budgeted, and never exposes reasoning as the result", async () => {
+  const base = { model: "fixture", apiKey: secret, messages: [], maxTokens: 80, temperature: 0.2,
+    signal: new AbortController().signal, maxAttempts: 1 };
+  for (const reasoning of ["none", "low"] as const) {
+    const result = await jsonCompletion({ ...base, reasoning, fetcher: async (_url, init) => {
+      const body = JSON.parse(String(init!.body));
+      assert.equal(body.thinking.type, reasoning === "none" ? "disabled" : "enabled");
+      assert.equal(body.reasoning_effort, reasoning === "none" ? undefined : "low");
+      assert.equal(body.temperature, reasoning === "none" ? 0.2 : undefined);
+      assert.equal(body.max_tokens, reasoning === "none" ? 80 : 8272);
+      return Response.json({ choices: [{ finish_reason: "stop", message: {
+        content: '{"chosen":1}', reasoning_content: secret.repeat(reasoning === "none" ? 1 : 2200),
+      } }] });
+    } });
+    assert.deepEqual(result, { chosen: 1 });
+    assert.ok(!JSON.stringify(result).includes(secret));
+  }
+  for (const response of [
+    () => envelope("x".repeat(20001)),
+    () => new Response("x".repeat(256001)),
+    () => Response.json({ choices: [{ finish_reason: "stop", message: { content: null, reasoning_content: '{"chosen":1}' } }] }),
+  ]) await assert.rejects(jsonCompletion({ ...base, reasoning: "low", fetcher: async () => response() }), failure("invalid-response"));
+  await jsonCompletion({ ...base, maxTokens: 6400, reasoning: "low", fetcher: async (_url, init) => {
+    assert.equal(JSON.parse(String(init!.body)).max_tokens, 12800, "The initial combined budget also respects the hard ceiling");
+    return envelope("{}");
+  } });
+});
+
+test("thinking retries increase the combined budget without exceeding the attempt or token ceiling", async () => {
+  const tokens: number[] = [];
+  await assert.rejects(jsonCompletion({ model: "fixture", apiKey: secret, messages: [], maxTokens: 2200,
+    reasoning: "low", signal: new AbortController().signal, wait: async () => {}, fetcher: async (_url, init) => {
+      const body = JSON.parse(String(init!.body)); tokens.push(body.max_tokens);
+      assert.ok(!JSON.stringify(body).includes(secret));
+      return envelope("", "length");
+    } }), error => { assert.ok(error instanceof AIRequestError); assert.equal(error.attempts, 4); return failure("output-truncated")(error); });
+  assert.deepEqual(tokens, [10392, 12800, 12800, 12800]);
+});
+
+test("semantic decisions can be compared in fast mode without changing the model", () => {
+  const previous = process.env.DEEPSEEK_THINKING;
+  try {
+    delete process.env.DEEPSEEK_THINKING; assert.equal(semanticReasoning(), "low");
+    process.env.DEEPSEEK_THINKING = "false"; assert.equal(semanticReasoning(), "none");
+  } finally {
+    if (previous === undefined) delete process.env.DEEPSEEK_THINKING; else process.env.DEEPSEEK_THINKING = previous;
+  }
+});
 
 test("HTTP failures expose fixed categories and discard private response bodies without retrying", async () => {
   for (const [status, code, retryable] of [

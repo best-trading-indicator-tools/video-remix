@@ -7,6 +7,7 @@ import { candidateFromUnits, createCandidateNoveltyCheck, spokenUnits } from "./
 import { paths } from "./config.js";
 import type { EditorialPlan } from "./diversity.js";
 import { generateCreativeJSON, intelligenceAvailable, type Candidate } from "./intelligence.js";
+import { semanticReasoning } from "./ai-json.js";
 import { editorialModel } from "./editorial-provider.js";
 
 const VERSION = 1;
@@ -104,7 +105,7 @@ export interface SourceIdeas {
   noCompleteIdea: boolean;
 }
 
-/** At most three DeepSeek calls and 120 seconds per source; the model chooses source IDs, never timestamps. */
+/** At most three sections within 120 seconds, including retries; the model chooses source IDs, never timestamps. */
 export async function discoverSourceIdeas({ transcript, sourceDuration, targetDuration, signal,
   cacheDir = paths.analysis }: {
   transcript: Transcript; sourceDuration: number; targetDuration: number; signal: AbortSignal; cacheDir?: string;
@@ -120,7 +121,8 @@ export async function discoverSourceIdeas({ transcript, sourceDuration, targetDu
     return fallback();
   }
   signal.throwIfAborted();
-  const identity = createHash("sha256").update(JSON.stringify({ version: VERSION, provider: "deepseek", model: editorialModel(),
+  const reasoning = semanticReasoning();
+  const identity = createHash("sha256").update(JSON.stringify({ version: VERSION, provider: "deepseek", model: editorialModel(), reasoning,
     language: transcript.language, sourceDuration, targetDuration, units: context.units })).digest("hex");
   const cachePath = path.join(cacheDir, `source-ideas-${identity}.json`);
   let responses: IdeaResponse[] | undefined;
@@ -138,7 +140,7 @@ export async function discoverSourceIdeas({ transcript, sourceDuration, targetDu
       for (const [sectionIndex, batch] of context.batches.entries()) {
         budget.throwIfAborted();
         const raw = await generateCreativeJSON({ signal: budget, schema: responseSchema, maxTokens: 1400,
-          timeoutMs: 45000, temperature: 0.1,
+          timeoutMs: 45000, temperature: 0.1, reasoning,
           prompt: {
             task: "Find complete, self-contained short-video ideas in this source section. Return only source unit ranges and evidence anchors, not rewritten speech.",
             instructions: [

@@ -1,0 +1,1560 @@
+{
+  "date": "2026-09-16",
+  "model": "deepseek-flash",
+  "scope": "Text and plan A/B diagnostics, not rendered visual quality or human acceptance. No workspace writes or renders.",
+  "dataset": {
+    "authoredEditorialCases": 6,
+    "authoredSelectionCases": 1,
+    "authoredBrollDescriptionCases": 4,
+    "savedEdits": 7,
+    "distinctSavedTranscriptSnapshots": 2,
+    "currentlyImportedVideos": 1
+  },
+  "decision": "Enable low thinking effort for semantic decisions. Keep routine edits, search queries, frame descriptions and packaging in fast mode. Initial thinking reserve increased from 4096 to 8192 within the same 12800-token ceiling after avoidable truncation retries.",
+  "limitations": [
+    "One run per configuration; not a statistically powered quality comparison.",
+    "Seven saved exports are not seven independent videos and have no independent correctness labels.",
+    "Authored B-roll descriptions do not measure actual visual recognition, motion, sharpness or cropping.",
+    "Some saved-edit findings differ between runs; validated quotations do not prove all model judgments correct.",
+    "Runs were sequential per process; baseline and thinking processes overlapped. Provider latency and prompt caching vary.",
+    "No 20-30-video representative acceptance set was available.",
+    "Costs are token-based estimates, not account billing receipts."
+  ],
+  "pricing": {
+    "source": "https://api-docs.deepseek.com/quick_start/pricing/",
+    "checked": "2026-09-16",
+    "usdPerMillionOffPeak": {
+      "inputCacheMiss": 0.15,
+      "inputCacheHit": 0.003,
+      "output": 0.6
+    },
+    "peakMultiplier": 2
+  },
+  "comparison": {
+    "fast": {
+      "cases": 19,
+      "providerAttempts": 24,
+      "authoredExpectedResults": {
+        "matched": 11,
+        "evaluated": 11
+      },
+      "editorialChecks": {
+        "complete": 12,
+        "total": 13,
+        "savedEditsComplete": 6,
+        "savedEdits": 7,
+        "medianSeconds": 2.84,
+        "maxSeconds": 13.78
+      },
+      "outputTokens": 10640,
+      "estimatedCostUSD": {
+        "offPeak": 0.00875,
+        "peak": 0.0175,
+        "attemptsWithoutUsage": 0
+      },
+      "discovery": {
+        "mode": "fast",
+        "id": "complete-idea-discovery",
+        "task": "discovery",
+        "analyzed": false,
+        "fullCoverage": true,
+        "anchoredCandidates": 0,
+        "candidateWindows": [],
+        "seconds": 1.05,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 1.05,
+            "status": 200,
+            "input": 1042,
+            "cacheHit": 896,
+            "output": 79
+          }
+        ]
+      }
+    },
+    "thinkingInitial4096Reserve": {
+      "cases": 19,
+      "providerAttempts": 23,
+      "authoredExpectedResults": {
+        "matched": 11,
+        "evaluated": 11
+      },
+      "editorialChecks": {
+        "complete": 13,
+        "total": 13,
+        "savedEditsComplete": 7,
+        "savedEdits": 7,
+        "medianSeconds": 15.53,
+        "maxSeconds": 63.37
+      },
+      "outputTokens": 74384,
+      "estimatedCostUSD": {
+        "offPeak": 0.04896,
+        "peak": 0.09791,
+        "attemptsWithoutUsage": 0
+      },
+      "discovery": {
+        "mode": "thinking",
+        "id": "complete-idea-discovery",
+        "task": "discovery",
+        "analyzed": true,
+        "fullCoverage": true,
+        "anchoredCandidates": 1,
+        "candidateWindows": [
+          {
+            "start": 8.48,
+            "end": 32.32
+          }
+        ],
+        "seconds": 11.15,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 11.14,
+            "status": 200,
+            "input": 1067,
+            "cacheHit": 0,
+            "output": 2397,
+            "reasoning": 2325
+          }
+        ]
+      }
+    },
+    "thinkingFinal8192Reserve": {
+      "cases": 19,
+      "providerAttempts": 20,
+      "authoredExpectedResults": {
+        "matched": 11,
+        "evaluated": 11
+      },
+      "editorialChecks": {
+        "complete": 13,
+        "total": 13,
+        "savedEditsComplete": 7,
+        "savedEdits": 7,
+        "medianSeconds": 21.24,
+        "maxSeconds": 34.83
+      },
+      "outputTokens": 58886,
+      "estimatedCostUSD": {
+        "offPeak": 0.036,
+        "peak": 0.072,
+        "attemptsWithoutUsage": 0
+      },
+      "discovery": {
+        "mode": "thinking",
+        "id": "complete-idea-discovery",
+        "task": "discovery",
+        "analyzed": true,
+        "fullCoverage": true,
+        "anchoredCandidates": 1,
+        "candidateWindows": [
+          {
+            "start": 8.48,
+            "end": 32.32
+          }
+        ],
+        "seconds": 7.65,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 7.64,
+            "status": 200,
+            "input": 1067,
+            "cacheHit": 896,
+            "output": 1489,
+            "reasoning": 1420
+          }
+        ]
+      }
+    }
+  },
+  "results": {
+    "fast": [
+      {
+        "mode": "fast",
+        "id": "complete-camera-advice",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 2.77,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.75,
+            "status": 200,
+            "input": 2444,
+            "cacheHit": 896,
+            "output": 507
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "omitted-caveat-universal-hook",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "hook-supported",
+          "meaning-preserved"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "hook-supported",
+          "meaning-preserved"
+        ],
+        "matched": true,
+        "seconds": 2.56,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.55,
+            "status": 200,
+            "input": 2447,
+            "cacheHit": 896,
+            "output": 461
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "retained-paper-qualification-captions",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 2.69,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.69,
+            "status": 200,
+            "input": 2846,
+            "cacheHit": 896,
+            "output": 635
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "removed-archive-negation",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "meaning-preserved"
+        ],
+        "matched": true,
+        "seconds": 2.4,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.4,
+            "status": 200,
+            "input": 2502,
+            "cacheHit": 896,
+            "output": 443
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "heldout-seedling-topic",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 2.62,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.62,
+            "status": 200,
+            "input": 2450,
+            "cacheHit": 896,
+            "output": 488
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "heldout-unsupported-daily-instruction",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "hook-supported"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "hook-supported"
+        ],
+        "matched": true,
+        "seconds": 2.84,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.84,
+            "status": 200,
+            "input": 2450,
+            "cacheHit": 896,
+            "output": 671
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-f9f4af8b836b",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "opening-context",
+          "ending-complete",
+          "meaning-preserved"
+        ],
+        "seconds": 3.58,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 3.58,
+            "status": 200,
+            "input": 2515,
+            "cacheHit": 2304,
+            "output": 727
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-a2a17945a748",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "opening-context",
+          "meaning-preserved"
+        ],
+        "seconds": 3.39,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 3.39,
+            "status": 200,
+            "input": 2736,
+            "cacheHit": 2560,
+            "output": 608
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-8b29f3f42163",
+        "task": "editorial",
+        "status": "unavailable",
+        "semanticCoverage": "unavailable",
+        "detected": [],
+        "failure": "invalid-response",
+        "seconds": 13.78,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.96,
+            "status": 200,
+            "input": 2557,
+            "cacheHit": 896,
+            "output": 547
+          },
+          {
+            "mode": "disabled",
+            "seconds": 2.5,
+            "status": 200,
+            "input": 2596,
+            "cacheHit": 2432,
+            "output": 534
+          },
+          {
+            "mode": "disabled",
+            "seconds": 2.64,
+            "status": 200,
+            "input": 2596,
+            "cacheHit": 2432,
+            "output": 550
+          },
+          {
+            "mode": "disabled",
+            "seconds": 2.54,
+            "status": 200,
+            "input": 2596,
+            "cacheHit": 2432,
+            "output": 536
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-87f441bedae4",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 5.97,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.75,
+            "status": 200,
+            "input": 2867,
+            "cacheHit": 2688,
+            "output": 558
+          },
+          {
+            "mode": "disabled",
+            "seconds": 2.72,
+            "status": 200,
+            "input": 2906,
+            "cacheHit": 2688,
+            "output": 555
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-87a3386387de",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 2.84,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.84,
+            "status": 200,
+            "input": 2490,
+            "cacheHit": 2304,
+            "output": 743
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-064dd7449d75",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 4.46,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 4.46,
+            "status": 200,
+            "input": 4410,
+            "cacheHit": 4224,
+            "output": 1162
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "saved-42147b3435aa",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 2.78,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 2.78,
+            "status": 200,
+            "input": 2657,
+            "cacheHit": 2432,
+            "output": 685
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "authored-complete-excerpt-selection",
+        "task": "selection",
+        "matched": true,
+        "selectedIndex": 1,
+        "packaged": true,
+        "seconds": 2.05,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 1.05,
+            "status": 200,
+            "input": 420,
+            "cacheHit": 0,
+            "output": 6
+          },
+          {
+            "mode": "disabled",
+            "seconds": 0.99,
+            "status": 200,
+            "input": 417,
+            "cacheHit": 0,
+            "output": 29
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "complete-idea-discovery",
+        "task": "discovery",
+        "analyzed": false,
+        "fullCoverage": true,
+        "anchoredCandidates": 0,
+        "candidateWindows": [],
+        "seconds": 1.05,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 1.05,
+            "status": 200,
+            "input": 1042,
+            "cacheHit": 896,
+            "output": 79
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "authored-broll-morning-text-not-wildlife",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [
+          "clip-2"
+        ],
+        "expected": [
+          "clip-2"
+        ],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.14,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 1.13,
+            "status": 200,
+            "input": 530,
+            "cacheHit": 256,
+            "output": 54
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "authored-broll-no-suitable-communication-shot",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [],
+        "expected": [],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 0.95,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 0.95,
+            "status": 200,
+            "input": 507,
+            "cacheHit": 256,
+            "output": 5
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "authored-broll-switch-off-after-work",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [
+          "clip-2"
+        ],
+        "expected": [
+          "clip-2"
+        ],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.16,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 1.16,
+            "status": 200,
+            "input": 523,
+            "cacheHit": 384,
+            "output": 52
+          }
+        ]
+      },
+      {
+        "mode": "fast",
+        "id": "authored-broll-search-intent-is-not-observation",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [],
+        "expected": [],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 0.8,
+        "calls": [
+          {
+            "mode": "disabled",
+            "seconds": 0.8,
+            "status": 200,
+            "input": 530,
+            "cacheHit": 384,
+            "output": 5
+          }
+        ]
+      }
+    ],
+    "thinkingInitial4096Reserve": [
+      {
+        "mode": "thinking",
+        "id": "complete-camera-advice",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 11.03,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 11.01,
+            "status": 200,
+            "input": 2469,
+            "cacheHit": 0,
+            "output": 2319,
+            "reasoning": 1818
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "omitted-caveat-universal-hook",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "hook-supported",
+          "meaning-preserved"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "hook-supported",
+          "meaning-preserved"
+        ],
+        "matched": true,
+        "seconds": 11.89,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 11.89,
+            "status": 200,
+            "input": 2472,
+            "cacheHit": 896,
+            "output": 2651,
+            "reasoning": 2213
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "retained-paper-qualification-captions",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 8.91,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 8.91,
+            "status": 200,
+            "input": 2871,
+            "cacheHit": 896,
+            "output": 1926,
+            "reasoning": 1281
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "removed-archive-negation",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "meaning-preserved"
+        ],
+        "matched": true,
+        "seconds": 12.17,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 12.17,
+            "status": 200,
+            "input": 2527,
+            "cacheHit": 896,
+            "output": 2793,
+            "reasoning": 2362
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "heldout-seedling-topic",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 12.47,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 12.47,
+            "status": 200,
+            "input": 2475,
+            "cacheHit": 896,
+            "output": 2729,
+            "reasoning": 2237
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "heldout-unsupported-daily-instruction",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "hook-supported"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "hook-supported"
+        ],
+        "matched": true,
+        "seconds": 10.76,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 10.76,
+            "status": 200,
+            "input": 2475,
+            "cacheHit": 896,
+            "output": 2223,
+            "reasoning": 1708
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-f9f4af8b836b",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 63.37,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 29.4,
+            "status": 200,
+            "input": 2540,
+            "cacheHit": 896,
+            "output": 6296,
+            "reasoning": 6296
+          },
+          {
+            "mode": "enabled",
+            "seconds": 33.43,
+            "status": 200,
+            "input": 2565,
+            "cacheHit": 2304,
+            "output": 7479,
+            "reasoning": 6861
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-a2a17945a748",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "opening-context",
+          "meaning-preserved"
+        ],
+        "seconds": 20.76,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 20.76,
+            "status": 200,
+            "input": 2761,
+            "cacheHit": 896,
+            "output": 4586,
+            "reasoning": 3976
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-8b29f3f42163",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 45.63,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 27.79,
+            "status": 200,
+            "input": 2582,
+            "cacheHit": 896,
+            "output": 6296,
+            "reasoning": 6020
+          },
+          {
+            "mode": "enabled",
+            "seconds": 17.37,
+            "status": 200,
+            "input": 2607,
+            "cacheHit": 2432,
+            "output": 3928,
+            "reasoning": 3416
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-87f441bedae4",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 15.53,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 15.53,
+            "status": 200,
+            "input": 2892,
+            "cacheHit": 896,
+            "output": 3629,
+            "reasoning": 2992
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-87a3386387de",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 59.76,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 27.59,
+            "status": 200,
+            "input": 2515,
+            "cacheHit": 896,
+            "output": 6296,
+            "reasoning": 6296
+          },
+          {
+            "mode": "enabled",
+            "seconds": 31.62,
+            "status": 200,
+            "input": 2540,
+            "cacheHit": 2304,
+            "output": 7170,
+            "reasoning": 6686
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-064dd7449d75",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 20.09,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 20.08,
+            "status": 200,
+            "input": 4435,
+            "cacheHit": 896,
+            "output": 4544,
+            "reasoning": 3643
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-42147b3435aa",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 25.9,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 25.9,
+            "status": 200,
+            "input": 2682,
+            "cacheHit": 896,
+            "output": 5793,
+            "reasoning": 5140
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-complete-excerpt-selection",
+        "task": "selection",
+        "matched": true,
+        "selectedIndex": 1,
+        "packaged": true,
+        "seconds": 2.77,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.55,
+            "status": 200,
+            "input": 445,
+            "cacheHit": 0,
+            "output": 91,
+            "reasoning": 83
+          },
+          {
+            "mode": "disabled",
+            "seconds": 1.22,
+            "status": 200,
+            "input": 417,
+            "cacheHit": 256,
+            "output": 30
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "complete-idea-discovery",
+        "task": "discovery",
+        "analyzed": true,
+        "fullCoverage": true,
+        "anchoredCandidates": 1,
+        "candidateWindows": [
+          {
+            "start": 8.48,
+            "end": 32.32
+          }
+        ],
+        "seconds": 11.15,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 11.14,
+            "status": 200,
+            "input": 1067,
+            "cacheHit": 0,
+            "output": 2397,
+            "reasoning": 2325
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-morning-text-not-wildlife",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [
+          "clip-2"
+        ],
+        "expected": [
+          "clip-2"
+        ],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 2.47,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 2.47,
+            "status": 200,
+            "input": 555,
+            "cacheHit": 0,
+            "output": 218,
+            "reasoning": 167
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-no-suitable-communication-shot",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [],
+        "expected": [],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.34,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.34,
+            "status": 200,
+            "input": 532,
+            "cacheHit": 384,
+            "output": 61,
+            "reasoning": 55
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-switch-off-after-work",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [
+          "clip-2"
+        ],
+        "expected": [
+          "clip-2"
+        ],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 5.31,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 5.31,
+            "status": 200,
+            "input": 548,
+            "cacheHit": 256,
+            "output": 800,
+            "reasoning": 753
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-search-intent-is-not-observation",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [],
+        "expected": [],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.49,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.49,
+            "status": 200,
+            "input": 555,
+            "cacheHit": 384,
+            "output": 129,
+            "reasoning": 123
+          }
+        ]
+      }
+    ],
+    "thinkingFinal8192Reserve": [
+      {
+        "mode": "thinking",
+        "id": "complete-camera-advice",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 8.02,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 8,
+            "status": 200,
+            "input": 2469,
+            "cacheHit": 2304,
+            "output": 1653,
+            "reasoning": 1145
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "omitted-caveat-universal-hook",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "hook-supported",
+          "meaning-preserved"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "hook-supported",
+          "meaning-preserved"
+        ],
+        "matched": true,
+        "seconds": 21.24,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 21.24,
+            "status": 200,
+            "input": 2472,
+            "cacheHit": 2304,
+            "output": 4396,
+            "reasoning": 3988
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "retained-paper-qualification-captions",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 16.15,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 16.15,
+            "status": 200,
+            "input": 2871,
+            "cacheHit": 2688,
+            "output": 3643,
+            "reasoning": 3012
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "removed-archive-negation",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "meaning-preserved"
+        ],
+        "matched": true,
+        "seconds": 15.53,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 15.52,
+            "status": 200,
+            "input": 2527,
+            "cacheHit": 2304,
+            "output": 3436,
+            "reasoning": 2955
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "heldout-seedling-topic",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "expected": "pass",
+        "expectedIssues": [],
+        "matched": true,
+        "seconds": 13.55,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 13.54,
+            "status": 200,
+            "input": 2475,
+            "cacheHit": 2304,
+            "output": 2836,
+            "reasoning": 2324
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "heldout-unsupported-daily-instruction",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "hook-supported"
+        ],
+        "expected": "needs-review",
+        "expectedIssues": [
+          "hook-supported"
+        ],
+        "matched": true,
+        "seconds": 13.21,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 13.2,
+            "status": 200,
+            "input": 2475,
+            "cacheHit": 2304,
+            "output": 2731,
+            "reasoning": 2227
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-f9f4af8b836b",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "ending-complete",
+          "meaning-preserved"
+        ],
+        "seconds": 34.83,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 34.83,
+            "status": 200,
+            "input": 2540,
+            "cacheHit": 2304,
+            "output": 7341,
+            "reasoning": 6644
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-a2a17945a748",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "opening-context"
+        ],
+        "seconds": 29.42,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 29.41,
+            "status": 200,
+            "input": 2761,
+            "cacheHit": 2560,
+            "output": 6272,
+            "reasoning": 5739
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-8b29f3f42163",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 24.4,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 24.4,
+            "status": 200,
+            "input": 2582,
+            "cacheHit": 2432,
+            "output": 5629,
+            "reasoning": 5082
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-87f441bedae4",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 11.91,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 11.91,
+            "status": 200,
+            "input": 2892,
+            "cacheHit": 2688,
+            "output": 2667,
+            "reasoning": 2193
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-87a3386387de",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 25.34,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 25.34,
+            "status": 200,
+            "input": 2515,
+            "cacheHit": 2304,
+            "output": 5814,
+            "reasoning": 5286
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-064dd7449d75",
+        "task": "editorial",
+        "status": "pass",
+        "semanticCoverage": "complete",
+        "detected": [],
+        "seconds": 23.51,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 23.5,
+            "status": 200,
+            "input": 4435,
+            "cacheHit": 4224,
+            "output": 5384,
+            "reasoning": 4543
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "saved-42147b3435aa",
+        "task": "editorial",
+        "status": "needs-review",
+        "semanticCoverage": "complete",
+        "detected": [
+          "meaning-preserved"
+        ],
+        "seconds": 22.67,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 22.67,
+            "status": 200,
+            "input": 2682,
+            "cacheHit": 2432,
+            "output": 4921,
+            "reasoning": 4346
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-complete-excerpt-selection",
+        "task": "selection",
+        "matched": true,
+        "selectedIndex": 1,
+        "packaged": true,
+        "seconds": 2.72,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.25,
+            "status": 200,
+            "input": 445,
+            "cacheHit": 256,
+            "output": 97,
+            "reasoning": 90
+          },
+          {
+            "mode": "disabled",
+            "seconds": 1.47,
+            "status": 200,
+            "input": 417,
+            "cacheHit": 256,
+            "output": 28
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "complete-idea-discovery",
+        "task": "discovery",
+        "analyzed": true,
+        "fullCoverage": true,
+        "anchoredCandidates": 1,
+        "candidateWindows": [
+          {
+            "start": 8.48,
+            "end": 32.32
+          }
+        ],
+        "seconds": 7.65,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 7.64,
+            "status": 200,
+            "input": 1067,
+            "cacheHit": 896,
+            "output": 1489,
+            "reasoning": 1420
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-morning-text-not-wildlife",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [
+          "clip-2"
+        ],
+        "expected": [
+          "clip-2"
+        ],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.29,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.29,
+            "status": 200,
+            "input": 555,
+            "cacheHit": 384,
+            "output": 154,
+            "reasoning": 100
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-no-suitable-communication-shot",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [],
+        "expected": [],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.13,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.13,
+            "status": 200,
+            "input": 532,
+            "cacheHit": 384,
+            "output": 71,
+            "reasoning": 65
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-switch-off-after-work",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [
+          "clip-2"
+        ],
+        "expected": [
+          "clip-2"
+        ],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 2.01,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 2.01,
+            "status": 200,
+            "input": 548,
+            "cacheHit": 384,
+            "output": 247,
+            "reasoning": 196
+          }
+        ]
+      },
+      {
+        "mode": "thinking",
+        "id": "authored-broll-search-intent-is-not-observation",
+        "task": "broll-semantic-matching",
+        "matched": true,
+        "selected": [],
+        "expected": [],
+        "limitation": "Authored visual descriptions; does not evaluate frame recognition or crop quality.",
+        "seconds": 1.34,
+        "calls": [
+          {
+            "mode": "enabled",
+            "seconds": 1.34,
+            "status": 200,
+            "input": 555,
+            "cacheHit": 384,
+            "output": 77,
+            "reasoning": 71
+          }
+        ]
+      }
+    ]
+  }
+}

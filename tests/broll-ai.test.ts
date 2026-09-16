@@ -160,9 +160,9 @@ test(
             const body = requestBody(init);
             bodies.push(body);
             assert.equal(body.model, "deepseek-flash");
-            assert.deepEqual(body.thinking, { type: "disabled" });
+            assert.deepEqual(body.thinking, { type: vision(body) ? "disabled" : "enabled" });
             assert.deepEqual(body.response_format, { type: "json_object" });
-            assert.ok(body.max_tokens <= 1400);
+            assert.ok(body.max_tokens <= (vision(body) ? 1400 : 1400 + 8192));
             assert.ok(
               !JSON.stringify(body).includes(directory),
               "No local paths sent to provider",
@@ -210,7 +210,7 @@ test(
               return success(description);
             }
             const prompt = JSON.parse(body.messages[1]!.content);
-            assert.equal(body.temperature, 0, "Final matching uses the least variable sampling setting");
+            assert.equal(body.temperature, undefined, "Thinking mode does not accept temperature sampling");
             assert.equal(prompt.clips[0].assetId, "clip-1");
             assert.ok(!JSON.stringify(body).includes(asset.id), "Random local download IDs do not reach the final matcher");
             assert.match(prompt.clips[0].description, /woodland/);
@@ -375,7 +375,7 @@ test(
               return success(description);
             }
             finalBodies.push(body);
-            assert.equal(body.temperature, 0);
+            assert.equal(body.temperature, undefined);
             const prompt = JSON.parse(body.messages[1]!.content);
             assert.deepEqual(prompt.clips.map((clip: any) => clip.assetId), ["clip-1", "clip-2", "clip-3"]);
             assert.deepEqual(prompt.clips.map((clip: any) => clip.searchIntent.visual),
@@ -808,7 +808,7 @@ test(
             assert.ok(body.messages[0]!.content.includes(`at least ${prompt.targetCount >= 6 ? 0.6 : 1.2} seconds between shots`),
               "The requested spacing must match the final timeline scheduler");
             assert.match(body.messages[0]!.content, /Do not force matches/i);
-            assert.ok(body.max_tokens <= 2200);
+            assert.ok(body.max_tokens <= 2200 + 8192);
             return success({ matches: prompt.clips.map((clip: { assetId: string }, index: number) => ({
               momentIndex: index,
               assetId: clip.assetId,

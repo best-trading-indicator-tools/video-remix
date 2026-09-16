@@ -5,6 +5,9 @@ const throwIfAborted = (signal: AbortSignal) => signal.throwIfAborted();
 
 export const AI_MAX_ATTEMPTS = 4;
 export const AI_REQUEST_BUDGET_MS = 120_000;
+export type AIReasoning = "none" | "low";
+/** Decision-heavy steps opt in. This private switch also supports reproducible A/B runs. */
+export const semanticReasoning = (): AIReasoning => process.env.DEEPSEEK_THINKING === "false" ? "none" : "low";
 interface CompletionOptions {
   model: string;
   apiKey: string;
@@ -12,6 +15,7 @@ interface CompletionOptions {
   signal: AbortSignal;
   maxTokens: number;
   temperature?: number;
+  reasoning?: AIReasoning;
   fetcher?: typeof fetch;
   /** Validation belongs inside the same retry budget as transport and JSON parsing. */
   validate?: (value: unknown) => unknown;
@@ -29,7 +33,7 @@ const retryInstruction = (code: AIRequestError["code"]) => code === "output-trun
 
 /** One retry owner for transport, JSON, schema and evidence; caller cancellation always wins. */
 export async function jsonCompletion(options: CompletionOptions): Promise<unknown> {
-  const { signal, temperature, maxTokens, maxAttempts = AI_MAX_ATTEMPTS, timeoutMs = AI_REQUEST_BUDGET_MS,
+  const { signal, temperature, maxTokens, reasoning = "none", maxAttempts = AI_MAX_ATTEMPTS, timeoutMs = AI_REQUEST_BUDGET_MS,
     wait = async (ms, budget) => { await delay(ms, undefined, { signal: budget }); } } = options;
   signal.throwIfAborted();
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > AI_MAX_ATTEMPTS ||
@@ -37,10 +41,14 @@ export async function jsonCompletion(options: CompletionOptions): Promise<unknow
     throw new Error("Invalid provider request budget");
   if (temperature !== undefined && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2))
     throw new Error("Invalid provider temperature");
+  if (reasoning !== "none" && reasoning !== "low") throw new Error("Invalid provider reasoning mode");
   const budgetMs = Math.min(AI_REQUEST_BUDGET_MS, Math.floor(timeoutMs));
   const deadline = Date.now() + budgetMs;
   const budget = AbortSignal.any([signal, AbortSignal.timeout(budgetMs)]);
-  let tokens = maxTokens;
+  // max_tokens includes both reasoning and final JSON. Tiny selection replies still
+  // need room to think; retries share the existing time/attempt budget.
+  const tokenLimit = reasoning === "none" ? 6400 : 12800;
+  let tokens = reasoning === "none" ? maxTokens : Math.min(tokenLimit, maxTokens + 8192);
   let correction: string | undefined;
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
@@ -58,7 +66,7 @@ export async function jsonCompletion(options: CompletionOptions): Promise<unknow
       if (budget.aborted || !failure.retryable || attempt === maxAttempts) throw failure;
       if (["output-truncated", "invalid-response", "invalid-schema", "invalid-evidence"].includes(failure.code))
         correction = retryInstruction(failure.code);
-      if (failure.code === "output-truncated") tokens = Math.min(6400, tokens * 2);
+      if (failure.code === "output-truncated") tokens = Math.min(tokenLimit, tokens * 2);
       const backoff = 400 * 2 ** (attempt - 1) + Math.floor(Math.random() * 200);
       const waitMs = Math.max(backoff, failure.retryAfterMs ?? 0);
       // Do not hammer a provider whose Retry-After extends beyond this request's budget.
@@ -82,6 +90,7 @@ async function completionAttempt({
   signal,
   maxTokens,
   temperature,
+  reasoning = "none",
   fetcher = fetch,
 }: CompletionOptions): Promise<unknown> {
   throwIfAborted(signal);
@@ -99,9 +108,10 @@ async function completionAttempt({
       model,
       messages,
       response_format: { type: "json_object" },
-      thinking: { type: "disabled" },
+      thinking: { type: reasoning === "none" ? "disabled" : "enabled" },
+      ...(reasoning !== "none" ? { reasoning_effort: reasoning } : {}),
       max_tokens: maxTokens,
-      ...(temperature !== undefined ? { temperature } : {}),
+      ...(reasoning === "none" && temperature !== undefined ? { temperature } : {}),
     }),
     signal: requestSignal,
     redirect: "error",
@@ -138,7 +148,7 @@ async function completionAttempt({
       const { done, value } = await reader.read();
       if (done) break;
       length += value.byteLength;
-      if (length > 64_000) throw new AIRequestError("invalid-response");
+      if (length > (reasoning === "none" ? 64_000 : 256_000)) throw new AIRequestError("invalid-response");
       chunks.push(value);
     }
   } catch (error) {
@@ -171,6 +181,7 @@ async function completionAttempt({
   const choice = parsed.data.choices[0]!;
   if (choice.finish_reason === "length") throw new AIRequestError("output-truncated");
   if (choice.finish_reason !== "stop") throw new AIRequestError("invalid-response");
+  // Discard reasoning_content; only bounded final content enters validation or storage.
   const message = z.object({ content: z.string().min(1).max(20_000) }).safeParse(choice.message);
   if (!message.success) throw new AIRequestError("invalid-response");
   // Accept harmless whole-response Markdown wrapping, never manufacture missing JSON or evidence.

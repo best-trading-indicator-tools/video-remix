@@ -11,7 +11,7 @@ const candidates: Candidate[] = [
 type Reply = { value?: unknown; status?: number; raw?: string; fail?: Error; abort?: AbortController };
 type RequestBody = {
   prompt: string; messages: { role: string; content: string }[]; format: { properties: Record<string, unknown> };
-  temperature: number; model: string;
+  temperature?: number; model: string; thinking: { type: string }; reasoning_effort?: string; max_tokens: number;
 };
 const packaging = (hook: string, narration = "") => ({ hook, callouts: [], narration });
 
@@ -54,6 +54,12 @@ test("creative editing separates candidate selection from grounded excerpt packa
       assert.equal(result?.windowIndex, 1);
       assert.equal(result?.hookRewritten, true);
       assert.equal(requests.length, 2);
+      assert.deepEqual(requests[0]!.thinking, { type: "enabled" });
+      assert.equal(requests[0]!.reasoning_effort, "low");
+      assert.equal(requests[0]!.max_tokens, 80 + 8192);
+      assert.equal(requests[0]!.temperature, undefined);
+      assert.deepEqual(requests[1]!.thinking, { type: "disabled" });
+      assert.equal(requests[1]!.reasoning_effort, undefined);
       const selection = JSON.parse(requests[0]!.prompt);
       const headline = JSON.parse(requests[1]!.prompt);
       assert.deepEqual(selection.candidates.map((item: { transcript: string }) => item.transcript), candidates.map(item => item.text));

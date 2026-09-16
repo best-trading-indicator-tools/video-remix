@@ -320,9 +320,10 @@ test("DeepSeek reviewer uses the fixed endpoint and rejects oversized or unfinis
       assert.equal(String(input), "https://api.deepseek.com/chat/completions");
       const { body, payload, system } = providerRequest(init!);
       assert.equal(body.model, editorialModel());
-      assert.equal(body.temperature, 0); assert.ok(body.max_tokens <= 2200);
+      assert.equal(body.temperature, undefined); assert.equal(body.max_tokens, 2200 + 8192);
       assert.deepEqual(body.response_format, { type: "json_object" });
-      assert.deepEqual(body.thinking, { type: "disabled" });
+      assert.deepEqual(body.thinking, { type: "enabled" });
+      assert.equal(body.reasoning_effort, "low");
       assert.equal(init!.redirect, "error");
       assert.equal(new Headers(init!.headers).get("authorization"), "Bearer test-editorial-key");
       assert.ok(!system.includes(request.excerpts[0]!.quote));

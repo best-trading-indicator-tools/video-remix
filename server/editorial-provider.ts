@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { config } from "./config.js";
-import { AI_REQUEST_BUDGET_MS, jsonCompletion } from "./ai-json.js";
+import { AI_REQUEST_BUDGET_MS, jsonCompletion, type AIReasoning } from "./ai-json.js";
 import { AIRequestError } from "./ai-errors.js";
 
 /** Reuse the same private DeepSeek configuration as prompt editing and stock search. */
@@ -11,9 +11,10 @@ export const editorialAIConfigured = () => editorialAIEnabled() && Boolean(proce
 
 /** Text-only, bounded DeepSeek request. Provider failures never switch to another model. */
 export async function generateEditorialJSON({ prompt, schema, signal, system, maxTokens = 1800,
-  temperature = 0, timeoutMs = AI_REQUEST_BUDGET_MS, validate }: {
+  temperature = 0, timeoutMs = AI_REQUEST_BUDGET_MS, validate, reasoning }: {
   prompt: unknown; schema: z.ZodType; signal: AbortSignal; system?: string;
   maxTokens?: number; temperature?: number; timeoutMs?: number;
+  reasoning?: AIReasoning;
   validate?: (value: unknown) => unknown;
 }): Promise<unknown> {
   signal.throwIfAborted();
@@ -27,7 +28,7 @@ export async function generateEditorialJSON({ prompt, schema, signal, system, ma
   if (content.length > 100_000 || (system?.length ?? 0) > 12_000) throw new Error("The editing request exceeds its limit.");
   try {
     return await jsonCompletion({ model: editorialModel(), apiKey: process.env.DEEPSEEK_API_KEY!.trim(),
-      signal, timeoutMs, maxTokens: Math.min(3200, Math.floor(maxTokens)), temperature,
+      signal, timeoutMs, maxTokens: Math.min(3200, Math.floor(maxTokens)), temperature, reasoning,
       validate: reply => {
         const parsed = schema.safeParse(reply);
         if (!parsed.success) throw new AIRequestError("invalid-schema");

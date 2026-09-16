@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AIRequestError } from "./ai-errors.js";
+import { semanticReasoning } from "./ai-json.js";
 import { SEMANTIC_EDITORIAL_CHECKS, type EditorialReviewer, type EditorialReviewRequest } from "../shared/editorial.js";
 import { editorialAIEnabled, generateEditorialJSON } from "./editorial-provider.js";
 
@@ -73,7 +74,7 @@ export const deepseekEditorialReviewer: EditorialReviewer = async (request, sign
       "captions-supported compares EVERY supplied caption with its corresponding assembled selected speech. Report a particular unsupported pair as captionWords and spokenWords if there is any mismatch; a representative faithful pair is sufficient evidence only after checking the whole list. captionWords must be ONE complete caption from the supplied enum, never concatenated captions or the whole transcript. spokenWords is the short matching portion of its cited selectedEvidence, not the entire speech. Identify any unsupported difference, and use uncertain if you cannot check all supplied captions.",
       "Use pass only for a comparison that establishes the requested textual property, issue for an evidenced difference, and uncertain when the comparison cannot decide. These are textual editing checks, not independent fact checking or judgments about unseen pictures, unheard audio or platform eligibility.",
     ].join("\n\n"),
-    prompt: { ...request, selectedSpeech }, schema, signal, maxTokens: 2200, temperature: 0,
+    prompt: { ...request, selectedSpeech }, schema, signal, maxTokens: 2200, temperature: 0, reasoning: semanticReasoning(),
     validate: reply => {
       const parsed = schema.parse(reply);
       signal.throwIfAborted();

@@ -20,7 +20,8 @@ const options = discoveryRequestSchema.parse({ sourceId: "aacaa565-781a-440c-b0b
 test("discovery reviews sections beyond Auto sampling, caches them, and anchors model ranges", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "clips-test-"));
   let calls = 0;
-  const generate = async ({ prompt }: { prompt: unknown }) => {
+  const generate = async ({ prompt, reasoning }: { prompt: unknown; reasoning?: string }) => {
+    assert.equal(reasoning, "low", "Discovery requests thinking for semantic source selection");
     calls++;
     const units = (prompt as { units: { id: number }[] }).units;
     return { ideas: [{ firstUnit: units[0].id, lastUnit: units[0].id, kind: "statement", summary: "A complete useful idea.", setupUnit: null, payoffUnit: units[0].id, qualificationUnits: [] },

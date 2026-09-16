@@ -65,3 +65,52 @@ Separate judgments: a shot can move correctly but depict the wrong idea; a clean
 After posting, enter the actual platform and observation date alongside available watch time, completion, saves/shares and exact notices. Leave unavailable values blank. Compare similar audiences, duration and observation periods. Keep different editorial approaches labeled so the comparison is meaningful.
 
 There is no predicted originality score. Real platform outcomes and human corrections are separate from these local technical diagnostics.
+
+## 5. Compare DeepSeek fast and thinking modes
+
+This is a **paid, opt-in** API benchmark, separate from CI. Use separate processes
+with the same model and saved workspace:
+
+```sh
+npx tsx benchmarks/thinking-ab.ts --run-deepseek --mode fast
+npx tsx benchmarks/thinking-ab.ts --run-deepseek --mode thinking
+```
+
+The commands use the private `.env`; an isolated checkout can pass `--env /private/path/.env`.
+Add `--workspace /path/to/video-remixer` to both commands to evaluate up to eight
+completed saved edits. That reads SQLite in read-only mode and sends their saved
+transcript/plan evidence through the usual text reviewer. It never changes reports,
+jobs, history, source files or exports. Discovery writes only to a removed temporary cache.
+`--broll-only` runs just the four authored semantic matching cases.
+
+The suite compares six authored editorial cases, complete-excerpt selection,
+source idea discovery and four B-roll meaning cases (including morning texts versus
+wildlife, work versus a literal light switch, and misleading search intent).
+The B-roll cases supply descriptions, not video: they do not test visual recognition,
+motion, sharpness, or portrait cropping. Saved edits have no independent human labels.
+Multiple edits of the same source are not independent representative videos.
+
+Each JSON line records safe case hashes, outcomes, total latency, request count and
+numeric provider usage, including retries. No transcript, API key or reasoning is
+printed. Repeated cases and provider prompt caching can change latency and billed
+input; compare output tokens too. At most 140 provider attempts are permitted per run.
+These small diagnostics measure validity and known expected findings, not creative
+acceptance. Use the real-video review process above before making broader quality claims.
+
+### Recorded comparison — 16 September 2026
+
+The [recorded results](results/deepseek-thinking-2026-09-16.json) include the initial
+thinking budget and the final adjusted budget, all attempts, numeric usage and limitations.
+
+| Measure | Fast | Final low thinking |
+| --- | ---: | ---: |
+| Authored expected outcomes matched | 11/11 | 11/11 |
+| Saved editorial reviews completed | 6/7 | 7/7 |
+| Median editorial review time | 2.84 s | 21.24 s |
+| Valid source idea proposals in the discovery case | 0 | 1 |
+| Provider attempts across 19 cases | 24 | 20 |
+
+Seven saved edits used two transcript snapshots; only one source video was currently
+imported. This sample supports testing the integration and its trade-offs, not a claim
+of better creative judgment across a representative channel. Completed reviews can
+still flag issues. Both modes rejected the authored irrelevant B-roll examples.

@@ -88,7 +88,7 @@ test("DeepSeek idea discovery uses validated source anchors, bounded requests, c
       const prompt = JSON.parse(calls[0]!.prompt);
       assert.equal(prompt.units.length, 6);
       assert.match(calls[0]!.prompt, /qualification|payoff|unanswered question/u);
-      assert.ok(calls[0]!.max_tokens <= 1800);
+      assert.equal(calls[0]!.max_tokens, 1400 + 8192);
       const cached = await discoverSourceIdeas(options("grounded"));
       assert.deepEqual(cached, result);
       assert.equal(calls.length, 1, "The source analysis is reused across edits");
@@ -112,6 +112,25 @@ test("DeepSeek idea discovery uses validated source anchors, bounded requests, c
       assert.equal(calls.length, 5);
       assert.equal(calls.at(-1)!.model, "another-editorial-test-model");
       process.env.DEEPSEEK_TEXT_MODEL = "editorial-test-model";
+    });
+
+    await t.test("fast and thinking discovery never reuse each other's cached recommendations", async () => {
+      const previous = process.env.DEEPSEEK_THINKING;
+      try {
+        calls = []; replies = [{ ideas: [idea()] }, { ideas: [] }];
+        process.env.DEEPSEEK_THINKING = "true";
+        const args = options("reasoning-identity");
+        assert.equal((await discoverSourceIdeas(args)).candidates.length, 1);
+        process.env.DEEPSEEK_THINKING = "false";
+        assert.equal((await discoverSourceIdeas(args)).candidates.length, 0);
+        assert.equal(calls.length, 2);
+        assert.equal(calls[1]!.max_tokens, 1400);
+        process.env.DEEPSEEK_THINKING = "true";
+        assert.equal((await discoverSourceIdeas(args)).candidates.length, 1);
+        assert.equal(calls.length, 2);
+      } finally {
+        if (previous === undefined) delete process.env.DEEPSEEK_THINKING; else process.env.DEEPSEEK_THINKING = previous;
+      }
     });
 
     await t.test("invalid IDs, omitted anchor spans, excessive durations and hallucinated timestamps never become cuts", async () => {
