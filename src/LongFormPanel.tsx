@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronRight, Clapperboard, Copy, Link2, LoaderCircle, Play, Plus, Scissors, Trash2, X } from "lucide-react";
-import { DEFAULT_SETTINGS, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
+import { DEFAULT_SETTINGS, type FocalPoint, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
 import { createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUTS, MAX_SHORTS, parseSourceClock, reconnectShortDraft, restoreShortDrafts, shortCropGuide, SHORT_DRAFT_STORAGE, validateShortDraft, type ShortCut, type ShortDraft } from "../shared/shorts";
 import Slider from "./Slider";
+import CropDragOverlay from "./CropDragOverlay";
 import "./shorts.css";
 
 type Props = {
@@ -179,20 +180,20 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     ? Math.round(Math.max(0, Math.min(1, (value - min) / (max - min))) * 100) : 50;
   const positionX = crop.canMoveX ? travelPercent(focalPoint.x, crop.minX, crop.maxX) : 50;
   const positionY = crop.canMoveY ? travelPercent(focalPoint.y, crop.minY, crop.maxY) : 50;
+  const cropEditingAvailable = active && !!draft && !!draftSource && draftSource.id === source?.id && !rendering;
+  const positionFrame = (point: FocalPoint) => {
+    if (!draft || !cropEditingAvailable) return;
+    // Manual framing applies to the whole short, replacing any per-cut override.
+    updateDraft({ focalPoint: point, cuts: draft.cuts.map(({ focalPoint: _point, ...cut }) => cut) });
+  };
   const positionSubject = (axis: "x" | "y", percent: number) => {
-    if (!draft) return;
+    if (!draft || !cropEditingAvailable) return;
     if (axis === "x" ? !crop.canMoveX : !crop.canMoveY) return;
     const min = axis === "x" ? crop.minX : crop.minY;
     const max = axis === "x" ? crop.maxX : crop.maxY;
     if (max <= min) return;
     const point = { ...focalPoint, [axis]: min + percent / 100 * (max - min) };
-    // These controls frame the whole short. An old per-cut override must not
-    // silently take priority over the setting the user just changed.
-    updateDraft({ focalPoint: point, cuts: draft.cuts.map(({ focalPoint: _point, ...cut }) => cut) });
-  };
-  const guideStyle = {
-    width: `${crop.width * 100}%`, height: `${crop.height * 100}%`,
-    left: `${crop.left * 100}%`, top: `${crop.top * 100}%`,
+    positionFrame(point);
   };
 
   return <div className="shorts-workspace" hidden={!active}>
@@ -205,7 +206,10 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
               onError={() => setCodecError(true)} onPlay={() => { clockOwner.current = "source"; sampleVideo.current?.pause(); }} onSeeking={() => { clockOwner.current = "source"; }}
               onLoadedMetadata={() => { if (video.current && playhead > 0) video.current.currentTime = playhead; }}
               onTimeUpdate={() => { if (!video.current || clockEditing || codecError || clockOwner.current !== "source") return; const time = Math.min(source.duration, video.current.currentTime); setPlayhead(time); setClock(formatSourceClock(time)); }} />
-            {draftSource?.id === source.id && draft?.fit === "crop" && !codecError && <div className="shorts-crop-guide" style={guideStyle} aria-hidden="true"><span>{draft.aspect === "original" ? "Source frame" : `${draft.aspect} crop`}</span></div>}
+            {draftSource?.id === source.id && draft?.fit === "crop" && !codecError && <CropDragOverlay
+              key={`${source.id}:${draft.id}:${currentCut?.id}:${currentCut?.start}:${currentCut?.end}:${draft.aspect}:${draft.zoom}:${draft.resolution}`}
+              videoRef={video} source={source} crop={crop} label={draft.aspect === "original" ? "Source frame" : `${draft.aspect} crop`}
+              disabled={!cropEditingAvailable} onChange={positionFrame} />}
           </div>
         </div>
         <div className="shorts-player-body">
@@ -244,12 +248,12 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
           <summary>Frame &amp; quality<span>{draft.aspect === "original" ? "Original" : draft.aspect} · {draft.resolution === "source" ? "Source" : `${draft.resolution}p`}</span></summary>
           <div className="shorts-settings-grid"><label>Format<select value={draft.aspect} onChange={event => updateDraft({ aspect: event.target.value as ShortDraft["aspect"] })}><option value="9:16">Portrait · 9:16</option><option value="1:1">Square · 1:1</option><option value="4:5">Portrait · 4:5</option><option value="16:9">Landscape · 16:9</option><option value="original">Original format</option></select></label><label>Export quality<select value={draft.resolution} onChange={event => updateDraft({ resolution: event.target.value as ShortDraft["resolution"] })}><option value="1080">1080p · Full HD</option><option value="720">720p · HD</option><option value="source">Source resolution</option></select></label><label className="shorts-full-width">Fit the frame<select value={draft.fit} onChange={event => updateDraft({ fit: event.target.value as ShortDraft["fit"], ...(event.target.value !== "crop" ? { zoom: 1 } : {}) })}><option value="crop">Fill frame · crop sides</option><option value="blur">Keep full shot · blurred background</option><option value="contain">Keep full shot · black background</option></select></label></div>
           {draft.fit === "crop" && <div className="shorts-focal-controls">
-            <p className="shorts-framing-scope">Position changes apply to every sequence.</p>
-            <Slider label="Crop zoom" min={1} max={2} step={0.01} unit="×" value={draft.zoom ?? 1} defaultValue={1} onChange={zoom => updateDraft({ zoom })}
+            <p className="shorts-framing-scope">Drag the orange frame on the video, or use these controls. Position changes apply to every sequence.</p>
+            <Slider label="Crop zoom" min={1} max={2} step={0.01} unit="×" value={draft.zoom ?? 1} defaultValue={1} disabled={!cropEditingAvailable} onChange={zoom => updateDraft({ zoom })}
               hint="Zoom in to leave room to move the frame. More zoom keeps less of the original picture." />
-            <Slider label="Subject left / right" min={0} max={100} step={1} unit="%" value={positionX} defaultValue={50} disabled={!crop.canMoveX}
+            <Slider label="Subject left / right" min={0} max={100} step={1} unit="%" value={positionX} defaultValue={50} disabled={!cropEditingAvailable || !crop.canMoveX}
               onChange={percent => positionSubject("x", percent)} hint={crop.canMoveX ? "0% selects the left edge; 100% selects the right edge." : "The full width is already visible. Increase Crop zoom to move left or right."} />
-            <Slider label="Subject up / down" min={0} max={100} step={1} unit="%" value={positionY} defaultValue={50} disabled={!crop.canMoveY}
+            <Slider label="Subject up / down" min={0} max={100} step={1} unit="%" value={positionY} defaultValue={50} disabled={!cropEditingAvailable || !crop.canMoveY}
               onChange={percent => positionSubject("y", percent)} hint={crop.canMoveY ? "0% selects the top edge; 100% selects the bottom edge." : "The full height is already visible. Increase Crop zoom to move up or down."} />
             <p className="shorts-helper">The outlined area updates as you adjust the frame. Preview this short to see the cropped result.</p>
           </div>}
