@@ -1,5 +1,5 @@
 import OwnFootagePanel from "./OwnFootagePanel";
-import CaptionStyleEditor from "./CaptionStyleEditor";
+import { CaptionAppearance } from "./CaptionStyleEditor";
 import { captionStyleSchema } from "../shared/caption-style";
 import {
   useCallback,
@@ -2095,10 +2095,7 @@ export default function App() {
                             edited video.
                           </p>
                           </>}
-                          <details className="manual-subsection">
-                            <summary>Caption appearance</summary>
-                            <CaptionStyleEditor value={settings.captionStyle} onChange={captionStyle => updateSettings({ captionStyle })} />
-                          </details>
+                          <CaptionAppearance value={settings.captionStyle} onChange={captionStyle => updateSettings({ captionStyle })} />
                           {attachmentError && (
                             <p className="inline-error">{attachmentError}</p>
                           )}

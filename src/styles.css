@@ -3433,7 +3433,7 @@ body {
   border-top: 1px solid #342b33;
   padding-top: 15px;
 }
-.auto-preferences summary {
+.auto-preferences > summary {
   list-style: none;
   display: flex;
   align-items: center;
@@ -3443,17 +3443,17 @@ body {
   font-size: 12px;
   color: var(--text);
 }
-.auto-preferences summary::-webkit-details-marker {
+.auto-preferences > summary::-webkit-details-marker {
   display: none;
 }
-.auto-preferences summary > span {
+.auto-preferences > summary > span {
   display: flex;
   align-items: center;
   gap: 5px;
   font-size: 12px;
   color: var(--muted);
 }
-.auto-preferences[open] summary svg {
+.auto-preferences[open] > summary svg {
   transform: rotate(180deg);
 }
 .auto-preferences-content {
@@ -3807,10 +3807,10 @@ body {
     margin-top: 19px;
     padding-top: 17px;
   }
-  .auto-preferences summary {
+  .auto-preferences > summary {
     font-size: 12px;
   }
-  .auto-preferences summary > span {
+  .auto-preferences > summary > span {
     font-size: 12px;
   }
   .auto-preferences-content > label {
@@ -4487,11 +4487,11 @@ body {
   .auto-original-voice {
     font-size: 12px;
   }
-  .auto-preferences summary {
+  .auto-preferences > summary {
     min-height: 44px;
     font-size: 13px;
   }
-  .auto-preferences summary > span {
+  .auto-preferences > summary > span {
     font-size: 12px;
   }
   .auto-preferences-content {

@@ -1,7 +1,21 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { RotateCcw, Check } from "lucide-react";
+import { RotateCcw, Check, ChevronDown, Type } from "lucide-react";
 import { CAPTION_FONTS, CAPTION_PRESETS, DEFAULT_CAPTION_STYLE, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
 import "./caption-style.css";
+
+export function CaptionAppearance(props: Parameters<typeof CaptionStyleEditor>[0]) {
+  return <details className="caption-appearance">
+    <summary>
+      <Type size={20} className="caption-appearance-icon" aria-hidden="true" />
+      <span className="caption-appearance-copy">
+        <strong>Caption appearance</strong>
+        <small>Font, size, color &amp; effects</small>
+      </span>
+      <ChevronDown size={20} className="caption-appearance-chevron" aria-hidden="true" />
+    </summary>
+    <CaptionStyleEditor {...props} />
+  </details>;
+}
 
 export function CaptionOverlay({ style, height, text }: { style?: CaptionStyle; height: number; text: string }) {
   const s = resolveCaptionStyle(style), scale = height / 288;
