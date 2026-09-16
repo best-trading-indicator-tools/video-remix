@@ -70,7 +70,7 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
   }
   if (trimChanged && !segments) delete next.segments;
   if ((trimChanged || segments) && patch.timeShift === undefined) next.timeShift = 0;
-  if (focalPoint && next.segments) next.segments = next.segments.map(cut => cut.focalPoint ? { ...cut, focalPoint: next.focalPoint } : cut);
+  if (focalPoint && next.segments) next.segments = next.segments.map(({ focusTrack: _track, ...cut }) => cut.focalPoint ? { ...cut, focalPoint: next.focalPoint } : cut);
   // Validate the complete settings object while preserving untouched metadata
   // fields; schema's legacy device normalization is not a prompted edit.
   settingsSchema.parse(next);
@@ -102,7 +102,8 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
     if (next[key] !== settings[key]) summary.push(`${label}: ${next[key]}${key === "fps" && next[key] !== "source" ? " fps" : ""}.`);
   if (next.hookText !== settings.hookText) summary.push(next.hookText ? `Opening heading: “${next.hookText}”.` : "Remove the opening heading.");
   if (next.hookDuration !== settings.hookDuration) summary.push(`Heading duration: ${display(next.hookDuration)}s${next.hookText && next.hookDuration > timeline.outputDuration ? ` (${display(timeline.outputDuration)}s visible in this clip)` : ""}.`);
-  const sourceCropOverridesChanged = Boolean(focalPoint && !same(next.segments?.map(cut => cut.focalPoint), settings.segments?.map(cut => cut.focalPoint)));
+  const sourceCropOverridesChanged = Boolean(focalPoint && (!same(next.segments?.map(cut => cut.focalPoint), settings.segments?.map(cut => cut.focalPoint)) ||
+    !same(next.segments?.map(cut => cut.focusTrack), settings.segments?.map(cut => cut.focusTrack))));
   if ((!same(next.focalPoint, settings.focalPoint) && !same(next.focalPoint, settings.focalPoint ?? { x: 0.5, y: 0.5 })) || sourceCropOverridesChanged)
     summary.push(`Focal point: ${display(next.focalPoint!.x * 100)}% across, ${display(next.focalPoint!.y * 100)}% down.`);
   if (!same(next.captionStyle, settings.captionStyle) && !same(next.captionStyle, settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 / 12 }))

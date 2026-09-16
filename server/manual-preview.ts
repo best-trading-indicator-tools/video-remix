@@ -4,6 +4,7 @@ import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import type { RemixSettings } from "../shared/types.js";
+import { withTrackBounds } from "../shared/focus.js";
 import { config } from "./config.js";
 import { geometry, probeMedia, renderVideo, type MediaInfo } from "./engine.js";
 import { settingsSchema } from "./schema.js";
@@ -41,7 +42,7 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
       const retained = Math.min(cut.end - cut.start, maximumLength - length);
       // The renderer requires each cut to contain at least 0.04 source seconds.
       if (retained <= 0.04) break;
-      preview.segments.push({ ...cut, end: cut.start + retained });
+      preview.segments.push(withTrackBounds({ ...cut, end: cut.start + retained }));
       length += retained;
       if (length >= maximumLength) break;
     }

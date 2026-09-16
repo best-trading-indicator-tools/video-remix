@@ -1,9 +1,16 @@
-import { DEFAULT_SETTINGS, type FocalPoint, type RemixSettings, type VideoSource } from "./types.js";
+import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RemixSettings, type VideoSource } from "./types.js";
+import { MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "./focus.js";
 
 export const SHORT_DRAFT_STORAGE = "remix-short-drafts-v1";
 export const MAX_SHORTS = 100;
 export const MAX_SHORT_CUTS = 60;
-export interface ShortCut { id: string; start: string; end: string; focalPoint?: FocalPoint }
+export interface ShortCut { id: string; start: string; end: string; focalPoint?: FocalPoint; focusTrack?: FocusKeyframe[] }
+export interface ShortFocusAnalysis {
+  signature: string;
+  status: "tracked" | "partial" | "no-face" | "unavailable";
+  multipleFaces: boolean;
+  reason?: string;
+}
 export interface ShortDraft {
   id: string;
   sourceId: string;
@@ -16,11 +23,19 @@ export interface ShortDraft {
   resolution: RemixSettings["resolution"];
   zoom: number;
   focalPoint: FocalPoint;
+  autoFocus?: boolean;
+  focusAnalysis?: ShortFocusAnalysis;
   normalizeAudio: boolean;
   qualityCleanup: boolean;
   updatedAt: string;
 }
 export interface ShortDraftStore { version: 1; drafts: ShortDraft[] }
+
+/** Face centers are independent of output aspect/zoom, but belong to these exact source cuts and starting point. */
+export function shortFocusSignature(draft: ShortDraft): string {
+  return JSON.stringify({ sourceId: draft.sourceId, seed: draft.focalPoint,
+    cuts: draft.cuts.map(cut => ({ id: cut.id, start: cut.start, end: cut.end, focalPoint: cut.focalPoint })) });
+}
 
 /** Crop bounds use source coordinates and the renderer's even-pixel crop sizing. */
 export function shortCropGuide(
@@ -85,6 +100,7 @@ export function createShortDraft(source: VideoSource, id: string, cutId: string,
     id, sourceId: source.id, sourceFingerprint: source.fingerprint, sourceName: source.name,
     title: `Short ${index}`, cuts: [{ id: cutId, start: formatSourceClock(position), end: formatSourceClock(Math.min(source.duration, position + 30)) }],
     aspect: "9:16", fit: "crop", resolution: "1080", zoom: 1, focalPoint: { x: 0.5, y: 0.5 },
+    autoFocus: false, focusAnalysis: undefined,
     normalizeAudio: false, qualityCleanup: false, updatedAt: new Date().toISOString(),
   };
 }
@@ -97,12 +113,20 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   if (!draft.cuts.length || draft.cuts.length > MAX_SHORT_CUTS) errors.push(`Choose between 1 and ${MAX_SHORT_CUTS} sequences.`);
   const zoom = draft.zoom ?? 1;
   if (!Number.isFinite(zoom) || zoom < 1 || zoom > 2) errors.push("Zoom must be between 1 and 2.");
+  const tracking = draft.autoFocus === true && draft.fit === "crop";
+  const analysisReady = draft.focusAnalysis?.signature === shortFocusSignature(draft);
+  if (tracking && !analysisReady) errors.push("Automatic centering is being prepared. Wait for it to finish or switch it off.");
+  if (tracking && draft.cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) > MAX_FOCUS_POINTS_TOTAL)
+    errors.push("This short contains too many focus points. Retry automatic centering.");
   const segments = draft.cuts.flatMap((cut, index) => {
     const start = parseSourceClock(cut.start), end = parseSourceClock(cut.end);
     if (start === null || end === null) { errors.push(`Sequence ${index + 1}: enter valid start and end timestamps.`); return []; }
     if (end <= start + 0.04) errors.push(`Sequence ${index + 1}: the end must be at least 0.05 seconds after the start.`);
     if (source && (start >= source.duration || end > source.duration + 0.001)) errors.push(`Sequence ${index + 1}: timestamps must stay within the source video.`);
-    return [{ start, end, ...(cut.focalPoint ? { focalPoint: cut.focalPoint } : {}) }];
+    if (tracking && cut.focusTrack && !validFocusTrack(cut.focusTrack, start, end))
+      errors.push(`Sequence ${index + 1}: retry automatic centering for these timestamps.`);
+    return [{ start, end, ...(cut.focalPoint ? { focalPoint: cut.focalPoint } : {}),
+      ...(tracking && analysisReady && cut.focusTrack ? { focusTrack: cut.focusTrack } : {}) }];
   });
   const duration = segments.reduce((sum, cut) => sum + Math.max(0, cut.end - cut.start), 0);
   const settings: RemixSettings = {
@@ -132,7 +156,10 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
     for (const cut of value.cuts) {
       if (!record(cut) || typeof cut.id !== "string" || cutIds.has(cut.id) || typeof cut.start !== "string" || typeof cut.end !== "string") return [];
       cutIds.add(cut.id);
-      cuts.push({ id: cut.id, start: cut.start.slice(0, 32), end: cut.end.slice(0, 32), ...(focal(cut.focalPoint) ? { focalPoint: cut.focalPoint } : {}) });
+      const start = parseSourceClock(cut.start), end = parseSourceClock(cut.end);
+      const focusTrack = Array.isArray(cut.focusTrack) && start !== null && end !== null && validFocusTrack(cut.focusTrack, start, end)
+        ? cut.focusTrack as FocusKeyframe[] : undefined;
+      cuts.push({ id: cut.id, start: cut.start.slice(0, 32), end: cut.end.slice(0, 32), ...(focal(cut.focalPoint) ? { focalPoint: cut.focalPoint } : {}), ...(focusTrack ? { focusTrack } : {}) });
     }
     ids.add(value.id);
     return [{
@@ -144,6 +171,14 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       resolution: (["source", "720", "1080"].includes(String(value.resolution)) ? value.resolution : "1080") as ShortDraft["resolution"],
       zoom: typeof value.zoom === "number" && Number.isFinite(value.zoom) && value.zoom >= 1 && value.zoom <= 2 ? value.zoom : 1,
       focalPoint: focal(value.focalPoint) ? value.focalPoint : { x: 0.5, y: 0.5 },
+      autoFocus: value.autoFocus === true,
+      focusAnalysis: record(value.focusAnalysis) && typeof value.focusAnalysis.signature === "string" && value.focusAnalysis.signature.length <= 20_000 &&
+        ["tracked", "partial", "no-face", "unavailable"].includes(String(value.focusAnalysis.status)) &&
+        cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) <= MAX_FOCUS_POINTS_TOTAL &&
+        !value.cuts.some((cut, index) => record(cut) && cut.focusTrack !== undefined && !cuts[index]?.focusTrack)
+        ? { signature: value.focusAnalysis.signature, status: value.focusAnalysis.status as ShortFocusAnalysis["status"],
+          multipleFaces: value.focusAnalysis.multipleFaces === true,
+          reason: typeof value.focusAnalysis.reason === "string" ? value.focusAnalysis.reason.slice(0, 500) : undefined } : undefined,
       normalizeAudio: value.normalizeAudio === true, qualityCleanup: value.qualityCleanup === true,
       updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString(),
     }];

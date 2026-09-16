@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { EditPlan, EditPlanChanges, Transcript } from "../shared/types.js";
+import { withTrackBounds } from "../shared/focus.js";
 import type { EditorialEvidence, EditorialIssue, EditorialReport, EditorialReviewer, EditorialSourceExcerpt } from "../shared/editorial.js";
 import {
   EDITORIAL_REPAIR_POLICY_VERSION, type EditorialBoundaryChoice, type EditorialRepairLog,
@@ -121,7 +122,7 @@ export function compileEditorialRepair(plan: EditPlan, original: EditPlan, trans
     const length = cuts.reduce((sum, cut) => sum + cut.end - cut.start, 0);
     if (length - sourceLength(original) > MAX_ADDED_SOURCE_SECONDS + 0.001 || length / plan.settings.speed > request.maxDuration + 0.001)
       throw new Error("The extension exceeds the allowed context or duration budget.");
-    patch.cuts = cuts;
+    patch.cuts = cuts.map(withTrackBounds);
   }
   let next = applyEditPlanChanges(plan, patch, transcript);
   next.revision = original.revision;

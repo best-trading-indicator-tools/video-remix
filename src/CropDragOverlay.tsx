@@ -16,19 +16,22 @@ interface Drag {
   target: HTMLButtonElement;
 }
 
-export default function CropDragOverlay({ videoRef, source, crop, label, disabled, onChange }: {
+export default function CropDragOverlay({ videoRef, source, crop, label, disabled, onChange, onDragStateChange }: {
   videoRef: RefObject<HTMLVideoElement | null>;
   source: { width: number; height: number };
   crop: CropGuide;
   label: string;
   disabled: boolean;
   onChange: (point: FocalPoint) => void;
+  onDragStateChange?: (dragging: boolean) => void;
 }) {
   const layer = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const geometry = useRef<PictureGeometry | null>(null);
   const [picture, setPicture] = useState<PictureGeometry | null>(null);
   const [pending, setPending] = useState<FocalPoint | null>(null);
+  const dragStateChange = useRef(onDragStateChange);
+  dragStateChange.current = onDragStateChange;
   const instructionsId = useId();
   const release = (current: Drag | null) => {
     if (current?.target.hasPointerCapture(current.pointerId)) current.target.releasePointerCapture(current.pointerId);
@@ -38,6 +41,7 @@ export default function CropDragOverlay({ videoRef, source, crop, label, disable
     drag.current = null;
     setPending(null);
     release(current);
+    if (current) dragStateChange.current?.(false);
   }, []);
 
   useLayoutEffect(() => {
@@ -62,7 +66,7 @@ export default function CropDragOverlay({ videoRef, source, crop, label, disable
   }, [videoRef, source.width, source.height, cancel]);
 
   useEffect(() => { cancel(); }, [disabled, crop.left, crop.top, crop.width, crop.height, cancel]);
-  useEffect(() => () => { const current = drag.current; drag.current = null; release(current); }, []);
+  useEffect(() => () => { const current = drag.current; drag.current = null; release(current); if (current) dragStateChange.current?.(false); }, []);
 
   const move = (event: PointerEvent<HTMLButtonElement>) => {
     const current = drag.current;
@@ -79,6 +83,7 @@ export default function CropDragOverlay({ videoRef, source, crop, label, disable
     setPending(null);
     release(current);
     if (!disabled && (Math.abs(current.current.x - current.start.x) > 1e-8 || Math.abs(current.current.y - current.start.y) > 1e-8)) onChange(current.current);
+    dragStateChange.current?.(false);
   };
   const center = pending || visibleCropCenter(crop);
   const left = picture ? picture.left + (center.x - crop.width / 2) * picture.width : 0;
@@ -103,6 +108,7 @@ export default function CropDragOverlay({ videoRef, source, crop, label, disable
           drag.current = { pointerId: event.pointerId, clientX: event.clientX, clientY: event.clientY, start, current: start, crop, picture, target: event.currentTarget };
           event.currentTarget.setPointerCapture(event.pointerId);
           setPending(start);
+          dragStateChange.current?.(true);
         }}
         onPointerMove={move} onPointerUp={finish}
         onPointerCancel={event => { if (drag.current?.pointerId === event.pointerId) cancel(); }}

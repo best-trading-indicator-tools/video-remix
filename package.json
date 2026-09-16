@@ -15,7 +15,8 @@
     "benchmark": "node --import tsx scripts/benchmark.mjs",
     "setup:auto": "node scripts/setup-auto.mjs",
     "setup:visuals": "puppeteer browsers install chrome",
-    "build:remotion": "node scripts/build-remotion.mjs"
+    "build:remotion": "node scripts/build-remotion.mjs",
+    "setup:focus": "node scripts/setup-focus.mjs"
   },
   "dependencies": {
     "@hyperframes/producer": "0.8.40",

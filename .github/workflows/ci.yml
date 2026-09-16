@@ -23,5 +23,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr
       - run: npm ci
+      - run: npm run setup:focus
       - run: npm run build
       - run: npm test
+        env:
+          REQUIRE_FOCUS_TESTS: "true"

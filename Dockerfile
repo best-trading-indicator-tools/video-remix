@@ -21,9 +21,9 @@ ENV NODE_ENV=production \
     PYTHONUNBUFFERED=1 \
     PRODUCER_HEADLESS_SHELL_PATH=/usr/bin/chromium
 
-COPY --from=build --chown=node:node /app/requirements-auto.txt ./requirements-auto.txt
+COPY --from=build --chown=node:node /app/requirements-auto.txt /app/requirements-focus.txt ./
 RUN python3 -m venv /app/.venv \
-    && /app/.venv/bin/python -m pip install --no-cache-dir --disable-pip-version-check -r requirements-auto.txt \
+    && /app/.venv/bin/python -m pip install --no-cache-dir --disable-pip-version-check -r requirements-auto.txt -r requirements-focus.txt \
     && chown -R node:node /app/.venv
 
 COPY --from=build --chown=node:node /app/package.json ./package.json

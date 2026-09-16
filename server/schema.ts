@@ -1,7 +1,13 @@
 import { z } from "zod";
 import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
+import { MAX_FOCUS_POINTS_PER_CUT, MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
 const n = (min: number, max: number) => z.number().finite().min(min).max(max);
 export const focalPointSchema = z.object({ x: n(0, 1), y: n(0, 1) }).strict();
+export const focusTrackSchema = z.array(z.object({ time: n(0, 86400), x: n(0, 1), y: n(0, 1) }).strict())
+  .min(1).max(MAX_FOCUS_POINTS_PER_CUT)
+  .refine(points => points.every((point, index) => !index || point.time > points[index - 1]!.time), "Focus keyframes must use increasing source timestamps");
+export const focusPointsWithinCut = (cut: { start: number; end: number; focusTrack?: unknown }) => validFocusTrack(cut.focusTrack, cut.start, cut.end);
+export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) <= MAX_FOCUS_POINTS_TOTAL;
 export const captionStyleSchema = z.object({ fontSize: n(12, 40), bottomPercent: n(5, 80) }).strict();
 export const settingsSchema = z
   .object({
@@ -40,7 +46,8 @@ export const settingsSchema = z
     segments: z
       .array(
         z
-          .object({ start: n(0, 86400), end: n(0, 86400), focalPoint: focalPointSchema.optional() })
+          .object({ start: n(0, 86400), end: n(0, 86400), focalPoint: focalPointSchema.optional(), focusTrack: focusTrackSchema.optional() })
+          .refine(focusPointsWithinCut, "Focus keyframes must stay within their source cut")
           .refine(
             (value) => value.end > value.start + 0.04,
             "Cut end must follow its start",
@@ -48,6 +55,7 @@ export const settingsSchema = z
       )
       .min(1)
       .max(60)
+      .refine(focusPointsWithinBudget, `Use at most ${MAX_FOCUS_POINTS_TOTAL} focus keyframes across all cuts`)
       .optional(),
     callouts: z
       .array(

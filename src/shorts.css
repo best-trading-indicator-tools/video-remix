@@ -85,6 +85,12 @@
 .shorts-workspace .shorts-settings-grid select { font-size: 12px; padding-left: 8px; padding-right: 24px; }
 .shorts-full-width { grid-column: 1 / -1; }
 .shorts-focal-controls { margin: 20px 0; display: grid; gap: 15px; }
+.shorts-focus-card { padding: 14px; border: 1px solid #465267; border-radius: 8px; background: #1c2430; }
+.shorts-workspace .shorts-focal-controls .shorts-focus-toggle { display: flex; padding: 0; }
+.shorts-focus-status { margin: 10px 0 0 28px; color: #c1cbd8; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.shorts-focus-status p { margin: 5px 0 0; }
+.shorts-focus-status p > svg { vertical-align: -2px; margin-right: 6px; }
+.shorts-focus-status .text-button { margin-top: 8px; font-size: 11px; }
 .shorts-framing-scope { margin: 0; font-size: 12px; color: var(--muted); }
 .shorts-focal-controls .slider-field { margin-top: 0; }
 .shorts-focal-controls .is-disabled input { cursor: not-allowed; }

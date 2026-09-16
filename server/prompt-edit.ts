@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
+import { withTrackBounds } from "../shared/focus.js";
 import type { EditPlan, EditPlanChanges, EditPlanVisual, EditSegment, Transcript } from "../shared/types.js";
 import { jsonCompletion } from "./ai-json.js";
 import { applyEditPlanChanges } from "./edit-plan.js";
@@ -49,7 +50,7 @@ function trimCuts(plan: EditPlan, start: number, end: number): EditSegment[] {
   for (const cut of plan.cuts) {
     const outputEnd = offset + (cut.end - cut.start) / plan.settings.speed;
     const left = Math.max(start, offset), right = Math.min(end, outputEnd);
-    if (right > left) cuts.push({ ...cut, start: rounded(cut.start + (left - offset) * plan.settings.speed), end: rounded(cut.start + (right - offset) * plan.settings.speed) });
+    if (right > left) cuts.push(withTrackBounds({ ...cut, start: rounded(cut.start + (left - offset) * plan.settings.speed), end: rounded(cut.start + (right - offset) * plan.settings.speed) }));
     offset = outputEnd;
   }
   return cuts;
@@ -135,12 +136,16 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
       case "framing": {
         const { op: _op, ...patch } = operation;
         changes.framing = { ...changes.framing, ...patch };
-        if (operation.focalPoint) cuts = cuts.map(cut => cut.focalPoint ? { ...cut, focalPoint: operation.focalPoint } : cut);
+        if (operation.focalPoint) cuts = cuts.map(({ focusTrack: _track, ...cut }) => cut.focalPoint ? { ...cut, focalPoint: operation.focalPoint } : cut);
         break;
       }
       case "cut_focal_point": {
         if (!cuts[operation.index]) throw new PromptEditError(422, "The requested source shot is not in the resulting video.");
-        cuts = cuts.map((cut, index) => index === operation.index ? { ...cut, focalPoint: operation.focalPoint } : cut);
+        cuts = cuts.map((cut, index) => {
+          if (index !== operation.index) return cut;
+          const { focusTrack: _track, ...stationary } = cut;
+          return { ...stationary, focalPoint: operation.focalPoint };
+        });
         break;
       }
       case "visual": {

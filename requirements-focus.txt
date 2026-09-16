@@ -1,0 +1,2 @@
+# Local CPU-only face positioning. No identity recognition or cloud service.
+opencv-python-headless==4.13.0.92

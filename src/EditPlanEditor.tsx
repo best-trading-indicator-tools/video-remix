@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, Lock
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
+import { focusPointAt, withTrackBounds } from "../shared/focus";
 import { hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
@@ -255,11 +256,12 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     setBrollCountInput(String(count));
   };
   const updateFraming = (patch: Partial<RemixSettings>) => {
-    setDraft((value) => value && ({ ...value, settings: { ...value.settings, ...patch } }));
+    setDraft((value) => value && ({ ...value, settings: { ...value.settings, ...patch },
+      cuts: patch.focalPoint ? value.cuts.map(({ focusTrack: _track, focalPoint: _point, ...cut }) => cut) : value.cuts }));
     setPreviewMode("framing");
   };
   const updateCutFraming = (index: number, point?: FocalPoint) => {
-    setDraft((value) => value && ({ ...value, cuts: value.cuts.map((cut, cutIndex) => cutIndex === index ? { ...cut, focalPoint: point } : cut) }));
+    setDraft((value) => value && ({ ...value, cuts: value.cuts.map((cut, cutIndex) => cutIndex === index ? { ...cut, focalPoint: point, focusTrack: undefined } : cut) }));
     setPreviewCut(index);
     setPreviewMode("framing");
   };
@@ -336,7 +338,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 </label>
                 <FootagePreview key={`${plan.sourceId}-${previewCut}-${activeCut.start}-${activeCut.end}`} url={`/api/sources/${plan.sourceId}/video`} label={`Framing preview for cut ${previewCut + 1}`} start={Number.isFinite(activeCut.start) ? activeCut.start : 0} end={Number.isFinite(activeCut.end) ? activeCut.end : plan.sourceDuration}
                   aspect={draft.settings.aspect === "original" ? undefined : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])}
-                  focalPoint={activeCut.focalPoint || focalPoint} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
+                  focalPoint={focusPointAt(activeCut.focusTrack, previewSourceTime, activeCut.focalPoint || focalPoint)} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
                     {draft.settings.hookText && previewOutputTime < draft.settings.hookDuration && <div className="edit-framing-hook" style={{ fontSize: `${height * Math.min(1, draft.settings.aspect === "original" ? 1 : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])) * 0.054}px` }}>{draft.settings.hookText}</div>}
                     {(draft.settings.callouts || []).filter((callout) => callout.start <= previewOutputTime && callout.end > previewOutputTime).map((callout, index) => <div className="edit-framing-callout" key={index} style={{ fontSize: `${height * 0.026}px` }}>{callout.text}</div>)}
                     {!!draft.captions.length && <div className="edit-framing-caption" style={{ bottom: `${captionStyle.bottomPercent}%`, fontSize: `${captionStyle.fontSize / 288 * height}px` }}>{activeCaption?.text || draft.captions[0]?.text}</div>}
@@ -429,7 +431,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   {draft.cuts.map((cut, index) => <div className="edit-plan-cut" key={index}><div className="edit-cut-heading"><strong>Cut {index + 1}</strong><button className="secondary-button" type="button" onClick={() => { setPreviewCut(index); setPreviewMode("framing"); }}>Preview crop</button></div>
                     <fieldset disabled={timelineCorrectionsChanged}><legend className="visually-hidden">Cut {index + 1} timing</legend><div className="edit-plan-times">
                     {(["start", "end"] as const).map((edge) => <label className="edit-plan-field" key={edge}>{edge === "start" ? "Start" : "End"} (s)
-                      <input aria-label={`Cut ${index + 1} ${edge} in seconds`} type="number" required min={0} max={plan.sourceDuration} step="any" value={Number.isFinite(cut[edge]) ? cut[edge] : ""} onChange={(event) => setDraft({ ...draft, cuts: draft.cuts.map((item, itemIndex) => itemIndex === index ? { ...item, [edge]: event.target.valueAsNumber } : item) })} />
+                      <input aria-label={`Cut ${index + 1} ${edge} in seconds`} type="number" required min={0} max={plan.sourceDuration} step="any" value={Number.isFinite(cut[edge]) ? cut[edge] : ""} onChange={(event) => setDraft({ ...draft, cuts: draft.cuts.map((item, itemIndex) => itemIndex === index ? withTrackBounds({ ...item, [edge]: event.target.valueAsNumber }) : item) })} />
                     </label>)}
                     </div></fieldset>
                     <label className="edit-plan-check edit-custom-crop"><input type="checkbox" checked={!!cut.focalPoint} onChange={(event) => updateCutFraming(index, event.target.checked ? { ...focalPoint } : undefined)} />Custom crop position for this cut</label>

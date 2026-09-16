@@ -1,8 +1,9 @@
 import { z } from "zod";
 import type { CaptionCue, EditPlan, EditPlanChanges, EditSegment, Transcript } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
+import { withTrackBounds } from "../shared/focus.js";
 import { captionsSrt, cutsDuration, retimeTranscript } from "./auto-plan.js";
-import { focalPointSchema, captionStyleSchema } from "./schema.js";
+import { focalPointSchema, captionStyleSchema, focusTrackSchema, focusPointsWithinCut, focusPointsWithinBudget } from "./schema.js";
 
 const epsilon = 0.001;
 const identity = z.string().min(1).max(120).regex(/^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/u);
@@ -10,8 +11,10 @@ const time = z.number().finite().nonnegative();
 const safeText = (maximum: number, empty = false) => z.string().max(maximum)
   .refine(text => empty || Boolean(text.trim()), "Caption text cannot be empty")
   .refine(text => !/[\u0000-\u0008\u000b-\u001f\u007f]|\n[ \t]*\n|\{\\|<[^>]*>|-->/u.test(text), "Use plain text without subtitle markup or control characters");
-const cutSchema = z.object({ start: time, end: time, focalPoint: focalPointSchema.optional() }).strict()
+const cutSchema = z.object({ start: time, end: time, focalPoint: focalPointSchema.optional(), focusTrack: focusTrackSchema.optional() }).strict()
+  .refine(focusPointsWithinCut, "Focus keyframes must stay within their source cut")
   .refine(cut => cut.end - cut.start >= 0.04 - 1e-9, "Each cut must contain at least 0.04 seconds");
+const cutsSchema = z.array(cutSchema).min(1).max(60).refine(focusPointsWithinBudget, "Use at most 240 focus keyframes across all cuts");
 const captionSchema = z.object({ id: identity, start: time, end: time, text: safeText(500) }).strict()
   .refine(cue => cue.end > cue.start && Math.round(cue.end * 1000) > Math.round(cue.start * 1000), "Each caption needs a positive duration at millisecond precision");
 const visualSchema = z.object({
@@ -32,7 +35,7 @@ export const editPlanChangesSchema = z.object({
   brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   hookText: safeText(120, true).optional(),
   captions: z.array(captionSchema).max(2000).optional(),
-  cuts: z.array(cutSchema).min(1).max(60).optional(),
+  cuts: cutsSchema.optional(),
   visuals: z.array(visualSchema).max(60).optional(),
   framing: z.object({ fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional() }).strict().optional(),
   correctionSeconds: z.number().finite().min(0).max(86400).optional(),
@@ -168,7 +171,14 @@ function retimedCaptions(plan: EditPlan, cuts: EditSegment[], sourceTranscript?:
 
 /** Apply one review revision without generating speech, choosing clips, or mutating the saved result. */
 export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sourceTranscript?: Transcript): EditPlan {
-  const changes = editPlanChangesSchema.parse(input);
+  // Boundary controls carry the saved trajectory unchanged. Clip only that
+  // known track; newly supplied trajectories must already satisfy the schema.
+  const boundedInput = input.cuts ? { ...input, cuts: input.cuts.map(cut => {
+    const carried = cut.focusTrack && plan.cuts.some(previous => previous.focusTrack &&
+      JSON.stringify(cut.focusTrack) === JSON.stringify(previous.focusTrack));
+    return carried ? withTrackBounds(cut) : cut;
+  }) } : input;
+  const changes = editPlanChangesSchema.parse(boundedInput);
   if (changes.brollCount !== undefined && !changes.refreshBroll)
     throw new Error("Choose a B-roll target when requesting a new stock search.");
   if (changes.refreshBroll && changes.visuals !== undefined)
@@ -176,8 +186,21 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
   if (changes.revision !== plan.revision) throw new Error("This edit changed since you opened it. Reload the latest revision before saving.");
   if (!Number.isFinite(plan.settings.speed) || plan.settings.speed <= 0) throw new Error("The saved edit has an invalid playback speed");
   const next = structuredClone(plan);
-  const cuts = changes.cuts ?? next.cuts;
-  z.array(cutSchema).min(1).max(60).parse(cuts);
+  let cuts = changes.cuts ?? next.cuts;
+  cuts = cuts.map((cut, index) => {
+    const explicitPoint = changes.cuts?.[index]?.focalPoint;
+    const carried = cut.focusTrack && plan.cuts.filter(previous => previous.focusTrack &&
+      JSON.stringify(cut.focusTrack) === JSON.stringify(withTrackBounds({ ...previous, start: cut.start, end: cut.end }).focusTrack));
+    // Cut indices change during reordering. A carried trajectory still belongs
+    // to its original source cut, including when its new boundaries are tighter.
+    const changedPoint = explicitPoint && carried?.length &&
+      carried.every(previous => JSON.stringify(explicitPoint) !== JSON.stringify(previous.focalPoint));
+    if (!changes.framing?.focalPoint && !changedPoint) return cut;
+    const { focusTrack: _track, ...stationary } = cut;
+    return changes.framing?.focalPoint && !changes.cuts && stationary.focalPoint
+      ? { ...stationary, focalPoint: changes.framing.focalPoint } : stationary;
+  });
+  cutsSchema.parse(cuts);
   if (cuts.some(cut => cut.end > plan.sourceDuration + epsilon)) throw new Error("Cuts must stay within the original source video");
   const cutsChanged = JSON.stringify(cuts.map(({ start, end }) => ({ start, end }))) !== JSON.stringify(plan.cuts.map(({ start, end }) => ({ start, end })));
   const duration = cutsChanged ? cutsDuration(cuts) / plan.settings.speed : plan.outputDuration;

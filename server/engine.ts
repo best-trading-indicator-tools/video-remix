@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
 import { randomUUID } from "node:crypto";
 import {
   access,
@@ -367,6 +368,9 @@ function validateSettings(settings: RemixSettings): void {
   }
   if (!validFocalPoint(settings.focalPoint) || settings.segments?.some(segment => !validFocalPoint(segment.focalPoint)))
     throw new Error("Focal points must contain x and y coordinates between 0 and 1");
+  if (settings.segments?.some(segment => segment.focusTrack !== undefined && !validFocusTrack(segment.focusTrack, segment.start, segment.end)) ||
+    (settings.segments?.reduce((sum, segment) => sum + (segment.focusTrack?.length ?? 0), 0) ?? 0) > MAX_FOCUS_POINTS_TOTAL)
+    throw new Error("Focus tracks need bounded, ordered source timestamps and coordinates between 0 and 1");
   const style = settings.captionStyle;
   if (style !== undefined && (!style || typeof style !== "object" ||
     !Number.isFinite(style.fontSize) || style.fontSize < 12 || style.fontSize > 40 ||
@@ -387,13 +391,25 @@ function focalExpression(settings: RemixSettings, axis: "x" | "y"): string {
   if (!settings.segments?.length) return decimal(fallback);
   let offset = 0;
   const choices = settings.segments.map(segment => {
+    const track = segment.focusTrack;
+    let expression = decimal(track?.[0]?.[axis] ?? segment.focalPoint?.[axis] ?? fallback);
+    // A sum of clamped ramps interpolates each observed movement and holds its
+    // endpoints, without nesting an if() for every point in a long trajectory.
+    for (let index = 1; index < (track?.length ?? 0); index++) {
+      const previous = track![index - 1], next = track![index];
+      const delta = next[axis] - previous[axis];
+      if (Math.abs(delta) < 1e-8) continue;
+      const start = offset + (previous.time - segment.start) / settings.speed;
+      const span = Math.max(1e-8, (next.time - previous.time) / settings.speed);
+      expression += `+(${decimal(delta)})*clip((t-(${decimal(start)}))/${decimal(span)},0,1)`;
+    }
     offset += (segment.end - segment.start) / settings.speed;
-    return { end: offset, value: segment.focalPoint?.[axis] ?? fallback };
+    return { end: offset, expression };
   });
-  let expression = decimal(choices.at(-1)!.value);
+  let expression = choices.at(-1)!.expression;
   for (let index = choices.length - 2; index >= 0; index--) {
     const choice = choices[index]!;
-    expression = `if(lt(t,${decimal(choice.end)}),${decimal(choice.value)},${expression})`;
+    expression = `if(lt(t,${decimal(choice.end)}),${choice.expression},${expression})`;
   }
   return expression;
 }

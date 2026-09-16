@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronRight, Clapperboard, Copy, Link2, LoaderCircle, Play, Plus, Scissors, Trash2, X } from "lucide-react";
-import { DEFAULT_SETTINGS, type FocalPoint, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
-import { createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUTS, MAX_SHORTS, parseSourceClock, reconnectShortDraft, restoreShortDrafts, shortCropGuide, SHORT_DRAFT_STORAGE, validateShortDraft, type ShortCut, type ShortDraft } from "../shared/shorts";
+import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
+import { createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUTS, MAX_SHORTS, parseSourceClock, reconnectShortDraft, restoreShortDrafts, shortCropGuide, shortFocusSignature, SHORT_DRAFT_STORAGE, validateShortDraft, type ShortCut, type ShortDraft, type ShortFocusAnalysis } from "../shared/shorts";
+import { focusPointAt, validFocusTrack } from "../shared/focus";
 import Slider from "./Slider";
 import CropDragOverlay from "./CropDragOverlay";
 import "./shorts.css";
@@ -19,6 +20,12 @@ const initialDrafts = () => {
   try { return restoreShortDrafts(JSON.parse(localStorage.getItem(SHORT_DRAFT_STORAGE) || "null")); }
   catch { return []; }
 };
+interface FocusResult {
+  status: ShortFocusAnalysis["status"];
+  tracks: { cutIndex: number; start: number; end: number; keyframes: FocusKeyframe[]; coverage: number }[];
+  multipleFaces: boolean;
+  reason?: string;
+}
 const durationLabel = (seconds: number) => seconds >= 60 ? `${Math.floor(Math.round(seconds) / 60)}m ${Math.round(seconds) % 60}s` : `${Number(seconds.toFixed(2))}s`;
 async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
@@ -43,6 +50,9 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   const [previewBusy, setPreviewBusy] = useState(false);
   const [preview, setPreview] = useState<{ url: string; duration: number; label: string; kind: "short" | "source"; sourceStart: number; sourceId: string } | null>(null);
   const [previewError, setPreviewError] = useState("");
+  const [focusBusyId, setFocusBusyId] = useState<string | null>(null);
+  const [focusRetry, setFocusRetry] = useState(0);
+  const [frozenFocus, setFrozenFocus] = useState<{ context: string; point: FocalPoint } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
   const sampleVideo = useRef<HTMLVideoElement>(null);
   const clockOwner = useRef<"source" | "sample" | null>(null);
@@ -56,6 +66,9 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   const startClockValid = clockValid && source!.duration - clockSeconds! > 0.04;
   const targets = scope === "current" ? (draft ? [draft] : []) : scope === "selected" ? drafts.filter(item => selectedIds.includes(item.id)) : drafts;
   const previewSignature = JSON.stringify({ draft, sourceId: source?.id });
+  const focusSignature = draft ? shortFocusSignature(draft) : "";
+  const focusReady = !!draft && draft.focusAnalysis?.signature === focusSignature;
+  const focusContext = `${draft?.id}:${currentCut?.id}:${currentCut?.start}:${currentCut?.end}`;
 
   useEffect(() => {
     try { localStorage.setItem(SHORT_DRAFT_STORAGE, JSON.stringify({ version: 1, drafts })); setSavingError(false); }
@@ -79,6 +92,36 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     if (!active) { video.current?.pause(); sampleVideo.current?.pause(); previewRequest.current?.abort(); }
     return () => { video.current?.pause(); sampleVideo.current?.pause(); previewRequest.current?.abort(); };
   }, [active]);
+  useEffect(() => { setFrozenFocus(null); }, [focusContext, active]);
+  useEffect(() => {
+    if (!active || !draft?.autoFocus || draft.fit !== "crop" || !draftSource || !engineReady || draft.focusAnalysis?.signature === focusSignature) return;
+    const checked = validateShortDraft({ ...draft, autoFocus: false }, draftSource);
+    if (!checked.settings) return;
+    const id = draft.id, cuts = checked.settings.segments!;
+    const controller = new AbortController();
+    setFocusBusyId(id);
+    const save = (result: FocusResult) => {
+      if (controller.signal.aborted) return;
+      setDrafts(current => current.map(item => {
+        if (item.id !== id || !item.autoFocus || item.fit !== "crop" || shortFocusSignature(item) !== focusSignature) return item;
+        return { ...item, cuts: item.cuts.map((cut, index) => {
+          const { focusTrack: _oldTrack, ...manualCut } = cut;
+          const track = result.tracks.find(value => value.cutIndex === index);
+          return { ...manualCut, ...(track && validFocusTrack(track.keyframes, cuts[index].start, cuts[index].end) ? { focusTrack: track.keyframes } : {}) };
+        }), focusAnalysis: { signature: focusSignature, status: result.status, multipleFaces: result.multipleFaces, reason: result.reason }, updatedAt: new Date().toISOString() };
+      }));
+    };
+    const timer = window.setTimeout(() => {
+      void post<FocusResult>("/api/speaker-focus", { sourceId: draft.sourceId, cuts, seed: draft.focalPoint }, controller.signal)
+        .then(save)
+        .catch(error => { if (!controller.signal.aborted) save({ status: "unavailable", tracks: [], multipleFaces: false, reason: error instanceof Error ? error.message : "Automatic centering could not complete." }); })
+        .finally(() => { if (!controller.signal.aborted) setFocusBusyId(current => current === id ? null : current); });
+    }, 400);
+    return () => { window.clearTimeout(timer); controller.abort(); setFocusBusyId(current => current === id ? null : current); };
+    // The signature covers the source, manual starting point and exact cuts.
+    // Saving analysis must not restart or abort its own request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, draft?.id, draft?.autoFocus, draft?.fit, draftSource?.id, engineReady, focusSignature, focusRetry]);
 
   const updateDraft = (patch: Partial<ShortDraft>) => {
     if (!draft) return;
@@ -174,7 +217,10 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     onNotice(`“${item.title}” reconnected to ${chosenSource.name}. Check its timestamps before rendering.`, "info");
   };
   const sourceAspect = source ? source.width / source.height : 16 / 9;
-  const focalPoint = currentCut?.focalPoint || draft?.focalPoint || { x: 0.5, y: 0.5 };
+  const manualPoint = currentCut?.focalPoint || draft?.focalPoint || { x: 0.5, y: 0.5 };
+  const trackedPoint = draft?.autoFocus && draft.fit === "crop" && focusReady
+    ? focusPointAt(currentCut?.focusTrack, playhead, manualPoint) : manualPoint;
+  const focalPoint = frozenFocus?.context === focusContext ? frozenFocus.point : trackedPoint;
   const crop = shortCropGuide(draftSource ?? source ?? { width: 1920, height: 1080 }, draft?.aspect ?? "9:16", draft?.zoom ?? 1, focalPoint, draft?.resolution ?? "1080");
   const travelPercent = (value: number, min: number, max: number) => max > min
     ? Math.round(Math.max(0, Math.min(1, (value - min) / (max - min))) * 100) : 50;
@@ -184,7 +230,8 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   const positionFrame = (point: FocalPoint) => {
     if (!draft || !cropEditingAvailable) return;
     // Manual framing applies to the whole short, replacing any per-cut override.
-    updateDraft({ focalPoint: point, cuts: draft.cuts.map(({ focalPoint: _point, ...cut }) => cut) });
+    updateDraft({ focalPoint: point, autoFocus: false, focusAnalysis: undefined,
+      cuts: draft.cuts.map(({ focalPoint: _point, focusTrack: _track, ...cut }) => cut) });
   };
   const positionSubject = (axis: "x" | "y", percent: number) => {
     if (!draft || !cropEditingAvailable) return;
@@ -209,7 +256,8 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
             {draftSource?.id === source.id && draft?.fit === "crop" && !codecError && <CropDragOverlay
               key={`${source.id}:${draft.id}:${currentCut?.id}:${currentCut?.start}:${currentCut?.end}:${draft.aspect}:${draft.zoom}:${draft.resolution}`}
               videoRef={video} source={source} crop={crop} label={draft.aspect === "original" ? "Source frame" : `${draft.aspect} crop`}
-              disabled={!cropEditingAvailable} onChange={positionFrame} />}
+              disabled={!cropEditingAvailable} onChange={positionFrame}
+              onDragStateChange={dragging => { if (dragging) { video.current?.pause(); setFrozenFocus({ context: focusContext, point: focalPoint }); } else setFrozenFocus(null); }} />}
           </div>
         </div>
         <div className="shorts-player-body">
@@ -248,6 +296,22 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
           <summary>Frame &amp; quality<span>{draft.aspect === "original" ? "Original" : draft.aspect} · {draft.resolution === "source" ? "Source" : `${draft.resolution}p`}</span></summary>
           <div className="shorts-settings-grid"><label>Format<select value={draft.aspect} onChange={event => updateDraft({ aspect: event.target.value as ShortDraft["aspect"] })}><option value="9:16">Portrait · 9:16</option><option value="1:1">Square · 1:1</option><option value="4:5">Portrait · 4:5</option><option value="16:9">Landscape · 16:9</option><option value="original">Original format</option></select></label><label>Export quality<select value={draft.resolution} onChange={event => updateDraft({ resolution: event.target.value as ShortDraft["resolution"] })}><option value="1080">1080p · Full HD</option><option value="720">720p · HD</option><option value="source">Source resolution</option></select></label><label className="shorts-full-width">Fit the frame<select value={draft.fit} onChange={event => updateDraft({ fit: event.target.value as ShortDraft["fit"], ...(event.target.value !== "crop" ? { zoom: 1 } : {}) })}><option value="crop">Fill frame · crop sides</option><option value="blur">Keep full shot · blurred background</option><option value="contain">Keep full shot · black background</option></select></label></div>
           {draft.fit === "crop" && <div className="shorts-focal-controls">
+            <div className="shorts-focus-card">
+              <label className="shorts-check-option shorts-focus-toggle"><input type="checkbox" checked={draft.autoFocus === true} disabled={!cropEditingAvailable || !engineReady}
+                onChange={event => updateDraft({ autoFocus: event.target.checked })} /><span><strong>Auto center speaker <em>Local</em></strong><small>Follow the face nearest your starting crop through each sequence.</small></span></label>
+              <div className="shorts-focus-status" role="status" aria-live="polite">
+                {draft.autoFocus ? <>
+                  {focusBusyId === draft.id || !focusReady ? <p><LoaderCircle size={13} className={focusBusyId === draft.id ? "spin" : ""} />{focusBusyId === draft.id ? "Finding the face in your selected sequences…" : "Complete valid timestamps to prepare automatic centering."}</p>
+                    : <><p>{draft.focusAnalysis?.status === "tracked" ? "Framing is ready. Play the source to see the crop follow the face."
+                      : draft.focusAnalysis?.status === "partial" ? "Framing is ready where a face was found. Other sequences keep your manual position."
+                      : draft.focusAnalysis?.status === "no-face" ? "No clear face was found. Your manual framing will be used." : "Automatic centering is unavailable. Your manual framing will be used."}</p>
+                      {draft.focusAnalysis?.reason && <p>{draft.focusAnalysis.reason}</p>}
+                      {draft.focusAnalysis?.multipleFaces && <p>Several faces were visible. This follows the face nearest your starting crop; it does not identify the person speaking.</p>}
+                      {draft.focusAnalysis?.status !== "tracked" && <button className="text-button" type="button" disabled={!cropEditingAvailable || !engineReady} onClick={() => { updateDraft({ focusAnalysis: undefined }); setFocusRetry(value => value + 1); }}>Retry automatic centering<ArrowRight size={13} /></button>}</>}
+                  <p>Dragging the frame or changing its position switches automatic centering off.</p>
+                </> : <p>Off · Your manual frame stays fixed. Analysis runs on your computer.</p>}
+              </div>
+            </div>
             <p className="shorts-framing-scope">Drag the orange frame on the video, or use these controls. Position changes apply to every sequence.</p>
             <Slider label="Crop zoom" min={1} max={2} step={0.01} unit="×" value={draft.zoom ?? 1} defaultValue={1} disabled={!cropEditingAvailable} onChange={zoom => updateDraft({ zoom })}
               hint="Zoom in to leave room to move the frame. More zoom keeps less of the original picture." />

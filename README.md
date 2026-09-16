@@ -286,6 +286,12 @@ The default portrait export is **1080 × 1920**, including from a 1920 × 1080 l
 
 **Crop zoom** creates room to reposition the frame. At 1×, a landscape-to-portrait crop already keeps the full source height, so vertical positioning is disabled until you zoom in. Position controls use 0–100% of the available travel, update the crop outline immediately, and apply to every sequence. Zoom and position are saved with the short and used by previews and exports. Choosing a full-shot background resets crop zoom.
 
+Drag the orange crop directly on the video with a mouse or touch. The lower playback controls stay usable. With the crop focused, arrow keys move it, Shift moves farther, Home centers it, and Escape cancels an unfinished drag.
+
+**Automatic speaker centering** optionally follows a visible face through the selected sequences. Enable it under **Frame & quality**. It runs locally using the bundled MIT-licensed YuNet detector; install its CPU dependencies once with `npm run setup:focus`. No API key or paid service is used. Each analysis seeks at most 180 small frames from the selected source intervals, without copying or decoding the entire recording. Very long selections get sparser tracking. Preview and export use the same saved source-time camera path, including reordered sequences.
+
+This is face positioning, not audio-based active-speaker recognition. With several people visible, position the crop over the desired person before switching it on. Tracking follows the nearest face using spatial continuity; occlusion or a scene change can break that continuity. No-face or unavailable analysis keeps manual framing and shows the reason. Turning it off restores your manual position; dragging or changing a position control takes manual control. Changing source timestamps triggers a fresh bounded analysis. Review the framing before exporting.
+
 ### Free cleanup and optional paid restoration
 
 **Clean up video** applies mild local noise reduction and sharpening before resizing. It uses FFmpeg on your computer and has no API charge. It can improve noisy footage; it cannot reconstruct detail that was never captured. Compare a rendered sample before enabling it on every clip.

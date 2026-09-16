@@ -38,6 +38,7 @@ import { installManualPreviewRoutes } from "./manual-preview.js";
 import { assertLinkedSourceUnchanged, ImportError, installMediaImportRoutes } from "./media-imports.js";
 import { installPromptEditRoutes } from "./prompt-routes.js";
 import { installEditorialReviewRoutes } from "./editorial-routes.js";
+import { installSpeakerFocusRoutes } from "./speaker-focus-routes.js";
 
 class HttpError extends Error {
   constructor(
@@ -145,6 +146,7 @@ export function createApp() {
   app.use(express.json({ limit: "512kb" }));
   installMediaImportRoutes(app);
   installManualPreviewRoutes(app);
+  installSpeakerFocusRoutes(app);
   let binaries = checkBinaries();
   app.get("/api/health", async (_req, res) => {
     let tools = await binaries;

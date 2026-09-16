@@ -2,6 +2,8 @@ import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog } from "./editorial-repair.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
 export interface FocalPoint { x: number; y: number }
+/** A subject center in source coordinates, at an original source timestamp. */
+export interface FocusKeyframe extends FocalPoint { time: number }
 export interface CaptionStyle { fontSize: number; bottomPercent: number }
 export interface QualityIssue { code: string; message: string; start?: number; end?: number }
 export interface QualityReport { status: "pass" | "review"; checkedAt: string; scope: "full" | "sampled"; issues: QualityIssue[] }
@@ -9,6 +11,7 @@ export interface EditSegment {
   start: number;
   end: number;
   focalPoint?: FocalPoint;
+  focusTrack?: FocusKeyframe[];
 }
 export interface TimedCallout {
   text: string;
