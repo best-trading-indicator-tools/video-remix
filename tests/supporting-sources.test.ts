@@ -1,3 +1,4 @@
+import { fixtureGraphics } from "./helpers/graphic-scenes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { planSupportingVisuals, prepareSupportingVisuals } from "../server/supporting-plan.js";
@@ -24,7 +25,7 @@ const jobFor = (visualSources: VisualSource[], brollCount = 6): StoredJob => ({ 
     changes: [], usedAI: false, narration: false, transcriptAvailable: true },
 } as StoredJob);
 const prepare = (job: StoredJob, extra: Partial<Parameters<typeof prepareSupportingVisuals>[0]> = {}) => prepareSupportingVisuals({
-  source, job, transcript: speech, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {},
+  planGraphics: fixtureGraphics, source, job, transcript: speech, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {},
   findStock: async () => { assert.fail("An unselected stock source must not make requests"); },
   matchAI: async ({ assets, moments }) => ({ matches: moments.flatMap((_moment, momentIndex) =>
     assets.map(asset => ({ momentIndex, assetId: asset.id, sourceStart: 0, reason: "Observed sea matches the spoken scene." }))), notes: [] }),
@@ -127,7 +128,7 @@ test("preparation dispatches every mix to exactly its selected stock provider an
         assert.ok(visualSources.includes(renderer)); rendered.push(renderer);
         assert.equal(options.width, 1080); assert.equal(options.height, 1920);
         assert.ok(options.output.includes(`supporting-${renderer}-`));
-        assert.ok(speech.segments.some(segment => segment.text === options.text));
+        assert.ok(speech.segments.some(segment => segment.text === options.scene?.nodes[0]?.quote));
       },
     });
     assert.equal(stockCalls, visualSources.includes("pixabay") ? 1 : 0);

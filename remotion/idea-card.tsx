@@ -9,10 +9,13 @@ import {
   useCurrentFrame,
   useVideoConfig,
 } from "remotion";
+import { graphicSceneSvg } from "../shared/graphic-art";
+import type { GraphicScene } from "../shared/graphic-scene";
 import "@fontsource/inter/latin-400.css";
 import "@fontsource/inter/latin-700.css";
 
 export type IdeaCardProps = {
+  scene?: GraphicScene;
   text: string;
   caption: string;
   width: number;
@@ -40,7 +43,7 @@ const linesFor = (text: string, size: number, width: number) => {
 };
 
 /** Fixed authored artwork. Every user string is a React text node. */
-export function IdeaCard({ text, caption }: IdeaCardProps) {
+export function IdeaCard({ text, caption, scene }: IdeaCardProps) {
   const frame = useCurrentFrame();
   const { width, height, fps, durationInFrames } = useVideoConfig();
   const [fontsReady] = useState(() => delayRender("Load local Inter fonts"));
@@ -50,6 +53,8 @@ export function IdeaCard({ text, caption }: IdeaCardProps) {
       document.fonts.load('400 16px "Inter"'),
     ]).then(() => continueRender(fontsReady), cancelRender);
   }, [fontsReady]);
+
+  if (scene) return <AbsoluteFill dangerouslySetInnerHTML={{ __html: graphicSceneSvg(scene, width, height, frame / fps, "paper") }} />;
 
   const short = Math.min(width, height);
   const inset = short * 0.095;

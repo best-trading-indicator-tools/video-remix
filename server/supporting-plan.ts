@@ -1,3 +1,6 @@
+import { planGraphicScenes } from "./graphic-planner.js";
+import type { GraphicScene } from "../shared/graphic-scene.js";
+import { GRAPHIC_KIND_LABELS } from "../shared/graphic-scene.js";
 import path from "node:path";
 import type { BrollAsset, RenderJob, Transcript, VisualSource } from "../shared/types.js";
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "../shared/types.js";
@@ -18,12 +21,14 @@ import { inspectBrollWindows } from "./broll-motion.js";
 import { compactBrollNotes } from "../shared/broll-notes.js";
 
 interface Moment {
+  words?: Transcript["segments"][number]["words"];
   start: number;
   end: number;
   text: string;
   context?: string;
 }
 export interface PlannedSupportingVisual extends Moment {
+  scene?: GraphicScene;
   assetId?: string;
   kind: "broll" | "graphic";
   visualSource: VisualSource;
@@ -88,6 +93,7 @@ function moments(
             end,
             text: selected.map((word) => word.word.trim()).join(" "),
             context,
+            words: selected,
           });
         first = last + 1;
       }
@@ -105,11 +111,39 @@ function moments(
   });
 }
 
+/** Give explanations enough spoken context for a relationship, while stock shots
+ * keep their shorter windows. Boundaries, reserved shots and coverage still win. */
+function explanationMoments(base: Moment[], transcript: Transcript | undefined, duration: number, maximum: number, occupied: Pick<SupportingVisual, "start" | "end">[], gap: number): Moment[] {
+  const allWords = transcript?.segments.flatMap(segment => segment.words).sort((a,b) => a.start-b.start) ?? [];
+  return base.map(moment => {
+    if (!moment.words?.length || !transcript) return moment;
+    const nextShot = occupied.filter(shot => shot.start > moment.start).sort((a,b) => a.start-b.start)[0];
+    const limit = Math.min(duration-.35, moment.start+maximum, nextShot ? nextShot.start-gap : Infinity);
+    const words: NonNullable<Moment["words"]> = [];
+    let lower = 0, upper = allWords.length;
+    while (lower < upper) {
+      const middle = Math.floor((lower+upper)/2);
+      if (allWords[middle]!.start < moment.start-.001) lower = middle+1; else upper = middle;
+    }
+    for (let index = lower; index < allWords.length; index++) {
+      const word = allWords[index]!;
+      if (word.end > limit) break;
+      words.push(word);
+      if (words.length >= 18 || (words.length >= 5 && /[.!?。！？]$/u.test(word.word.trim()))) break;
+    }
+    if (!words.length) return moment;
+    return { ...moment, words, text: words.map(word => word.word.trim()).join(" "),
+      end: Math.min(limit, Math.max(moment.end, words.at(-1)!.end+.35)) };
+  });
+}
+
 export function planSupportingVisuals({
   transcript, duration, sourceName, assets, mode = "off", visualSources, aiMatches,
-  brollCount, brollMaxCoverage = DEFAULT_BROLL_MAX_COVERAGE, assetSources = {}, occupied = [], effortRound = 0, graphicStart = 0,
+  graphicScenes, graphicMoments, brollCount, brollMaxCoverage = DEFAULT_BROLL_MAX_COVERAGE, assetSources = {}, occupied = [], effortRound = 0, graphicStart = 0,
 }: {
   transcript?: Transcript;
+  graphicScenes?: Map<number, GraphicScene>;
+  graphicMoments?: Moment[];
   duration: number;
   sourceName: string;
   assets: BrollAsset[];
@@ -154,11 +188,16 @@ export function planSupportingVisuals({
     for (const source of priority) {
       let proposed: PlannedSupportingVisual | undefined;
       if (source === "hyperframes" || source === "remotion") {
-        const text = moment.text.replace(/\s+/gu, " ").trim();
-        if (!transcript?.segments.length || moment.start < graphicStart || text.length < 12 || text.length > 100 || tokens(text).length < 2 || text.split(/\s+/u).length > Math.max(6, Math.floor((moment.end - moment.start) * 4)))
-          continue;
-        proposed = { ...moment, text, kind: "graphic", visualSource: source,
-          reason: "Animated emphasis of the spoken phrase." };
+        const idea = graphicMoments?.[momentIndex] ?? moment;
+        const text = idea.text.replace(/\s+/gu, " ").trim();
+        if (!transcript?.segments.length || idea.start < graphicStart) continue;
+        const scene = graphicScenes?.get(momentIndex);
+        // The public timing helper can propose moments; production supplies only
+        // verified scenes. Readability is based on scene labels, not speech length.
+        if (graphicScenes ? !scene : text.length < 12 || text.length > 100 || tokens(text).length < 2 ||
+          text.split(/\s+/u).length > Math.max(6, Math.floor((idea.end - idea.start) * 4))) continue;
+        proposed = { ...idea, text, kind: "graphic", visualSource: source, scene,
+          reason: scene?.reason ?? "Spoken moment available for illustration planning." };
       } else {
         const words = new Set(tokens(moment.text));
         const available = assets.filter(asset => origin(asset) === source && !used.has(asset.id) && asset.duration >= 1.5);
@@ -223,7 +262,7 @@ const renderCard = async (source: GraphicSource, options: GraphicOptions) => sou
 async function prepareSupportingVisualsPass({
   source, job, transcript, assets, workDir, signal, onPhase, occupied = [], options = job.auto,
   inspect = inspectBrollWindows, findStock = findStockBroll, matchAI = matchBrollWithAI,
-  available = graphicAvailable, render = renderCard, effortRound = 0, excludedStockIds = [],
+  available = graphicAvailable, render = renderCard, planGraphics = planGraphicScenes, effortRound = 0, excludedStockIds = [],
 }: {
   source: StoredSource;
   options?: StoredJob["auto"];
@@ -239,6 +278,7 @@ async function prepareSupportingVisualsPass({
   matchAI?: typeof matchBrollWithAI;
   available?: typeof graphicAvailable;
   render?: typeof renderCard;
+  planGraphics?: typeof planGraphicScenes;
   effortRound?: number;
   excludedStockIds?: string[];
 }): Promise<SupportingVisual[]> {
@@ -297,9 +337,19 @@ async function prepareSupportingVisualsPass({
     } else if (!transcript?.segments.length)
       addNote("AI B-roll matching needs a speech transcript. Original footage was kept.");
   }
+  const graphicMoments = explanationMoments(matchingMoments, transcript, duration,
+    effortRound ? 3.6 : Math.max(3.6, Math.min(6, duration * (options?.brollMaxCoverage ?? DEFAULT_BROLL_MAX_COVERAGE) / 100 / timingCount)), occupied, effortRound ? .15 : timingCount >= 6 ? .6 : 1.2);
+  let graphicScenes = new Map<number, GraphicScene>();
+  if (sources.some(source => source === "hyperframes" || source === "remotion") && transcript?.segments.length) {
+    onPhase("Designing illustrations from the spoken ideas", 64);
+    const graphics = await planGraphics({ moments: graphicMoments, signal });
+    graphicScenes = graphics.scenes;
+    graphics.notes.forEach(addNote);
+    if (!graphicScenes.size) addNote("No useful illustration fit these spoken moments. Original footage was kept.");
+  }
   const plan = (candidates: StoredBroll[]) => planSupportingVisuals({
     transcript, duration, sourceName: source.name, assets: candidates,
-    visualSources: sources, aiMatches, brollCount: requested, brollMaxCoverage: options?.brollMaxCoverage, assetSources, occupied, effortRound,
+    visualSources: sources, aiMatches, graphicScenes, graphicMoments, brollCount: requested, brollMaxCoverage: options?.brollMaxCoverage, assetSources, occupied, effortRound,
     graphicStart: job.settings.hookText ? job.settings.hookDuration : 0,
   });
   let plans = plan(assets);
@@ -339,17 +389,20 @@ async function prepareSupportingVisualsPass({
         ...(asset.selection ? { selection: asset.selection } : {}), ...(asset.stock ? { stock: asset.stock } : {}) });
       if (placement.reason) addNote(`B-roll at ${placement.start.toFixed(1)}s: ${asset.name} — ${placement.reason}`);
     } else {
+      if (!placement.scene) continue;
+      const scene = placement.scene;
       const engines = [placement.visualSource as GraphicSource, ...sources.filter((source): source is GraphicSource =>
         (source === "hyperframes" || source === "remotion") && source !== placement.visualSource)];
       for (const engine of engines) try {
         onPhase(`Creating ${VISUAL_SOURCE_LABELS[engine]} animated card · shot ${index + 1}/${plans.length}`, 65);
         const output = path.join(workDir, `supporting-${engine}-${effortRound}-${index}.mp4`);
-        await render(engine, { text: placement.text, ...dimensions, duration: placement.end - placement.start,
+        await render(engine, { text: scene.title, scene, ...dimensions, duration: placement.end - placement.start,
           output, workDir, signal });
         result.push({ path: output, start: placement.start, end: placement.end, sourceStart: 0,
-          label: placement.text, kind: "graphic", visualSource: engine });
-        details.push({ name: placement.text, kind: "graphic", visualSource: engine, start: placement.start,
-          end: placement.end, reason: placement.reason });
+          label: scene.title, kind: "graphic", visualSource: engine });
+        details.push({ name: scene.title, kind: "graphic", visualSource: engine, start: placement.start,
+          end: placement.end, reason: placement.reason, graphicScene: scene });
+        addNote(`${GRAPHIC_KIND_LABELS[scene.kind]} at ${placement.start.toFixed(1)}s: ${scene.title} — ${scene.reason}`);
         break;
       } catch {
         signal.throwIfAborted();

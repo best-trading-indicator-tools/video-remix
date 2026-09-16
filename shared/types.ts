@@ -1,3 +1,4 @@
+import type { GraphicScene } from "./graphic-scene.js";
 import type { FinishedReviewReport } from "./finished-review.js";
 import type { VisualIdentity, HistoryMatch } from "./visual-identity.js";
 import type { PacingOptions } from "./pacing.js";
@@ -217,6 +218,7 @@ export interface BrollAsset extends VideoSource {
 }
 export interface CaptionCue { id: string; start: number; end: number; text: string }
 export interface EditPlanMedia {
+  graphicScene?: GraphicScene;
   id: string;
   name: string;
   kind: "broll" | "graphic" | "audio";
@@ -428,7 +430,7 @@ export interface RenderJob {
   notes?: string[];
   captionUrl?: string;
   supportingVisuals?: {
-    kind: "broll" | "graphic";
+    graphicScene?: GraphicScene;    kind: "broll" | "graphic";
     visualSource?: VisualSource;
     name: string;
     start: number;

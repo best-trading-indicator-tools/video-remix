@@ -1,3 +1,4 @@
+import { fixtureGraphics } from "./helpers/graphic-scenes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mkdtemp, rm, stat } from "node:fs/promises";
@@ -23,7 +24,7 @@ test("four requested mixed cards are present in the decoded final ten-second vid
       auto:{aspect:"9:16",targetDuration:10,narration:false,visualSources:["hyperframes","remotion"],brollCount:4},
       summary:{title:"Camera advice",sourceDuration:10,outputDuration:10,changes:[],usedAI:false,narration:false,transcriptAvailable:true}} as StoredJob;
     const transcript: Transcript = {language:"en",duration:10,segments:["Use soft window light.","Steady the camera tripod.","Check your audio microphone.","Frame the subject carefully."].map((text,i)=>({start:i*2.4,end:i*2.4+2.1,text,words:[]}))};
-    const visuals = await prepareSupportingVisuals({source,job,transcript,assets:[],workDir:directory,signal,onPhase:()=>{}});
+    const visuals = await prepareSupportingVisuals({planGraphics:fixtureGraphics,source,job,transcript,assets:[],workDir:directory,signal,onPhase:()=>{}});
     assert.equal(visuals.length,4,JSON.stringify(job.notes));
     assert.equal(new Set(visuals.map(visual=>visual.path)).size,4);
     assert.deepEqual(new Set(visuals.map(visual=>visual.visualSource)),new Set(["hyperframes","remotion"]));

@@ -1,3 +1,4 @@
+import { sceneFixtures } from "./helpers/graphic-scene-fixtures.js";
 import { readWorkspaceFile, writeWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
@@ -383,7 +384,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
         "-vf", "drawtext=text='Saved animated title':fontsize=18:fontcolor=white:x=20+20*t:y=75",
         "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", cardPath]);
       const cardBytes = await readFile(cardPath);
-      parent.editPlan.media.push({ id: cardId, kind: "graphic", name: "Saved Remotion title", duration: 2, visualSource: "remotion" });
+      parent.editPlan.media.push({ id: cardId, kind: "graphic", name: "Saved Remotion title", duration: 2, visualSource: "remotion", graphicScene: sceneFixtures[3] });
       const cardPlacement = { id: randomUUID(), mediaId: cardId, start: 8, end: 9, sourceStart: 0,
         enabled: true, locked: true, reason: "Retained spoken emphasis" };
       parent.editPlan.visuals.push(cardPlacement);
@@ -470,6 +471,8 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.deepEqual(after.visuals.find(item => item.mediaId === cardId), cardPlacement);
       const keptCard = after.media.find(item => item.id === cardId)!;
       assert.equal(keptCard.visualSource, "remotion");
+      assert.deepEqual(keptCard.graphicScene, sceneFixtures[3]);
+      assert.deepEqual(refreshed.supportingVisuals?.find(item => item.kind === "graphic")?.graphicScene, sceneFixtures[3]);
       assert.equal(keptCard.name, "Saved Remotion title");
       assert.equal(digest(await download(keptCard.url!)), digest(cardBytes));
       assert.equal(refreshed.supportingVisuals?.find(item => item.kind === "graphic")?.visualSource, "remotion");

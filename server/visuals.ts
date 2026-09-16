@@ -2,6 +2,8 @@ import { access, copyFile, mkdir, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { graphicSceneSchema, type GraphicScene } from "../shared/graphic-scene.js";
+import { graphicSceneSvg } from "../shared/graphic-art.js";
 import type { FocalPoint, VisualSource } from "../shared/types.js";
 
 /** Local, preselected media on the final edited timeline. Sound is never used. */
@@ -18,6 +20,7 @@ export interface SupportingVisual {
 }
 
 export interface GraphicOptions {
+  scene?: GraphicScene;
   text: string;
   caption?: string;
   width: number;
@@ -45,9 +48,13 @@ function escapeHtml(text: string): string {
 export function validateGraphic(
   options: Pick<
     GraphicOptions,
-    "text" | "caption" | "width" | "height" | "duration"
+    "text" | "caption" | "width" | "height" | "duration" | "scene"
   >,
 ): void {
+  if (options.scene) {
+    graphicSceneSchema.parse(options.scene);
+    if (options.scene.nodes.some(node => node.at > options.duration - .5)) throw new Error("Visual reveal exceeds the card duration");
+  }
   if (
     !options.text.trim() ||
     options.text.length > 180 ||
@@ -74,11 +81,15 @@ export function validateGraphic(
 export function graphicHtml(
   options: Pick<
     GraphicOptions,
-    "text" | "caption" | "width" | "height" | "duration"
+    "text" | "caption" | "width" | "height" | "duration" | "scene"
   >,
 ): string {
   validateGraphic(options);
   const { width, height, duration } = options;
+  if (options.scene) return `<!doctype html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:Inter;font-weight:400;src:url('./inter-400.woff2')}@font-face{font-family:Inter;font-weight:700;src:url('./inter-700.woff2')}
+html,body{margin:0;width:${width}px;height:${height}px;overflow:hidden}</style></head><body>
+<div data-composition-id="supporting-idea" data-no-timeline data-start="0" data-duration="${duration}" data-width="${width}" data-height="${height}">${graphicSceneSvg(options.scene,width,height)}</div></body></html>`;
   const short = Math.min(width, height);
   let titleSize = Math.round(
     short *

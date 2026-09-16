@@ -180,6 +180,7 @@ export async function renderRemotionGraphic(
     });
     signal.throwIfAborted();
     const inputProps = {
+      scene: options.scene,
       text: options.text.trim(),
       caption: options.caption?.trim() || "",
       width: options.width,

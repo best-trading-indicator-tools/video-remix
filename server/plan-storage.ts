@@ -97,7 +97,7 @@ export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual
       const { probeMedia } = await import("./engine.js");
       const metadata = await probeMedia(visual.path);
       const mediaId = await snapshot(visual.path, { name: visual.label, kind: visual.kind, duration: metadata.duration,
-        assetId: detail?.assetId, attribution: detail?.attribution, selection: detail?.selection, stock: detail?.stock, visualSource: detail?.visualSource ?? visual.visualSource });
+        assetId: detail?.assetId, attribution: detail?.attribution, selection: detail?.selection, stock: detail?.stock, graphicScene: detail?.graphicScene, visualSource: detail?.visualSource ?? visual.visualSource });
       next.push({ id: randomUUID(), mediaId, start: visual.start, end: visual.end,
         sourceStart: visual.sourceStart ?? 0, enabled: true, locked: true, reason: detail?.reason, focalPoint: visual.focalPoint });
     }
@@ -170,7 +170,7 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
       const metadata = await probeMedia(visual.path);
       const mediaId = await snapshot(visual.path, { name: visual.label, kind: visual.kind,
         duration: metadata.duration, assetId: detail?.assetId, attribution: detail?.attribution,
-        selection: detail?.selection, stock: detail?.stock, visualSource: detail?.visualSource ?? visual.visualSource });
+        selection: detail?.selection, stock: detail?.stock, graphicScene: detail?.graphicScene, visualSource: detail?.visualSource ?? visual.visualSource });
       plannedVisuals.push({ id: randomUUID(), mediaId, start: visual.start, end: visual.end,
         sourceStart: visual.sourceStart ?? 0, enabled: true, locked: true, reason: detail?.reason, focalPoint: visual.focalPoint });
     }
@@ -231,7 +231,7 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
     const media = plan.media.find(media => media.id === item.mediaId)!;
     return { name: media.name, kind: media.kind as "broll" | "graphic", start: item.start, end: item.end,
       sourceStart: item.sourceStart, assetId: media.assetId, attribution: media.attribution,
-      selection: media.selection, stock: media.stock, reason: item.reason, visualSource: media.visualSource };
+      selection: media.selection, stock: media.stock, graphicScene: media.graphicScene, reason: item.reason, visualSource: media.visualSource };
   });
   if (job.summary) {
     const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays/iu.test(change));

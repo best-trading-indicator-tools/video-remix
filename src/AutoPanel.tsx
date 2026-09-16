@@ -81,8 +81,8 @@ export default function AutoPanel({
   const visualChoices: { id: VisualSource; description: string; icon: typeof Film; available: boolean; setup: string }[] = [
     { id: "pixabay", description: "Moving stock footage", icon: Film, available: capabilities?.stockProviders?.includes("pixabay") ?? !!capabilities?.stockBroll, setup: "Add a Pixabay API key to enable stock search." },
     { id: "pexels", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockProviders?.includes("pexels"), setup: "Add a Pexels API key to enable stock search." },
-    { id: "hyperframes", description: "Animated cards", icon: Layers3, available: !!capabilities?.motionGraphics, setup: "HyperFrames renderer is unavailable on this engine." },
-    { id: "remotion", description: "Animated cards", icon: Shapes, available: !!capabilities?.remotionGraphics, setup: "Remotion renderer is unavailable on this engine." },
+    { id: "hyperframes", description: "Illustrated explainers", icon: Layers3, available: !!capabilities?.motionGraphics, setup: "HyperFrames renderer is unavailable on this engine." },
+    { id: "remotion", description: "Illustrated explainers", icon: Shapes, available: !!capabilities?.remotionGraphics, setup: "Remotion renderer is unavailable on this engine." },
     { id: "library", description: "Your uploaded clips", icon: FolderOpen, available: true, setup: "" },
   ];
   const toggleVisualSource = (source: VisualSource, enabled: boolean) => onChange({
@@ -339,7 +339,8 @@ export default function AutoPanel({
                   : <p className="auto-visual-empty">Original footage only. No supporting shots will be added.</p>}
               </fieldset>
               <p className="auto-preferences-note">Stock videos provided by <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a> and <a href="https://pixabay.com" target="_blank" rel="noreferrer">Pixabay</a>. Creator credits accompany each selected clip.</p>
-              {graphicsSelected && <p className="auto-preferences-note">Animated cards use text and shapes to illustrate key points from the speech. Your main audio continues underneath.</p>}
+              {graphicsSelected && !capabilities?.intelligence && <p className="auto-preferences-note">Configure DeepSeek to plan illustrated explainers. Without it, the original picture is kept.</p>}
+              {graphicsSelected && <p className="auto-preferences-note">DeepSeek designs illustrations, diagrams and comparisons for the current spoken idea. Charts use only numbers stated in the speech. Both renderers animate them locally; your main audio continues underneath.</p>}
               {stockSelected && (
                 <div className="broll-matching">
                   <label htmlFor="stock-video-type">Stock video style</label>

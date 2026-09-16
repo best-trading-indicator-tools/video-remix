@@ -1,3 +1,4 @@
+import { GRAPHIC_KIND_LABELS } from "../shared/graphic-scene";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -497,7 +498,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                         <label className="edit-plan-check"><input type="checkbox" checked={visual.enabled} onChange={(event) => updateVisual(visual.id, { enabled: event.target.checked })} />Include shot</label>
                       </div>
                       {media?.url && <FootagePreview key={`${media.id}:${previewStart}:${previewEnd}`} url={media.url} label={`Preview shot ${index + 1}`} start={previewStart} end={previewEnd} aspect={previewAspect} focalPoint={visual.focalPoint || CENTER} height={230} />}
-                      {media?.kind === "graphic" && media.visualSource && <p className="edit-plan-note">{VISUAL_SOURCE_LABELS[media.visualSource]} · Animated card</p>}
+                      {media?.kind === "graphic" && media.visualSource && <p className="edit-plan-note">{VISUAL_SOURCE_LABELS[media.visualSource]} · {media.graphicScene ? GRAPHIC_KIND_LABELS[media.graphicScene.kind] : "Animated card"}</p>}
                       <button type="button" className="secondary-button edit-plan-lock" disabled={!visual.enabled} aria-pressed={visual.locked} onClick={() => updateVisual(visual.id, { locked: !visual.locked })}>
                         {visual.locked ? <LockKeyhole size={14} /> : <LockKeyholeOpen size={14} />}{visual.locked ? "Unlock shot to edit" : "Lock this shot"}
                       </button>
@@ -519,6 +520,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                         <FocalControls label={`Shot ${index + 1} crop position`} value={visual.focalPoint || CENTER} onChange={(point) => updateVisual(visual.id, { focalPoint: point })} />
                       </fieldset>
                       <p className="edit-plan-note">{visual.reason || media?.selection?.reason || "Supporting footage selected for this part of the edit."}</p>
+                      {media?.graphicScene && <p className="edit-plan-note">Spoken evidence: {media.graphicScene.nodes.map(node => `“${node.quote}”`).join(" · ")}</p>}
                       {media?.attribution && <p className="edit-plan-credit">Video by {media.attribution.creator} on <a href={media.attribution.url} target="_blank" rel="noreferrer">{media.attribution.provider}</a>{media.stock?.licenseUrl && <> · <a href={media.stock.licenseUrl} target="_blank" rel="noreferrer">License</a></>}</p>}
                     </article>;
                   })}

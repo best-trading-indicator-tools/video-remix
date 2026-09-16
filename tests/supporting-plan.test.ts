@@ -1,3 +1,5 @@
+import { groundGraphicScenes } from "../server/graphic-planner.js";
+import { fixtureGraphics } from "./helpers/graphic-scenes.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
@@ -264,7 +266,7 @@ const effortFixture = (visualSources: NonNullable<StoredJob["auto"]>["visualSour
   const job = { id: "effort", auto: { aspect: "9:16", targetDuration: 10, narration: false, visualSources, brollCount: count }, settings: { ...DEFAULT_SETTINGS, aspect: "9:16" },
     summary: { title: "Camera advice", sourceDuration: 10, outputDuration: 10, changes: [], usedAI: false, narration: false, transcriptAvailable: true } } as StoredJob;
   const transcript: Transcript = { language: "en", duration: 10, segments: ["Use soft window light.", "Steady the camera tripod.", "Check your audio microphone.", "Frame the subject carefully."].map((text, i) => ({start:i*2.4,end:i*2.4+2.1,text,words:[]})) };
-  return { source, job, transcript, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {} };
+  return { planGraphics: fixtureGraphics, source, job, transcript, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {} };
 };
 
 test("all best-effort passes obey the same coverage cap, counting retained shots", async () => {
@@ -354,4 +356,38 @@ test("stock shortfalls trigger more searches and keep matched shots while reject
   assert.deepEqual(rounds, [0,1]);
   assert.equal(new Set(input.job.supportingVisuals!.map(shot=>shot.stock!.providerId)).size, 4);
   assert.equal(input.job.brollCandidates?.length, 4);
+});
+
+
+test("no verified scene never falls back to rendering generic text cards", async () => {
+  const input = effortFixture(["hyperframes", "remotion"]);
+  let attempts = 0;
+  const result = await prepareSupportingVisuals({ ...input, available: async () => true,
+    planGraphics: async () => { attempts++; return { scenes: new Map(), notes: [] }; },
+    render: async () => { assert.fail("A spoken phrase without a useful scene must not render"); } });
+  assert.deepEqual(result, []);
+  assert.equal(attempts, 3, "Best effort remains bounded");
+  assert.ok(input.job.notes?.some(note => /No useful illustration/u.test(note)));
+});
+
+
+test("word-timed diagrams can explain a complete relationship within coverage and reserved-shot limits", async () => {
+ const input=effortFixture(["remotion"],1);
+ input.source.duration=20; input.job.summary!.outputDuration=20;
+ const text="A morning message lets another person know you care and helps them feel connected.";
+ const words=text.split(" ").map((word,index)=>({word,start:4+index*.3,end:4+index*.3+.24}));
+ input.transcript={language:"en",duration:20,segments:[{start:4,end:8.5,text,words}]};
+ let designed=false;
+ const result=await prepareSupportingVisuals({...input,occupied:[{start:10,end:12}],available:async()=>true,
+  planGraphics:async({moments})=>{
+   const moment=moments[0]!; assert.match(moment.text,/feel connected/); assert.ok(moment.end-moment.start>3.6);
+   designed=true;
+   const scenes=groundGraphicScenes({scenes:[{momentIndex:0,scene:{kind:"process",title:"A small check-in",reason:"Shows the stated connection between a message and feeling connected.",unit:"",nodes:[
+    {label:"Morning message",icon:"phone",quote:"morning message",value:null,at:0},
+    {label:"Connection",icon:"people",quote:"helps them feel connected",value:null,at:0}]} }]},moments);
+   return {scenes,notes:[]};
+  },render:async(_engine,options)=>{assert.equal(options.scene?.kind,"process");}});
+ assert.equal(designed,true);assert.equal(result.length,1);assert.ok(result[0]!.end<=8.8);
+ assert.ok(result[0]!.end-result[0]!.start+2<=12);
+ assert.equal(input.job.supportingVisuals?.[0]?.graphicScene?.kind,"process");
 });

@@ -18,7 +18,10 @@ try {
     publicDir: path.join(root, "remotion/public"),
     enableCaching: false,
     gitSource: null,
-    webpackOverride: (configuration) => ({ ...configuration, devtool: false }),
+    webpackOverride: (configuration) => ({ ...configuration, devtool: false,
+      // Shared scene code uses Node ESM .js specifiers; resolve its TS source in the browser bundle.
+      resolve: { ...configuration.resolve, extensionAlias: { ...configuration.resolve?.extensionAlias, ".js": [".ts", ".tsx", ".js"] } },
+    }),
   });
 } catch (error) {
   await rm(output, { recursive: true, force: true });
