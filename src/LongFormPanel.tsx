@@ -7,6 +7,7 @@ import Slider from "./Slider";
 import CropDragOverlay from "./CropDragOverlay";
 import ClipDiscovery from "./ClipDiscovery";
 import FinishingPresets from "./FinishingPresets";
+import ShortPacing from "./ShortPacing";
 import "./shorts.css";
 
 type Props = {
@@ -56,6 +57,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   const [focusRetry, setFocusRetry] = useState(0);
   const [frozenFocus, setFrozenFocus] = useState<{ context: string; point: FocalPoint } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
+  const pacingPreviewEnd = useRef<number | null>(null);
   const sampleVideo = useRef<HTMLVideoElement>(null);
   const clockOwner = useRef<"source" | "sample" | null>(null);
   const previewRequest = useRef<AbortController | null>(null);
@@ -156,6 +158,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   };
   const seek = (seconds: number) => {
     if (!source) return;
+    pacingPreviewEnd.current = null;
     const next = Math.min(Math.max(0, seconds), source.duration);
     clockOwner.current = codecError ? null : "source"; video.current?.pause(); sampleVideo.current?.pause();
     if (video.current && !codecError) { try { video.current.currentTime = next; } catch { /* The clock also works before metadata is available. */ } }
@@ -276,7 +279,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
             <video key={source.id} ref={video} src={source.url} poster={source.thumbnailUrl} controls preload="metadata" playsInline
               onError={() => setCodecError(true)} onPlay={() => { clockOwner.current = "source"; sampleVideo.current?.pause(); }} onSeeking={() => { clockOwner.current = "source"; }}
               onLoadedMetadata={() => { if (video.current && playhead > 0) video.current.currentTime = playhead; }}
-              onTimeUpdate={() => { if (!video.current || clockEditing || codecError || clockOwner.current !== "source") return; const time = Math.min(source.duration, video.current.currentTime); setPlayhead(time); setClock(formatSourceClock(time)); }} />
+              onTimeUpdate={() => { if (!video.current || clockEditing || codecError || clockOwner.current !== "source") return; const time = Math.min(source.duration, video.current.currentTime); if (pacingPreviewEnd.current !== null && time >= pacingPreviewEnd.current) { video.current.pause(); pacingPreviewEnd.current = null; } setPlayhead(time); setClock(formatSourceClock(time)); }} />
             {draftSource?.id === source.id && draft?.fit === "crop" && (!draft.layout || draft.layout === "single") && !codecError && <CropDragOverlay
               key={`${source.id}:${draft.id}:${currentCut?.id}:${currentCut?.start}:${currentCut?.end}:${draft.aspect}:${draft.zoom}:${draft.resolution}`}
               videoRef={video} source={source} crop={crop} label={draft.aspect === "original" ? "Source frame" : `${draft.aspect} crop`}
@@ -363,6 +366,8 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
           <label className="shorts-check-option"><input type="checkbox" checked={draft.qualityCleanup} onChange={event => updateDraft({ qualityCleanup: event.target.checked })} /><span><strong>Gentle cleanup <em>Free</em></strong><small>Reduce noise and sharpen lightly on your computer.</small></span></label>
           <p className="shorts-helper">1080p portrait exports are 1080 × 1920. Enlarging or cleaning up footage cannot restore missing detail.</p>
         </details>
+        {draftSource && <ShortPacing key={draft.id} draft={draft} active={active} disabled={rendering || !engineReady || !validateShortDraft({ ...draft, autoFocus: false }, draftSource).settings} onChange={updateDraft}
+          onPreview={(start, end) => { seek(start); pacingPreviewEnd.current = end; clockOwner.current = "source"; void video.current?.play().catch(() => setPreviewError("Use Render sample at this time to inspect this source format.")); }} />}
         <div className="shorts-total"><span>Short duration</span><strong>{durationLabel(validation?.duration || 0)}</strong></div>
         {!!validation?.errors.length && <div className="shorts-error" role="alert">{validation.errors[0]}</div>}
         {(validation?.duration || 0) > 180 && <p className="shorts-message">This cut runs over three minutes. Check the length you want before posting.</p>}

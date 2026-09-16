@@ -1,3 +1,4 @@
+import type { PacingOptions } from "./pacing.js";
 import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog } from "./editorial-repair.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
@@ -29,6 +30,7 @@ export interface AutoOptions {
   /** Maximum output length in whole seconds, starting at 1. */
   targetDuration: number;
   narration: boolean;
+  pacing?: PacingOptions;
   /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
   captions?: "auto" | "add" | "keep";
   supportingVisuals?: "off" | "stock" | "library" | "graphics" | "both";
@@ -48,6 +50,7 @@ export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   narration: false,
   captions: "auto",
   editorialMode: "repair",
+  pacing: { mode: "natural", minimumPause: 0.9, keepPause: 0.35, removeFillers: false },
 };
 export interface AutoBatchItem {
   sourceId: string;
@@ -121,6 +124,7 @@ export interface RemixSettings {
   segments?: EditSegment[];
   callouts?: TimedCallout[];
   normalizeAudio?: boolean;
+  smoothCuts?: boolean;
   /** Mild local denoising and sharpening, without a cloud service. */
   qualityCleanup?: boolean;
   layout?: "single" | "split" | "presentation";

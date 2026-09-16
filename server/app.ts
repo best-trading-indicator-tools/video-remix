@@ -39,6 +39,7 @@ import { assertLinkedSourceUnchanged, ImportError, installMediaImportRoutes } fr
 import { installPromptEditRoutes } from "./prompt-routes.js";
 import { installEditorialReviewRoutes } from "./editorial-routes.js";
 import { installSpeakerFocusRoutes } from "./speaker-focus-routes.js";
+import { installPacingRoutes } from "./pacing-routes.js";
 import { installClipDiscoveryRoutes } from "./clip-discovery-routes.js";
 
 class HttpError extends Error {
@@ -149,6 +150,7 @@ export function createApp() {
   installManualPreviewRoutes(app);
   installSpeakerFocusRoutes(app);
   installClipDiscoveryRoutes(app);
+  installPacingRoutes(app);
   let binaries = checkBinaries();
   app.get("/api/health", async (_req, res) => {
     let tools = await binaries;

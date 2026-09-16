@@ -1,3 +1,4 @@
+import { pacingOptionsSchema } from "../shared/pacing.js";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
 import { MAX_FOCUS_POINTS_PER_CUT, MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
@@ -73,6 +74,7 @@ export const settingsSchema = z
       .max(5)
       .optional(),
     normalizeAudio: z.boolean().optional(),
+    smoothCuts: z.boolean().optional(),
     qualityCleanup: z.boolean().optional(),
     layout: z.enum(["single", "split", "presentation"]).optional(),
     secondaryFocalPoint: focalPointSchema.optional(),
@@ -104,6 +106,7 @@ export const autoOptionsSchema = z
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
     targetDuration: z.number().int().min(1).default(45),
     narration: z.boolean().default(false),
+    pacing: pacingOptionsSchema.optional(),
     captions: z.enum(["auto", "add", "keep"]).optional(),
     supportingVisuals: z
       .enum(["off", "stock", "library", "graphics", "both"])

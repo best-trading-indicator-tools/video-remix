@@ -1,3 +1,4 @@
+import { pacingCutSignature, pacingReviewSchema, type PacingReview } from "./pacing.js";
 import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RemixSettings, type VideoSource } from "./types.js";
 import { MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "./focus.js";
 
@@ -30,6 +31,7 @@ export interface ShortDraft {
   qualityCleanup: boolean;
   layout?: RemixSettings["layout"];
   secondaryFocalPoint?: FocalPoint;
+  pacingReview?: PacingReview;
   updatedAt: string;
 }
 export interface ShortDraftStore { version: 1; drafts: ShortDraft[] }
@@ -137,6 +139,7 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
     ...DEFAULT_SETTINGS, aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
     segments, focalPoint: draft.focalPoint, normalizeAudio: draft.normalizeAudio, qualityCleanup: draft.qualityCleanup,
     layout: draft.layout, secondaryFocalPoint: draft.secondaryFocalPoint,
+    smoothCuts: !!draft.pacingReview?.appliedSignature && draft.pacingReview.appliedSignature === pacingCutSignature(draft.cuts),
   };
   return { errors, duration, settings: errors.length ? null : settings };
 }
@@ -167,6 +170,14 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       cuts.push({ id: cut.id, start: cut.start.slice(0, 32), end: cut.end.slice(0, 32), ...(focal(cut.focalPoint) ? { focalPoint: cut.focalPoint } : {}), ...(focusTrack ? { focusTrack } : {}) });
     }
     ids.add(value.id);
+    const pacing = pacingReviewSchema.safeParse(value.pacingReview);
+    const validPacing = pacing.success && pacing.data.baseCuts.every(cut => {
+      const start = parseSourceClock(cut.start), end = parseSourceClock(cut.end);
+      return start !== null && end !== null && end - start >= 0.05;
+    }) && pacing.data.removals.every(removal => {
+      const cut = pacing.data.baseCuts[removal.cutIndex];
+      return removal.start >= parseSourceClock(cut.start)! && removal.end <= parseSourceClock(cut.end)!;
+    });
     return [{
       id: value.id, sourceId: value.sourceId, sourceName: value.sourceName.slice(0, 500),
       sourceFingerprint: typeof value.sourceFingerprint === "string" ? value.sourceFingerprint : undefined,
@@ -188,6 +199,7 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       normalizeAudio: value.normalizeAudio === true, qualityCleanup: value.qualityCleanup === true,
       layout: value.layout === "split" || value.layout === "presentation" ? value.layout : "single",
       secondaryFocalPoint: focal(value.secondaryFocalPoint) ? value.secondaryFocalPoint : undefined,
+      ...(validPacing ? { pacingReview: pacing.data } : {}),
       updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString(),
     }];
   });

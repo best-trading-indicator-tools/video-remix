@@ -23,6 +23,8 @@ import { DEFAULT_BROLL_COUNT, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDu
 import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import FinishingPresets from "./FinishingPresets";
+import PacingOptions from "./PacingOptions";
+import "./pacing.css";
 import "./auto-panel.css";
 
 export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
@@ -125,6 +127,7 @@ export default function AutoPanel({
       </div>
       <div className="auto-panel-body">
         <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch })} />
+        <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
         <div className="auto-scope">
           <label htmlFor="auto-source">
             {sources.length

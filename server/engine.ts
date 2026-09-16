@@ -92,7 +92,7 @@ function run(
       cleanup();
       reject(error);
     });
-    child.once("close", (code) => {
+    child.once("close", (code, signal) => {
       cleanup();
       if (options.signal?.aborted) reject(abortError());
       else if (timedOut)
@@ -100,7 +100,7 @@ function run(
       else if (code !== 0)
         reject(
           new Error(
-            `${binary} failed: ${stderr.trim().slice(-4_000) || `exit ${code}`}`,
+            `${binary} failed: ${stderr.trim().slice(-4_000) || (signal ? `signal ${signal}` : `exit ${code}`)}`,
           ),
         );
       else resolve(stdout);
@@ -362,7 +362,7 @@ function validateSettings(settings: RemixSettings): void {
       ))
   )
     throw new Error("Callouts need valid text and start/end times");
-  for (const key of ["normalizeAudio", "autoMotion", "qualityCleanup"] as const) {
+  for (const key of ["normalizeAudio", "autoMotion", "qualityCleanup", "smoothCuts"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean")
       throw new Error(`Invalid ${key} setting`);
   }
@@ -821,6 +821,19 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
             // At normal speed it adds buffering without changing the audio.
             ...(s.speed === 1 ? [] : [`atempo=${s.speed}`]),
           ];
+      if (s.smoothCuts && segments && segments.length > 1 && !replacementAudio) {
+        let boundary = 0;
+        const dips = segments.slice(0, -1).map(segment => {
+          boundary += (segment.end - segment.start) / s.speed;
+          return `min(1,abs(t-${decimal(boundary)})/0.004)`;
+        });
+        // A 4 ms dip on each side softens hard joins without shifting either stream.
+        // Use the export's explicit stereo layout: FFmpeg 8 can crash while
+        // negotiating aeval's "same" layout from mono input to stereo output.
+        const gain = dips.join("*");
+        audioFilters.push("aformat=channel_layouts=stereo",
+          `aeval=exprs='val(0)*(${gain})|val(1)*(${gain})':channel_layout=stereo`);
+      }
       if (s.normalizeAudio) audioFilters.push("loudnorm=I=-16:TP=-1.5:LRA=11");
       audioFilters.push(
         `volume=${s.volume}`,

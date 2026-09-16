@@ -1,3 +1,4 @@
+import { applyPacing, suggestPacing } from "../shared/pacing.js";
 import { randomUUID } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -310,7 +311,14 @@ export async function prepareAutoRemix({
     );
     const candidate = candidates[creative?.windowIndex ?? 0]!;
     if (candidate.idea) notes.push(`Selected idea: ${candidate.idea.summary}`);
-    cuts = selectSpeechCuts(transcript, candidate);
+    if (options.pacing) {
+      const original = [{ start: candidate.start, end: candidate.end }];
+      const suggestions = suggestPacing(transcript, original, options.pacing);
+      cuts = applyPacing(original, suggestions.removals);
+      notes.push(...suggestions.notes);
+      const fillers = suggestions.removals.filter(item => item.kind === "filler").length;
+      if (fillers) notes.push(`Removed ${fillers} isolated filler sound${fillers === 1 ? "" : "s"}. Review the speech joins.`);
+    } else cuts = selectSpeechCuts(transcript, candidate);
     captionTranscript = retimeTranscript(transcript, cuts);
     hook = creative?.hook || fallbackHook(captionTranscript);
     callouts = creative?.callouts || [];
@@ -436,6 +444,7 @@ export async function prepareAutoRemix({
     hookText: keepSourceCaptions ? "" : hook,
     hookDuration: Math.min(3.5, duration),
     normalizeAudio: true,
+    smoothCuts: !!options.pacing && cuts.length > 1,
     autoMotion: false,
     device: "none",
     callouts: captionTranscript && !keepSourceCaptions

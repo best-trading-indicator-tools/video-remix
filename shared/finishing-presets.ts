@@ -1,3 +1,4 @@
+import { NATURAL_PACING, pacingOptionsSchema } from "./pacing.js";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT } from "./types.js";
 import { getVisualSources } from "./visual-sources.js";
@@ -10,7 +11,7 @@ const framing = {
   zoom: z.number().min(1).max(2), layout: z.enum(["single", "split", "presentation"]).default("single"),
   normalizeAudio: z.boolean().default(false), qualityCleanup: z.boolean().default(false),
 };
-const autoSchema = z.object({ aspect, captions: z.enum(["auto", "add", "keep"]).default("auto"),
+const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
   visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"])).max(5).transform(values => [...new Set(values)]),
   brollCount: z.number().int().min(1).max(10).default(DEFAULT_BROLL_COUNT),
   brollMatching: z.enum(["tags", "ai"]).default("tags"), stockVideoType: z.enum(["all", "animation"]).default("all"),
