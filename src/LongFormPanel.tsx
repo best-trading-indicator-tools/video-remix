@@ -245,7 +245,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
 
   return <div className="shorts-workspace" hidden={!active}>
     <section className="shorts-player panel">
-      <div className="panel-heading"><h2><Play size={16} /> Find your moment</h2><span className="shorts-kicker">SOURCE CLOCK</span></div>
+      <div className="panel-heading"><h2><Play size={16} /> Source preview</h2><span className="shorts-kicker">SOURCE CLOCK</span></div>
       {source ? <>
         <div className="shorts-viewer">
           <div className="shorts-source-frame" style={{ aspectRatio: sourceAspect, maxWidth: `${500 * sourceAspect}px` }}>
@@ -266,7 +266,6 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
           <label className="shorts-scrubber"><span className="visually-hidden">Source position</span><input type="range" min={0} max={source.duration} step={0.001} value={playhead} onChange={event => seek(event.target.valueAsNumber)} style={{ "--range-fill": `${playhead / source.duration * 100}%` } as CSSProperties} /></label>
           <div className="shorts-clock-row"><label htmlFor="shorts-source-clock">Source timestamp<input id="shorts-source-clock" className="shorts-clock" value={clock} inputMode="decimal" spellCheck={false} aria-invalid={!clockValid} onFocus={() => setClockEditing(true)} onChange={event => setClock(event.target.value)} onBlur={() => { setClockEditing(false); if (clockValid) seek(clockSeconds!); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label><button className="secondary-button" disabled={!clockValid} onClick={() => seek(clockSeconds!)}>Go to time<ChevronRight size={14} /></button></div>
           {!clockValid && <p className="shorts-error" role="alert">Enter a timestamp inside this video: HH:MM:SS.mmm or seconds.</p>}
-          <div className="shorts-mark-actions"><button className="secondary-button" disabled={!currentCut || !startClockValid || draftSource?.id !== source.id} onClick={() => mark("start")}><Scissors size={14} />Mark start</button><button className="secondary-button" disabled={!currentCut || !clockValid || draftSource?.id !== source.id} onClick={() => mark("end")}><Scissors size={14} />Mark end</button></div>
           <div className="shorts-sample-action"><button className="text-button" disabled={!engineReady || !startClockValid || previewBusy} onClick={() => void renderPreview("source")}><Play size={13} />Render sample at this time</button><span>5 seconds · up to 720p</span></div>
         </div>
       </> : <div className="shorts-empty"><Clapperboard size={30} /><h3>A long video. Your best moments.</h3><p>Import a video from the source panel, then choose the timestamps that belong in your short.</p></div>}
@@ -276,12 +275,13 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     </section>
 
     <section className="shorts-editor panel">
-      <div className="panel-heading"><h2><Scissors size={16} /> Build a short</h2><button className="icon-button" disabled={!source || drafts.length >= MAX_SHORTS} aria-label="Create a new short" onClick={addDraft}><Plus size={17} /></button></div>
+      <div className="panel-heading"><h2><Scissors size={16} /> Build a short</h2><button className="secondary-button" disabled={!source || drafts.length >= MAX_SHORTS} onClick={addDraft}><Plus size={15} />New short</button></div>
       {draft ? <div className="shorts-editor-body">
         <div className="shorts-title-row"><label htmlFor="shorts-title">Short name<input id="shorts-title" value={draft.title} maxLength={100} placeholder="Name this moment" onChange={event => updateDraft({ title: event.target.value })} /></label><button className="icon-button" title="Duplicate short" aria-label="Duplicate short" disabled={drafts.length >= MAX_SHORTS} onClick={duplicate}><Copy size={16} /></button></div>
         {!draftSource && <div className="shorts-message"><strong>Source unavailable</strong><p>Reimport {draft.sourceName}, then reconnect this draft. Your sequences are saved.</p>{matchingShortSource(draft, sources) ? <button className="secondary-button" onClick={() => reconnect(draft, matchingShortSource(draft, sources)!)}><Link2 size={14} />Reconnect matching video</button> : source && <button className="secondary-button" onClick={() => reconnect(draft, source)}><Link2 size={14} />Reconnect to selected source</button>}</div>}
         <div className="shorts-section-label"><h3>Sequences</h3><span>{draft.cuts.length} / {MAX_SHORT_CUTS}</span></div>
-        <p className="shorts-helper">Source timestamps. Sequences play in the order below.</p>
+        <p className="shorts-helper">Source timestamps. Sequences play in the order below. Use the source preview to find a moment, then set the selected sequence here.</p>
+          <div className="shorts-mark-actions"><button className="secondary-button" disabled={!currentCut || !startClockValid || draftSource?.id !== source.id} onClick={() => mark("start")}><Scissors size={14} />Set start at playhead</button><button className="secondary-button" disabled={!currentCut || !clockValid || draftSource?.id !== source.id} onClick={() => mark("end")}><Scissors size={14} />Set end at playhead</button></div>
         <ol className="shorts-cut-list">{draft.cuts.map((cut, index) => {
           const start = parseSourceClock(cut.start), end = parseSourceClock(cut.end);
           const invalid = start === null || end === null || end <= start + 0.04 || (!!draftSource && (start >= draftSource.duration || end > draftSource.duration + 0.001));
@@ -329,7 +329,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
         {!!validation?.errors.length && <div className="shorts-error" role="alert">{validation.errors[0]}</div>}
         {(validation?.duration || 0) > 180 && <p className="shorts-message">This cut runs over three minutes. Check the length you want before posting.</p>}
         <button className="secondary-button shorts-preview-button" disabled={!engineReady || !validation?.settings || previewBusy} onClick={() => void renderPreview("short")}><Play size={14} />Preview this short<span>5s</span></button>
-      </div> : <div className="shorts-empty"><Scissors size={28} /><h3>Keep the part that matters.</h3><p>Create a short, set its start and end, then add another sequence if your story needs it.</p><button className="primary-button" disabled={!source || drafts.length >= MAX_SHORTS} onClick={addDraft}><Plus size={15} />Create a short</button></div>}
+      </div> : <div className="shorts-empty"><Scissors size={28} /><h3>Keep the part that matters.</h3><p>Create a short, set its start and end, then add another sequence if your story needs it.</p></div>}
     </section>
 
     <section className="shorts-collection panel">
@@ -345,7 +345,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
             <button className="icon-button" aria-label={`Delete ${item.title || "untitled short"} draft`} onClick={() => { setDrafts(current => current.filter(value => value.id !== item.id)); setSelectedIds(current => current.filter(id => id !== item.id)); if (draft?.id === item.id) setActiveId(null); }}><Trash2 size={15} /></button>
           </div>;
         })}</div> : <p className="shorts-collection-empty">Every short you create appears here. Select clips from several source videos and render them together.</p>}
-        <div className="shorts-collection-actions"><button className="secondary-button" disabled={!source || drafts.length >= MAX_SHORTS} onClick={addDraft}><Plus size={14} />New short from selected video</button>{drafts.length > 0 && <button className="text-button" onClick={() => setSelectedIds(selectedIds.length === drafts.length ? [] : drafts.map(item => item.id))}>{selectedIds.length === drafts.length ? "Clear selection" : "Select all shorts"}</button>}</div>
+        <div className="shorts-collection-actions">{drafts.length > 0 && <button className="text-button" onClick={() => setSelectedIds(selectedIds.length === drafts.length ? [] : drafts.map(item => item.id))}>{selectedIds.length === drafts.length ? "Clear selection" : "Select all shorts"}</button>}</div>
       </div>
       <div className="shorts-render-bar"><div><strong>From long-form to ready to share.</strong><p>Your original file stays intact. Each short becomes its own MP4.</p></div><div className="shorts-render-controls"><label htmlFor="shorts-render-scope">Render scope<select id="shorts-render-scope" value={scope} onChange={event => setScope(event.target.value as typeof scope)}><option value="current">This short</option><option value="selected">Selected shorts ({selectedIds.length})</option><option value="all">All shorts ({drafts.length})</option></select></label><button className="primary-button" disabled={!engineReady || !targets.length || rendering || (scope === "current" && !validation?.settings)} onClick={() => void render()}>{rendering ? <LoaderCircle size={16} className="spin" /> : <Clapperboard size={16} />}<span>{rendering ? "Preparing…" : `Render ${targets.length === 1 ? "this short" : `${targets.length} shorts`}`}</span><ArrowRight size={15} /></button></div></div>
       {error && <p className="shorts-batch-error shorts-error" role="alert">{error}</p>}
