@@ -1,5 +1,6 @@
 /** Opt-in semantic smoke, never part of CI: npx tsx benchmarks/editorial-smoke.ts --run-deepseek
- * Four authored text fixtures; up to four paid DeepSeek calls (six with --held-out), no user media or model downloads.
+ * Four authored text fixtures (six with --held-out), each with up to four paid DeepSeek attempts.
+ * No user media or model downloads.
  * Results are observations on these examples, not human acceptance or model accuracy.
  */
 import { pathToFileURL } from "node:url";
@@ -7,6 +8,7 @@ import { DEFAULT_SETTINGS, type EditPlan, type Transcript } from "../shared/type
 import { editorialAIConfigured, editorialModel } from "../server/editorial-provider.js";
 import { editorialReplySchema, deepseekEditorialReviewer } from "../server/editorial-model.js";
 import { reviewEditorialPlan } from "../server/editorial-review.js";
+import { AI_MAX_ATTEMPTS } from "../server/ai-json.js";
 
 function speech(text: string, start: number): Transcript["segments"][number] {
   const words = text.split(" ").map((word, index) => ({ word, start: Number((start + index * 0.32).toFixed(3)),
@@ -90,7 +92,7 @@ export async function runEditorialSmoke(includeHeldOut = false) {
       seconds: Number(((Date.now() - start) / 1000).toFixed(2)),
       findings: parsed.success ? parsed.data.checks.map(({ check, verdict, explanation }) => ({ check, verdict, explanation })) : [] }));
   }
-  console.log(JSON.stringify({ calls, matched, total: fixtures.length, limitation: "Authored textual examples; this does not measure human acceptance, audio, visuals or platform eligibility." }));
+  console.log(JSON.stringify({ reviews: calls, maxProviderCalls: calls * AI_MAX_ATTEMPTS, matched, total: fixtures.length, limitation: "Authored textual examples; this does not measure human acceptance, audio, visuals or platform eligibility." }));
   if (matched !== fixtures.length) process.exitCode = 1;
 }
 

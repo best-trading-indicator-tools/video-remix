@@ -9,6 +9,7 @@ import {
 import { buildEditorialReviewContext, reviewEditorialPlan } from "./editorial-review.js";
 import { applyEditPlanChanges } from "./edit-plan.js";
 import { editorialAIEnabled, generateEditorialJSON } from "./editorial-provider.js";
+import { AIRequestError } from "./ai-errors.js";
 
 const MAX_EXTENSION = 3;
 const MAX_ADDED_SOURCE_SECONDS = 6;
@@ -217,7 +218,8 @@ export async function repairEditorialPlan({ plan, transcript, signal, maxDuratio
   catch {
     signal.throwIfAborted();
     initialTimedOut = true;
-    report = await reviewEditorialPlan({ plan: best, transcript, signal, aiEnabled: false });
+    report = await reviewEditorialPlan({ plan: best, transcript, signal,
+      reviewer: async () => { throw new AIRequestError("timeout"); } });
   }
   const log: EditorialRepairLog = { policyVersion: EDITORIAL_REPAIR_POLICY_VERSION, modelVersion: report.modelVersion,
     initialReport: structuredClone(report), finalReport: structuredClone(report), attempts: [], stopReason: "" };

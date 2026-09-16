@@ -1,4 +1,5 @@
 import { historyRecords, reconcileHistory } from "./store.js";
+import { AI_REQUEST_BUDGET_MS } from "./ai-json.js";
 import { createHash } from "node:crypto";
 import type { Express } from "express";
 import type { EditorialReviewer } from "../shared/editorial.js";
@@ -20,7 +21,7 @@ const signature = (job: StoredJob) => createHash("sha256")
 export function installEditorialReviewRoutes(app: Express, options: ReviewRouteOptions = {}) {
   const active = new Map<string, AbortController>();
   const running = options.isJobRunning || isRunning;
-  const timeoutMs = Math.max(1, Math.min(65_000, options.timeoutMs ?? 65_000));
+  const timeoutMs = Math.max(1, Math.min(AI_REQUEST_BUDGET_MS + 15_000, options.timeoutMs ?? AI_REQUEST_BUDGET_MS + 15_000));
   app.post("/api/jobs/:id/editorial-review", async (req, res) => {
     if (req.body !== undefined && (!req.body || typeof req.body !== "object" || Array.isArray(req.body) || Object.keys(req.body).length))
       return res.status(400).json({ error: "This action reviews the saved edit and does not accept editing changes." });

@@ -34,10 +34,12 @@ test("creative editing separates candidate selection from grounded excerpt packa
     const body = JSON.parse(String(init?.body));
     assert.equal(body.model, "editorial-test-model");
     assert.equal(body.response_format.type, "json_object");
-    assert.deepEqual(body.messages.map((message: { role: string }) => message.role), ["system", "user"]);
+    assert.deepEqual(body.messages.slice(0, 2).map((message: { role: string }) => message.role), ["system", "user"]);
+    assert.ok(body.messages.length <= 3, "Retries keep one original task and at most one format correction");
+    if (body.messages[2]) assert.equal(body.messages[2].role, "user");
     const supplied = JSON.parse(body.messages[1].content);
     requests.push({ ...body, prompt: JSON.stringify(supplied.input), format: supplied.outputSchema } as RequestBody);
-    const reply = replies.shift();
+    const reply = replies.length > 1 ? replies.shift() : replies[0];
     assert.ok(reply, "The editing workflow made an unexpected extra model call");
     if (reply.abort) {
       reply.abort.abort(new Error("Cancelled while generating"));
@@ -69,10 +71,10 @@ test("creative editing separates candidate selection from grounded excerpt packa
     await t.test("invalid selections cannot produce a headline for a different or nonexistent candidate", async () => {
       for (const value of [{ windowIndex: 3 }, { windowIndex: -1 }, { windowIndex: 1.5 }, {}, { windowIndex: 1, hook: "Wrong phase" }]) {
         assert.equal(await run([{ value }]), null);
-        assert.equal(requests.length, 1);
+        assert.equal(requests.length, value.windowIndex === 3 ? 1 : 4);
       }
       assert.equal(await run([{ raw: "{not JSON" }]), null);
-      assert.equal(requests.length, 1);
+      assert.equal(requests.length, 4);
     });
 
     await t.test("neighboring evidence informs selection but cannot enter the selected-excerpt packaging request", async () => {
@@ -98,7 +100,7 @@ test("creative editing separates candidate selection from grounded excerpt packa
         assert.deepEqual(result, {
           windowIndex: 2, hookRewritten: false, hook: "The carpenter checks the wood grain.", callouts: [], narration: "",
         });
-        assert.equal(requests.length, 2);
+        assert.equal(requests.length, 5, "One selection plus four bounded packaging attempts");
       }
     });
 

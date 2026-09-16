@@ -80,7 +80,7 @@ test("Auto editorial AI reuses DeepSeek configuration with bounded validated req
           assert.ok(!String(error.stack).includes("private-provider-details"));
           assert.ok(!JSON.stringify(error).includes("fixture-key")); return true;
         });
-        assert.equal(calls, 1);
+        assert.equal(calls, code === "authentication" || code === "quota" ? 1 : 4);
       }
     });
     await t.test("an editorial deadline remains a typed timeout through the nested provider request", async () => {

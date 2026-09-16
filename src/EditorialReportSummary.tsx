@@ -30,7 +30,7 @@ export default function EditorialReportSummary({ report: savedReport, repair, co
     <details className="editorial-report-details" open={!compact && report.status !== "pass"}>
     <summary className="editorial-report-heading">{report.status === "pass" ? <Check size={14} /> : report.status === "unavailable" ? <CircleHelp size={14} /> : <AlertTriangle size={14} />}
       <span className="editorial-report-title"><strong>{title}</strong>
-        {failureMessage && <span className="editorial-failure">{failureMessage}</span>}
+        {failureMessage && <span className="editorial-failure">{failureMessage}{(report.failure?.attempts ?? 0) > 1 && ` Automatically tried ${report.failure!.attempts} times.`}</span>}
       </span></summary>
     <p>Checks selected speech, headings, callouts, and captions against the original transcript. Your judgment of the finished video is recorded separately in History.</p>
     {!!report.issues.length && <ul className="editorial-issues">{report.issues.map((issue, index) => <li key={`${issue.code}-${index}`}>
@@ -73,7 +73,8 @@ export default function EditorialReportSummary({ report: savedReport, repair, co
         {retrying ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
         <span role={retrying ? "status" : undefined}>{retrying ? "Checking edit…" : "Retry editorial check"}</span>
       </button>
-      <p>Checks this saved edit without changing or rendering the video.</p>
+      <p>{retrying ? "Checking the saved edit. Temporary DeepSeek errors are retried automatically."
+        : "Checks this saved edit without changing or rendering the video."}</p>
     </div>}
     {retryError && <p className="editorial-retry-error" role="alert">{retryError}</p>}
   </section>;

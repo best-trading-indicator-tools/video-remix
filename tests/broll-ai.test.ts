@@ -707,7 +707,9 @@ test(
           try {
             AbortSignal.timeout = (milliseconds: number) => {
               timerBudgets.push(milliseconds);
-              return milliseconds >= 120_000 ? analysisTimeout.signal : oldTimeout(milliseconds);
+              // Only expire the analysis stage; individual provider retries
+              // now have their own independent two-minute total budgets.
+              return timerBudgets.length === 1 && milliseconds >= 120_000 ? analysisTimeout.signal : oldTimeout(milliseconds);
             };
             globalThis.fetch = async (_input, init) => {
               const body = requestBody(init);
@@ -735,6 +737,7 @@ test(
             assert.equal(result.matches.length, 1);
             assert.match(result.notes.join(" "), /time limit was reached.*shots already inspected/);
             assert.equal(timerBudgets.at(-1), 45_000, "Final matching receives its own provider timeout");
+            assert.deepEqual(timerBudgets.slice(-2), [120_000, 45_000], "Matching has fresh total and per-attempt deadlines");
             assert.deepEqual((await readdir(paths.analysis)).filter(name => name.startsWith(".broll-frames")), []);
           } finally { AbortSignal.timeout = oldTimeout; }
         },

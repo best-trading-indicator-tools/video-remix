@@ -35,6 +35,20 @@ With the local speech model ready, Auto transcribes speech, selects a focused ex
 
 If speech or the speech model is unavailable, Auto falls back to scene and timing edits using the source footage. Captions require a usable transcript. The export notes explain which tools were used and any fallback.
 
+### DeepSeek recovery
+
+DeepSeek requests automatically try up to four times within two minutes (or the
+remaining time allowed by the editing stage). Temporary connection/service
+errors, rate limits and incomplete JSON are retried with backoff. The server
+respects `Retry-After`; truncated answers get a larger, bounded response budget.
+Editorial checks also retry invalid schemas and unverifiable source quotations,
+without changing the saved edit or assuming a passing verdict. Authentication
+and account-credit errors stop immediately with an actionable message.
+
+If recovery is exhausted, the export remains available and the editorial warning
+shows the reason and number of attempts. **Retry editorial check** checks the
+saved edit again without rendering. Cancelling stops requests and backoff waits.
+
 ### Captions already in the footage
 
 **Captions → Auto · avoid duplicates** is the default. Before adding captions,

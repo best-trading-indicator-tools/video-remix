@@ -244,7 +244,11 @@ test("manual prompts compile private bounded settings proposals without mutating
         Response.json({ choices: [{ finish_reason: "length", message: { content: "{}" } }] }),
         new Response("secret diagnostics manual-prompt-private-test-key", { status: 403 }),
       ]) {
-        fetchMock.mock.mockImplementationOnce(async () => response);
+        const body = await response.text();
+        const firstCall = fetchMock.mock.callCount();
+        const attempts = response.ok ? 4 : 1;
+        for (let attempt = 0; attempt < attempts; attempt++)
+          fetchMock.mock.mockImplementationOnce(async () => new Response(body, { status: response.status, headers: response.headers }), firstCall + attempt);
         await assert.rejects(propose(), (error: unknown) => error instanceof PromptEditError && error.status === 502 && !error.message.includes("private-test-key"));
       }
       reply = { patch: {}, summary: ["Video rendered"] };

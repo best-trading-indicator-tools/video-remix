@@ -5,7 +5,7 @@ import { jsonCompletion } from "../server/ai-json.js";
 
 const secret = "private-provider-response-and-key";
 const request = (fetcher: typeof fetch, signal = new AbortController().signal) => jsonCompletion({
-  model: "fixture-model", apiKey: secret, messages: [], maxTokens: 100, signal, fetcher,
+  model: "fixture-model", apiKey: secret, messages: [], maxTokens: 100, signal, fetcher, maxAttempts: 1,
 });
 const failure = (code: AIRequestErrorCode, retryable = true) => (error: unknown) => {
   assert.ok(error instanceof AIRequestError);

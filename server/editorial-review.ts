@@ -1,3 +1,4 @@
+import { AI_REQUEST_BUDGET_MS } from "./ai-json.js";
 import type { EditPlan, Transcript, TranscriptSegment } from "../shared/types.js";
 import {
   EDITORIAL_POLICY_VERSION, SEMANTIC_EDITORIAL_CHECKS,
@@ -183,8 +184,8 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
   const context = buildEditorialReviewContext(plan, transcript);
   const report: EditorialReport = { status: "unavailable", checkedAt: new Date().toISOString(), policyVersion: EDITORIAL_POLICY_VERSION,
     modelVersion: null, checks: context.structuralChecks, issues: context.structuralIssues, coverage: context.coverage };
-  const unavailable = (message: string, code: string, retryable = false) => {
-    report.failure = { code, message, retryable };
+  const unavailable = (message: string, code: string, retryable = false, attempts = 1) => {
+    report.failure = { code, message, retryable, ...(attempts > 1 ? { attempts } : {}) };
     report.coverage.semantic = "unavailable";
     report.coverage.omittedChecks.push(...context.request.checks);
     report.checks.push(...context.request.checks.map(check => ({ check, status: "unavailable" as const, origin: "semantic" as const, message })));
@@ -198,7 +199,7 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
   report.modelVersion = editorialModel();
   report.provider = "deepseek";
   try {
-    const budget = AbortSignal.any([signal, AbortSignal.timeout(50_000)]);
+    const budget = AbortSignal.any([signal, AbortSignal.timeout(AI_REQUEST_BUDGET_MS + 5_000)]);
     const raw = await new Promise<unknown>((resolve, reject) => {
       const abort = () => reject(budget.reason);
       budget.addEventListener("abort", abort, { once: true });
@@ -240,9 +241,7 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
     return report;
   } catch (error) {
     signal.throwIfAborted();
-    if (error instanceof AIRequestError) return unavailable(error.message, error.code, error.retryable);
-    if (error instanceof EditorialValidationError)
-      return unavailable("DeepSeek returned findings whose source quotations or comparisons could not be verified. Retry the editorial check.", "invalid-evidence", true);
+    if (error instanceof AIRequestError) return unavailable(error.message, error.code, error.retryable, error.attempts);
     if (error instanceof Error && error.name === "TimeoutError") {
       const timeout = new AIRequestError("timeout");
       return unavailable(timeout.message, timeout.code, timeout.retryable);

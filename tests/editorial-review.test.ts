@@ -74,6 +74,34 @@ const withoutExplanation = (reply: unknown) => (reply as ReturnType<typeof passi
 const review = (edit = plan(), source: Transcript | undefined = transcript(), reviewer: EditorialReviewer = async request => passing(request)) =>
   reviewEditorialPlan({ plan: edit, transcript: source, signal: new AbortController().signal, aiEnabled: true, reviewer });
 
+test("editorial review automatically recovers malformed JSON, invalid schema and unsupported quotations in one budget", async () => {
+  const oldFetch = globalThis.fetch;
+  const edit = plan(), source = transcript();
+  const before = structuredClone({ edit, source });
+  let calls = 0;
+  try {
+    globalThis.fetch = async (_url, init) => {
+      calls++;
+      const request = providerRequest(init!).payload.input as EditorialReviewRequest;
+      if (calls === 1) return Response.json({ choices: [{ finish_reason: "stop", message: { content: '{"checks":' } }] });
+      if (calls === 2) return completion({ checks: {} });
+      const reply = providerPassing(request);
+      if (calls === 3) reply.checks["meaning-preserved"]!.selectedEvidence.quote = "Invented words not present in the source.";
+      if (calls === 4) {
+        const messages = JSON.parse(String(init!.body)).messages;
+        assert.match(messages.at(-1).content, /Never invent evidence or assume a passing verdict/);
+        assert.ok(!JSON.stringify(messages).includes("Invented words not present"));
+      }
+      return completion(reply);
+    };
+    const report = await reviewEditorialPlan({ plan: edit, transcript: source, signal: new AbortController().signal });
+    assert.equal(calls, 4);
+    assert.equal(report.status, "pass"); assert.equal(report.coverage.semantic, "complete");
+    assert.equal(report.failure, undefined);
+    assert.deepEqual({ edit, source }, before, "Provider retries must not alter the edit or transcript");
+  } finally { globalThis.fetch = oldFetch; }
+});
+
 test("editorial review separates validated semantic findings from structural evidence and never fabricates coverage", async t => {
   const configured = config.aiEnabled;
   config.aiEnabled = true;
@@ -265,7 +293,8 @@ test("editorial reports preserve safe failure categories from provider responses
       const error = new AIRequestError(code);
       assert.equal(report.status, "unavailable");
       assert.equal(report.coverage.semantic, "unavailable");
-      assert.deepEqual(report.failure, { code, message: error.message, retryable: error.retryable });
+      assert.deepEqual(report.failure, { code, message: error.message, retryable: error.retryable,
+        ...(error.retryable ? { attempts: 4 } : {}) });
       assert.ok(report.checks.filter(check => check.origin === "semantic").every(check => check.status === "unavailable" && check.message === error.message));
       assert.ok(!JSON.stringify(report).includes("private-provider-diagnostic"));
       assert.ok(!JSON.stringify(report).includes("test-editorial-key"));
@@ -318,7 +347,7 @@ test("DeepSeek reviewer uses the fixed endpoint and rejects oversized or unfinis
       return new Response("private provider diagnostic", { status: 503 });
     };
     const unavailable = await reviewEditorialPlan({ plan: plan(), transcript: transcript(), signal: new AbortController().signal });
-    assert.equal(failedCalls, 1, "A failed DeepSeek request must not retry or fall back to Ollama");
+    assert.equal(failedCalls, 4, "Transient failures get bounded retries on DeepSeek, never another provider");
     assert.equal(unavailable.status, "unavailable");
     assert.equal(unavailable.modelVersion, editorialModel()); assert.equal(unavailable.provider, "deepseek");
     assert.ok(!JSON.stringify(unavailable).includes("private provider diagnostic"));

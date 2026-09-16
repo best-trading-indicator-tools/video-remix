@@ -294,6 +294,21 @@ test("bounded editorial repair accepts independently verified improvements and p
         assert.match(timed.repairLog.attempts[0]!.reason, /time budget/);
       } finally { AbortSignal.timeout = oldTimeout; }
     });
+    await t.test("an initial review deadline reports a retryable timeout instead of incorrectly claiming AI is disabled", async () => {
+      const oldTimeout = AbortSignal.timeout, expired = new AbortController();
+      try {
+        AbortSignal.timeout = ms => ms === 120000 ? expired.signal : oldTimeout(ms);
+        const timed = await run({ reviewer: async () => {
+          queueMicrotask(() => expired.abort(new DOMException("Timed out", "TimeoutError")));
+          return new Promise(() => {});
+        } });
+        assert.deepEqual(timed.plan, edit());
+        assert.equal(timed.report.failure?.code, "timeout");
+        assert.equal(timed.report.failure?.retryable, true);
+        assert.equal(timed.report.provider, "deepseek");
+        assert.equal(timed.repairLog.attempts.length, 0);
+      } finally { AbortSignal.timeout = oldTimeout; }
+    });
     await t.test("caller cancellation propagates during a proposal instead of publishing a fallback result", async () => {
       const controller = new AbortController();
       const running = run({ signal: controller.signal, proposer: async () => { queueMicrotask(() => controller.abort()); return new Promise(() => {}); } });

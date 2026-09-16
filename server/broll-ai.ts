@@ -425,7 +425,7 @@ export async function matchBrollWithAI({
         apiKey,
         // Give matching its own bounded request: an analysis timeout must not
         // discard usable observations that already completed. User cancellation
-        // still aborts immediately, and jsonCompletion limits this call to 45s.
+        // still aborts immediately; jsonCompletion bounds all recovery attempts.
         signal,
         maxTokens: Math.max(1_400, budget.briefLimit * 180),
         temperature: 0,
