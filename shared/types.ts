@@ -1,3 +1,4 @@
+import type { VisualIdentity, HistoryMatch } from "./visual-identity.js";
 import type { PacingOptions } from "./pacing.js";
 import type { OwnFootagePlacement, OwnFootageAsset } from "./own-footage.js";
 import type { EditorialReport } from "./editorial.js";
@@ -184,6 +185,7 @@ export interface VideoSource {
   url: string;
   fingerprint?: string;
   previousExports?: number;
+  similarExports?: number;
 }
 export interface BrollAsset extends VideoSource {
   tags: string[];
@@ -331,6 +333,9 @@ export interface ExportMeasurements {
 }
 export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
 export interface ExportHistoryEntry {
+  sourcePicture?: VisualIdentity;
+  outputPicture?: VisualIdentity;
+  match?: HistoryMatch;
   configuration?: ExportConfiguration;
   editorialMode?: AutoOptions["editorialMode"];
   id: string;

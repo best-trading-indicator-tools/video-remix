@@ -271,6 +271,7 @@ function HistoryCard({ entry, stockUses, onSaved }: {
         {entry.publications.length ? <Check size={13} /> : <Clock3 size={13} />}{entry.publications.length ? "Published" : "Exported"}
       </span>
     </div>
+    {entry.match && entry.match.kind !== "exact" && <p className="history-match-notice"><strong>{entry.match.kind === "similar-export" ? "Possible re-export of this finished video" : "Picture resembles this earlier source"}</strong><span>{entry.match.matchedFrames} of {entry.match.sampledFrames} sampled frames match. Compare the previews; this is a local visual hint, and never blocks an export.</span></p>}
     <details className="history-excerpts">
       <summary>Source excerpts &amp; stock footage</summary>
       <p className="history-detail-label">Intervals used from the original source</p>
@@ -357,7 +358,7 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
     <header className="history-heading"><div><h2 id="history-title">Export history <span className="count-pill">{entries.length}</span></h2><p>History stays available after video files expire. Review earlier excerpts and keep a record of your posts.</p></div>
       <button className="secondary-button" onClick={onBack}><ArrowLeft size={14} />Workspace</button>
     </header>
-    {source && <div className="history-source-filter"><div><strong>Earlier exports from this source</strong><span>{source.name}</span></div><button className="secondary-button" onClick={onClearSource}><X size={13} />Show all history</button></div>}
+    {source && <div className="history-source-filter"><div><strong>Earlier exports & possible picture matches</strong><span>{source.name}</span></div><button className="secondary-button" onClick={onClearSource}><X size={13} />Show all history</button></div>}
     <div className="history-toolbar"><label className="history-search"><Search size={16} /><span className="visually-hidden">Search history by title or source</span><input type="search" placeholder="Search by title or source…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
       <button className="secondary-button" disabled={loading} onClick={() => setReload((value) => value + 1)}><RefreshCw className={loading ? "spin" : ""} size={14} />Refresh</button></div>
     <ConfigurationHistory entries={visible} />

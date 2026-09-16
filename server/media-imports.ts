@@ -1,3 +1,4 @@
+import { visualIdentity } from "./visual-identity.js";
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { constants, createReadStream, createWriteStream } from "node:fs";
@@ -155,13 +156,16 @@ async function processImport(item: StoredImport, signal: AbortSignal) {
     const fingerprint = await fingerprintFile(mediaPath(item), signal, bytes => {
       item.progress = Math.min(98, Math.round(12 + bytes / item.size * 86));
     });
+    item.phase = "Checking picture similarity with earlier exports";
+    await persist(item);
+    const picture = await visualIdentity(mediaPath(item), media.duration, signal);
     if (item.signature) await assertLinkedSourceUnchanged({ filePath: mediaPath(item), fileSignature: item.signature });
     signal.throwIfAborted();
     await exclusive(async () => {
       signal.throwIfAborted();
       if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
       const source: StoredSource = {
-        id: item.id, name: item.name, size: item.size, fingerprint, ...media,
+        id: item.id, name: item.name, size: item.size, fingerprint, picture, ...media,
         createdAt: new Date().toISOString(), filePath: mediaPath(item), thumbnailPath: thumbnailPath(item.id),
         url: `/api/sources/${item.id}/video`, thumbnailUrl: `/api/sources/${item.id}/thumbnail`,
         ...(item.signature ? { fileSignature: item.signature } : {}),

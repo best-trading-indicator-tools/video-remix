@@ -34,7 +34,7 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     ...(body === undefined ? {} : { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }),
   });
   const jobs = async () => ((await (await fetch(`${base}/api/jobs`)).json()) as { jobs: RenderJob[] }).jobs;
-  const history = async (sourceId?: string) => {
+  const history = async (sourceId?: string, includeSimilar = false) => {
     const response = await fetch(`${base}${sourceId ? `/api/sources/${sourceId}/history` : "/api/history"}`);
     assert.equal(response.status, 200, await response.clone().text());
     const result = await response.json() as { entries: ExportHistoryEntry[] };
@@ -42,7 +42,7 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     assert.ok(!serialized.includes(directory));
     for (const field of ["filePath", "outputPath", "planFiles", "captionPath", "thumbnailPath", "apiKey"])
       assert.ok(!serialized.includes(`"${field}"`), `History must not expose ${field}`);
-    return result.entries;
+    return includeSimilar ? result.entries : result.entries.filter(entry => !entry.match);
   };
   const thumbnailBytes = async (entry: ExportHistoryEntry, kind: "export" | "source" = "export") => {
     assert.equal(entry.thumbnailUrl, `/api/history/${encodeURIComponent(entry.id)}/thumbnail`);
@@ -562,6 +562,25 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.deepEqual(restored.configuration, target.configuration);
       assert.deepEqual(restored.measurements?.posts, posts);
       assert.deepEqual(restored.publications, [postA, postB]);
+    });
+    await t.test("re-encoded finished exports have advisory picture history after restart and can still render", async () => {
+      const prior = (await history()).find(item => item.available)!;
+      const originalExport = path.join(directory, "finished-export.mp4");
+      await writeFile(originalExport, Buffer.from(await (await fetch(`${base}/api/jobs/${prior.jobId}/video`)).arrayBuffer()));
+      const reencoded = path.join(directory, "finished-reencoded.mp4");
+      await exec("ffmpeg", ["-v", "error", "-y", "-i", originalExport, "-vf", "scale=480:-2", "-c:v", "libx264", "-threads", "1", "-crf", "29", "-c:a", "aac", reencoded]);
+      const uploaded = await sourceUpload(reencoded, "re-export.mp4");
+      assert.equal(uploaded.previousExports, 0);
+      assert.ok((uploaded.similarExports || 0) > 0);
+      const match = (await history(uploaded.id, true)).find(item => item.id === prior.id)!;
+      assert.equal(match.match?.kind, "similar-export");
+      assert.ok((match.match?.matchedFrames || 0) >= 5);
+      assert.equal(match.sourcePicture, undefined, "Private matching evidence is omitted from API payloads");
+      await stop(); await start();
+      assert.equal((await history(uploaded.id, true)).find(item => item.id === prior.id)?.match?.kind, "similar-export");
+      const rendered = await finished((await auto(uploaded.id)).id, "completed");
+      assert.ok(rendered.notes?.some(note => note.includes("possible re-export")));
+      assert.equal((await fetch(`${base}${rendered.downloadUrl}`)).status, 200);
     });
   } finally {
     await stop();

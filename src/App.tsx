@@ -1237,8 +1237,8 @@ export default function App() {
                     ))
                   )}
                 </div>
-                {mode === "auto" && selected && (selected.previousExports || 0) > 0 && <button className="source-history-notice" onClick={() => { setHistorySource(selected); setView("history"); }}>
-                  <strong>{selected.name}</strong>Previously exported {selected.previousExports} {selected.previousExports === 1 ? "edit" : "edits"} · See History
+                {mode === "auto" && selected && ((selected.previousExports || 0) + (selected.similarExports || 0)) > 0 && <button className="source-history-notice" onClick={() => { setHistorySource(selected); setView("history"); }}>
+                  <strong>{selected.name}</strong>{(selected.previousExports || 0) > 0 ? `Previously exported ${selected.previousExports} ${selected.previousExports === 1 ? "edit" : "edits"}` : `${selected.similarExports} possible picture ${selected.similarExports === 1 ? "match" : "matches"}`} · See History
                 </button>}
                 <div className="source-footer">
                   <span className="privacy-icon">

@@ -8,6 +8,7 @@ import type { StoredJob, StoredSource } from "./store.js";
 import { cutsDuration, retimeTranscript } from "./auto-plan.js";
 import { exportConfiguration } from "./export-configuration.js";
 import { validPublicationUrl } from "../shared/publishing.js";
+import { similarPicture } from "./visual-identity.js";
 import { footageTimeline } from "../shared/own-footage.js";
 
 /** Content identity survives a rename/reimport; memory usage stays bounded. */
@@ -77,6 +78,8 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     jobId: job.id,
     sourceId: source.id,
     sourceFingerprint: source.fingerprint,
+    ...(source.picture ? { sourcePicture: source.picture } : {}),
+    ...(job.outputPicture ? { outputPicture: job.outputPicture } : {}),
     sourceName: source.name,
     title: job.summary?.title || job.settings.hookText || source.name,
     cuts,
@@ -108,7 +111,9 @@ export function upsertHistory(entries: ExportHistoryEntry[], entry: ExportHistor
   const configuration = prior.find(item => item.configuration)?.configuration ?? entry.configuration;
   const thumbnailUrl = entry.thumbnailUrl ?? prior.find(item => item.thumbnailUrl)?.thumbnailUrl;
   const thumbnailKind = entry.thumbnailKind ?? prior.find(item => item.thumbnailUrl)?.thumbnailKind;
-  const updated = structuredClone({ ...entry, configuration, publications: distinctPublications, ...(measurements ? { measurements } : {}),
+  const updated = structuredClone({ ...entry,
+    sourcePicture: entry.sourcePicture ?? prior.find(item => item.sourcePicture)?.sourcePicture,
+    outputPicture: entry.outputPicture ?? prior.find(item => item.outputPicture)?.outputPicture, configuration, publications: distinctPublications, ...(measurements ? { measurements } : {}),
     ...(thumbnailUrl ? { thumbnailUrl, ...(thumbnailKind ? { thumbnailKind } : {}) } : {}) });
   const result: ExportHistoryEntry[] = [];
   let inserted = false;
@@ -127,6 +132,17 @@ export function previousEditorialPlans(entries: ExportHistoryEntry[], sourceFing
   if (!sourceFingerprint) return [];
   return entries.filter(entry => entry.sourceFingerprint === sourceFingerprint && entry.cuts.length && entry.cuts.every(validCut))
     .map(entry => ({ cuts: structuredClone(entry.cuts), text: entry.sourceText }));
+}
+
+/** Fuzzy picture matches are review hints only; never reserve cuts or block a render. */
+export function relatedHistory(entries: ExportHistoryEntry[], source: Pick<StoredSource, "fingerprint" | "picture">): ExportHistoryEntry[] {
+  return entries.flatMap<ExportHistoryEntry>(entry => {
+    if (source.fingerprint && entry.sourceFingerprint === source.fingerprint) return [{ ...entry, match: { kind: "exact" as const } }];
+    const output = similarPicture(source.picture, entry.outputPicture);
+    if (output) return [{ ...entry, match: { kind: "similar-export" as const, ...output } }];
+    const original = similarPicture(source.picture, entry.sourcePicture);
+    return original ? [{ ...entry, match: { kind: "similar-source" as const, ...original } }] : [];
+  });
 }
 
 const publication = z.object({

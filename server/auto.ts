@@ -33,7 +33,7 @@ import {
   alignCallouts,
 } from "./auto-plan.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
-import { completedAutoSiblings, footageOverlap, type EditorialPlan } from "./diversity.js";
+import { completedAutoSiblings, footageContainment, type EditorialPlan } from "./diversity.js";
 import { graphicsAvailable } from "./visuals.js";
 import { remotionAvailable } from "./remotion-visuals.js";
 import { brollAIConfigured } from "./broll-ai.js";
@@ -430,7 +430,7 @@ export async function prepareAutoRemix({
   signal.throwIfAborted();
   if (!cuts?.length)
     throw new Error("This video did not contain a usable section to edit.");
-  if (historyPlans.some(plan => footageOverlap(cuts, plan.cuts) >= 0.8))
+  if (historyPlans.some(plan => footageContainment(cuts, plan.cuts) >= 0.8))
     notes.push("This edit reuses footage from an earlier export. Open History to compare.");
   const duration = cutsDuration(cuts);
   const targetRatio =

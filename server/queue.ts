@@ -1,8 +1,9 @@
+import { visualIdentity } from "./visual-identity.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
 import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
-import { geometry, renderVideo } from "./engine.js";
+import { geometry, renderVideo, probeMedia } from "./engine.js";
 import { AutoSkipError, prepareAutoRemix, protectFinalAutoCaptions } from "./auto.js";
 import { prepareSupportingVisuals } from "./supporting-plan.js";
 import type { SupportingVisual } from "./visuals.js";
@@ -10,7 +11,7 @@ import { saveStore, state, type StoredJob, type StoredSource } from "./store.js"
 import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan, preservedVisualsOnStockRefresh } from "./plan-storage.js";
 import { DEFAULT_BROLL_COUNT } from "../shared/types.js";
 import { getVisualSources, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
-import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory } from "./history.js";
+import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory, relatedHistory } from "./history.js";
 import { historyThumbnailPath, retainHistoryThumbnail, type HistoryThumbnail } from "./history-thumbnails.js";
 import { assertLinkedSourceUnchanged } from "./media-imports.js";
 import { inspectExport } from "./quality.js";
@@ -18,7 +19,7 @@ import { reviewEditorialPlan } from "./editorial-review.js";
 import { repairEditorialPlan } from "./editorial-repair.js";
 import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
-import { footageOverlap } from "./diversity.js";
+import { footageContainment } from "./diversity.js";
 import { readFile } from "node:fs/promises";
 import { canRetryRender, recoverInterruptedJob, retryPhase, scheduleJobRetry } from "./job-recovery.js";
 import { retainFootage } from "./footage-storage.js";
@@ -120,6 +121,7 @@ async function run(job: StoredJob, controller: AbortController) {
       // Known, different sources may now use the remaining worker slots.
       pumpQueue();
     }
+    source.picture ??= await visualIdentity(source.filePath, source.duration, controller.signal);
     const audio = state.attachments.find(
       (item) => item.id === job.settings.audioId,
     );
@@ -318,6 +320,7 @@ async function run(job: StoredJob, controller: AbortController) {
       job.summary.outputDuration = timeline.duration;
       job.summary.changes.push(`${timeline.inserts.length} uploaded segment${timeline.inserts.length === 1 ? "" : "s"} inserted`, `${timeline.covers.length} uploaded cover shot${timeline.covers.length === 1 ? "" : "s"}`);
     }
+    job.outputPicture = await visualIdentity(job.outputPath, (await probeMedia(job.outputPath, controller.signal)).duration, controller.signal);
     outputSize = (await stat(job.outputPath)).size;
     status = "completed";
   } catch (error) {
@@ -396,9 +399,11 @@ async function run(job: StoredJob, controller: AbortController) {
     if (status === "completed" && job.auto && source?.fingerprint) {
       const cuts = job.settings.segments || [{ start: job.settings.trimStart, end: job.settings.trimEnd ?? source.duration }];
       const earlier = previousEditorialPlans(state.history.filter(entry => entry.jobId !== job.id), source.fingerprint);
-      if (earlier.some(plan => footageOverlap(cuts, plan.cuts) >= 0.8))
+      if (earlier.some(plan => footageContainment(cuts, plan.cuts) >= 0.8))
         job.notes = [...new Set([...(job.notes || []), "This edit reuses footage from an earlier export. Open History to compare."])];
     }
+    if (status === "completed" && source && relatedHistory(state.history.filter(entry => entry.jobId !== job.id), source).some(entry => entry.match?.kind !== "exact"))
+      job.notes = [...new Set([...(job.notes || []), "The picture resembles an earlier source or export. Open History to compare this possible re-export; rendering is allowed."])];
     const entry = source && historyEntry(source, job);
     if (entry && thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
     if (entry) state.history = upsertHistory(state.history, entry);

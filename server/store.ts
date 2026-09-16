@@ -10,11 +10,14 @@ import type {
   ExportHistoryEntry,
 } from "../shared/types.js";
 import { config, paths } from "./config.js";
-import { fingerprintFile, historyEntry, upsertHistory } from "./history.js";
+import { fingerprintFile, historyEntry, upsertHistory, relatedHistory } from "./history.js";
 import { migrateLegacyPlanResolutions } from "./plan-migrations.js";
 import { retainHistoryThumbnail } from "./history-thumbnails.js";
 import { recoverInterruptedJob } from "./job-recovery.js";
+import type { VisualIdentity } from "../shared/visual-identity.js";
+import { visualIdentity } from "./visual-identity.js";
 export interface StoredSource extends VideoSource {
+  picture?: VisualIdentity;
   filePath: string;
   thumbnailPath: string;
   fileSignature?: { dev: number; ino: number; size: number; mtimeMs: number };
@@ -30,6 +33,7 @@ export interface StoredAttachment extends Attachment {
   createdAt: string;
 }
 export interface StoredJob extends RenderJob {
+  outputPicture?: VisualIdentity;
   footageFiles?: Record<string, { filename: string; name: string; duration: number; hasAudio: boolean }>;
   /** An explicit retry of a skipped Auto version can reuse this batch's footage. */
   allowRepeatedFootage?: boolean;
@@ -103,7 +107,9 @@ export async function initStore() {
       try { source.fingerprint = await fingerprintFile(source.filePath); }
       catch { continue; } // A missing legacy source cannot be identified reliably.
     }
+    source.picture ??= await visualIdentity(source.filePath, source.duration);
     for (const job of completed) {
+      job.outputPicture ??= state.history.find(entry => entry.jobId === job.id)?.outputPicture ?? await visualIdentity(job.outputPath, job.summary?.outputDuration ?? 0);
       const entry = historyEntry(source, job);
       if (entry) state.history = upsertHistory(state.history, entry);
     }
@@ -142,12 +148,14 @@ export function publicSource(source: StoredSource): VideoSource {
     filePath: _filePath,
     thumbnailPath: _thumbnailPath,
     fileSignature: _fileSignature,
+    picture: _picture,
     ...value
   } = source;
-  return { ...value, ...(source.fingerprint ? { previousExports: state.history.filter(entry => entry.sourceFingerprint === source.fingerprint).length } : {}) };
+  return { ...value, ...(source.fingerprint ? { previousExports: state.history.filter(entry => entry.sourceFingerprint === source.fingerprint).length,
+    similarExports: relatedHistory(state.history, source).filter(entry => entry.match?.kind !== "exact").length } : {}) };
 }
 export function publicJob(job: StoredJob): RenderJob {
-  const { outputPath: _outputPath, captionPath: _captionPath, footageFiles: _footageFiles,
+  const { outputPicture: _outputPicture, outputPath: _outputPath, captionPath: _captionPath, footageFiles: _footageFiles,
     editPlan: _editPlan, planFiles: _planFiles, sourceTranscript: _transcript,
     brollCandidates: _candidates, refreshBroll: _refreshBroll, preserveBroll: _preserveBroll,
     allowRepeatedFootage: _allowRepeatedFootage, ...value } = job;

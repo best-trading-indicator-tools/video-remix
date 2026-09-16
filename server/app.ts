@@ -1,3 +1,5 @@
+import { visualIdentity } from "./visual-identity.js";
+import { relatedHistory } from "./history.js";
 import express, { type ErrorRequestHandler } from "express";
 import multer from "multer";
 import { ZipArchive } from "archiver";
@@ -173,7 +175,7 @@ export function createApp() {
   app.get("/api/sources", (_req, res) =>
     res.json({ sources: state.sources.map(publicSource) }),
   );
-  const publicHistory = () => state.history.map(entry => ({ ...entry,
+  const publicHistory = () => state.history.map(({ sourcePicture: _sourcePicture, outputPicture: _outputPicture, ...entry }) => ({ ...entry,
     thumbnailUrl: entry.thumbnailUrl ? historyThumbnailUrl(entry.id) : undefined,
     available: state.jobs.some(job => job.id === entry.jobId && job.status === "completed"),
   })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -211,7 +213,8 @@ export function createApp() {
   app.get("/api/sources/:id/history", (req, res) => {
     const source = state.sources.find(item => item.id === req.params.id);
     if (!source) throw new HttpError(404, "Source video not found.");
-    res.json({ entries: publicHistory().filter(entry => entry.sourceFingerprint === source.fingerprint) });
+    const matches = new Map(relatedHistory(state.history, source).map(entry => [entry.id, entry.match]));
+    res.json({ entries: publicHistory().filter(entry => matches.has(entry.id)).map(entry => ({ ...entry, match: matches.get(entry.id)?.kind === "exact" ? undefined : matches.get(entry.id) })) });
   });
   app.patch("/api/history/:id", async (req, res) => {
     const entry = state.history.find(item => item.id === req.params.id);
@@ -407,7 +410,7 @@ export function createApp() {
               id,
               name: nameOf(file.originalname),
               size: file.size,
-              ...(!isBroll ? { fingerprint: await fingerprintFile(file.path) } : {}),
+              ...(!isBroll ? { fingerprint: await fingerprintFile(file.path), picture: await visualIdentity(file.path, media.duration) } : {}),
               ...media,
               createdAt: new Date().toISOString(),
               filePath: file.path,

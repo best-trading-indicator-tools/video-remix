@@ -64,6 +64,15 @@ export function footageOverlap(
   return union > 0 ? overlap / union : 0;
 }
 
+/** Overlap relative to the shorter excerpt also catches a reused subclip. Advisory only. */
+export function footageContainment(left: EditSegment[], right: EditSegment[]): number {
+  const duration = (cuts: EditSegment[]) => mergedIntervals(cuts).reduce((sum, cut) => sum + cut.end - cut.start, 0);
+  const a = duration(left), b = duration(right);
+  const iou = footageOverlap(left, right);
+  const intersection = iou * (a + b) / (1 + iou);
+  return Math.min(a, b) > 0 ? intersection / Math.min(a, b) : 0;
+}
+
 const words = (text: string) =>
   text.toLocaleLowerCase().match(/[\p{L}\p{N}]+/gu) || [];
 
