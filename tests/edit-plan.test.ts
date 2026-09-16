@@ -41,6 +41,18 @@ function deepFreeze<T>(value: T): T {
   return value;
 }
 
+test("coverage changes require a stock refresh and an empty search cannot retain over-budget stock", async () => {
+  const plan = makePlan();
+  assert.throws(() => applyEditPlanChanges(plan, { revision: plan.revision, brollMaxCoverage: 10 }), /coverage limit/);
+  for (const cap of [-1, 101, 0.5]) assert.equal(editPlanChangesSchema.safeParse({ revision: 3, refreshBroll: true, brollMaxCoverage: cap }).success, false);
+  const { refreshPlanBroll } = await import("../server/plan-storage.js");
+  const job = { editPlan: structuredClone(plan), auto: { brollMaxCoverage: 10 } } as import("../server/store.js").StoredJob;
+  await refreshPlanBroll(job, [], new AbortController().signal);
+  assert.equal(job.editPlan!.visuals.length, 0);
+  assert.equal(plan.visuals.length, 1, "The parent export remains unchanged");
+  assert.match(job.notes!.join(" "), /coverage limit/);
+});
+
 test("framing-only corrections preserve source timing, corrected captions and locked media", () => {
   const plan = deepFreeze(makePlan());
   const cuts = plan.cuts.map(cut => ({ ...cut, focalPoint: { x: 0.1, y: 0.8 } }));

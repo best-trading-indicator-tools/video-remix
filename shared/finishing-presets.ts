@@ -1,6 +1,6 @@
 import { NATURAL_PACING, pacingOptionsSchema } from "./pacing.js";
 import { z } from "zod";
-import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT } from "./types.js";
+import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "./types.js";
 import { getVisualSources } from "./visual-sources.js";
 import type { AutoOptions } from "./types.js";
 export const FINISHING_PRESET_STORAGE = "remix-finishing-presets-v1";
@@ -14,6 +14,7 @@ const framing = {
 const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
   visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"])).max(5).transform(values => [...new Set(values)]),
   brollCount: z.number().int().min(1).max(10).default(DEFAULT_BROLL_COUNT),
+  brollMaxCoverage: z.number().int().min(0).max(100).default(DEFAULT_BROLL_MAX_COVERAGE),
   brollMatching: z.enum(["tags", "ai"]).default("tags"), stockVideoType: z.enum(["all", "animation"]).default("all"),
 });
 const shortSchema = z.object({ ...framing, autoFocus: z.boolean().default(false), focusMode: z.enum(["face", "speaker"]).default("face") });

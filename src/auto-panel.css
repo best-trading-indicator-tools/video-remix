@@ -488,3 +488,4 @@
     min-height: 42px;
   }
 }
+.broll-count .auto-output-field + .auto-output-field { margin-top: 16px; }

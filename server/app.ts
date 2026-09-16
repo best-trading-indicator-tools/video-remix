@@ -28,7 +28,7 @@ import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
 import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
 import { getVisualSources, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
-import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
+import { clonePlanFiles, planMediaPath, publicEditPlan, preservedVisualsOnStockRefresh } from "./plan-storage.js";
 import { stockBrollConfigured, stockProvidersForEdit } from "./stock-broll.js";
 import { brollAIConfigured } from "./broll-ai.js";
 import { fingerprintFile, publicationChangesSchema } from "./history.js";
@@ -570,6 +570,12 @@ export function createApp() {
     let plan;
     try { plan = applyEditPlanChanges(parent.editPlan, parsed.data, parent.sourceTranscript); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid edit changes."); }
+    if (parsed.data.refreshBroll && parsed.data.brollMaxCoverage !== undefined) {
+      const keptSeconds = preservedVisualsOnStockRefresh(plan, parsed.data.preserveBroll).filter(shot => shot.enabled)
+        .reduce((sum, shot) => sum + shot.end - shot.start, 0);
+      if (keptSeconds > plan.outputDuration * parsed.data.brollMaxCoverage / 100 + 0.001)
+        throw new HttpError(400, "Saved animations or uploaded shots already exceed this coverage limit. Shorten or remove those shots first, or raise the limit.");
+    }
     const id = randomUUID();
     const job: StoredJob = {
       id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
@@ -577,6 +583,7 @@ export function createApp() {
       auto: parent.auto || parsed.data.refreshBroll ? { ...(parent.auto ?? DEFAULT_AUTO_OPTIONS),
         ...(parsed.data.refreshBroll ? { visualSources: [...new Set([...getVisualSources(parent.auto), ...stockProvidersForEdit(parent.auto)])] } : {}),
         ...(parsed.data.brollCount !== undefined ? { brollCount: parsed.data.brollCount } : {}),
+        ...(parsed.data.brollMaxCoverage !== undefined ? { brollMaxCoverage: parsed.data.brollMaxCoverage } : {}),
         // Explicit caption edits belong to the user; final Auto checks must preserve them.
         ...(parsed.data.captions?.length ? { captions: "add" as const } : {}),
       } : undefined,

@@ -37,6 +37,20 @@ export function preservedVisualsOnStockRefresh(plan: EditPlan, preserveAll = fal
 export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual[], signal: AbortSignal) {
   const plan = job.editPlan!;
   if (!visuals.length) {
+    if (job.auto?.brollMaxCoverage !== undefined) {
+      const preserved = preservedVisualsOnStockRefresh(plan, job.preserveBroll);
+      let seconds = preserved.filter(shot => shot.enabled).reduce((sum, shot) => sum + shot.end - shot.start, 0);
+      const budget = plan.outputDuration * job.auto.brollMaxCoverage / 100;
+      const retained = plan.visuals.filter(shot => {
+        if (preserved.includes(shot) || !shot.enabled) return true;
+        if (seconds + shot.end - shot.start > budget + 0.001) return false;
+        seconds += shot.end - shot.start; return true;
+      });
+      if (retained.length < plan.visuals.length) {
+        plan.visuals = retained;
+        (job.notes ??= []).push("Saved stock shots exceeding your coverage limit were removed; original footage fills those moments.");
+      }
+    }
     if (plan.visuals.some(visual => visual.enabled)) {
       job.notes = (job.notes || []).flatMap(note => {
         if (note.startsWith("B-roll target:")) return [];

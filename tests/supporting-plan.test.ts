@@ -267,6 +267,32 @@ const effortFixture = (visualSources: NonNullable<StoredJob["auto"]>["visualSour
   return { source, job, transcript, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {} };
 };
 
+test("all best-effort passes obey the same coverage cap, counting retained shots", async () => {
+  const input = effortFixture(["hyperframes", "remotion"], 10);
+  input.job.auto!.brollMaxCoverage = 35;
+  const occupied = [{ start: 0, end: 1.5 }];
+  const result = await prepareSupportingVisuals({ ...input, occupied, available: async () => true, render: async () => {} });
+  const covered = [...occupied, ...result].reduce((sum, shot) => sum + shot.end - shot.start, 0);
+  assert.ok(result.length > 0, "Use remaining space rather than abandoning the search");
+  assert.ok(covered <= 3.5 + 1e-9, `${covered}s exceeds the chosen 35% of 10 seconds`);
+  assert.ok(input.job.visualFulfillment!.placed < 10);
+  assert.match(input.job.notes!.join(" "), /coverage limit: 35%/);
+  for (const effortRound of [0, 1, 2]) {
+    const planned = planSupportingVisuals({ transcript: input.transcript, duration: 10, sourceName: "talk", assets: [], visualSources: ["remotion"], brollCount: 10, brollMaxCoverage: 20, effortRound, occupied });
+    assert.ok([...occupied, ...planned].reduce((sum, shot) => sum + shot.end - shot.start, 0) <= 2 + 1e-9);
+  }
+});
+
+test("zero coverage performs no cloud, matching or rendering work", async () => {
+  const input = effortFixture(["pixabay", "hyperframes"]);
+  input.job.auto!.brollMaxCoverage = 0;
+  const unexpected = async () => { throw new Error("No work should be requested"); };
+  const result = await prepareSupportingVisuals({ ...input, available: unexpected, findStock: unexpected, matchAI: unexpected, render: unexpected });
+  assert.deepEqual(result, []);
+  assert.equal(input.job.visualFulfillment!.attempts, 0);
+  assert.match(input.job.visualFulfillment!.reason!, /coverage limit/);
+});
+
 test("four requested cards fill a ten-second short through tighter placements, without overwriting earlier files", async () => {
   const input = effortFixture(["hyperframes", "remotion"]);
   const outputs: string[] = [];

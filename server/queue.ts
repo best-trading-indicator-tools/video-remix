@@ -148,7 +148,7 @@ async function run(job: StoredJob, controller: AbortController) {
             job.phase = phase; job.progress = Math.max(job.progress, progress);
           } }) : [];
         if (!requested) (job.notes ??= []).push("Saved animations and library shots already fill the shot target. Increase the target to add stock shots.");
-        if (requested) await refreshPlanBroll(job, visuals, controller.signal);
+        if (requested || options?.brollMaxCoverage !== undefined) await refreshPlanBroll(job, visuals, controller.signal);
         const keptShots = job.editPlan.visuals.filter(item => item.enabled);
         job.notes = (job.notes || []).filter(note => !/^(?:B-roll target:|Supporting visual target:|Visual mix —)/u.test(note));
         job.notes.push(`Supporting visual target: ${keptShots.length} of ${options?.brollCount ?? DEFAULT_BROLL_COUNT} shots added or retained.`);

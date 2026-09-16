@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
-import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
+import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
 import { focusPointAt, withTrackBounds } from "../shared/focus";
 import { VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
@@ -21,8 +21,8 @@ const CENTER: FocalPoint = { x: 0.5, y: 0.5 };
 const DEFAULT_CAPTION_STYLE = { fontSize: 20, bottomPercent: 100 * 24 / 288 };
 
 interface PromptDraftAnchor { plan: EditPlan; changes: EditPlanChanges }
-interface PromptUndo { draft: EditPlan; refreshBroll: boolean; brollCount: number; anchor: PromptDraftAnchor | null; appliedIdentity: string }
-const draftIdentity = (draft: EditPlan, refreshBroll: boolean, brollCount: number) => JSON.stringify({ draft, refreshBroll, brollCount });
+interface PromptUndo { draft: EditPlan; refreshBroll: boolean; brollCount: number; brollMaxCoverage: number; anchor: PromptDraftAnchor | null; appliedIdentity: string }
+const draftIdentity = (draft: EditPlan, refreshBroll: boolean, brollCount: number, brollMaxCoverage: number) => JSON.stringify({ draft, refreshBroll, brollCount, brollMaxCoverage });
 
 /** Keep server-retimed media implicit, while preserving later manual corrections. */
 function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: boolean, anchor: PromptDraftAnchor | null): EditPlanChanges {
@@ -134,6 +134,9 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   onCreated: (job: RenderJob) => void;
 }) {
   const savedBrollCount = job.auto?.brollCount ?? DEFAULT_BROLL_COUNT;
+  const savedCoverage = job.auto?.brollMaxCoverage ?? DEFAULT_BROLL_MAX_COVERAGE;
+  const [brollMaxCoverage, setBrollMaxCoverage] = useState(savedCoverage);
+  const [coverageInput, setCoverageInput] = useState(String(savedCoverage));
   const [plan, setPlan] = useState<EditPlan | null>(null);
   const [draft, setDraft] = useState<EditPlan | null>(null);
   const [error, setError] = useState("");
@@ -242,7 +245,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const cutTimingsChanged = !!plan && !!draft && differs((promptAnchor?.plan || plan).cuts.map(({ start, end }) => ({ start, end })), draft.cuts.map(({ start, end }) => ({ start, end })));
   const draftChanges = plan && draft ? collectDraftChanges(plan, draft, refreshBroll, promptAnchor) : null;
   const changed = !!draftChanges && Object.keys(draftChanges).length > 1;
-  const draftKey = draft ? draftIdentity(draft, refreshBroll, brollCount) : "";
+  const draftKey = draft ? draftIdentity(draft, refreshBroll, brollCount, brollMaxCoverage) : "";
   const timelineCorrectionsChanged = draftChanges?.captions !== undefined || draftChanges?.visuals !== undefined;
   const explicitVisualChanges = draftChanges?.visuals !== undefined;
   const layoutIssues = draft ? textLayoutIssues(draft, knownOutputAspect) : [];
@@ -276,7 +279,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     if (!plan || !draft || savingRef.current) throw new Error("Wait for the current edit to finish loading.");
     if (!form.current?.reportValidity()) throw new Error("Correct the highlighted field before asking for an edit.");
     const changes = collectDraftChanges(plan, draft, refreshBroll, promptAnchor);
-    if (refreshBroll) changes.brollCount = brollCount;
+    if (refreshBroll) { changes.brollCount = brollCount; changes.brollMaxCoverage = brollMaxCoverage; }
     validateDraftChanges(plan, draft, changes);
     return request<PromptProposal>(`/api/jobs/${job.id}/edit-prompt`, {
       method: "POST", headers: { "Content-Type": "application/json" }, signal,
@@ -289,11 +292,12 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     const next = structuredClone(proposal.plan);
     next.revision = plan.revision;
     const nextRefresh = !!proposal.changes.refreshBroll;
-    setPromptUndo({ draft: structuredClone(draft), refreshBroll, brollCount, anchor: promptAnchor, appliedIdentity: draftIdentity(next, nextRefresh, proposal.changes.brollCount ?? brollCount) });
+    setPromptUndo({ draft: structuredClone(draft), refreshBroll, brollCount, brollMaxCoverage, anchor: promptAnchor, appliedIdentity: draftIdentity(next, nextRefresh, proposal.changes.brollCount ?? brollCount, proposal.changes.brollMaxCoverage ?? brollMaxCoverage) });
     setPromptAnchor({ plan: structuredClone(next), changes: structuredClone(proposal.changes) });
     setDraft(next);
     setRefreshBroll(nextRefresh);
     if (proposal.changes.brollCount !== undefined) { setBrollCount(proposal.changes.brollCount); setBrollCountInput(String(proposal.changes.brollCount)); }
+    if (proposal.changes.brollMaxCoverage !== undefined) { setBrollMaxCoverage(proposal.changes.brollMaxCoverage); setCoverageInput(String(proposal.changes.brollMaxCoverage)); }
     setPreviewCut(0);
     setPreviewSourceTime(next.cuts[0]?.start || 0);
     setPreviewMode("framing");
@@ -304,7 +308,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     if (!plan || !draft || (!changed && !searchAgain) || savingRef.current) return;
     setError("");
     const changes = collectDraftChanges(plan, draft, searchAgain, promptAnchor);
-    if (searchAgain) changes.brollCount = brollCount;
+    if (searchAgain) { changes.brollCount = brollCount; changes.brollMaxCoverage = brollMaxCoverage; }
     try { validateDraftChanges(plan, draft, changes); }
     catch (reason) { setError((reason as Error).message); return; }
     updateCorrectionClock.current();
@@ -369,7 +373,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 examples={savedEditExamples(draft)}
                 applied={!!promptUndo} canUndo={!!promptUndo && promptUndo.appliedIdentity === draftKey} onUndo={() => {
                   if (!promptUndo || promptUndo.appliedIdentity !== draftKey) return;
-                  setDraft(structuredClone(promptUndo.draft)); setRefreshBroll(promptUndo.refreshBroll); setBrollCount(promptUndo.brollCount); setBrollCountInput(String(promptUndo.brollCount)); setPromptAnchor(promptUndo.anchor); setPromptUndo(null); setError("");
+                  setDraft(structuredClone(promptUndo.draft)); setRefreshBroll(promptUndo.refreshBroll); setBrollCount(promptUndo.brollCount); setBrollCountInput(String(promptUndo.brollCount)); setBrollMaxCoverage(promptUndo.brollMaxCoverage); setCoverageInput(String(promptUndo.brollMaxCoverage)); setPromptAnchor(promptUndo.anchor); setPromptUndo(null); setError("");
                   setPreviewCut(0); setPreviewSourceTime(promptUndo.draft.cuts[0]?.start || 0);
                 }} />
               <details open className="edit-plan-section edit-framing-section">
@@ -461,11 +465,16 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                         onBlur={commitBrollCount}
                         onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} />
                     </label>
+                    <label className="edit-plan-field">Maximum B-roll coverage (%)
+                      <input type="number" min={0} max={100} step={1} required disabled={saving || explicitVisualChanges} value={coverageInput}
+                        onChange={event => { setCoverageInput(event.target.value); const n = event.target.valueAsNumber; if (Number.isInteger(n) && n >= 0 && n <= 100) setBrollMaxCoverage(n); }}
+                        onBlur={() => { const n = coverageInput.trim() ? Number(coverageInput) : brollMaxCoverage; const limit = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : brollMaxCoverage; setBrollMaxCoverage(limit); setCoverageInput(String(limit)); }} />
+                    </label>
                     <button type="button" className="secondary-button" disabled={saving || explicitVisualChanges} onClick={(event) => {
                       if (event.currentTarget.form?.reportValidity()) void submit(true);
                     }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
                   </div>
-                  <p id="edit-broll-count-note">Request 1–{MAX_BROLL_COUNT} supporting shots in total, including saved animations and uploaded B-roll. Up to three search and placement passes fill the remaining places; the result reports any shortage.</p>
+                  <p id="edit-broll-count-note">Request 1–{MAX_BROLL_COUNT} supporting shots in total, including saved animations and uploaded B-roll. Up to three search and placement passes fill the remaining places; the result reports any shortage. Stock, saved animations and uploaded shots together must fit within {brollMaxCoverage}% of the video.</p>
                   {explicitVisualChanges && <p className="edit-plan-note">Render or reset your shot changes first.</p>}
                 </div>}
                 <fieldset disabled={saving || cutTimingsChanged}>
@@ -514,7 +523,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
           </div>
           <footer className="edit-plan-footer">
             <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will request {brollCount} total supporting shots. {promptAnchor?.changes.preserveBroll ? "All existing shots will be kept." : "Saved animations and uploaded B-roll will be kept."}</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
-            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
+            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount && brollMaxCoverage === savedCoverage)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setBrollMaxCoverage(savedCoverage); setCoverageInput(String(savedCoverage)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
         </form> : <div className="edit-plan-loading"><p className="edit-plan-error" role="alert">{error || "This edit is unavailable."}</p><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}

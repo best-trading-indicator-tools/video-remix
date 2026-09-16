@@ -24,6 +24,7 @@ export const isAutoTargetDuration = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 export const DEFAULT_BROLL_COUNT = 4;
 export const MAX_BROLL_COUNT = 10;
+export const DEFAULT_BROLL_MAX_COVERAGE = 60;
 export type VisualSource = "pixabay" | "pexels" | "hyperframes" | "remotion" | "library";
 export interface AutoOptions {
   aspect: Aspect;
@@ -41,12 +42,15 @@ export interface AutoOptions {
   brollMatching?: "tags" | "ai";
   /** Requested total; additional search/placement passes try to fill every slot. */
   brollCount?: number;
+  /** Maximum percent of the output covered by stock, library shots and animation cards. */
+  brollMaxCoverage?: number;
   /** Independent review of the final selected speech; unavailable checks remain visible. */
   editorialMode?: "off" | "check" | "repair";
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
   targetDuration: 45,
+  brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE,
   narration: false,
   captions: "auto",
   editorialMode: "repair",
@@ -250,6 +254,8 @@ export interface EditPlanChanges {
   preserveBroll?: boolean;
   /** New stock search target; only supplied with refreshBroll. */
   brollCount?: number;
+  /** Maximum percent of the output covered by stock, library shots and animation cards. */
+  brollMaxCoverage?: number;
   hookText?: string;
   captions?: CaptionCue[];
   cuts?: EditSegment[];

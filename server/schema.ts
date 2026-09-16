@@ -116,6 +116,7 @@ export const autoOptionsSchema = z
     brollIds: z.array(z.string().uuid()).max(100).optional(),
     brollMatching: z.enum(["tags", "ai"]).optional(),
     brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
+  brollMaxCoverage: z.number().int().min(0).max(100).optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
     stockVideoType: z.enum(["all", "animation"]).optional(),
   })

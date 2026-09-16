@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { BrollAsset, RenderJob, Transcript, VisualSource } from "../shared/types.js";
-import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types.js";
+import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "../shared/types.js";
 import { getVisualSources, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
 import { geometry } from "./engine.js";
 import {
@@ -107,7 +107,7 @@ function moments(
 
 export function planSupportingVisuals({
   transcript, duration, sourceName, assets, mode = "off", visualSources, aiMatches,
-  brollCount, assetSources = {}, occupied = [], effortRound = 0, graphicStart = 0,
+  brollCount, brollMaxCoverage = DEFAULT_BROLL_MAX_COVERAGE, assetSources = {}, occupied = [], effortRound = 0, graphicStart = 0,
 }: {
   transcript?: Transcript;
   duration: number;
@@ -118,6 +118,7 @@ export function planSupportingVisuals({
   /** Undefined uses local tags. An empty AI result keeps the source picture. */
   aiMatches?: AIMatch[];
   brollCount?: number;
+  brollMaxCoverage?: number;
   /** A previously downloaded stock clip can also be selected from the library. */
   assetSources?: Record<string, VisualSource>;
   effortRound?: number;
@@ -136,7 +137,7 @@ export function planSupportingVisuals({
   const result: PlannedSupportingVisual[] = [];
   const counts = new Map(sources.map(source => [source, 0]));
   const gap = effortRound ? 0.15 : timingCount >= 6 ? 0.6 : 1.2;
-  const coverageBudget = duration * (effortRound ? 0.9 : legacyGraphics ? 0.3 : 0.6);
+  const coverageBudget = duration * Math.min(legacyGraphics ? 30 : 100, brollMaxCoverage) / 100;
   const fits = (moment: Moment) => [...occupied, ...result].every(other =>
     moment.start >= other.end + gap - 1e-9 || moment.end + gap <= other.start + 1e-9) &&
     [...occupied, ...result].reduce((sum, item) => sum + item.end - item.start, 0) +
@@ -298,7 +299,7 @@ async function prepareSupportingVisualsPass({
   }
   const plan = (candidates: StoredBroll[]) => planSupportingVisuals({
     transcript, duration, sourceName: source.name, assets: candidates,
-    visualSources: sources, aiMatches, brollCount: requested, assetSources, occupied, effortRound,
+    visualSources: sources, aiMatches, brollCount: requested, brollMaxCoverage: options?.brollMaxCoverage, assetSources, occupied, effortRound,
     graphicStart: job.settings.hookText ? job.settings.hookDuration : 0,
   });
   let plans = plan(assets);
@@ -399,6 +400,9 @@ export async function prepareSupportingVisuals(input: Parameters<typeof prepareS
   for (let round = 0; round < 3 && result.length < requested; round++) {
     input.signal.throwIfAborted();
     if (deadline.aborted) break;
+    const budget = input.job.summary!.outputDuration * (options?.brollMaxCoverage ?? DEFAULT_BROLL_MAX_COVERAGE) / 100;
+    const covered = [...(input.occupied ?? []), ...result].reduce((sum, shot) => sum + shot.end - shot.start, 0);
+    if (budget - covered < 1.5 - 1e-9) break;
     attempts++;
     input.onPhase(`Filling supporting visuals: ${result.length}/${requested} · pass ${round + 1}/3`, 62);
     input.job.summary!.changes = [...baseChanges];
@@ -435,7 +439,8 @@ export async function prepareSupportingVisuals(input: Parameters<typeof prepareS
   input.job.notes = (input.job.notes ?? []).filter(note => !/^(?:B-roll target:|Supporting visual target:|Visual mix —)/u.test(note));
   if (result.length) input.job.notes = input.job.notes.filter(note => !/^No (?:suitable|relevant)|^AI found no spoken moment|^None of the /u.test(note));
   const reason = result.length < requested ? (deadline.aborted ? "The eight-minute search/render budget was reached."
-    : "Available matching footage, readable spoken phrases, working renderers or free timeline space could not fill the remaining places.") : undefined;
+    : "Available matching footage, readable spoken phrases, working renderers or timeline space within the coverage limit could not fill the remaining places.") : undefined;
+  input.job.notes.push(`Supporting visual coverage limit: ${options?.brollMaxCoverage ?? DEFAULT_BROLL_MAX_COVERAGE}% of the video, across all search passes.`);
   input.job.notes.push(`Supporting visual target: ${result.length} of ${requested} shots added after ${attempts} pass${attempts === 1 ? "" : "es"}.${reason ? ` ${reason}` : ""}`);
   input.job.visualFulfillment = { requested, placed: result.length, attempts, ...(reason ? { reason } : {}) };
   const selected = getVisualSources(options);

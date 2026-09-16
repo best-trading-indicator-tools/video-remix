@@ -104,6 +104,8 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         ? options!.supportingVisuals
         : "off",
       brollMatching: options?.brollMatching === "ai" ? "ai" : "tags",
+      brollMaxCoverage: typeof options?.brollMaxCoverage === "number" && Number.isInteger(options.brollMaxCoverage) && options.brollMaxCoverage >= 0 && options.brollMaxCoverage <= 100
+        ? options.brollMaxCoverage : DEFAULT_AUTO_OPTIONS.brollMaxCoverage,
       brollCount:
         typeof options?.brollCount === "number" &&
         Number.isInteger(options.brollCount) &&

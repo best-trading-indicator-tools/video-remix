@@ -34,6 +34,7 @@ export const editPlanChangesSchema = z.object({
   refreshBroll: z.boolean().optional(),
   preserveBroll: z.boolean().optional(),
   brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
+  brollMaxCoverage: z.number().int().min(0).max(100).optional(),
   hookText: safeText(120, true).optional(),
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: cutsSchema.optional(),
@@ -184,6 +185,8 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
     throw new Error("Keeping existing shots requires a new stock search.");
   if (changes.brollCount !== undefined && !changes.refreshBroll)
     throw new Error("Choose a B-roll target when requesting a new stock search.");
+  if (changes.brollMaxCoverage !== undefined && !changes.refreshBroll)
+    throw new Error("Choose a coverage limit when requesting a new stock search.");
   if (changes.refreshBroll && changes.visuals !== undefined)
     throw new Error("Render your manual footage changes separately before searching for new B-roll.");
   if (changes.revision !== plan.revision) throw new Error("This edit changed since you opened it. Reload the latest revision before saving.");

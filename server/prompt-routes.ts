@@ -115,6 +115,8 @@ export function installPromptEditRoutes(app: Express) {
           if (refreshBroll) {
             const search = proposal.changes.refreshBroll ? proposal.changes : draft;
             if (search?.brollCount !== undefined) changes.brollCount = search.brollCount;
+            const coverage = search?.brollMaxCoverage ?? draft?.brollMaxCoverage;
+            if (coverage !== undefined) changes.brollMaxCoverage = coverage;
             if (search?.preserveBroll !== undefined) changes.preserveBroll = search.preserveBroll;
           }
         } catch (error) {

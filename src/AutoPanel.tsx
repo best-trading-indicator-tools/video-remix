@@ -19,7 +19,7 @@ import type {
   VideoSource,
   VisualSource,
 } from "../shared/types";
-import { DEFAULT_BROLL_COUNT, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDuration } from "../shared/types";
+import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDuration } from "../shared/types";
 import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import FinishingPresets from "./FinishingPresets";
@@ -98,6 +98,9 @@ export default function AutoPanel({
     setDurationInput(String(duration));
     onChange({ ...options, targetDuration: duration });
   };
+  const coverage = options.brollMaxCoverage ?? DEFAULT_BROLL_MAX_COVERAGE;
+  const [coverageInput, setCoverageInput] = useState(String(coverage));
+  useEffect(() => setCoverageInput(String(coverage)), [coverage, selectedId]);
   const [brollCountInput, setBrollCountInput] = useState(String(brollCount));
   useEffect(() => setBrollCountInput(String(brollCount)), [brollCount, selectedId]);
   const [versionInput, setVersionInput] = useState(String(variants));
@@ -375,6 +378,12 @@ export default function AutoPanel({
                         onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
                       />
                     </label>
+                    <label className="auto-output-field">Maximum B-roll coverage (%)
+                      <input type="number" inputMode="numeric" min={0} max={100} step={1} value={coverageInput}
+                        onChange={event => { setCoverageInput(event.target.value); const n = event.target.valueAsNumber; if (Number.isInteger(n) && n >= 0 && n <= 100) onChange({ ...options, brollMaxCoverage: n }); }}
+                        onBlur={() => { const n = coverageInput.trim() ? Number(coverageInput) : coverage; const limit = Number.isFinite(n) ? Math.max(0, Math.min(100, Math.round(n))) : coverage; setCoverageInput(String(limit)); onChange({ ...options, brollMaxCoverage: limit }); }} />
+                    </label>
+                    <p className="auto-preferences-note">Stock, uploaded B-roll and animation cards together can cover at most {coverage}% of the result. A 30-second video allows {(30 * coverage / 100).toFixed(1)} seconds. We may use fewer shots to respect this limit.</p>
                     <p id="auto-broll-count-note" className="auto-preferences-note">
                       Request 1–{MAX_BROLL_COUNT} visuals in total across your selected sources. We keep searching and adjusting placement to fill the count.
                       Up to three passes try additional clips and shorter placements. Any unfilled places are reported with the result; higher counts take longer.
