@@ -21,6 +21,10 @@ import { parseCaptionCues } from "./edit-plan.js";
 import { footageOverlap } from "./diversity.js";
 import { readFile } from "node:fs/promises";
 import { canRetryRender, recoverInterruptedJob, retryPhase, scheduleJobRetry } from "./job-recovery.js";
+import { retainFootage } from "./footage-storage.js";
+import { captionsAfterInserts, footageTimeline } from "../shared/own-footage.js";
+import { captionCuesSrt } from "./edit-plan.js";
+import { writeFile } from "node:fs/promises";
 const running = new Map<string, AbortController>();
 // Only initial analysis and clip selection need exclusive access to a source.
 // Once cuts are chosen, expensive stock searches, reviews and exports can overlap.
@@ -186,6 +190,7 @@ async function run(job: StoredJob, controller: AbortController) {
         },
       });
       job.settings = prepared.settings;
+      if (job.auto.ownFootage?.length) job.settings.ownFootage = structuredClone(job.auto.ownFootage);
       job.summary = prepared.summary;
       job.notes = prepared.notes;
       controller.signal.throwIfAborted();
@@ -199,6 +204,7 @@ async function run(job: StoredJob, controller: AbortController) {
       supportingVisuals = await prepareSupportingVisuals({
         source,
         job,
+        occupied: footageTimeline(job.settings.ownFootage, job.summary.outputDuration, source.fps).covers.map(item => ({ start: item.at, end: item.at + item.length })),
         transcript: prepared.transcript,
         assets: state.broll.filter((asset) =>
           job.auto?.brollIds?.includes(asset.id),
@@ -257,7 +263,20 @@ async function run(job: StoredJob, controller: AbortController) {
       job.phase = mode === "off" ? "Rendering your saved edit" : "Rendering the reviewed edit";
       await saveStore();
     }
+    const ownFootage = await retainFootage(job, controller.signal);
+    if (ownFootage.length) {
+      const baseDuration = job.editPlan?.outputDuration ?? (job.settings.segments?.reduce((sum, cut) => sum + cut.end - cut.start, 0) ?? (Math.min(job.settings.trimEnd ?? source.duration, source.duration) - job.settings.trimStart)) / job.settings.speed;
+      const covers = footageTimeline(job.settings.ownFootage, baseDuration, job.settings.fps === "source" ? source.fps : Number(job.settings.fps)).covers;
+      const visible = (shot: { start: number; end: number }) => covers.every(item => shot.end <= item.at || shot.start >= item.at + item.length);
+      supportingVisuals = supportingVisuals.filter(visible);
+      job.supportingVisuals = job.supportingVisuals?.filter(visible);
+      if (job.editPlan) for (const shot of job.editPlan.visuals) if (!visible(shot)) shot.enabled = false;
+      for (const clip of ownFootage.filter(clip => clip.placement.at >= baseDuration))
+        (job.notes ??= []).push(clip.placement.mode === "insert" ? `${clip.name}: the requested position is past this edit's end. The clip was appended at ${baseDuration.toFixed(2)}s.` : `${clip.name}: the cover position is past this edit's end and was omitted. Adjust its timestamp in Edit this result.`);
+    }
+    await saveStore();
     await renderVideo({
+      ownFootage,
       input: source.filePath,
       output: job.outputPath,
       source,
@@ -278,7 +297,7 @@ async function run(job: StoredJob, controller: AbortController) {
     await assertLinkedSourceUnchanged(source);
     job.phase = "Checking the rendered video";
     job.qualityReport = await inspectExport({ output: job.outputPath, source,
-      settings: job.settings, audioPath, supportingVisuals, signal: controller.signal });
+      settings: job.settings, audioPath, supportingVisuals, ownFootage, signal: controller.signal });
     let captions = job.editPlan?.captions || [];
     if (!job.editPlan && subtitlePath) {
       try { captions = parseCaptionCues(await readFile(subtitlePath, "utf8")); }
@@ -289,7 +308,15 @@ async function run(job: StoredJob, controller: AbortController) {
     if (job.qualityReport.issues.length) job.qualityReport.status = "review";
     if (job.auto && subtitlePath) {
       job.captionPath = path.join(paths.outputs, `${job.id}.srt`);
-      await copyFile(subtitlePath, job.captionPath);
+      if (job.settings.ownFootage?.some(item => item.mode === "insert")) {
+        const baseDuration = job.editPlan!.outputDuration;
+        await writeFile(job.captionPath, captionCuesSrt(captionsAfterInserts(captions, job.settings.ownFootage, baseDuration, job.settings.fps === "source" ? source.fps : Number(job.settings.fps))), "utf8");
+      } else await copyFile(subtitlePath, job.captionPath);
+    }
+    if (job.summary && job.settings.ownFootage?.length) {
+      const timeline = footageTimeline(job.settings.ownFootage, job.editPlan?.outputDuration ?? job.summary.outputDuration, job.settings.fps === "source" ? source.fps : Number(job.settings.fps));
+      job.summary.outputDuration = timeline.duration;
+      job.summary.changes.push(`${timeline.inserts.length} uploaded segment${timeline.inserts.length === 1 ? "" : "s"} inserted`, `${timeline.covers.length} uploaded cover shot${timeline.covers.length === 1 ? "" : "s"}`);
     }
     outputSize = (await stat(job.outputPath)).size;
     status = "completed";

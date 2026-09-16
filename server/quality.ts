@@ -53,7 +53,8 @@ function detectedIntervals(log: string, window: Interval): { black: Interval[]; 
  * resolution and four frames per second. Long exports inspect three 12-second
  * windows; callers must display the returned sampled scope to the reviewer.
  */
-export async function inspectExport({ output, source, settings, audioPath, supportingVisuals = [], signal }: {
+export async function inspectExport({ output, source, settings, audioPath, supportingVisuals = [], ownFootage = [], signal }: {
+  ownFootage?: ResolvedFootage[];
   output: string;
   source: MediaInfo;
   settings: RemixSettings;
@@ -74,7 +75,7 @@ export async function inspectExport({ output, source, settings, audioPath, suppo
     const sourceLength = settings.segments
       ? settings.segments.reduce((sum, cut) => sum + cut.end - cut.start, 0)
       : Math.min(settings.trimEnd ?? source.duration, source.duration) - settings.trimStart;
-    const expectedDuration = sourceLength / settings.speed;
+    const expectedDuration = footageTimeline(settings.ownFootage, sourceLength / settings.speed, settings.fps === "source" ? source.fps : Number(settings.fps)).duration;
     if (!Number.isFinite(expectedDuration) || expectedDuration <= 0) throw new Error("Invalid expected duration");
     const expectedSize = geometry(source, settings);
     const media = await probeMedia(output, budgetSignal);
@@ -86,7 +87,7 @@ export async function inspectExport({ output, source, settings, audioPath, suppo
       add({ code: "duration-mismatch", message: `The video is ${media.duration.toFixed(2)} seconds; the saved edit expects ${expectedDuration.toFixed(2)} seconds.` });
     if (media.width !== expectedSize.width || media.height !== expectedSize.height)
       add({ code: "dimensions-mismatch", message: `The video is ${media.width} × ${media.height}; the saved framing expects ${expectedSize.width} × ${expectedSize.height}.` });
-    const expectsAudibleAudio = !settings.muted && settings.volume > 0 && (source.hasAudio || Boolean(audioPath));
+    const expectsAudibleAudio = !settings.muted && settings.volume > 0 && (source.hasAudio || Boolean(audioPath) || ownFootage.some(item => item.placement.mode === "insert" && item.placement.audio === "clip" && item.hasAudio));
     if (expectsAudibleAudio && !media.hasAudio)
       add({ code: "missing-audio", message: "The exported video has no audio track although this edit expects sound." });
     const inspectAudio = expectsAudibleAudio && media.hasAudio;
@@ -139,3 +140,5 @@ export async function inspectExport({ output, source, settings, audioPath, suppo
   signal.throwIfAborted();
   return { status: issues.length ? "review" : "pass", checkedAt: new Date().toISOString(), scope, issues };
 }
+import { footageTimeline } from "../shared/own-footage.js";
+import type { ResolvedFootage } from "./footage-composition.js";

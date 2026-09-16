@@ -14,6 +14,7 @@ export interface SupportingVisual {
   label: string;
   kind: "broll" | "graphic";
   visualSource?: VisualSource;
+  fit?: "contain" | "crop";
 }
 
 export interface GraphicOptions {

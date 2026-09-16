@@ -1,3 +1,4 @@
+import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useState } from "react";
 import {
   Check,
@@ -129,7 +130,8 @@ export default function AutoPanel({
         <span className="auto-badge">Guided edit</span>
       </div>
       <div className="auto-panel-body">
-        <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch })} />
+        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={libraryBusy} />
+      <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch })} />
         <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
         <div className="auto-scope">
           <label htmlFor="auto-source">

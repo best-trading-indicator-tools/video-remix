@@ -17,6 +17,7 @@ export function exportConfiguration(job: StoredJob, duration: number): ExportCon
   let covered = 0, last = 0;
   for (const [start, end] of intervals) { covered += Math.max(0, end - Math.max(last, start)); last = Math.max(last, end); }
   const actual = {
+    ...(settings.ownFootage?.length ? { ownFootage: settings.ownFootage.map(item => ({ name: job.footageFiles?.[item.assetId]?.name || "Uploaded footage", at: item.at, start: item.start, end: item.end, mode: item.mode })) } : {}),
     captions: job.editPlan?.captionMode ?? (job.captionPath ? "added" : "not recorded"),
     narration: Boolean(job.summary?.narration),
     visualCount: intervals.length,
@@ -24,9 +25,10 @@ export function exportConfiguration(job: StoredJob, duration: number): ExportCon
     visualSources: [...new Set((job.supportingVisuals || []).map(shot => shot.visualSource || shot.stock?.providerId?.split(":")[0] || (shot.kind === "graphic" ? "graphics" : "library")))].sort(),
   };
   // Compare editing choices independently of the selected words, times, IDs and subject positions.
-  const { segments, hookText, trimStart, trimEnd, callouts, audioId, subtitleId, focalPoint, secondaryFocalPoint, ...profile } = settings;
-  const { brollIds, ...autoProfile } = auto || {};
+  const { ownFootage, segments, hookText, trimStart, trimEnd, callouts, audioId, subtitleId, focalPoint, secondaryFocalPoint, ...profile } = settings;
+  const { brollIds, ownFootage: _autoFootage, ...autoProfile } = auto || {};
   const profileId = createHash("sha256").update(canonical({ version: 1, profile, auto: auto ? autoProfile : null,
+    ownFootage: ownFootage?.map(({ mode, audio, fit }) => ({ mode, audio, fit })),
     hook: Boolean(hookText), soundtrack: Boolean(audioId), subtitles: Boolean(subtitleId) })).digest("hex").slice(0, 12);
   return { version: 1, profileId, settings, ...(auto ? { auto } : {}), actual };
 }

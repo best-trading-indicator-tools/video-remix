@@ -1,4 +1,5 @@
 import type { PacingOptions } from "./pacing.js";
+import type { OwnFootagePlacement, OwnFootageAsset } from "./own-footage.js";
 import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog } from "./editorial-repair.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
@@ -27,6 +28,7 @@ export const MAX_BROLL_COUNT = 10;
 export const DEFAULT_BROLL_MAX_COVERAGE = 60;
 export type VisualSource = "pixabay" | "pexels" | "hyperframes" | "remotion" | "library";
 export interface AutoOptions {
+  ownFootage?: OwnFootagePlacement[];
   aspect: Aspect;
   /** Maximum output length in whole seconds, starting at 1. */
   targetDuration: number;
@@ -97,6 +99,7 @@ export interface AutoCapabilities {
   message?: string;
 }
 export interface RemixSettings {
+  ownFootage?: OwnFootagePlacement[];
   speed: number;
   volume: number;
   muted: boolean;
@@ -248,6 +251,7 @@ export interface EditPlan {
   narration: boolean;
 }
 export interface EditPlanChanges {
+  ownFootage?: OwnFootagePlacement[];
   revision: number;
   refreshBroll?: boolean;
   /** Add stock in unused slots while retaining every saved shot. */
@@ -305,7 +309,8 @@ export interface ExportConfiguration {
   profileId: string;
   settings: RemixSettings;
   auto?: AutoOptions;
-  actual: { captions: string; narration: boolean; visualCount: number; visualCoveragePercent: number; visualSources: string[] };
+  actual: { captions: string; narration: boolean; visualCount: number; visualCoveragePercent: number; visualSources: string[];
+    ownFootage?: { name: string; at: number; start: number; end: number; mode: "insert" | "cover" }[] };
 }
 export interface PostMetrics {
   platform: PublishingPlatform;
@@ -359,6 +364,7 @@ export interface Attachment {
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
+  footageAssets?: OwnFootageAsset[];
   visualFulfillment?: { requested: number; placed: number; attempts: number; reason?: string };
   /** Mode actually used, kept separate from unset legacy preferences. */
   editorialModeApplied?: AutoOptions["editorialMode"];

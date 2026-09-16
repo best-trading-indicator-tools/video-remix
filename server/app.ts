@@ -41,6 +41,7 @@ import { installEditorialReviewRoutes } from "./editorial-routes.js";
 import { installSpeakerFocusRoutes } from "./speaker-focus-routes.js";
 import { installPacingRoutes } from "./pacing-routes.js";
 import { installClipDiscoveryRoutes } from "./clip-discovery-routes.js";
+import { footageFile, validateFootage } from "./footage-storage.js";
 
 class HttpError extends Error {
   constructor(
@@ -263,7 +264,7 @@ export function createApp() {
     if (!asset) throw new HttpError(404, "B-roll clip not found.");
     if (
       state.jobs.some(
-        (job) => isActive(job) && job.auto?.brollIds?.includes(asset.id),
+        (job) => isActive(job) && (job.auto?.brollIds?.includes(asset.id) || [...(job.settings.ownFootage ?? []), ...(job.auto?.ownFootage ?? [])].some(item => item.assetId === asset.id)),
       )
     )
       throw new HttpError(
@@ -298,6 +299,8 @@ export function createApp() {
       throw new HttpError(503, "Install FFmpeg and ffprobe before exporting.");
     // Resolve every source and library selection before adding any jobs.
     const preparedItems = items.map(({ sourceId, variants, options }) => {
+      try { validateFootage(options.ownFootage); }
+      catch (error) { throw new HttpError(400, (error as Error).message); }
       const source = state.sources.find((item) => item.id === sourceId);
       if (!source)
         throw new HttpError(
@@ -341,7 +344,7 @@ export function createApp() {
             sourceName: source.name,
             variant: index + 1,
             auto: { ...options, brollIds: [...options.brollIds] },
-            settings: { ...DEFAULT_SETTINGS },
+            settings: { ...DEFAULT_SETTINGS, ...(options.ownFootage ? { ownFootage: structuredClone(options.ownFootage) } : {}) },
             status: "queued",
             phase: "Waiting to edit",
             progress: 0,
@@ -542,6 +545,11 @@ export function createApp() {
     if (!job?.editPlan) throw new HttpError(404, "This export has no saved editable plan. Create a new Auto edit first.");
     res.json(publicEditPlan(job));
   });
+  app.get("/api/jobs/:id/footage/:assetId", (req, res, next) => {
+    const job = state.jobs.find(item => item.id === req.params.id);
+    if (!job?.footageFiles || !Object.hasOwn(job.footageFiles, req.params.assetId)) throw new HttpError(404, "Saved footage is unavailable.");
+    res.sendFile(footageFile(job, req.params.assetId), error => { if (error) next(error); });
+  });
   app.get("/api/jobs/:id/plan/media/:mediaId", (req, res, next) => {
     const job = state.jobs.find(item => item.id === req.params.id);
     if (!job?.editPlan?.media.some(item => item.id === req.params.mediaId))
@@ -570,6 +578,8 @@ export function createApp() {
     let plan;
     try { plan = applyEditPlanChanges(parent.editPlan, parsed.data, parent.sourceTranscript); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid edit changes."); }
+    try { validateFootage(plan.settings.ownFootage, parent); }
+    catch (error) { throw new HttpError(400, (error as Error).message); }
     if (parsed.data.refreshBroll && parsed.data.brollMaxCoverage !== undefined) {
       const keptSeconds = preservedVisualsOnStockRefresh(plan, parsed.data.preserveBroll).filter(shot => shot.enabled)
         .reduce((sum, shot) => sum + shot.end - shot.start, 0);
@@ -634,6 +644,8 @@ export function createApp() {
         "FFmpeg and ffprobe must be installed before exporting. See the README for setup.",
       );
     for (const item of items) {
+      try { validateFootage(item.settings.ownFootage); }
+      catch (error) { throw new HttpError(400, (error as Error).message); }
       const source = state.sources.find(
         (source) => source.id === item.sourceId,
       );

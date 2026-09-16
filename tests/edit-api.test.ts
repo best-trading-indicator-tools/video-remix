@@ -515,6 +515,32 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.equal(retimed.segments[0]!.end, 1);
       assert.equal(retimed.segments[0]!.words[1]!.start, 0.5);
     });
+    await t.test("uploaded insertions remain editable after deleting their library item and restarting", async () => {
+      const asset = ((await upload("/api/broll", brollPath, "My extra footage.mp4")) as { assets: BrollAsset[] }).assets[0]!;
+      const ownFootage = [{ id: randomUUID(), assetId: asset.id, mode: "insert", at: 2, start: 0, end: 1, audio: "clip", fit: "contain" }];
+      const invalid = await request(`/api/jobs/${original.id}/revisions`, "POST", { revision: plan.revision, ownFootage: [{ ...ownFootage[0], assetId: randomUUID() }] });
+      assert.equal(invalid.status, 400);
+      const response = await request(`/api/jobs/${original.id}/revisions`, "POST", { revision: plan.revision, ownFootage });
+      assert.equal(response.status, 201, await response.clone().text());
+      const inserted = await completed((await response.json() as RenderJob).id);
+      assertPublic(inserted);
+      assert.equal(inserted.summary!.outputDuration, plan.outputDuration + 1);
+      assert.equal(inserted.qualityReport?.issues.some(issue => issue.code === "duration-mismatch"), false);
+      assert.equal(inserted.footageAssets?.[0]?.name, "My extra footage.mp4");
+      const snapshot = await download(inserted.footageAssets![0]!.url);
+      assert.equal(digest(snapshot), digest(await readFile(brollPath)));
+      assert.equal((await request(`/api/broll/${asset.id}`, "DELETE")).status, 200);
+      await stop(); await start(true);
+      const saved = await planOf(inserted.id);
+      assert.deepEqual(saved.settings.ownFootage, ownFootage);
+      const revised = await request(`/api/jobs/${inserted.id}/revisions`, "POST", { revision: saved.revision, hookText: "My saved footage remains" });
+      assert.equal(revised.status, 201, await revised.clone().text());
+      const completedRevision = await completed((await revised.json() as RenderJob).id);
+      assert.equal(completedRevision.summary!.outputDuration, inserted.summary!.outputDuration);
+      assert.equal(digest(await download(completedRevision.footageAssets![0]!.url)), digest(snapshot));
+      assert.deepEqual((await planOf(completedRevision.id)).settings.ownFootage, ownFootage);
+      assert.equal(digest(await download(original.downloadUrl!)), digest(originalBytes));
+    });
   } finally {
     await stop();
     await rm(directory, { recursive: true, force: true });

@@ -25,6 +25,7 @@ export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?:
   const changes: EditPlanChanges = { revision: base.revision };
   if (differs(base.cuts, next.cuts)) changes.cuts = next.cuts;
   const retimed = changes.cuts ? applyEditPlanChanges(base, changes, transcript) : base;
+  if (differs(base.settings.ownFootage, next.settings.ownFootage)) changes.ownFootage = next.settings.ownFootage || [];
   if (base.settings.hookText !== next.settings.hookText) changes.hookText = next.settings.hookText;
   if (differs(retimed.captions, next.captions)) changes.captions = next.captions;
   if (differs(retimed.visuals, next.visuals)) changes.visuals = next.visuals;

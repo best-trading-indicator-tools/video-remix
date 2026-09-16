@@ -1,3 +1,4 @@
+import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronRight, Clapperboard, Copy, Link2, LoaderCircle, Play, Plus, Scissors, Trash2, X } from "lucide-react";
 import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
@@ -304,6 +305,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     <section className="shorts-editor panel">
       <div className="panel-heading"><h2><Scissors size={16} /> Build a short</h2><button className="secondary-button" disabled={!source || drafts.length >= MAX_SHORTS} onClick={addDraft}><Plus size={15} />New short</button></div>
       {draft ? <div className="shorts-editor-body">
+        <OwnFootagePanel key={draft.id} value={draft.ownFootage} onChange={ownFootage => updateDraft({ ownFootage })} disabled={rendering} onApplyAll={ownFootage => setDrafts(current => current.map(item => ({ ...item, ownFootage: structuredClone(ownFootage), updatedAt: new Date().toISOString() })))} />
         <FinishingPresets mode="shorts" settings={draft} disabled={rendering} onApply={patch => updateDraft({ ...patch, focusAnalysis: undefined })}
           onApplySelected={selectedIds.length ? patch => setDrafts(current => current.map(item => selectedIds.includes(item.id) ? { ...item, ...patch, focusAnalysis: undefined, updatedAt: new Date().toISOString() } : item)) : undefined} />
         <div className="shorts-title-row"><label htmlFor="shorts-title">Short name<input id="shorts-title" value={draft.title} maxLength={100} placeholder="Name this moment" onChange={event => updateDraft({ title: event.target.value })} /></label><button className="icon-button" title="Duplicate short" aria-label="Duplicate short" disabled={drafts.length >= MAX_SHORTS} onClick={duplicate}><Copy size={16} /></button></div>

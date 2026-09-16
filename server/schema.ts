@@ -1,4 +1,5 @@
 import { pacingOptionsSchema } from "../shared/pacing.js";
+import { ownFootageSchema } from "../shared/own-footage.js";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
 import { MAX_FOCUS_POINTS_PER_CUT, MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
@@ -12,6 +13,7 @@ export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => c
 export const captionStyleSchema = z.object({ fontSize: n(12, 40), bottomPercent: n(5, 80) }).strict();
 export const settingsSchema = z
   .object({
+    ownFootage: ownFootageSchema.optional(),
     speed: n(0.5, 2),
     volume: n(0, 2),
     muted: z.boolean(),
@@ -115,6 +117,7 @@ export const autoOptionsSchema = z
       .max(5).refine(sources => new Set(sources).size === sources.length, "Choose each visual source once").optional(),
     brollIds: z.array(z.string().uuid()).max(100).optional(),
     brollMatching: z.enum(["tags", "ai"]).optional(),
+    ownFootage: ownFootageSchema.optional(),
     brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   brollMaxCoverage: z.number().int().min(0).max(100).optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),

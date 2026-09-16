@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ownFootageSchema } from "../shared/own-footage.js";
 import type { CaptionCue, EditPlan, EditPlanChanges, EditSegment, Transcript } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import { withTrackBounds } from "../shared/focus.js";
@@ -30,6 +31,7 @@ const visualSchema = z.object({
 }).strict().refine(visual => visual.end - visual.start >= 0.5 - 1e-9, "Each supporting shot must last at least 0.5 seconds");
 
 export const editPlanChangesSchema = z.object({
+  ownFootage: ownFootageSchema.optional(),
   revision: z.number().int().nonnegative(),
   refreshBroll: z.boolean().optional(),
   preserveBroll: z.boolean().optional(),
@@ -192,6 +194,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
   if (changes.revision !== plan.revision) throw new Error("This edit changed since you opened it. Reload the latest revision before saving.");
   if (!Number.isFinite(plan.settings.speed) || plan.settings.speed <= 0) throw new Error("The saved edit has an invalid playback speed");
   const next = structuredClone(plan);
+  if (changes.ownFootage) next.settings.ownFootage = structuredClone(changes.ownFootage);
   let cuts = changes.cuts ?? next.cuts;
   cuts = cuts.map((cut, index) => {
     const explicitPoint = changes.cuts?.[index]?.focalPoint;

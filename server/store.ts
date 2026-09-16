@@ -30,6 +30,7 @@ export interface StoredAttachment extends Attachment {
   createdAt: string;
 }
 export interface StoredJob extends RenderJob {
+  footageFiles?: Record<string, { filename: string; name: string; duration: number; hasAudio: boolean }>;
   /** An explicit retry of a skipped Auto version can reuse this batch's footage. */
   allowRepeatedFootage?: boolean;
   refreshBroll?: boolean;
@@ -146,11 +147,11 @@ export function publicSource(source: StoredSource): VideoSource {
   return { ...value, ...(source.fingerprint ? { previousExports: state.history.filter(entry => entry.sourceFingerprint === source.fingerprint).length } : {}) };
 }
 export function publicJob(job: StoredJob): RenderJob {
-  const { outputPath: _outputPath, captionPath: _captionPath,
+  const { outputPath: _outputPath, captionPath: _captionPath, footageFiles: _footageFiles,
     editPlan: _editPlan, planFiles: _planFiles, sourceTranscript: _transcript,
     brollCandidates: _candidates, refreshBroll: _refreshBroll, preserveBroll: _preserveBroll,
     allowRepeatedFootage: _allowRepeatedFootage, ...value } = job;
-  return { ...value, ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
+  return { ...value, ...(job.footageFiles ? { footageAssets: Object.entries(job.footageFiles).map(([id, media]) => ({ id, name: media.name, duration: media.duration, hasAudio: media.hasAudio, url: `/api/jobs/${job.id}/footage/${id}` })) } : {}), ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
 }
 export function publicBroll(asset: StoredBroll): BrollAsset {
   const {

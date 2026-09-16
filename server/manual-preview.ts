@@ -61,6 +61,7 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
     preview.timeShift = 0;
   }
   if (length <= 0.04) throw new PreviewError(400, "Choose a longer interval to preview.");
+  if (preview.ownFootage) preview.ownFootage = preview.ownFootage.filter(item => item.at < length / settings.speed);
   // Limit unusual panoramic source formats as well as ordinary 720p exports.
   // The renderer scales display pixels first, so this preserves crop positions.
   const output = geometry(source, preview);
@@ -131,9 +132,10 @@ export function installManualPreviewRoutes(app: Express) {
     try {
       await assertLinkedSourceUnchanged(source);
       const bounded = manualPreviewSettings(settings, source);
+      const ownFootage = previewFootage(bounded.settings.ownFootage);
       // Attachment IDs are immutable; mtime and size also invalidate cached
       // previews if local media was replaced outside the app.
-      const files = await Promise.all([source.filePath, audio?.filePath, subtitle?.filePath]
+      const files = await Promise.all([source.filePath, audio?.filePath, subtitle?.filePath, ...ownFootage.map(item => item.path)]
         .filter((file): file is string => !!file)
         .map(async file => { const info = await stat(file); return [file, info.size, info.mtimeMs]; }));
       await cleanup();
@@ -144,6 +146,7 @@ export function installManualPreviewRoutes(app: Express) {
       const folder = path.join(directory, id);
       const output = path.join(folder, "preview.mp4");
       await renderVideo({
+        ownFootage, maximumOutputDuration: 5,
         input: source.filePath, output, settings: bounded.settings, source: bounded.source,
         audioPath: audio?.filePath, subtitlePath: subtitle?.filePath,
         motionDuration: bounded.motionDuration,
@@ -184,3 +187,4 @@ export function installManualPreviewRoutes(app: Express) {
     });
   });
 }
+import { previewFootage } from "./footage-storage.js";

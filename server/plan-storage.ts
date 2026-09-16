@@ -7,6 +7,7 @@ import { captionCuesSrt, parseCaptionCues } from "./edit-plan.js";
 import type { StoredJob, StoredSource } from "./store.js";
 import type { SupportingVisual } from "./visuals.js";
 import { retimeTranscript } from "./auto-plan.js";
+import { cloneFootage } from "./footage-storage.js";
 
 /** Search the saved export's speech timeline, including caption corrections. */
 export function transcriptFromPlan(job: StoredJob): Transcript | undefined {
@@ -197,6 +198,7 @@ export async function clonePlanFiles(parent: StoredJob, job: StoredJob) {
   const directory = path.join(paths.plans, job.id);
   await mkdir(directory, { recursive: true });
   try {
+    await cloneFootage(parent, job);
     job.planFiles = {};
     for (const item of job.editPlan!.media) {
       const source = planMediaPath(parent, item.id);

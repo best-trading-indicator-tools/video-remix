@@ -1,3 +1,4 @@
+import OwnFootagePanel from "./OwnFootagePanel";
 import {
   useCallback,
   useEffect,
@@ -1554,6 +1555,7 @@ export default function App() {
                     role="tabpanel"
                     aria-labelledby={`tab-${tab}`}
                   >
+                    <OwnFootagePanel key={selected?.id || "default"} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
                     <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={updateSettings} />
                     {selected && <ManualPromptEditor key={selected.id} sourceId={selected.id} settings={settings}
                       disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}

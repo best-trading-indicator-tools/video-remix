@@ -1,3 +1,4 @@
+import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
@@ -31,6 +32,7 @@ function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: bool
     changes.refreshBroll = true;
     if (anchor?.changes.preserveBroll) changes.preserveBroll = true;
   }
+  if (differs(plan.settings.ownFootage, draft.settings.ownFootage)) changes.ownFootage = draft.settings.ownFootage || [];
   if (plan.settings.hookText !== draft.settings.hookText) changes.hookText = draft.settings.hookText;
   if (differs(plan.cuts, draft.cuts)) changes.cuts = draft.cuts;
   for (const key of ["captions", "visuals"] as const) {
@@ -448,6 +450,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   </div>)}
                 </fieldset>
               </details>
+              <OwnFootagePanel value={draft.settings.ownFootage} savedAssets={job.footageAssets} disabled={saving} onChange={ownFootage => setDraft({ ...draft, settings: { ...draft.settings, ownFootage } })} />
               <details open className="edit-plan-section">
                 <summary>B-roll & supporting visuals <span>{draft.visuals.length}</span></summary>
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>

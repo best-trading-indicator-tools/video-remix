@@ -8,6 +8,7 @@ import type { StoredJob, StoredSource } from "./store.js";
 import { cutsDuration, retimeTranscript } from "./auto-plan.js";
 import { exportConfiguration } from "./export-configuration.js";
 import { validPublicationUrl } from "../shared/publishing.js";
+import { footageTimeline } from "../shared/own-footage.js";
 
 /** Content identity survives a rename/reimport; memory usage stays bounded. */
 export async function fingerprintFile(filePath: string, signal?: AbortSignal, onBytes?: (bytes: number) => void): Promise<string> {
@@ -58,7 +59,7 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
   if (!source.fingerprint || job.status !== "completed") return null;
   const cuts = renderedCuts(source, job);
   if (!cuts.length || cuts.some(cut => !validCut(cut) || cut.end > source.duration + 0.001)) return null;
-  const outputDuration = job.summary?.outputDuration ?? cutsDuration(cuts) / job.settings.speed;
+  const outputDuration = job.summary?.outputDuration ?? footageTimeline(job.settings.ownFootage, cutsDuration(cuts) / job.settings.speed, job.settings.fps === "source" ? source.fps : Number(job.settings.fps)).duration;
   if (!Number.isFinite(outputDuration) || outputDuration <= 0) return null;
   const sourceText = job.sourceTranscript
     ? clean(retimeTranscript(job.sourceTranscript, cuts).segments.map(segment => segment.text).join(" "))

@@ -11,6 +11,7 @@ export function SettingsSnapshot({ entry }: { entry: ExportHistoryEntry }) {
     {!snapshot ? <p className="measurement-note">Settings were not retained for this older export. They cannot be reconstructed from its video alone.</p> : <>
       <p className="measurement-note">Saved export settings. {snapshot.actual.visualCount} supporting shots cover {snapshot.actual.visualCoveragePercent}% of the result. Captions: {snapshot.actual.captions}. Narration: {snapshot.actual.narration ? "on" : "off"}.</p>
       <dl className="settings-grid">{Object.entries(snapshot.settings).map(([key, item]) => <div key={key}><dt>{label(key)}</dt><dd>{value(item)}</dd></div>)}</dl>
+      {!!snapshot.actual.ownFootage?.length && <><h4>Your footage placements</h4><ul className="history-stock-list">{snapshot.actual.ownFootage.map((item, i) => <li key={i}>{item.name}<small>{item.mode === "insert" ? "Inserted" : "Cover shot"} at {item.at}s · Clip {item.start}–{item.end}s</small></li>)}</ul></>}
       {snapshot.auto && <><h4>Auto choices</h4><dl className="settings-grid">{Object.entries(snapshot.auto).map(([key, item]) => <div key={key}><dt>{label(key)}</dt><dd>{value(item)}</dd></div>)}</dl></>}
     </>}
   </details>;

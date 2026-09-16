@@ -16,6 +16,8 @@ import type { RemixSettings } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
+import { footageTimeline, ownFootageSchema } from "../shared/own-footage.js";
+import { composeFootage, type ResolvedFootage } from "./footage-composition.js";
 
 export interface MediaInfo {
   duration: number;
@@ -508,6 +510,8 @@ async function canonicalSubtitles(filePath: string): Promise<string> {
 }
 
 export interface RenderOptions {
+  maximumOutputDuration?: number;
+  ownFootage?: ResolvedFootage[];
   input: string;
   output: string;
   settings: RemixSettings;
@@ -554,12 +558,26 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       );
   const duration = clipLength / s.speed;
   const fps = s.fps === "source" ? source.fps : Number(s.fps);
+  const placements = ownFootageSchema.parse(s.ownFootage ?? []);
+  const footage = placements.map(placement => {
+    const clip = options.ownFootage?.find(item => item.placement.id === placement.id && item.placement.assetId === placement.assetId);
+    if (!clip) throw new Error("Your uploaded footage is unavailable. Choose the clip again.");
+    if (placement.end > clip.duration + 0.001) throw new Error("Your footage selection extends beyond the uploaded clip.");
+    return { ...clip, placement };
+  });
+  const footageTimes = footageTimeline(placements, duration, fps);
+  let exportDuration = footageTimes.duration;
   const { width, height } = geometry(source, s);
   if (width > 16384 || height > 16384)
     throw new Error("This aspect ratio exceeds the output size limit. Choose Source resolution or a standard video format.");
-  const supportingVisuals = options.supportingVisuals ?? [];
+  const covers: SupportingVisual[] = footageTimes.covers.map(item => {
+    const clip = footage.find(clip => clip.placement.id === item.id)!;
+    return { path: clip.path, label: clip.name, kind: "broll", start: item.at, end: item.at + item.length, sourceStart: item.start, fit: item.fit };
+  });
+  // The user's explicit cutaway has priority over automatically chosen footage.
+  const supportingVisuals = [...(options.supportingVisuals ?? []).filter(shot => covers.every(cover => shot.end <= cover.start || shot.start >= cover.end)), ...covers];
   if (
-    supportingVisuals.length > MAX_BROLL_COUNT ||
+    supportingVisuals.length > MAX_BROLL_COUNT + covers.length ||
     supportingVisuals.some(
       (visual) =>
         !Number.isFinite(visual.start) ||
@@ -770,10 +788,10 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "-i",
         await localFile(options.audioPath!),
       );
+    const graph: string[] = [];
+    const hasInserts = footageTimes.inserts.length > 0;
     if (supportingVisuals.length) {
-      const graph = [
-        `[0:V:0]${filters.slice(0, cutawayFilterIndex).join(",")}[picture0]`,
-      ];
+      graph.push(`[0:V:0]${filters.slice(0, cutawayFilterIndex).join(",")}[picture0]`);
       for (const [index, visual] of supportingVisuals.entries()) {
         const local = await localFile(visual.path);
         const media = await probeMedia(local);
@@ -796,19 +814,25 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         const inputIndex = index + (replacementAudio ? 2 : 1);
         const supportingCrop = focalCrop(String(width), String(height),
           decimal(visual.focalPoint?.x ?? 0.5), decimal(visual.focalPoint?.y ?? 0.5));
+        const fit = visual.fit === "contain"
+          ? `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`
+          : `scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,${supportingCrop}`;
         graph.push(
-          `[${inputIndex}:V:0]trim=duration=${decimal(length)},setpts=PTS-STARTPTS+${decimal(visual.start)}/TB,scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,${supportingCrop},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
+          `[${inputIndex}:V:0]trim=duration=${decimal(length)},setpts=PTS-STARTPTS+${decimal(visual.start)}/TB,${fit},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
           `[picture${index}][cutaway${index}]overlay=x=0:y=0:eof_action=pass:repeatlast=0:enable='gte(t,${decimal(visual.start)})*lt(t,${decimal(visual.end)})'[picture${index + 1}]`,
         );
       }
       graph.push(
         `[picture${supportingVisuals.length}]${filters.slice(cutawayFilterIndex).join(",") || "null"}[edited]`,
       );
-      args.push("-filter_complex", graph.join(";"), "-map", "[edited]");
-    } else args.push("-map", "0:V:0", "-vf", filters.join(","));
+    } else if (hasInserts) graph.push(`[0:V:0]${filters.join(",")}[edited]`);
+    else args.push("-map", "0:V:0", "-vf", filters.join(","));
+    const inputInsertionIndex = args.length;
+    if (graph.length && !hasInserts) args.push("-filter_complex", graph.join(";"), "-map", "[edited]");
     args.push("-filter_threads", "1", "-filter_complex_threads", "1");
-    if (!s.muted && (replacementAudio || source.hasAudio)) {
-      args.push("-map", replacementAudio ? "1:a:0" : "0:a:0");
+    const hasAudio = !s.muted && (replacementAudio || source.hasAudio || footage.some(clip => clip.placement.mode === "insert" && clip.placement.audio === "clip" && clip.hasAudio));
+    if (hasAudio) {
+      if (!hasInserts) args.push("-map", replacementAudio ? "1:a:0" : "0:a:0");
       const audioFilters = replacementAudio
         ? ["asetpts=PTS-STARTPTS"]
         : [
@@ -840,9 +864,11 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "apad",
         `atrim=duration=${decimal(duration)}`,
       );
+      if (hasInserts) graph.push(replacementAudio || source.hasAudio
+        ? `[${replacementAudio ? "1:a:0" : "0:a:0"}]${audioFilters.join(",")},aresample=48000,aformat=channel_layouts=stereo[baseaudio]`
+        : `anullsrc=r=48000:cl=stereo,atrim=duration=${decimal(duration)}[baseaudio]`);
+      else args.push("-af", audioFilters.join(","));
       args.push(
-        "-af",
-        audioFilters.join(","),
         "-c:a",
         "aac",
         "-b:a",
@@ -853,6 +879,19 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "2",
       );
     } else args.push("-an");
+    if (hasInserts) {
+      const ownInputs: string[] = [];
+      exportDuration = await composeFootage({ graph, footage, duration, fps, width, height, audio: hasAudio,
+        volume: s.volume, normalizeAudio: !!s.normalizeAudio, firstInput: (replacementAudio ? 2 : 1) + supportingVisuals.length,
+        addInput: async (clip, length) => { ownInputs.push("-threads", "2", ...SAFE_INPUT, "-ss", decimal(clip.placement.start), "-t", decimal(length), "-i", await localFile(clip.path)); } });
+      args.splice(inputInsertionIndex, 0, ...ownInputs);
+      args.push("-filter_complex", graph.join(";"), "-map", "[footagevideo]");
+      if (hasAudio) args.push("-map", "[footageaudio]");
+    }
+    if (options.maximumOutputDuration !== undefined) {
+      if (!Number.isFinite(options.maximumOutputDuration) || options.maximumOutputDuration <= 0) throw new Error("Invalid preview duration");
+      exportDuration = Math.min(exportDuration, options.maximumOutputDuration);
+    }
     args.push(
       "-sn",
       "-dn",
@@ -883,7 +922,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       "-movflags",
       "+faststart+use_metadata_tags",
       "-t",
-      decimal(duration),
+      decimal(exportDuration),
       "-progress",
       "pipe:1",
       "-nostats",
@@ -904,7 +943,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         for (const line of lines) {
           if (!line.startsWith("out_time_us=")) continue;
           const seconds = Number(line.slice("out_time_us=".length)) / 1_000_000;
-          const progress = clamp((seconds / duration) * 100, 0, 99);
+          const progress = clamp((seconds / exportDuration) * 100, 0, 99);
           if (Number.isFinite(progress) && progress > lastProgress) {
             lastProgress = progress;
             options.onProgress(progress);

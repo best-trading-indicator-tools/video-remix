@@ -1,0 +1,17 @@
+.own-footage { border: 1px solid var(--line); border-radius: 12px; background: var(--surface); padding: 18px; margin: 20px 0; min-width: 0; }
+.own-footage > summary { display: flex; align-items: center; gap: 10px; color: var(--text); cursor: pointer; font-size: 15px; font-weight: 600; line-height: 1.6; }
+.own-footage > summary > span { margin-left: auto; color: var(--subtle); font-size: 12px; font-weight: 400; }
+.own-footage-note { color: var(--subtle); font-size: 13px; line-height: 1.8; margin: 16px 0; }
+.own-footage fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+.own-footage-toolbar, .own-footage-upload { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+.own-footage-add { display: flex; gap: 12px; align-items: end; margin-bottom: 16px; flex-wrap: wrap; }
+.own-footage-add > label { flex: 1; min-width: min(220px, 100%); }
+.own-footage label { display: flex; flex-direction: column; gap: 8px; color: var(--subtle); font-size: 13px; min-width: 0; }
+.own-footage select, .own-footage input[type=number] { width: 100%; min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: 8px; color: var(--text); background: var(--field); color-scheme: dark; font-size: 14px; }
+.own-footage-placement { border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 16px 0; background: var(--surface-raised); }
+.own-footage-placement header { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.own-footage-placement header strong { flex: 1; overflow-wrap: anywhere; min-width: 0; font-size: 14px; color: var(--text); line-height: 1.5; }
+.own-footage-placement video { display: block; width: 100%; height: 180px; object-fit: contain; background: #090d11; border-radius: 8px; margin-bottom: 18px; }
+.own-footage-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr)); gap: 16px; }
+.own-footage-error { color: #ffb6ac; margin-top: 12px; font-size: 13px; line-height: 1.7; }
+@media (max-width: 580px) { .own-footage-fields { grid-template-columns: 1fr; } .own-footage { padding: 14px; } }

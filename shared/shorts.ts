@@ -1,3 +1,4 @@
+import { ownFootageSchema, type OwnFootagePlacement } from "./own-footage.js";
 import { pacingCutSignature, pacingReviewSchema, type PacingReview } from "./pacing.js";
 import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RemixSettings, type VideoSource } from "./types.js";
 import { MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "./focus.js";
@@ -13,6 +14,7 @@ export interface ShortFocusAnalysis {
   reason?: string;
 }
 export interface ShortDraft {
+  ownFootage?: OwnFootagePlacement[];
   id: string;
   sourceId: string;
   sourceFingerprint?: string;
@@ -136,7 +138,7 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   });
   const duration = segments.reduce((sum, cut) => sum + Math.max(0, cut.end - cut.start), 0);
   const settings: RemixSettings = {
-    ...DEFAULT_SETTINGS, aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
+    ...DEFAULT_SETTINGS, ...(draft.ownFootage ? { ownFootage: draft.ownFootage } : {}), aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
     segments, focalPoint: draft.focalPoint, normalizeAudio: draft.normalizeAudio, qualityCleanup: draft.qualityCleanup,
     layout: draft.layout, secondaryFocalPoint: draft.secondaryFocalPoint,
     smoothCuts: !!draft.pacingReview?.appliedSignature && draft.pacingReview.appliedSignature === pacingCutSignature(draft.cuts),
@@ -182,6 +184,7 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       id: value.id, sourceId: value.sourceId, sourceName: value.sourceName.slice(0, 500),
       sourceFingerprint: typeof value.sourceFingerprint === "string" ? value.sourceFingerprint : undefined,
       title: value.title.slice(0, 101), cuts,
+      ...(value.ownFootage !== undefined && ownFootageSchema.safeParse(value.ownFootage).success ? { ownFootage: ownFootageSchema.parse(value.ownFootage) } : {}),
       aspect: (["original", "9:16", "1:1", "4:5", "16:9"].includes(String(value.aspect)) ? value.aspect : "9:16") as ShortDraft["aspect"],
       fit: (["crop", "contain", "blur"].includes(String(value.fit)) ? value.fit : "crop") as ShortDraft["fit"],
       resolution: (["source", "720", "1080"].includes(String(value.resolution)) ? value.resolution : "1080") as ShortDraft["resolution"],
