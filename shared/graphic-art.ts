@@ -113,6 +113,5 @@ export function graphicSceneSvg(raw: GraphicScene, width: number, height: number
 <style>@keyframes scene-reveal{from{opacity:0}to{opacity:1}}@keyframes scene-grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}@keyframes scene-float{from{transform:translateY(-2px)}to{transform:translateY(2px)}}</style>
 <rect width="1000" height="${round(H)}" fill="${paper}"/><path d="M80 ${round(H*.09)}h80" stroke="${accent}" stroke-width="6"/>
 ${label(scene.title,500,titleY,short*.064,portrait?25:42,ink,700,840,H*.115)}${body}
-${label(scene.kind === "bars" ? "AS STATED BY THE SPEAKER" : "ILLUSTRATING THE SPOKEN IDEA",500,H*.74,short*.019,60,muted,400)}
 </svg>`;
 }
