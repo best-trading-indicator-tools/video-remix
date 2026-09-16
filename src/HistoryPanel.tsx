@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditorialReportSummary from "./EditorialReportSummary";
 import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, Image, LoaderCircle, Play, Plus, RefreshCw, Search, X } from "lucide-react";
@@ -181,9 +181,9 @@ interface MeasurementGroup {
   correctionTimeExports: number; averageCorrectionSeconds: number | null; medianCorrectionSeconds: number | null;
   automaticRepair?: { logs: number; attempts: number; accepted: number; rejected: number; unavailable: number };
 }
-function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[] | null; entries: ExportHistoryEntry[] }) {
+function MeasurementComparison({ groups, entries, onOpen }: { groups: MeasurementGroup[] | null; entries: ExportHistoryEntry[]; onOpen: () => void }) {
   const latest = entries.flatMap(entry => latestPostObservations(entry).map(snapshot => ({ entry, snapshot })));
-  return <details className="measurement-comparison">
+  return <details className="measurement-comparison" onToggle={event => { if (event.currentTarget.open) onOpen(); }}>
     <summary>Compare recorded results</summary>
     <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Acceptance rates use only explicit human verdicts, including rejections. Undecided exports stay outside that denominator. Automatic repairs are counted separately. Each export is counted separately, including revisions; download measurements to compare editing modes and model versions.</p>
     <div className="measurement-downloads"><a className="secondary-button" href="/api/measurements/export?format=csv" download><Download size={13} />Download all measurements · CSV</a><a className="secondary-button" href="/api/measurements/export?format=json" download><Download size={13} />JSON</a></div>
@@ -342,40 +342,54 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
   const [search, setSearch] = useState("");
   const [reload, setReload] = useState(0);
   const [measurementGroups, setMeasurementGroups] = useState<MeasurementGroup[] | null>(null);
+  const [total, setTotal] = useState(0);
+  const [stockUses, setStockUses] = useState(new Map<string, number>());
+  const [page, setPage] = useState({ key: "", offset: 0 });
+  const [loadComparisons, setLoadComparisons] = useState(false);
+  const filterKey = `${source?.id || ""}:${search}`;
+  const offset = page.key === filterKey ? page.offset : 0;
+  const pageSize = 50;
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
     const endpoint = source ? `/api/sources/${encodeURIComponent(source.id)}/history` : "/api/history";
-    void request<{ entries: ExportHistoryEntry[] }>(endpoint, { signal: controller.signal })
-      .then((result) => { if (!controller.signal.aborted) setEntries(result.entries); })
-      .catch((reason: Error) => { if (!controller.signal.aborted) setError(reason.message); })
-      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
-    return () => controller.abort();
-  }, [source?.id, refreshKey, reload]);
+    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset), search: search.trim() });
+    const timer = setTimeout(() => {
+      void request<{ entries: ExportHistoryEntry[]; total: number; offset: number; stockUses: Record<string, number> }>(`${endpoint}?${params}`, { signal: controller.signal })
+        .then((result) => { if (!controller.signal.aborted) {
+          setEntries(result.entries); setTotal(result.total); setStockUses(new Map(Object.entries(result.stockUses)));
+          if (result.offset !== offset) setPage({ key: filterKey, offset: result.offset });
+        } })
+        .catch((reason: Error) => { if (!controller.signal.aborted) setError(reason.message); })
+        .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    }, search ? 250 : 0);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [source?.id, refreshKey, reload, offset, search]);
   useEffect(() => {
     const controller = new AbortController();
+    if (!loadComparisons) return;
     void request<{ groups: MeasurementGroup[] }>("/api/measurements", { signal: controller.signal })
       .then((result) => { if (!controller.signal.aborted) setMeasurementGroups(result.groups); })
       .catch(() => { if (!controller.signal.aborted) setMeasurementGroups(null); });
     return () => controller.abort();
-  }, [refreshKey, reload]);
-  const stockUses = useMemo(() => {
-    const uses = new Map<string, number>();
-    for (const entry of entries) for (const identity of new Set(entry.stockShots.map((shot) => shot.identity))) uses.set(identity, (uses.get(identity) || 0) + 1);
-    return uses;
-  }, [entries]);
+  }, [refreshKey, reload, loadComparisons]);
   const query = search.trim().toLocaleLowerCase();
-  const visible = entries.filter((entry) => `${entry.title} ${entry.sourceName}`.toLocaleLowerCase().includes(query));
+  const visible = entries;
   return <section className="history-panel panel" aria-labelledby="history-title">
-    <header className="history-heading"><div><h2 id="history-title">Export history <span className="count-pill">{entries.length}</span></h2><p>History stays available after video files expire. Review earlier excerpts and keep a record of your posts.</p></div>
+    <header className="history-heading"><div><h2 id="history-title">Export history <span className="count-pill">{total}</span></h2><p>History stays available after video files expire. Review earlier excerpts and keep a record of your posts.</p></div>
       <button className="secondary-button" onClick={onBack}><ArrowLeft size={14} />Workspace</button>
     </header>
     {source && <div className="history-source-filter"><div><strong>Earlier exports & possible picture matches</strong><span>{source.name}</span></div><button className="secondary-button" onClick={onClearSource}><X size={13} />Show all history</button></div>}
-    <div className="history-toolbar"><label className="history-search"><Search size={16} /><span className="visually-hidden">Search history by title or source</span><input type="search" placeholder="Search by title or source…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+    <div className="history-toolbar"><label className="history-search"><Search size={16} /><span className="visually-hidden">Search history by title or source</span><input type="search" placeholder="Search by title or source…" value={search} maxLength={200} onChange={(event) => setSearch(event.target.value)} /></label>
       <button className="secondary-button" disabled={loading} onClick={() => setReload((value) => value + 1)}><RefreshCw className={loading ? "spin" : ""} size={14} />Refresh</button></div>
-    <ConfigurationHistory entries={visible} />
-    <MeasurementComparison groups={measurementGroups} entries={visible} />
+    <ConfigurationHistory entries={visible} scope="this page" />
+    <MeasurementComparison groups={measurementGroups} entries={visible} onOpen={() => setLoadComparisons(true)} />
+    <nav className="history-pagination" aria-label="History pages">
+      <span>{total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total} exports` : "0 exports"}</span>
+      <button className="secondary-button" disabled={loading || offset === 0} onClick={() => setPage({ key: filterKey, offset: Math.max(0, offset - pageSize) })}>Previous</button>
+      <button className="secondary-button" disabled={loading || offset + pageSize >= total} onClick={() => setPage({ key: filterKey, offset: offset + pageSize })}>Next</button>
+    </nav>
     {error && <p className="history-error" role="alert">{error}</p>}
     {loading && !entries.length ? <div className="history-empty" role="status"><LoaderCircle className="spin" size={24} /><p>Loading export history…</p></div> :
       !visible.length ? <div className="history-empty"><Clock3 size={30} /><h3>{query ? "No matching exports" : "Your export history starts here"}</h3><p>{query ? "Try another title or source name." : "Finished Auto edits will appear here, including future revisions."}</p></div> :

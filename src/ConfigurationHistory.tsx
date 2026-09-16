@@ -17,7 +17,7 @@ export function SettingsSnapshot({ entry }: { entry: ExportHistoryEntry }) {
   </details>;
 }
 
-export function ConfigurationHistory({ entries }: { entries: ExportHistoryEntry[] }) {
+export function ConfigurationHistory({ entries, scope }: { entries: ExportHistoryEntry[]; scope?: string }) {
   const groups = new Map<string, { profile: string; platform: string; exports: Set<string>; unknown: number; normal: number; suspected: number; confirmed: number; resolved: number }>();
   for (const entry of entries) for (const post of latestPostObservations(entry)) {
     const profile = entry.configuration?.profileId || "Settings unavailable";
@@ -25,7 +25,7 @@ export function ConfigurationHistory({ entries }: { entries: ExportHistoryEntry[
     const group = groups.get(key) || { profile, platform: post.platform, exports: new Set<string>(), unknown: 0, normal: 0, suspected: 0, confirmed: 0, resolved: 0 };
     group.exports.add(entry.id); group[post.reachAssessment || "unknown"]++; groups.set(key, group);
   }
-  return <details className="measurement-comparison"><summary>Settings &amp; posting outcomes</summary>
+  return <details className="measurement-comparison"><summary>Settings &amp; posting outcomes{scope ? ` · ${scope}` : ""}</summary>
     <p className="measurement-note">Compare your latest assessment of each post by settings profile and platform. Profiles group editing choices, excluding the specific words, source times and media IDs. Footage, accounts and posting conditions still differ; these counts show associations, not proof that a setting caused a restriction.</p>
     {groups.size ? <div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Settings and posting outcomes"><table className="measurement-table"><thead><tr><th>Settings profile</th><th>Platform</th><th>Exports</th><th>No restriction observed</th><th>Suspected</th><th>Confirmed notice</th><th>Resolved</th><th>Not assessed</th></tr></thead><tbody>{[...groups.values()].map(group => <tr key={`${group.profile}:${group.platform}`}><th>{group.profile === "Settings unavailable" ? group.profile : group.profile.slice(0, 8)}</th><td>{PLATFORM_NAMES[group.platform as keyof typeof PLATFORM_NAMES]}</td><td>{group.exports.size}</td><td>{group.normal}</td><td>{group.suspected}</td><td>{group.confirmed}</td><td>{group.resolved}</td><td>{group.unknown}</td></tr>)}</tbody></table></div> : <p className="measurement-note">Record a publication and posting feedback on an export below to start comparing.</p>}
   </details>;

@@ -1,4 +1,4 @@
-import { historyRecords, reconcileHistory } from "./store.js";
+import { historyRecords, historyMatches } from "./store.js";
 import { reviewJobFinished } from "./finished-review-jobs.js";
 import { visualIdentity } from "./visual-identity.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
@@ -410,7 +410,7 @@ async function run(job: StoredJob, controller: AbortController) {
       if (earlier.some(plan => footageContainment(cuts, plan.cuts) >= 0.8))
         job.notes = [...new Set([...(job.notes || []), "This edit reuses footage from an earlier export. Open History to compare."])];
     }
-    if (status === "completed" && source && relatedHistory(state.history.filter(entry => entry.jobId !== job.id), source).some(entry => entry.match?.kind !== "exact"))
+    if (status === "completed" && source && historyMatches(source).some(entry => entry.id !== job.id && entry.match?.kind !== "exact"))
       job.notes = [...new Set([...(job.notes || []), "The picture resembles an earlier source or export. Open History to compare this possible re-export; rendering is allowed."])];
     const entry = source && historyEntry(source, job);
     if (entry && thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }

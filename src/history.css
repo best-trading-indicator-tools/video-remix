@@ -159,3 +159,6 @@ a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-of
 
 .history-match-notice { display: grid; gap: 6px; padding: 14px 16px; border: 1px solid var(--line); border-left: 3px solid #ffc29c; border-radius: 8px; color: var(--text); }
 .history-match-notice span { color: var(--muted); font-size: 13px; line-height: 1.6; }
+
+.history-pagination { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+.history-pagination > span { margin-right: auto; color: var(--text-secondary); }

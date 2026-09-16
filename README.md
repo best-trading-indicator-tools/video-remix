@@ -523,6 +523,11 @@ before this feature cannot be reconstructed. Deleting a batch or automatic media
 expiry keeps the history. Publication dates and links are local records of posts you
 have already published; the app does not post them.
 
+History loads 50 exports per page. Search covers the entire ledger, including older
+pages, and shot reuse counts include all exports. Settings comparisons and individual
+post observations show the current page; the all-history review comparison loads when
+opened. Full measurement downloads still include every record.
+
 History cards retain a small preview frame from each completed export in
 `data/history-thumbnails`, separately from video retention. Click the frame to
 play an available video, or open the saved image after its video expires. Startup

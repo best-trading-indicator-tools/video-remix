@@ -1,4 +1,4 @@
-import { historyRecords, reconcileHistory } from "./store.js";
+import { historyRecords, historyMatches, historyPage, historyStockUses } from "./store.js";
 import { visualIdentity } from "./visual-identity.js";
 import { relatedHistory } from "./history.js";
 import express, { type ErrorRequestHandler } from "express";
@@ -177,11 +177,25 @@ export function createApp() {
   app.get("/api/sources", (_req, res) =>
     res.json({ sources: state.sources.map(publicSource) }),
   );
-  const publicHistory = () => state.history.map(({ sourcePicture: _sourcePicture, outputPicture: _outputPicture, ...entry }) => ({ ...entry,
+  const publicHistory = (entries = state.history) => entries.map(({ sourcePicture: _sourcePicture, outputPicture: _outputPicture, ...entry }) => ({ ...entry,
     thumbnailUrl: entry.thumbnailUrl ? historyThumbnailUrl(entry.id) : undefined,
     available: state.jobs.some(job => job.id === entry.jobId && job.status === "completed"),
   })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  app.get("/api/history", (_req, res) => res.json({ entries: publicHistory() }));
+  const pageOptions = (query: Record<string, unknown>) => {
+    if (Object.keys(query).some(key => !["limit", "offset", "search"].includes(key))) throw new HttpError(400, "Unknown history search parameter.");
+    const number = (value: unknown, fallback: number, maximum: number, minimum: number) => {
+      if (value === undefined) return fallback;
+      if (typeof value !== "string" || !/^\d+$/u.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < minimum || Number(value) > maximum)
+        throw new HttpError(400, "Use a valid history page and a page size between 1 and 100.");
+      return Number(value);
+    };
+    if (query.search !== undefined && (typeof query.search !== "string" || query.search.length > 200)) throw new HttpError(400, "History search must be at most 200 characters.");
+    return { limit: number(query.limit, 50, 100, 1), offset: number(query.offset, 0, Number.MAX_SAFE_INTEGER, 0), search: String(query.search || "").trim() };
+  };
+  app.get("/api/history", (req, res) => {
+    const page = historyPage(pageOptions(req.query));
+    res.json({ ...page, entries: publicHistory(page.entries), stockUses: historyStockUses(page.entries) });
+  });
   app.get("/api/history/:id/thumbnail", async (req, res, next) => {
     const entry = historyRecords({ id: String(req.params.id) })[0];
     if (!entry || !await historyThumbnailExists(entry.id)) throw new HttpError(404, "History preview is unavailable.");
@@ -210,13 +224,15 @@ export function createApp() {
     }
     entry.measurements = parsed.data;
     await saveStore([entry]);
-    res.json(publicHistory().find(item => item.id === entry.id));
+    res.json(publicHistory([entry])[0]);
   });
   app.get("/api/sources/:id/history", (req, res) => {
     const source = state.sources.find(item => item.id === req.params.id);
     if (!source) throw new HttpError(404, "Source video not found.");
-    const matches = new Map(relatedHistory(state.history, source).map(entry => [entry.id, entry.match]));
-    res.json({ entries: publicHistory().filter(entry => matches.has(entry.id)).map(entry => ({ ...entry, match: matches.get(entry.id)?.kind === "exact" ? undefined : matches.get(entry.id) })) });
+    const matches = new Map(historyMatches(source).map(entry => [entry.id, entry.match]));
+    const page = historyPage({ ...pageOptions(req.query), ids: [...matches.keys()] });
+    res.json({ ...page, stockUses: historyStockUses(page.entries), entries: publicHistory(page.entries).map(entry => ({ ...entry,
+      match: matches.get(entry.id)?.kind === "exact" ? undefined : matches.get(entry.id) })) });
   });
   app.patch("/api/history/:id", async (req, res) => {
     const entry = historyRecords({ id: String(req.params.id) })[0];
@@ -229,7 +245,7 @@ export function createApp() {
     }
     entry.publications = parsed.data.publications;
     await saveStore([entry]);
-    res.json(publicHistory().find(item => item.id === entry.id));
+    res.json(publicHistory([entry])[0]);
   });
   app.get("/api/broll", (_req, res) =>
     res.json({ assets: state.broll.map(publicBroll) }),

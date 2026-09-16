@@ -7,7 +7,7 @@ import type { ExportHistoryEntry } from "../shared/types.js";
 export const collections = ["sources", "attachments", "jobs", "broll"] as const;
 type Collection = typeof collections[number];
 export type WorkspaceSnapshot = Record<Collection, { id: string }[]> & { history: ExportHistoryEntry[] };
-export type HistoryFilter = { id?: string; jobId?: string; fingerprint?: string };
+export type HistoryFilter = { id?: string; jobId?: string; fingerprint?: string; missingPreview?: boolean };
 
 /** One row per record. History is read on demand, never part of routine workspace saves. */
 export class WorkspaceDatabase {
@@ -107,8 +107,35 @@ export class WorkspaceDatabase {
     const conditions: string[] = [], values: string[] = [];
     for (const [key, column] of [["id", "id"], ["jobId", "job_id"], ["fingerprint", "fingerprint"]] as const)
       if (filter[key] !== undefined) { conditions.push(`${column}=?`); values.push(filter[key]!); }
+    if (filter.missingPreview) conditions.push("json_extract(data,'$.thumbnailUrl') IS NULL");
     for (const row of this.db.prepare(`SELECT data FROM history${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY created_at DESC,id DESC`).iterate(...values))
       yield JSON.parse(row.data as string);
+  }
+  page({ limit = 50, offset = 0, search = "", ids }: { limit?: number; offset?: number; search?: string; ids?: string[] } = {}) {
+    const conditions: string[] = [], args: (string | number)[] = [];
+    if (search) { conditions.push("instr(search_text,?) > 0"); args.push(search.toLocaleLowerCase()); }
+    if (ids) { conditions.push("id IN (SELECT value FROM json_each(?))"); args.push(JSON.stringify(ids)); }
+    const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
+    const total = Number(this.db.prepare(`SELECT count(*) AS total FROM history${where}`).get(...args)!.total);
+    const start = Math.min(offset, Math.max(0, Math.ceil(total / limit) - 1) * limit);
+    const entries = this.db.prepare(`SELECT data FROM history${where} ORDER BY created_at DESC,id DESC LIMIT ? OFFSET ?`)
+      .all(...args, limit, start).map(row => JSON.parse(row.data as string) as ExportHistoryEntry);
+    return { entries, total, offset: start, limit };
+  }
+  *identities() {
+    // Similar-picture checks need only compact signatures, not transcripts and review reports.
+    for (const row of this.db.prepare(`SELECT id, fingerprint, json_extract(data,'$.sourcePicture') AS source_picture,
+      json_extract(data,'$.outputPicture') AS output_picture FROM history`).iterate())
+      yield { id: row.id as string, sourceFingerprint: row.fingerprint as string,
+        sourcePicture: row.source_picture ? JSON.parse(row.source_picture as string) : undefined,
+        outputPicture: row.output_picture ? JSON.parse(row.output_picture as string) : undefined };
+  }
+  stockUses(identities: string[]) {
+    if (!identities.length) return {};
+    return Object.fromEntries(this.db.prepare(`SELECT json_extract(shot.value,'$.identity') AS identity, count(DISTINCT history.id) AS uses
+      FROM history, json_each(history.data,'$.stockShots') AS shot
+      WHERE json_extract(shot.value,'$.identity') IN (SELECT value FROM json_each(?)) GROUP BY identity`)
+      .all(JSON.stringify(identities)).map(row => [row.identity, Number(row.uses)]));
   }
   close() { this.db.close(); }
 }

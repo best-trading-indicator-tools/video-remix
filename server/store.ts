@@ -65,7 +65,7 @@ let database: WorkspaceDatabase | undefined;
 let replacementHistory: ExportHistoryEntry[] | undefined;
 Object.defineProperty(state, "history", {
   get: () => replacementHistory ?? (database ? [...database.history()] : []),
-  set: (entries: ExportHistoryEntry[]) => { replacementHistory = entries; },
+  set: (entries: ExportHistoryEntry[]) => { replacementHistory = entries; matchCache.clear(); },
   enumerable: true,
 });
 export function historyRecords(filter: HistoryFilter = {}): ExportHistoryEntry[] {
@@ -75,9 +75,31 @@ export function historyRecords(filter: HistoryFilter = {}): ExportHistoryEntry[]
     (filter.jobId === undefined || entry.jobId === filter.jobId) &&
     (filter.fingerprint === undefined || entry.sourceFingerprint === filter.fingerprint));
 }
-export function* iterateHistory() {
+export function* iterateHistory(filter: HistoryFilter = {}) {
   if (replacementHistory) yield* replacementHistory;
-  else if (database) yield* database.history();
+  else if (database) yield* database.history(filter);
+}
+const matchCache = new Map<string, { id: string; match: ExportHistoryEntry["match"] }[]>();
+export function historyMatches(source: Pick<StoredSource, "fingerprint" | "picture">) {
+  const key = JSON.stringify([source.fingerprint, source.picture]);
+  const cached = matchCache.get(key);
+  if (cached) return cached;
+  const matches: { id: string; match: ExportHistoryEntry["match"] }[] = [];
+  const identities = replacementHistory ?? database?.identities() ?? [];
+  for (const identity of identities) {
+    const match = relatedHistory([identity as ExportHistoryEntry], source)[0];
+    if (match) matches.push({ id: match.id, match: match.match });
+  }
+  if (matchCache.size >= 32) matchCache.delete(matchCache.keys().next().value!);
+  matchCache.set(key, matches);
+  return matches;
+}
+export function historyPage(options: { limit: number; offset: number; search: string; ids?: string[] }) {
+  if (!database) throw new Error("Workspace database is not initialized");
+  return database.page(options);
+}
+export function historyStockUses(entries: ExportHistoryEntry[]) {
+  return database?.stockUses([...new Set(entries.flatMap(entry => entry.stockShots.map(shot => shot.identity)))]) ?? {};
 }
 export async function reconcileHistory(entry: ExportHistoryEntry) {
   const previous = historyRecords({ jobId: entry.jobId });
@@ -87,7 +109,7 @@ export async function initStore() {
   await Promise.all(Object.values(paths).map((dir) => mkdir(dir, { recursive: true })));
   database?.close();
   database = new WorkspaceDatabase(path.join(config.dataDir, "remixer.sqlite"));
-  replacementHistory = undefined;
+  replacementHistory = undefined; matchCache.clear();
   try {
     await database.initialize();
     Object.assign(state, database.loadActive());
@@ -125,9 +147,9 @@ export async function initStore() {
     }
   }
   // Backfill available legacy exports before startup retention removes them.
-  // Two workers bound local media work; retained frames need no source/video file.
+  // Iterate rows without retaining the full ledger; retained frames need no source/video file.
   const completedJobs = new Map(state.jobs.filter(job => job.status === "completed").map(job => [job.id, job]));
-  for (const entry of iterateHistory()) {
+  for (const entry of iterateHistory({ missingPreview: true })) {
     const source = state.sources.find(item => item.fingerprint === entry.sourceFingerprint);
     const cut = entry.cuts[0];
     const sourceFrame = source && cut && cut.end <= source.duration
@@ -143,6 +165,7 @@ export async function initStore() {
 export async function saveStore(history: ExportHistoryEntry[] = []) {
   if (!database) throw new Error("Workspace database is not initialized");
   database.save(state, replacementHistory ? [...replacementHistory.filter(entry => !history.some(update => update.id === entry.id)), ...history] : history, replacementHistory !== undefined);
+  if (history.length || replacementHistory) matchCache.clear();
   replacementHistory = undefined;
 }
 export function publicSource(source: StoredSource): VideoSource {
@@ -153,8 +176,8 @@ export function publicSource(source: StoredSource): VideoSource {
     picture: _picture,
     ...value
   } = source;
-  return { ...value, ...(source.fingerprint ? { previousExports: state.history.filter(entry => entry.sourceFingerprint === source.fingerprint).length,
-    similarExports: relatedHistory(state.history, source).filter(entry => entry.match?.kind !== "exact").length } : {}) };
+  return { ...value, ...(source.fingerprint ? { previousExports: historyMatches(source).filter(entry => entry.match?.kind === "exact").length,
+    similarExports: historyMatches(source).filter(entry => entry.match?.kind !== "exact").length } : {}) };
 }
 export function publicJob(job: StoredJob): RenderJob {
   const { outputPicture: _outputPicture, outputPath: _outputPath, captionPath: _captionPath, footageFiles: _footageFiles,
