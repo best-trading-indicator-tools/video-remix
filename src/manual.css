@@ -63,3 +63,14 @@
   .manual-preview-actions { align-items: stretch; }
   .manual-preview-actions .secondary-button { flex: 1; }
 }
+
+/* Shared tools stay mounted below the category so switching tabs is immediate. */
+.manual-workflow-tools { padding: 20px; border-top: 1px solid var(--line); min-width: 0; }
+.manual-workflow-tools > :first-child { margin-top: 0; }
+.manual-all-controls .manual-workflow-tools { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 20px; }
+.manual-all-controls .manual-workflow-tools > * { margin-block: 0; min-width: 0; }
+@media (max-width: 980px) {
+  .manual-all-controls .manual-workflow-tools { display: block; }
+  .manual-all-controls .manual-workflow-tools > * + * { margin-top: 20px; }
+}
+@media (max-width: 680px) { .manual-workflow-tools { padding: 18px; } }

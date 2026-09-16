@@ -324,6 +324,15 @@ export default function App() {
   const [tab, setTab] = useState<"essentials" | "color" | "advanced" | "all">(
     "essentials",
   );
+  const selectControlsTab = (next: typeof tab) => {
+    setTab(next);
+    requestAnimationFrame(() => {
+      const content = document.getElementById("settings-content");
+      if (content) content.scrollTop = 0;
+      // All controls changes the desktop grid. Scroll after React lays it out.
+      document.querySelector(".settings-tabs")?.scrollIntoView({ block: "start", behavior: "instant" });
+    });
+  };
   const [jobs, setJobs] = useState<RenderJob[]>([]);
   const [editorialRetries, setEditorialRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
   const editorialRequests = useRef(new Set<string>());
@@ -1558,9 +1567,21 @@ export default function App() {
                           type="button"
                           role="tab"
                           aria-selected={tab === value}
+                          tabIndex={tab === value ? 0 : -1}
                           aria-controls="settings-content"
                           className={tab === value ? "active" : ""}
-                          onClick={() => { setTab(value); if (value === "all" || tab === "all") requestAnimationFrame(() => document.getElementById("settings-content")?.parentElement?.scrollIntoView({ block: "start" })); }}
+                          onClick={() => selectControlsTab(value)}
+                          onKeyDown={event => {
+                            const values = ["essentials", "color", "advanced", "all"] as const;
+                            const index = values.indexOf(value);
+                            const next = event.key === "ArrowRight" ? values[(index + 1) % values.length]
+                              : event.key === "ArrowLeft" ? values[(index + values.length - 1) % values.length]
+                              : event.key === "Home" ? values[0] : event.key === "End" ? values.at(-1) : undefined;
+                            if (!next) return;
+                            event.preventDefault();
+                            selectControlsTab(next);
+                            document.getElementById(`tab-${next}`)?.focus({ preventScroll: true });
+                          }}
                         >
                           {value === "essentials"
                             ? "Essentials"
@@ -1576,11 +1597,8 @@ export default function App() {
                     id="settings-content"
                     role="tabpanel"
                     aria-labelledby={`tab-${tab}`}
+                    tabIndex={0}
                   >
-                    <OwnFootagePanel key={selected?.id || "default"} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
-                    <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={updateSettings} />
-                    {selected && <ManualPromptEditor key={selected.id} sourceId={selected.id} settings={settings}
-                      disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}
                     {(tab === "essentials" || tab === "all") && (
                       <>
                         <Section
@@ -2094,6 +2112,12 @@ export default function App() {
                         </Section>
                       </>
                     )}
+                  </div>
+                  <div className="manual-workflow-tools">
+                    <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
+                    <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={updateSettings} />
+                    {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
+                      disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}
                   </div>
                   <div className="settings-footer">
                     <button
