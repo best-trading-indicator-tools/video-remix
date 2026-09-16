@@ -89,6 +89,7 @@ export async function inspectBrollWindows(
   targetAspect: number,
   signal: AbortSignal,
   exactWindow?: { sourceStart: number; duration: number },
+  onProgress?: (checked: number, total: number) => void,
 ): Promise<BrollWindow[]> {
   checkCancelled(signal);
   if (
@@ -122,7 +123,8 @@ export async function inspectBrollWindows(
   const directory = await mkdtemp(path.join(os.tmpdir(), "broll-motion-"));
   try {
     const windows: BrollWindow[] = [];
-    for (const sourceStart of starts) {
+    onProgress?.(0, starts.length);
+    for (const [index, sourceStart] of starts.entries()) {
       checkCancelled(signal);
       const output = path.join(directory, "frames.gray");
       await runLocal("ffmpeg", [
@@ -144,13 +146,14 @@ export async function inspectBrollWindows(
       const frames = await readFile(output);
       checkCancelled(signal);
       // A truncated download must not qualify a longer interval than decoded.
-      if (Math.floor(frames.length / frameSize) < Math.floor(duration * SAMPLE_FPS) - 1)
-        continue;
-      const motion = sustainedMotion(frames, frameSize);
-      if (motion > 0) windows.push({
-        sourceStart, duration, motion, cropRetention,
-        score: motion * 0.8 + cropRetention * 0.2,
-      });
+      if (Math.floor(frames.length / frameSize) >= Math.floor(duration * SAMPLE_FPS) - 1) {
+        const motion = sustainedMotion(frames, frameSize);
+        if (motion > 0) windows.push({
+          sourceStart, duration, motion, cropRetention,
+          score: motion * 0.8 + cropRetention * 0.2,
+        });
+      }
+      onProgress?.(index + 1, starts.length);
     }
     return windows.sort((a, b) => b.score - a.score || a.sourceStart - b.sourceStart).slice(0, 3);
   } finally {

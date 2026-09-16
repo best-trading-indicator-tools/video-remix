@@ -73,8 +73,10 @@ test("semantic stock selection shortlists suitable moving portrait shots without
       let stockRequests = 0;
       const downloads: number[] = [];
       const inspections: number[] = [];
+      const phases: string[] = [];
       const args = {
         ...makeOptions("shortlist"),
+        onPhase: (phase: string) => phases.push(phase),
         fetcher: (async (input, init) => {
           assert.equal(init?.redirect, "error");
           const url = new URL(String(input));
@@ -100,19 +102,24 @@ test("semantic stock selection shortlists suitable moving portrait shots without
           downloads.push(id);
           return new Response(new Uint8Array([id, 0, 0, 0]));
         }) as typeof fetch,
-        inspect: async (asset: Parameters<typeof inspectBrollWindows>[0], targetAspect: number, inspectionSignal: AbortSignal) => {
+        inspect: async (asset: Parameters<typeof inspectBrollWindows>[0], targetAspect: number, inspectionSignal: AbortSignal,
+          _window: unknown, onProgress?: (checked: number, total: number) => void) => {
           assert.equal(targetAspect, 9 / 16);
           assert.equal(inspectionSignal, signal);
           const id = (await readFile(asset.filePath))[0]!;
           assert.equal(asset.width, id === 1 ? 1280 : 720);
           assert.equal(asset.height, id === 1 ? 720 : 1280);
           inspections.push(id);
+          onProgress?.(0, 5); onProgress?.(5, 5);
           return id === 2 ? [] : [viable, { ...viable, sourceStart: 0, motion: 0.2, score: 0.36 }];
         },
       };
       const first = await findStockBroll(args);
       assert.deepEqual(downloads, [2, 3, 1], "Crop suitability breaks relevance ties within the three-clip limit");
       assert.deepEqual(inspections, [2, 3, 1]);
+      assert.ok(phases.some(phase => /Pixabay candidate 1 .*0\/5 motion windows checked/.test(phase)));
+      assert.ok(phases.some(phase => /Pixabay candidate 3 .*5\/5 motion windows checked/.test(phase)));
+      assert.ok(phases.every(phase => !phase.includes(directory) && !phase.includes(stockKey)), "Progress never exposes paths or API keys");
       assert.equal(first.assets.length, 2);
       const selected = first.assets[0]!;
       assert.deepEqual(selected.selection, {

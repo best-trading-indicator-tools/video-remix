@@ -296,14 +296,29 @@ test("zero coverage performs no cloud, matching or rendering work", async () => 
 test("four requested cards fill a ten-second short through tighter placements, without overwriting earlier files", async () => {
   const input = effortFixture(["hyperframes", "remotion"]);
   const outputs: string[] = [];
+  const progress: NonNullable<StoredJob["visualSearch"]>[] = [];
   const result = await prepareSupportingVisuals({ ...input, available: async () => true,
-    render: async (_engine, options) => { outputs.push(options.output); } });
+    render: async (_engine, options) => { outputs.push(options.output); progress.push(structuredClone(input.job.visualSearch!)); } });
   assert.equal(result.length, 4);
   assert.ok(input.job.visualFulfillment!.attempts > 1);
   assert.equal(new Set(outputs).size, 4, "Separate passes must never overwrite a retained rendered card");
   assert.equal(input.job.supportingVisuals?.length, 4);
   assert.ok(result.every((shot,i) => shot.end <= 10 && (!i || shot.start >= result[i-1]!.end)));
   assert.ok(input.job.notes?.some(note => /4 of 4 shots added/.test(note)));
+  assert.ok(progress.every(item => item.requested === 4 && item.budgetMs === 480_000 && item.maxPasses === 3));
+  assert.equal(new Set(progress.map(item => item.startedAt)).size, 1, "Elapsed time is measured across passes");
+  assert.ok(progress.some(item => item.pass === 2 && item.placed > 0), "Later passes report retained shots");
+  assert.equal(input.job.visualSearch, undefined, "Live search status must clear before rendering");
+});
+
+test("failed and cancelled visual searches clear their live counters", async () => {
+  const input = effortFixture(["pexels"]);
+  await assert.rejects(prepareSupportingVisuals({ ...input, findStock: async () => { throw new Error("test failure"); } }), /test failure/);
+  assert.equal(input.job.visualSearch, undefined);
+  const controller = new AbortController();
+  await assert.rejects(prepareSupportingVisuals({ ...input, signal: controller.signal,
+    findStock: async () => { controller.abort(); controller.signal.throwIfAborted(); throw new Error("unreachable"); } }), { name: "AbortError" });
+  assert.equal(input.job.visualSearch, undefined);
 });
 
 test("failed cards try another selected renderer and unavailable targets report a bounded shortage", async () => {

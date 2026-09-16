@@ -1990,6 +1990,11 @@ h1 > span {
   border-radius: 4px;
   transition: width 0.3s;
 }
+.job-progress.is-searching > span { width: 30%; animation: visual-search-progress 1.8s ease-in-out infinite; }
+.job-search-detail { margin: 10px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.6; font-variant-numeric: tabular-nums; }
+.job-search-detail > span { display: block; color: var(--muted); }
+@keyframes visual-search-progress { from { transform: translateX(-100%); } to { transform: translateX(334%); } }
+@media (prefers-reduced-motion: reduce) { .job-progress.is-searching > span { animation: none; width: 100%; opacity: .5; } }
 .job-recovery {
   margin-top: 14px;
   padding: 14px 16px;

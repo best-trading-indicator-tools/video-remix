@@ -376,6 +376,8 @@ export interface Attachment {
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
+  /** Live work counters; visual preparation has no reliable percentage or ETA. */
+  visualSearch?: { startedAt: string; budgetMs: number; pass: number; maxPasses: number; requested: number; placed: number };
   finishedReviewReport?: FinishedReviewReport;
   footageAssets?: OwnFootageAsset[];
   visualFulfillment?: { requested: number; placed: number; attempts: number; reason?: string };

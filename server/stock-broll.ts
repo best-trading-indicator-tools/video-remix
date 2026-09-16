@@ -384,10 +384,12 @@ export async function findStockBroll({
       downloads++;
       const id = randomUUID();
       const filePath = path.join(workDir, `stock-${id}.mp4`);
+      const candidate = `${providerLabel(hit.provider)} candidate ${downloads} (up to ${budget.downloadLimit})`;
       try {
-        onPhase("Preparing matched stock B-roll");
+        onPhase(`Downloading ${candidate}`);
         const { size, contentHash } = await downloadStock(file.url, filePath, signal, fetcher);
-        const media = await probe(filePath);
+        onPhase(`Reading ${candidate}`);
+        const media = await probe(filePath, signal);
         signal.throwIfAborted();
         if (media.duration < 1.5 || media.duration > 86400)
           throw new Error("Unsuitable stock duration");
@@ -396,8 +398,9 @@ export async function findStockBroll({
           notes.push("Low-resolution stock footage was skipped because too few pixels survived the output crop.");
           continue;
         }
-        onPhase("Checking stock motion and framing");
-        const windows = await inspect({ ...media, filePath }, targetAspect, signal);
+        onPhase(`Checking motion and framing · ${candidate}`);
+        const windows = await inspect({ ...media, filePath }, targetAspect, signal, undefined,
+          (checked, total) => onPhase(`Checking ${candidate} · ${checked}/${total} motion windows checked`));
         const window = windows[0];
         if (!window) {
           await rm(filePath, { force: true });

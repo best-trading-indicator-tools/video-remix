@@ -110,6 +110,7 @@ async function run(job: StoredJob, controller: AbortController) {
   delete job.qualityReport;
   delete job.finishedReviewReport;
   delete job.editorialReport;
+  delete job.visualSearch;
   // Keep the saved correction history through failed retries; its budget belongs to this job.
   delete job.editorialModeApplied;
   try {

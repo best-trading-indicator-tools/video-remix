@@ -18,6 +18,7 @@ export function retryPhase(job: RenderJob): string {
 
 /** Called only after the old worker's files have been cleaned up. Budget survives restarts. */
 export function scheduleJobRetry(job: RenderJob, reason: string, cause: "failure" | "restart", retryable = true, now = Date.now()) {
+  delete job.visualSearch;
   const count = job.retry?.count ?? 0;
   const limit = job.retry?.limit ?? config.renderRetries;
   const lastPhase = job.phase;
@@ -40,6 +41,7 @@ export function scheduleJobRetry(job: RenderJob, reason: string, cause: "failure
 }
 
 export function recoverInterruptedJob(job: RenderJob) {
+  delete job.visualSearch;
   if (job.cancelledByUser) {
     job.status = "cancelled";
     job.phase = undefined;

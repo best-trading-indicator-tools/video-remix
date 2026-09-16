@@ -2484,14 +2484,20 @@ export default function App() {
                                 </p>
                               )}
                               {job.status === "processing" && (
-                                <div className="job-progress">
+                                <div className={`job-progress${job.visualSearch ? " is-searching" : ""}`} role="progressbar"
+                                  aria-label={job.visualSearch ? "Preparing supporting visuals" : "Export progress"}
+                                  aria-valuenow={job.visualSearch ? undefined : Math.round(job.progress)}>
                                   <span
-                                    style={{
+                                    style={job.visualSearch ? undefined : {
                                       width: `${Math.max(1, Math.min(100, job.progress))}%`,
                                     }}
                                   />
                                 </div>
                               )}
+                              {job.status === "processing" && job.visualSearch && <p className="job-search-detail">
+                                Pass {job.visualSearch.pass}/{job.visualSearch.maxPasses} · {job.visualSearch.placed}/{job.visualSearch.requested} shots placed · {duration(Math.max(0, (Date.now() - Date.parse(job.visualSearch.startedAt)) / 1000))} elapsed
+                                <span>Visual preparation can take up to {Math.round(job.visualSearch.budgetMs / 60000)} minutes. Rendering follows.</span>
+                              </p>}
                               {job.summary && (
                                 <div className="job-summary">
                                   {job.summary.changes.map((change, index) => (
@@ -2570,7 +2576,7 @@ export default function App() {
                               ) : job.status === "processing" ? (
                                 <>
                                   <span className="live-dot" />
-                                  {Math.round(job.progress)}%
+                                  {job.visualSearch ? "Finding visuals" : `${Math.round(job.progress)}%`}
                                 </>
                               ) : (
                                 job.status.charAt(0).toUpperCase() +

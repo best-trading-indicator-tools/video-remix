@@ -20,7 +20,10 @@ async function fixture(t: TestContext, filter: string, duration = 4) {
 
 test("moving MP4 produces bounded ranked windows with portrait crop retention", async (t) => {
   const asset = await fixture(t, "testsrc2=size=320x180:rate=24:duration=12", 12);
-  const windows = await inspectBrollWindows(asset, 9 / 16, new AbortController().signal);
+  const progress: number[][] = [];
+  const windows = await inspectBrollWindows(asset, 9 / 16, new AbortController().signal, undefined,
+    (checked, total) => progress.push([checked, total]));
+  assert.deepEqual(progress, [[0, 5], [1, 5], [2, 5], [3, 5], [4, 5], [5, 5]], "Report every decoded window, not just the whole asset");
   assert.ok(windows.length > 0 && windows.length <= 3);
   assert.ok(windows.every((window) => window.motion > 0 && window.motion <= 1));
   assert.ok(windows.every((window) => window.duration === 3.6));

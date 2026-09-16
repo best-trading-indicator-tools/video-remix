@@ -307,12 +307,13 @@ async function prepareSupportingVisualsPass({
   const verified = new Set<string>();
   while (true) {
     let changed = false;
-    for (const placement of plans) {
+    for (const [index, placement] of plans.entries()) {
       if (placement.kind !== "broll") continue;
       const asset = assets.find(item => item.id === placement.assetId)!;
       if (!asset.stock) continue;
       const identity = JSON.stringify([asset.id, placement.sourceStart, placement.end - placement.start]);
       if (verified.has(identity)) continue;
+      onPhase(`Verifying the final B-roll interval · shot ${index + 1}/${plans.length}`, 64);
       const checked = await inspect(asset, dimensions.width / dimensions.height, signal,
         { sourceStart: placement.sourceStart ?? 0, duration: placement.end - placement.start });
       if (checked.length) verified.add(identity);
@@ -341,7 +342,7 @@ async function prepareSupportingVisualsPass({
       const engines = [placement.visualSource as GraphicSource, ...sources.filter((source): source is GraphicSource =>
         (source === "hyperframes" || source === "remotion") && source !== placement.visualSource)];
       for (const engine of engines) try {
-        onPhase(`Creating ${VISUAL_SOURCE_LABELS[engine]} animated cards`, 65);
+        onPhase(`Creating ${VISUAL_SOURCE_LABELS[engine]} animated card · shot ${index + 1}/${plans.length}`, 65);
         const output = path.join(workDir, `supporting-${engine}-${effortRound}-${index}.mp4`);
         await render(engine, { text: placement.text, ...dimensions, duration: placement.end - placement.start,
           output, workDir, signal });
@@ -387,10 +388,19 @@ async function prepareSupportingVisualsPass({
 export async function prepareSupportingVisuals(input: Parameters<typeof prepareSupportingVisualsPass>[0]): Promise<SupportingVisual[]> {
   const options = input.options ?? input.job.auto;
   if (!getVisualSources(options).length) return [];
+  input.job.visualSearch = { startedAt: new Date().toISOString(), budgetMs: 480_000, pass: 1, maxPasses: 3,
+    requested: targetCount(options?.brollCount), placed: 0 };
+  try { return await prepareSupportingVisualsWithProgress(input); }
+  finally { delete input.job.visualSearch; }
+}
+
+async function prepareSupportingVisualsWithProgress(input: Parameters<typeof prepareSupportingVisualsPass>[0]): Promise<SupportingVisual[]> {
+  const options = input.options ?? input.job.auto;
+  if (!getVisualSources(options).length) return [];
   // Upgrade old saved/retried stock jobs as well as newly validated requests.
   if (input.job.auto && hasStockVisuals(options)) input.job.auto.brollMatching = "ai";
   const requested = targetCount(options?.brollCount);
-  const deadline = AbortSignal.any([input.signal, AbortSignal.timeout(480_000)]);
+  const deadline = AbortSignal.any([input.signal, AbortSignal.timeout(input.job.visualSearch!.budgetMs)]);
   const result: SupportingVisual[] = [];
   const details: NonNullable<StoredJob["supportingVisuals"]> = [];
   const candidates = new Map<string, StoredBroll>();
@@ -406,6 +416,8 @@ export async function prepareSupportingVisuals(input: Parameters<typeof prepareS
     const covered = [...(input.occupied ?? []), ...result].reduce((sum, shot) => sum + shot.end - shot.start, 0);
     if (budget - covered < 1.5 - 1e-9) break;
     attempts++;
+    input.job.visualSearch!.pass = round + 1;
+    input.job.visualSearch!.placed = result.length;
     input.onPhase(`Filling supporting visuals: ${result.length}/${requested} · pass ${round + 1}/3`, 62);
     input.job.summary!.changes = [...baseChanges];
     input.job.settings.callouts = structuredClone(baseCallouts);
@@ -416,6 +428,7 @@ export async function prepareSupportingVisuals(input: Parameters<typeof prepareS
         assets: input.assets.filter(asset => !usedIds.has(asset.id)),
         occupied: [...(input.occupied ?? []), ...result], excludedStockIds: [...usedStock] });
       result.push(...extra);
+      input.job.visualSearch!.placed = result.length;
       details.push(...(input.job.supportingVisuals ?? []));
       for (const asset of input.job.brollCandidates ?? []) candidates.set(asset.id, asset);
       for (const detail of details) {

@@ -485,7 +485,7 @@ export async function prepareAutoRemix({
         : "Reframed",
   );
   if (source.hasAudio || audioPath) changes.push("Balanced audio");
-  onPhase("Rendering your edit", 65);
+  onPhase("Preparing the selected edit", 61);
   return {
     settings,
     subtitlePath,
