@@ -21,3 +21,7 @@ export function getVisualSources(options: VisualOptions = {}): VisualSource[] {
 export const hasStockVisuals = (options: VisualOptions = {}) => getVisualSources(options).some(source => source === "pixabay" || source === "pexels");
 export const hasLibraryVisuals = (options: VisualOptions = {}) => getVisualSources(options).includes("library");
 export const hasGraphicVisuals = (options: VisualOptions = {}) => getVisualSources(options).some(source => source === "hyperframes" || source === "remotion");
+
+/** Provider tags are retrieval hints, never sufficient evidence for an automatic cutaway. */
+export const getBrollMatching = (options: VisualOptions & Pick<AutoOptions, "brollMatching"> = {}): "ai" | "tags" =>
+  hasStockVisuals(options) || options.brollMatching === "ai" ? "ai" : "tags";

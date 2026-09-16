@@ -1,3 +1,4 @@
+import { hasStockVisuals } from "../shared/visual-sources.js";
 import { pacingOptionsSchema } from "../shared/pacing.js";
 import { ownFootageSchema } from "../shared/own-footage.js";
 import { z } from "zod";
@@ -125,7 +126,8 @@ export const autoOptionsSchema = z
     stockVideoType: z.enum(["all", "animation"]).optional(),
   })
   .strict()
-  .default({ aspect: "9:16", targetDuration: 45, narration: false });
+  .default({ aspect: "9:16", targetDuration: 45, narration: false })
+  .transform(options => hasStockVisuals(options) ? { ...options, brollMatching: "ai" as const } : options);
 const autoVariantsSchema = z.number().int().min(1).max(MAX_AUTO_VERSIONS).default(1);
 const autoItemsSchema = z
   .object({

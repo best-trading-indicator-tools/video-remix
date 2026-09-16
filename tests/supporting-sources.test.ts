@@ -26,7 +26,8 @@ const jobFor = (visualSources: VisualSource[], brollCount = 6): StoredJob => ({ 
 const prepare = (job: StoredJob, extra: Partial<Parameters<typeof prepareSupportingVisuals>[0]> = {}) => prepareSupportingVisuals({
   source, job, transcript: speech, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {},
   findStock: async () => { assert.fail("An unselected stock source must not make requests"); },
-  matchAI: async () => { assert.fail("Tag matching and graphics must not invoke AI"); },
+  matchAI: async ({ assets, moments }) => ({ matches: moments.flatMap((_moment, momentIndex) =>
+    assets.map(asset => ({ momentIndex, assetId: asset.id, sourceStart: 0, reason: "Observed sea matches the spoken scene." }))), notes: [] }),
   available: async () => true,
   render: async () => { assert.fail("An unselected renderer must not run"); },
   inspect: async () => [{ sourceStart: 0, duration: 3, motion: 1, cropRetention: 1 }],
@@ -188,7 +189,7 @@ test("empty selections do no work and cancellation during an active renderer sto
 
 test("stock-refresh overrides do not temporarily replace the saved mix or total target", async () => {
   const job = jobFor(["pixabay", "remotion"], 6), original = job.auto;
-  const before = structuredClone(original);
+  const before = { ...structuredClone(original), brollMatching: "ai" };
   const result = await prepare(job, {
     options: { ...job.auto!, visualSources: ["pixabay"], brollCount: 2 },
     findStock: async options => {
@@ -203,4 +204,29 @@ test("stock-refresh overrides do not temporarily replace the saved mix or total 
   assert.ok(result.every(shot => shot.visualSource === "pixabay"));
   assert.equal(job.auto, original);
   assert.deepEqual(job.auto, before);
+});
+
+
+test("the morning check-in cannot fall back to powerful gorillas or morning fog under saved keyword settings", async () => {
+  const job = jobFor(["pixabay", "pexels"], 4);
+  const transcript: Transcript = { language: "en", duration: 30, segments: [
+    { start: 4, end: 7, text: "One of the most powerful things is to text someone good morning.", words: [] },
+    { start: 10, end: 13, text: "Check in with another member of your species each morning.", words: [] },
+    { start: 18, end: 21, text: "Knowing someone cares makes us feel part of the tribe.", words: [] },
+  ] };
+  const gorilla = { ...storedAssets[0]!, name: "gorilla powerful species.mp4", tags: ["powerful", "species"] };
+  const fog = { ...storedAssets[1]!, name: "morning fog.mp4", tags: ["morning"] };
+  let rounds = 0, checks = 0;
+  const result = await prepare(job, { transcript,
+    findStock: async options => { rounds++; assert.equal(options.matching, "ai"); return { assets: [gorilla, fog], notes: [] }; },
+    matchAI: async ({ moments }) => {
+      checks++; assert.ok(moments.some(moment => moment.context?.includes("text someone good morning")));
+      return { matches: [], notes: ["Neither wildlife nor fog illustrates a social check-in."] };
+    },
+    inspect: async () => { assert.fail("Semantically rejected stock must never reach final placement"); },
+  });
+  assert.deepEqual(result, []);
+  assert.equal(rounds, 3); assert.equal(checks, 3);
+  assert.equal(job.auto!.brollMatching, "ai");
+  assert.equal(job.visualFulfillment!.placed, 0);
 });

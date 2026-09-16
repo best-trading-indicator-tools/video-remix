@@ -1,7 +1,7 @@
 import path from "node:path";
 import type { BrollAsset, RenderJob, Transcript, VisualSource } from "../shared/types.js";
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "../shared/types.js";
-import { getVisualSources, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
+import { getVisualSources, getBrollMatching, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
 import { geometry } from "./engine.js";
 import {
   graphicsAvailable,
@@ -250,7 +250,7 @@ async function prepareSupportingVisualsPass({
   const matchingMoments = moments(transcript, duration, source.name, effortRound ? 1.5 : shotDuration(duration, timingCount), effortRound)
     .filter(moment => occupied.every(shot => moment.start >= shot.end + (effortRound ? 0.15 : 0) || moment.end <= shot.start - (effortRound ? 0.15 : 0)));
   const dimensions = geometry(source, job.settings);
-  const usesAI = selected.some(source => source === "pixabay" || source === "pexels" || source === "library") && options?.brollMatching === "ai";
+  const usesAI = selected.some(source => source === "pixabay" || source === "pexels" || source === "library") && getBrollMatching(options) === "ai";
   const addNote = (text: string) => {
     job.notes ??= [];
     if (!job.notes.includes(text)) job.notes.push(text);
@@ -387,6 +387,8 @@ async function prepareSupportingVisualsPass({
 export async function prepareSupportingVisuals(input: Parameters<typeof prepareSupportingVisualsPass>[0]): Promise<SupportingVisual[]> {
   const options = input.options ?? input.job.auto;
   if (!getVisualSources(options).length) return [];
+  // Upgrade old saved/retried stock jobs as well as newly validated requests.
+  if (input.job.auto && hasStockVisuals(options)) input.job.auto.brollMatching = "ai";
   const requested = targetCount(options?.brollCount);
   const deadline = AbortSignal.any([input.signal, AbortSignal.timeout(480_000)]);
   const result: SupportingVisual[] = [];
@@ -435,7 +437,7 @@ export async function prepareSupportingVisuals(input: Parameters<typeof prepareS
   const stock = details.filter(item => item.kind === "broll").length, cards = details.length - stock;
   if (stock) input.job.summary!.changes.push(`${stock} B-roll cutaway${stock === 1 ? "" : "s"}`);
   if (cards) input.job.summary!.changes.push(`${cards} animated card${cards === 1 ? "" : "s"}`);
-  if (stock && options?.brollMatching === "ai") { input.job.summary!.changes.push("AI visual matching"); input.job.summary!.usedAI = true; }
+  if (stock && getBrollMatching(options) === "ai") { input.job.summary!.changes.push("AI visual matching"); input.job.summary!.usedAI = true; }
   input.job.notes = (input.job.notes ?? []).filter(note => !/^(?:B-roll target:|Supporting visual target:|Visual mix —)/u.test(note));
   if (result.length) input.job.notes = input.job.notes.filter(note => !/^No (?:suitable|relevant)|^AI found no spoken moment|^None of the /u.test(note));
   const reason = result.length < requested ? (deadline.aborted ? "The eight-minute search/render budget was reached."

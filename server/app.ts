@@ -578,7 +578,7 @@ export function createApp() {
       throw new HttpError(400, "Choose a B-roll target when requesting a new stock search.");
     if (parsed.data.refreshBroll && !stockBrollConfigured(stockProvidersForEdit(parent.auto)))
       throw new HttpError(400, "Add a Pixabay or Pexels API key for the selected stock provider before finding B-roll again.");
-    if (parsed.data.refreshBroll && parent.auto?.brollMatching === "ai" && !brollAIConfigured())
+    if (parsed.data.refreshBroll && !brollAIConfigured())
       throw new HttpError(400, "Add a DeepSeek API key in your local environment before finding AI B-roll again.");
     let plan;
     try { plan = applyEditPlanChanges(parent.editPlan, parsed.data, parent.sourceTranscript); }

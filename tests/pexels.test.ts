@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { findStockBroll } from "../server/stock-broll.js";
+import { findStockBroll, usableStockResolution } from "../server/stock-broll.js";
 
 const hit = (id = 7, link = `https://videos.pexels.com/video-files/${id}/ocean.mp4`) => ({
   id, url: `https://www.pexels.com/video/ocean-waves-${id}/`, duration: 8, user: { name: "Test artist" },
@@ -68,4 +68,42 @@ test("a failed Pixabay search does not prevent the selected Pexels provider from
     assert.equal(result.assets[0]?.attribution?.provider, "Pexels");
     assert.match(result.notes.join(" "), /Pixabay search was unavailable/);
   } finally { for (const [i, key] of ["PEXELS_API_KEY", "PIXABAY_API_KEY"].entries()) { if (old[i] === undefined) delete process.env[key]; else process.env[key] = old[i]; } await rm(directory, {recursive: true, force:true}); }
+});
+
+
+test("portrait stock uses HD despite fractional SD aspect advantage and rejects insufficient cropped pixels", async () => {
+  const old = process.env.PEXELS_API_KEY; process.env.PEXELS_API_KEY = "fixture";
+  const directory = await mkdtemp(path.join(tmpdir(), "stock-resolution-"));
+  const downloaded: string[] = [];
+  const variants = [[426, 240], [1280, 720], [1920, 1080]];
+  try {
+    const options: Parameters<typeof findStockBroll>[0] = { moments: [{ text: "ocean waves" }], providers: ["pexels"],
+      workDir: directory, cacheDir: directory, signal: new AbortController().signal, onPhase: () => {},
+      fetcher: async input => {
+        const url = String(input);
+        if (url.startsWith("https://api.pexels.com")) return Response.json({ videos: [
+          { ...hit(), video_files: variants.map(([width, height]) => ({ file_type: "video/mp4", width, height,
+            link: `https://videos.pexels.com/video-files/7/${width}.mp4` })) },
+          { ...hit(8), video_files: [{ file_type: "video/mp4", width: 426, height: 240, link: "https://videos.pexels.com/video-files/8/small.mp4" }] },
+        ] });
+        downloaded.push(url); return new Response(new Uint8Array([1]));
+      },
+      probe: async () => ({ duration: 8, width: 1920, height: 1080, fps: 24, hasAudio: false }),
+      inspect: async () => [{ sourceStart: 0, duration: 3, motion: 0.8, cropRetention: 0.5, score: 1 }],
+    };
+    const result = await findStockBroll(options);
+    assert.deepEqual(downloaded, ["https://videos.pexels.com/video-files/7/1920.mp4"]);
+    assert.equal(result.assets.length, 1);
+    assert.match(result.notes.join(" "), /Low-resolution/);
+    const misleadingMetadata = await findStockBroll({ ...options,
+      probe: async () => ({ duration: 8, width: 426, height: 240, fps: 24, hasAudio: false }),
+      inspect: async () => { assert.fail("Actual low-resolution bytes must be rejected before motion analysis"); },
+    });
+    assert.deepEqual(misleadingMetadata.assets, []);
+    assert.match(misleadingMetadata.notes.join(" "), /Low-resolution/);
+    assert.equal(usableStockResolution({ width: 426, height: 240 }, 9 / 16), false);
+    assert.equal(usableStockResolution({ width: 1280, height: 720 }, 9 / 16), true);
+    assert.equal(usableStockResolution({ width: 1080, height: 1920 }, 16 / 9), true);
+    assert.equal(usableStockResolution({ width: 720, height: 1280 }, 16 / 9), true);
+  } finally { if (old === undefined) delete process.env.PEXELS_API_KEY; else process.env.PEXELS_API_KEY = old; await rm(directory, { recursive: true, force: true }); }
 });

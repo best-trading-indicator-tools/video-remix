@@ -44,7 +44,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
     for (const field of ["filePath", "outputPath", "captionPath", "thumbnailPath", "apiKey", "refreshBroll"])
       assert.ok(!serialized.includes(`"${field}"`), `Public plans cannot expose ${field}`);
   };
-  const start = async (mockStock = false) => {
+  const start = async (mockStock = false, mockAI = mockStock) => {
     processLog = "";
     server = spawn(process.execPath, [...(mockStock ? ["--import", path.join(directory, "mock-stock.mjs")] : []), "--import", "tsx", "server/index.ts"], {
       cwd: process.cwd(),
@@ -53,7 +53,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
         PORT: String(port), HOST: "127.0.0.1", DATA_DIR: dataDirectory,
         RENDER_CONCURRENCY: "1", AUTO_AI: "false",
         WHISPER_CACHE_DIR: path.join(directory, "model-not-installed"),
-        DEEPSEEK_API_KEY: "", PEXELS_API_KEY: "", PIXABAY_API_KEY: mockStock ? "isolated-test-key" : "", MAX_FILES: "4", MAX_FILE_SIZE_MB: "3",
+        DEEPSEEK_API_KEY: mockAI ? "isolated-ai-key" : "", PEXELS_API_KEY: "", PIXABAY_API_KEY: mockStock ? "isolated-test-key" : "", MAX_FILES: "4", MAX_FILE_SIZE_MB: "3",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -400,24 +400,35 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       await stop();
       const requestLog = path.join(directory, "stock-requests.jsonl");
       const emptyFlag = path.join(directory, "empty-stock");
-      const sourceBytes = await readFile(sourcePath);
+      const stockPath = path.join(directory, "hd-stock.mp4");
+      await exec("ffmpeg", ["-v", "error", "-i", sourcePath, "-vf", "scale=640:360", "-c:v", "libx264", "-threads", "1", "-an", stockPath]);
+      const sourceBytes = await readFile(stockPath);
       await writeFile(path.join(directory, "mock-stock.mjs"), `
         import { readFile, appendFile, access } from 'node:fs/promises';
-        globalThis.fetch = async (input) => {
+        globalThis.fetch = async (input, init) => {
           const url = String(input);
+          if (url.startsWith('https://api.deepseek.com/')) {
+            const body = JSON.parse(init.body);
+            const content = body.messages[1].content;
+            const data = typeof content === 'string' ? JSON.parse(content) : null;
+            const result = Array.isArray(content) ? { description: 'Waves on a seaside coast.', usable: true, confidence: 0.96 }
+              : data.clips ? { matches: data.moments.slice(0,1).map(moment => ({ momentIndex: moment.momentIndex, assetId: data.clips[0].assetId, confidence: 0.95, reason: 'The coast illustrates the spoken seaside.' })) }
+              : { briefs: data.moments.slice(0,1).map(moment => ({ momentIndex: moment.momentIndex, query: moment.text.toLowerCase().replace(/[^a-z ]/g, '').slice(0,90), visual: 'A seaside coast', reason: 'Illustrates the spoken scenery' })) };
+            return Response.json({ choices: [{ finish_reason: 'stop', message: { content: JSON.stringify(result) } }] });
+          }
           if (url.startsWith('https://pixabay.com/api/videos/')) {
             await appendFile(${JSON.stringify(requestLog)}, JSON.stringify(url) + '\\n');
             const empty = await access(${JSON.stringify(emptyFlag)}).then(() => true, () => false);
             return Response.json({ hits: empty ? [] : [{ id: 456123, pageURL: 'https://pixabay.com/videos/id-456123/',
               type: 'film', tags: 'sunset, sea, waves, coast', duration: 12, user: 'Test creator', videos: {
-                medium: { url: 'https://cdn.pixabay.com/video/2026/01/01/456123_test.mp4', width: 320, height: 180, size: ${sourceBytes.length} }
+                medium: { url: 'https://cdn.pixabay.com/video/2026/01/01/456123_test.mp4', width: 640, height: 360, size: ${sourceBytes.length} }
               } }] });
           }
-          if (url.startsWith('https://cdn.pixabay.com/')) return new Response(await readFile(${JSON.stringify(sourcePath)}), { headers: { 'content-type': 'video/mp4' } });
+          if (url.startsWith('https://cdn.pixabay.com/')) return new Response(await readFile(${JSON.stringify(stockPath)}), { headers: { 'content-type': 'video/mp4' } });
           throw new Error('Unexpected external request in isolated refresh test');
         };
       `);
-      await start(true);
+      await start(true, false);
       const noAIKey = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: parent.editPlan.revision, refreshBroll: true });
       assert.equal(noAIKey.status, 400);
       assert.match(await noAIKey.text(), /DeepSeek/u);

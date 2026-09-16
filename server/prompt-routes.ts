@@ -98,7 +98,7 @@ export function installPromptEditRoutes(app: Express) {
         throw new PromptEditError(400, error instanceof Error ? error.message : "Check your current draft before describing another edit.");
       }
       const canRefreshBroll = stockBrollConfigured(stockProvidersForEdit(parent.auto)) &&
-        (parent.auto?.brollMatching !== "ai" || brollAIConfigured());
+        brollAIConfigured();
       const proposal = await proposePromptEdit({ plan: effective, prompt, signal: controller.signal,
         sourceTranscript: parent.sourceTranscript, canRefreshBroll, pendingBrollCount: draft?.refreshBroll ? draft.brollCount : undefined });
       controller.signal.throwIfAborted();

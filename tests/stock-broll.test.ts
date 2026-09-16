@@ -301,6 +301,7 @@ test("B-roll defaults off, stock requires no uploads, and missing key keeps the 
       job,
       assets: [],
       workDir: "/unused",
+      transcript: { language: "en", duration: 30, segments: [{ start: 8, end: 11, text: "mountain trail", words: [] }] },
       signal: new AbortController().signal,
       onPhase: () => undefined,
     };
@@ -323,6 +324,8 @@ test("stock preparation downloads a real MP4, validates its media, and attaches 
   const directory = await mkdtemp(path.join(os.tmpdir(), "stock-media-"));
   const originalKey = process.env.PIXABAY_API_KEY;
   const originalAnalysis = paths.analysis;
+  const originalAIKey = process.env.DEEPSEEK_API_KEY;
+  process.env.DEEPSEEK_API_KEY = "test-ai-key";
   process.env.PIXABAY_API_KEY = "test-key";
   paths.analysis = path.join(directory, "cache");
   try {
@@ -334,7 +337,7 @@ test("stock preparation downloads a real MP4, validates its media, and attaches 
       "-f",
       "lavfi",
       "-i",
-      "testsrc2=size=320x180:rate=24:duration=4",
+      "testsrc2=size=640x360:rate=24:duration=4",
       "-c:v",
       "libx264",
       "-threads",
@@ -348,9 +351,9 @@ test("stock preparation downloads a real MP4, validates its media, and attaches 
       globalThis,
       "fetch",
       async (input: Parameters<typeof fetch>[0]) =>
-        String(input).startsWith("https://pixabay.com/api/")
-          ? Response.json({ hits: [clip()] })
-          : new Response(bytes),
+        String(input).startsWith("https://api.deepseek.com/")
+          ? Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ briefs: [{ momentIndex: 0, query: "mountain trail", visual: "A mountain walking trail", reason: "Illustrates the trail discussed" }] }) } }] })
+          : String(input).startsWith("https://pixabay.com/api/") ? Response.json({ hits: [clip()] }) : new Response(bytes),
     );
     const source = {
       name: "mountain trail.mp4",
@@ -368,6 +371,7 @@ test("stock preparation downloads a real MP4, validates its media, and attaches 
       summary: { outputDuration: 30, changes: [] },
     } as unknown as StoredJob;
     const visuals = await prepareSupportingVisuals({
+      matchAI: async ({ assets }) => ({ matches: assets.slice(0, 1).map(asset => ({ momentIndex: 0, assetId: asset.id, sourceStart: 0, reason: "Observed mountain trail" })), notes: [] }),
       source,
       job,
       assets: [],
@@ -393,6 +397,7 @@ test("stock preparation downloads a real MP4, validates its media, and attaches 
     assert.ok(job.summary!.changes.includes("1 B-roll cutaway"));
   } finally {
     paths.analysis = originalAnalysis;
+    if (originalAIKey === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = originalAIKey;
     if (originalKey === undefined) delete process.env.PIXABAY_API_KEY;
     else process.env.PIXABAY_API_KEY = originalKey;
     await rm(directory, { recursive: true, force: true });

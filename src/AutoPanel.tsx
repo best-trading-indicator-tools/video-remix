@@ -21,7 +21,7 @@ import type {
   VisualSource,
 } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDuration } from "../shared/types";
-import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
+import { getVisualSources, getBrollMatching, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import FinishingPresets from "./FinishingPresets";
 import PacingOptions from "./PacingOptions";
@@ -74,6 +74,7 @@ export default function AutoPanel({
   const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions;
   const visualSources = getVisualSources(options);
   const stockSelected = hasStockVisuals(options);
+  const aiMatching = getBrollMatching(options) === "ai";
   const librarySelected = hasLibraryVisuals(options);
   const graphicsSelected = hasGraphicVisuals(options);
   const visualChoices: { id: VisualSource; description: string; icon: typeof Film; available: boolean; setup: string }[] = [
@@ -86,7 +87,7 @@ export default function AutoPanel({
   const toggleVisualSource = (source: VisualSource, enabled: boolean) => onChange({
     ...options,
     visualSources: enabled ? [...visualSources, source] : visualSources.filter((item) => item !== source),
-    ...((source === "pixabay" || source === "pexels") && enabled && !options.brollMatching && capabilities?.brollAI
+    ...((source === "pixabay" || source === "pexels") && enabled
       ? { brollMatching: "ai" as const } : {}),
   });
   const brollCount = options.brollCount ?? DEFAULT_BROLL_COUNT;
@@ -398,10 +399,11 @@ export default function AutoPanel({
               {(stockSelected || librarySelected) && (
                 <>
                   <div className="broll-matching">
+                    {stockSelected ? <strong>Meaning &amp; visual matching · DeepSeek</strong> : <>
                     <label htmlFor="broll-matching">Match B-roll using</label>
                     <select
                       id="broll-matching"
-                      value={options.brollMatching || "tags"}
+                      value={getBrollMatching(options)}
                       onChange={(event) =>
                         onChange({
                           ...options,
@@ -410,32 +412,29 @@ export default function AutoPanel({
                       }
                     >
                       <option value="tags">
-                        {stockSelected && librarySelected ? "Spoken keywords, filenames & tags"
-                          : stockSelected ? "Spoken keywords & stock tags" : "Filename & tags · local"}
+                        Filename &amp; tags · local
                       </option>
                       <option value="ai" disabled={!capabilities?.brollAI}>
                         Meaning &amp; visual matching · DeepSeek
                       </option>
-                    </select>
-                    {options.brollMatching === "ai" ? (
+                    </select></>}
+                    {aiMatching ? (
                       <p className="auto-preferences-note">
                         Sends sampled B-roll frames and transcript excerpts to
                         DeepSeek.{" "}
                         {stockSelected
-                          ? "Uses surrounding speech to find relevant shots. Previous inspections are reused."
+                          ? "Stock footage is always checked against the surrounding speech and sampled images. Unrelated or unclear shots are skipped; the requested count is best effort. Previous inspections are reused."
                           : "Checks selected clips for a relevant match. Previous inspections are reused."}
                       </p>
                     ) : (
                       <p className="auto-preferences-note">
-                        {stockSelected && librarySelected ? "Matches the spoken words to stock tags and uploaded clip names."
-                          : stockSelected ? "Matches the spoken words to stock clip tags."
-                            : "Matches words from the transcript to clip filenames and tags."}{" "}
+                        Matches words from the transcript to clip filenames and tags.{" "}
                         Clips without a match are skipped.
                       </p>
                     )}
-                    {!capabilities?.brollAI && (
+                    {capabilities && !capabilities.brollAI && (
                       <p className="auto-preferences-note">
-                        {options.brollMatching === "ai"
+                        {aiMatching
                           ? "AI matching needs a DeepSeek key on the server. Other selected visual sources can still be used."
                           : "Add a DeepSeek API key on the server to enable AI matching."}
                       </p>
@@ -448,7 +447,7 @@ export default function AutoPanel({
                       onSelectionChange={onBrollSelectionChange}
                       onBusyChange={onLibraryBusyChange}
                       onRemoved={onBrollRemoved}
-                      aiMatching={options.brollMatching === "ai"}
+                      aiMatching={aiMatching}
                       maxFiles={maxFiles}
                       maxFileSize={maxFileSize}
                     />

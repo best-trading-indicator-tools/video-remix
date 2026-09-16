@@ -231,6 +231,15 @@ async function downloadStock(
   }
 }
 
+/** Judge the pixels that survive the output crop, not the provider's HD label. */
+function croppedResolution(video: { width: number; height: number }, aspect: number) {
+  return { width: Math.min(video.width, video.height * aspect), height: Math.min(video.height, video.width / aspect) };
+}
+export function usableStockResolution(video: { width: number; height: number }, aspect: number): boolean {
+  const { width, height } = croppedResolution(video, aspect);
+  return Math.min(width, height) >= 360 && Math.max(width, height) >= 640;
+}
+
 /** Small, user-triggered searches. Stock files live only for this render. */
 export async function findStockBroll({
   moments,
@@ -351,13 +360,17 @@ export async function findStockBroll({
             video.size > 0 &&
             video.size <= maxBytes() &&
             Math.max(video.width, video.height) <= 1920 &&
+            usableStockResolution(video, targetAspect) &&
             trustedVideoUrl(video.url) &&
             new URL(video.url).pathname.endsWith(".mp4"),
         )
         .sort((a, b) => {
-          const fit = (v: typeof a) => Math.min(v.width / v.height / targetAspect, targetAspect / (v.width / v.height));
-          return fit(b) - fit(a) || b.width * b.height - a.width * a.height;
+          const pixels = (v: typeof a) => { const crop = croppedResolution(v, targetAspect); return crop.width * crop.height; };
+          // Slightly different SD aspect ratios must never outrank an HD file.
+          return pixels(b) - pixels(a);
         })[0];
+      if (!file && Object.values(hit.videos).some(video => !usableStockResolution(video, targetAspect)))
+        notes.push("Low-resolution stock footage was skipped because too few pixels survived the output crop.");
       return file ? [{ hit, file, query, score }] : [];
     }).sort((a, b) => {
       const fit = (v: typeof a.file) => Math.min(v.width / v.height / targetAspect, targetAspect / (v.width / v.height));
@@ -378,6 +391,11 @@ export async function findStockBroll({
         signal.throwIfAborted();
         if (media.duration < 1.5 || media.duration > 86400)
           throw new Error("Unsuitable stock duration");
+        if (!usableStockResolution(media, targetAspect)) {
+          await rm(filePath, { force: true });
+          notes.push("Low-resolution stock footage was skipped because too few pixels survived the output crop.");
+          continue;
+        }
         onPhase("Checking stock motion and framing");
         const windows = await inspect({ ...media, filePath }, targetAspect, signal);
         const window = windows[0];

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { AutoOptions, VisualSource } from "../shared/types.js";
-import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
+import { getVisualSources, getBrollMatching, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { autoBatchSchema, autoOptionsSchema } from "../server/schema.js";
 
 const choices: VisualSource[] = ["pixabay", "pexels", "hyperframes", "remotion", "library"];
@@ -72,4 +72,15 @@ test("resolved lists cannot mutate stored preferences or later resolutions", () 
   resolved.splice(0, resolved.length, "remotion");
   assert.deepEqual(options.visualSources, ["library", "pixabay"]);
   assert.deepEqual(getVisualSources(options), ["pixabay", "library"]);
+});
+
+
+test("old stock presets always upgrade to semantic matching while local library matching remains optional", () => {
+  for (const options of [{ supportingVisuals: "stock" as const }, { visualSources: ["pexels" as const] },
+    { visualSources: ["pixabay" as const, "library" as const] }]) {
+    assert.equal(getBrollMatching({ ...options, brollMatching: "tags" }), "ai");
+    assert.equal(autoOptionsSchema.parse({ ...options, brollMatching: "tags" }).brollMatching, "ai");
+  }
+  assert.equal(getBrollMatching({ visualSources: ["library"], brollMatching: "tags" }), "tags");
+  assert.equal(getBrollMatching({ visualSources: [], supportingVisuals: "stock", brollMatching: "tags" }), "tags");
 });

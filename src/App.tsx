@@ -70,7 +70,7 @@ import ManualPromptEditor from "./ManualPromptEditor";
 import FinishingPresets from "./FinishingPresets";
 import { useDialogViewport } from "./useDialogViewport";
 import { compactBrollNotes } from "../shared/broll-notes";
-import { getVisualSources, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
+import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 
 type AutoPreset = { options: AutoOptions; variants: number };
@@ -107,7 +107,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       ].includes(options?.supportingVisuals || "")
         ? options!.supportingVisuals
         : "off",
-      brollMatching: options?.brollMatching === "ai" ? "ai" : "tags",
+      brollMatching: getBrollMatching(options),
       brollMaxCoverage: typeof options?.brollMaxCoverage === "number" && Number.isInteger(options.brollMaxCoverage) && options.brollMaxCoverage >= 0 && options.brollMaxCoverage <= 100
         ? options.brollMaxCoverage : DEFAULT_AUTO_OPTIONS.brollMaxCoverage,
       brollCount:
@@ -1269,7 +1269,7 @@ export default function App() {
                   <span>
                     {autoPresets.some(
                       (preset) =>
-                        preset.options.brollMatching === "ai" &&
+                        getBrollMatching(preset.options) === "ai" &&
                         (hasStockVisuals(preset.options) || hasLibraryVisuals(preset.options)),
                     ) ? (
                       <>

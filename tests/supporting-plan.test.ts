@@ -326,6 +326,8 @@ test("stock shortfalls trigger more searches and keep matched shots while reject
   const created: StoredBroll[] = input.transcript.segments.map((segment,i) => ({ ...asset(`asset-${i}`, segment.text),
     filePath:`/tmp/shot-${i}.mp4`, thumbnailPath:"", stock:{providerId:`pexels:${i}`,rendition:"https://videos.pexels.com/video-files/test.mp4",contentHash:String(i),retrievedAt:"",licenseUrl:"https://www.pexels.com/license/"} }));
   const result = await prepareSupportingVisuals({ ...input,
+    matchAI: async ({ assets, moments }) => ({ matches: moments.flatMap((moment, momentIndex) =>
+      assets.filter(asset => asset.name === moment.text).map(asset => ({ momentIndex, assetId: asset.id, sourceStart: 0, reason: "Visible matched scene" }))), notes: [] }),
     findStock: async options => {
       rounds.push(options.searchRound!);
       const clips = options.searchRound === 0 ? [created[2]!] : created.filter(asset => !options.excludedStockIds?.includes(asset.stock!.providerId));
