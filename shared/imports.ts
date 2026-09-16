@@ -1,5 +1,7 @@
 import type { VideoSource } from "./types.js";
 
+export const DEFAULT_IMPORT_BATCH_SIZE = 100;
+
 /** Upload bytes and media processing are separate, resumable stages. */
 export interface ImportSession {
   id: string;

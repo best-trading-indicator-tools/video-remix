@@ -12,6 +12,7 @@ for the layout rules and browser verification matrix.
 
 ## Import long recordings
 
+- Import up to **100 videos per batch** by default (`MAX_FILES`, 1–100), with up to **200 source videos** in the workspace. Completed import cards do not occupy unfinished-import slots. If one selected file cannot be queued, the other files continue and its error stays visible beside the uploader.
 - **Browse or drop videos:** source imports accept up to **50 GiB per file** by default, including 10–40 GB recordings. Each file transfers in 8 MiB chunks with confirmed progress. Pause an upload, or select the same unchanged file after reloading to resume it. Imports continue while you open Exports or History; keep the browser tab open during transfer.
 - **Link files on this computer:** paste one absolute video path per line. On Mac, select files in Finder and press **Option + Command + C** to copy their paths. The app reads the originals through managed links, without copying a 40 GB file. Removing or expiring an import removes the link, leaving the original intact. Keep originals at the same path and unchanged until exports finish. In Docker, the paths must be visible inside the container.
 - **Preparation runs in the background:** video metadata, a preview image, and a streaming content fingerprint are prepared with visible progress. Two videos can be analyzed at once. The fingerprint reads the full file to recognize earlier exports, so large originals still take time to prepare.
@@ -443,7 +444,7 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `DATA_DIR`           | `data`                   | Writable directory for uploads, attachments, manifests, and renders. |
 | `MAX_FILE_SIZE_MB`   | `500`                    | B-roll and legacy multipart limit in MiB; accepts 1–2048.           |
 | `MAX_LARGE_FILE_SIZE_GB` | `50`                 | Resumable and linked source import limit in GiB; accepts 1–1024.     |
-| `MAX_FILES`          | `30`                     | Maximum files in one upload; accepts 1–100.                          |
+| `MAX_FILES`          | `100`                    | Files per selection/local-link request and maximum unfinished imports; accepts 1–100. Completed imports do not occupy queue slots. |
 | `RENDER_CONCURRENCY` | `2`                      | Simultaneous processing jobs; accepts 1–4.                           |
 | `RENDER_MAX_RETRIES` | `3`                      | Additional attempts after a failed/interrupted export; 0–10.         |
 | `RENDER_RETRY_DELAY_SECONDS` | `5`               | Initial retry delay; 1–300 seconds, triples up to five minutes.      |

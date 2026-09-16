@@ -14,7 +14,6 @@ import { fingerprintFile } from "./history.js";
 import { publicSource, saveStore, state, type StoredSource } from "./store.js";
 
 const TTL = 48 * 60 * 60 * 1000;
-const MAX_SESSIONS = 30;
 const DISK_RESERVE = 128 * 1024 * 1024;
 const extensions = new Set([".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi", ".mpeg", ".mpg"]);
 const uuid = /^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu;
@@ -115,7 +114,8 @@ async function requireSpace(additional = 0) {
     throw new ImportError(507, "There is not enough free disk space for this import and the remaining uploads. Free some space or cancel an unused import.");
 }
 function ensureCapacity() {
-  if (sessions.size >= MAX_SESSIONS) throw new ImportError(429, "There are already 30 imports. Dismiss completed imports or cancel unused ones first.");
+  const unfinished = [...sessions.values()].filter(item => item.status !== "completed").length;
+  if (unfinished >= config.maxFiles) throw new ImportError(429, `There are already ${config.maxFiles} unfinished imports. Finish or cancel an unused import before adding more.`);
   if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
 }
 async function discard(item: StoredImport) {
@@ -302,8 +302,8 @@ export function installMediaImportRoutes(app: Express) {
     res.status(201).json(publicImport(item));
   }));
   app.post("/api/imports/local", route(async (req, res) => {
-    const parsed = z.object({ paths: z.array(z.string().min(1).max(4096)).min(1).max(30) }).strict().safeParse(req.body);
-    if (!parsed.success) throw new ImportError(400, "Enter one or more absolute paths to video files on this computer.");
+    const parsed = z.object({ paths: z.array(z.string().min(1).max(4096)).min(1).max(config.maxFiles) }).strict().safeParse(req.body);
+    if (!parsed.success) throw new ImportError(400, `Enter 1–${config.maxFiles} absolute paths to video files on this computer, one per line.`);
     const imports: ImportSession[] = [];
     const errors: { name: string; error: string }[] = [];
     for (const candidate of parsed.data.paths) {

@@ -88,6 +88,7 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
       assert.equal(health.maxFileSize, 2 * 1024 ** 2);
       assert.equal(health.maxLargeFileSize, 50 * 1024 ** 3);
       assert.equal(health.importChunkSize, 8 * 1024 ** 2);
+      assert.equal(health.maxFiles, 100);
       assert.equal((await json("/api/imports", { name: "bad.exe", size: 100, lastModified: 1, identity })).status, 400);
       assert.equal((await json("/api/imports", { name: "bad.mp4", size: 51 * 1024 ** 3, lastModified: 1, identity })).status, 400);
       assert.equal((await json("/api/imports", { name: "bad.mp4", size: 100, lastModified: 1, identity: "bad" })).status, 400);
@@ -119,6 +120,47 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
       assert.equal((await json(`/api/imports/${item.id}/finish`, {})).status, 200);
       assert.equal((await dismiss(item.id)).status, 200);
       assert.equal((await fetch(`${base}${ready.source!.url}`)).status, 200, "Dismissing a completed session preserves its source");
+    });
+    await t.test("larger batches pass five videos and completed cards do not consume unfinished import capacity", async () => {
+      const completed: string[] = [];
+      for (let index = 0; index < 10; index++) {
+        const response = await json("/api/imports", { name: `batch ${index + 1}.mp4`, size: bytes.length, lastModified: 1, identity });
+        assert.equal(response.status, 201, await response.clone().text());
+        const item = await response.json() as ImportSession;
+        assert.equal((await chunk(item.id, 0, bytes)).status, 200);
+        assert.equal((await json(`/api/imports/${item.id}/finish`, {})).status, 202);
+        completed.push(item.id);
+      }
+      for (const id of completed) assert.equal((await waitImport(id)).source!.fingerprint, identity);
+      const pending: string[] = [];
+      for (let index = 0; index < 100; index++) {
+        const response = await json("/api/imports", { name: `pending ${index}.mp4`, size: bytes.length, lastModified: 1, identity });
+        assert.equal(response.status, 201, `Import ${index + 1}: ${await response.clone().text()}`);
+        pending.push((await response.json() as ImportSession).id);
+      }
+      const overflow = await json("/api/imports", { name: "one more.mp4", size: bytes.length, lastModified: 1, identity });
+      assert.equal(overflow.status, 429);
+      assert.match((await overflow.json()).error, /100 unfinished imports/);
+      await stop(); await start();
+      assert.equal((await getImport(completed[0]!)).status, "completed");
+      assert.equal((await getImport(pending[99]!)).status, "uploading");
+      for (const id of pending) assert.equal((await dismiss(id)).status, 200);
+      for (const id of completed) {
+        assert.equal((await dismiss(id)).status, 200);
+        assert.equal((await fetch(`${base}/api/sources/${id}/video`)).status, 200);
+      }
+    });
+    await t.test("local links share the advertised batch limit instead of the old 30-file cap", async () => {
+      const tooMany = await json("/api/imports/local", { paths: Array(101).fill(fixture) });
+      assert.equal(tooMany.status, 400);
+      assert.match((await tooMany.json()).error, /1–100/);
+      const response = await json("/api/imports/local", { paths: Array(31).fill(fixture) });
+      assert.equal(response.status, 202, await response.clone().text());
+      const result = await response.json();
+      assert.equal(result.imports.length, 31);
+      assert.deepEqual(result.errors, []);
+      for (const item of result.imports as ImportSession[]) await dismiss(item.id);
+      assert.deepEqual(await readFile(fixture), bytes, "Cancelling local links preserves the original");
     });
     await t.test("an interrupted request leaves no committed bytes and cancellation removes temporary files", async () => {
       const item = await (await json("/api/imports", { name: "interrupted.mp4", size: bytes.length, lastModified: 1, identity })).json() as ImportSession;

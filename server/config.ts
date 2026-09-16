@@ -1,4 +1,5 @@
 import path from "node:path";
+import { DEFAULT_IMPORT_BATCH_SIZE } from "../shared/imports.js";
 // Load local secrets for both development and production. Explicit shell
 // variables take precedence; a fresh clone can still run without an .env file.
 try {
@@ -20,7 +21,7 @@ export const config = {
   maxFileSize: numberEnv("MAX_FILE_SIZE_MB", 500, 1, 2048) * 1024 * 1024,
   maxLargeFileSize: numberEnv("MAX_LARGE_FILE_SIZE_GB", 50, 1, 1024) * 1024 ** 3,
   importChunkSize: 8 * 1024 * 1024,
-  maxFiles: numberEnv("MAX_FILES", 30, 1, 100),
+  maxFiles: numberEnv("MAX_FILES", DEFAULT_IMPORT_BATCH_SIZE, 1, 100),
   concurrency: numberEnv("RENDER_CONCURRENCY", 2, 1, 4),
   renderRetries: numberEnv("RENDER_MAX_RETRIES", 3, 0, 10),
   retryDelayMs: numberEnv("RENDER_RETRY_DELAY_SECONDS", 5, 1, 300) * 1000,

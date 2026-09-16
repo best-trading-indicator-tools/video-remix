@@ -9,6 +9,7 @@ import {
   Upload,
 } from "lucide-react";
 import type { BrollAsset } from "../shared/types";
+import { DEFAULT_IMPORT_BATCH_SIZE } from "../shared/imports";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
@@ -27,7 +28,7 @@ export default function BrollPanel({
   onBusyChange,
   onRemoved,
   aiMatching = false,
-  maxFiles = 30,
+  maxFiles = DEFAULT_IMPORT_BATCH_SIZE,
   maxFileSize = 500 * 1024 ** 2,
 }: {
   selectedIds: string[];

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, Upload, X } from "lucide-react";
 import type { Health, VideoSource } from "../shared/types";
-import type { ImportSession } from "../shared/imports";
+import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { importRequest, transferImport, uploadIdentity } from "./import-client";
 import "./imports.css";
 
@@ -24,6 +24,7 @@ export default function ImportPanel(props: Props) {
   const [localPaths, setLocalPaths] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [selectionErrors, setSelectionErrors] = useState<string[]>([]);
   const sessionsRef = useRef(sessions);
   const files = useRef(new Map<string, File>());
   const seen = useRef(new Set<string>());
@@ -119,32 +120,38 @@ export default function ImportPanel(props: Props) {
   const selectFiles = async (selected: File[], requestedId?: string | null) => {
     if (!selected.length || choosing) return;
     const maximum = props.health?.maxLargeFileSize || 50 * 1024 ** 3;
-    if (selected.length > (props.health?.maxFiles || 30)) {
-      props.onError(`Choose up to ${props.health?.maxFiles || 30} videos at once.`);
+    if (selected.length > (props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE)) {
+      props.onError(`Choose up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`);
       return;
     }
     setChoosing(true);
+    setSelectionErrors([]);
+    const failures: string[] = [];
     try {
       for (const file of selected) {
-        if (file.size > maximum) { props.onError(`${file.name} exceeds the ${size(maximum)} import limit.`); continue; }
-        if (!/\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg)$/iu.test(file.name)) { props.onError(`${file.name}: choose a supported video file.`); continue; }
-        const identity = await uploadIdentity(file);
-        const requested = requestedId ? sessionsRef.current.find(item => item.id === requestedId) : undefined;
-        if (requestedId && !requested) throw new Error("This import is no longer available. Choose the video as a new import.");
-        if (requested && (requested.size !== file.size || requested.identity !== identity || requested.name !== file.name || requested.lastModified !== file.lastModified))
-          throw new Error("Choose the same unchanged video to resume this import.");
-        let session = requested || sessionsRef.current.find(item => item.kind === "upload" && item.status === "uploading" &&
-          item.name === file.name && item.size === file.size && item.lastModified === file.lastModified && item.identity === identity);
-        session ||= await importRequest<ImportSession>("/api/imports", { method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: file.name, size: file.size, lastModified: file.lastModified, identity }) });
         if (!mounted.current) return;
-        setErrors(current => { const next = { ...current }; delete next[session.id]; return next; });
-        update([session]);
-        files.current.set(session.id, file);
+        try {
+          if (file.size > maximum) throw new Error(`Exceeds the ${size(maximum)} import limit.`);
+          if (!/\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg)$/iu.test(file.name)) throw new Error("Choose a supported video file.");
+          const identity = await uploadIdentity(file);
+          const requested = requestedId ? sessionsRef.current.find(item => item.id === requestedId) : undefined;
+          if (requestedId && !requested) throw new Error("This import is no longer available. Choose the video as a new import.");
+          if (requested && (requested.size !== file.size || requested.identity !== identity || requested.name !== file.name || requested.lastModified !== file.lastModified))
+            throw new Error("Choose the same unchanged video to resume this import.");
+          let session = requested || sessionsRef.current.find(item => item.kind === "upload" && item.status === "uploading" &&
+            item.name === file.name && item.size === file.size && item.lastModified === file.lastModified && item.identity === identity);
+          session ||= await importRequest<ImportSession>("/api/imports", { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: file.name, size: file.size, lastModified: file.lastModified, identity }) });
+          if (!mounted.current) return;
+          setErrors(current => { const next = { ...current }; delete next[session.id]; return next; });
+          update([session]);
+          files.current.set(session.id, file);
+        } catch (error) {
+          failures.push(`${file.name}: ${error instanceof Error ? error.message : "Unable to prepare this import."}`);
+          if (mounted.current) setSelectionErrors([...failures]);
+        }
       }
-      void runQueue();
-    } catch (error) {
-      props.onError(error instanceof Error ? error.message : "Unable to prepare this import.");
+      if (failures.length && mounted.current) props.onError(`${failures.length} video${failures.length === 1 ? "" : "s"} could not be queued. See the import details; other videos will continue.`);
       void runQueue();
     } finally {
       resumeId.current = null;
@@ -169,13 +176,21 @@ export default function ImportPanel(props: Props) {
   const linkFiles = async () => {
     const paths = localPaths.split(/\r?\n/u).map(value => value.trim().replace(/^["']|["']$/gu, "")).filter(Boolean);
     if (!paths.length || localBusy) return;
+    if (paths.length > (props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE)) {
+      props.onError(`Link up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`);
+      return;
+    }
     setLocalBusy(true);
+    setSelectionErrors([]);
     try {
       const result = await importRequest<{ imports: ImportSession[]; errors?: { name: string; error: string }[] }>("/api/imports/local", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ paths }),
       });
       update(result.imports);
-      result.errors?.forEach(item => props.onError(`${item.name}: ${item.error}`));
+      if (result.errors?.length) {
+        setSelectionErrors(result.errors.map(item => `${item.name}: ${item.error}`));
+        props.onError(`${result.errors.length} video${result.errors.length === 1 ? "" : "s"} could not be linked. See the import details.`);
+      }
       if (!result.errors?.length) { setLocalPaths(""); setLocalOpen(false); }
     } catch (error) { props.onError(error instanceof Error ? error.message : "Unable to link these videos."); }
     finally { setLocalBusy(false); }
@@ -192,7 +207,7 @@ export default function ImportPanel(props: Props) {
       <span className="upload-icon">{choosing ? <LoaderCircle size={22} className="spin" /> : <Upload size={22} />}</span>
       <strong>{choosing ? "Preparing imports…" : "Drop your videos here"}</strong>
       <span>or <em>browse files</em></span>
-      <small>Short clips or full recordings<br />Up to {size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
+      <small>Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos per batch<br />{size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
     </button>
     <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><Link2 size={15} /> Link files on this computer</button>
     {localOpen && <div className="import-local">
@@ -204,6 +219,11 @@ export default function ImportPanel(props: Props) {
         {localBusy ? <LoaderCircle size={14} className="spin" /> : <FolderOpen size={14} />} Link videos
       </button>
     </div>}
+    {!!selectionErrors.length && <details className="import-selection-errors" open>
+      <summary>{selectionErrors.length} video{selectionErrors.length === 1 ? "" : "s"} {selectionErrors.length === 1 ? "needs" : "need"} attention</summary>
+      <ul>{selectionErrors.map((message, index) => <li key={index}>{message}</li>)}</ul>
+      <p>Other videos continue importing. Correct these files, then choose them again.</p>
+    </details>}
     {!!sessions.length && <div className="import-list" aria-label="Video imports">
       {sessions.map(session => {
         const complete = session.status === "completed";
