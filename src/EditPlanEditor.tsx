@@ -227,9 +227,9 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     const focusable = () => Array.from(dialog.current?.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), video[controls], [tabindex="0"]',
-    ) || []).filter((element) => element.getClientRects().length > 0);
-    focusable()[0]?.focus();
+      'button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), summary, video[controls], [tabindex="0"]',
+    ) || []).filter((element) => element.checkVisibility() && !element.closest('[hidden]'));
+    (focusable()[0] || dialog.current)?.focus({ preventScroll: true });
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape" && !savingRef.current) { event.preventDefault(); closeRef.current(); }
       if (event.key !== "Tab") return;
@@ -242,7 +242,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
       }
     };
     window.addEventListener("keydown", keydown);
-    return () => { window.removeEventListener("keydown", keydown); document.body.style.overflow = overflow; previous?.focus(); };
+    return () => { window.removeEventListener("keydown", keydown); document.body.style.overflow = overflow; previous?.focus({ preventScroll: true }); };
   }, []);
 
   const cutTimingsChanged = !!plan && !!draft && differs((promptAnchor?.plan || plan).cuts.map(({ start, end }) => ({ start, end })), draft.cuts.map(({ start, end }) => ({ start, end })));
@@ -328,7 +328,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   };
 
   return <div className="modal-backdrop edit-plan-backdrop" onClick={() => { if (!savingRef.current) onClose(); }}>
-    <section ref={dialog} className="edit-plan-modal" role="dialog" aria-modal="true" aria-labelledby="edit-plan-title" onClick={(event) => event.stopPropagation()}>
+    <section ref={dialog} className="edit-plan-modal" role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="edit-plan-title" onClick={(event) => event.stopPropagation()}>
       <header className="edit-plan-heading">
         <div><span className="eyebrow">REFINE YOUR FINISHED CUT{plan ? ` · REVISION ${plan.revision}` : ""}</span>
           <h2 id="edit-plan-title">Edit this result</h2><p>{job.summary?.title || job.sourceName}</p></div>

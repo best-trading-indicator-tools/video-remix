@@ -2,6 +2,14 @@
 
 A private video repurposing workspace with **Auto remix** selected by default. Import your videos, start the batch, and download fresh edits as MP4s or a ZIP. Editing, speech recognition, and rendering run locally. Auto's AI selection, writing, editorial checks, and repairs use DeepSeek through the existing private API key; built-in selection remains available without it.
 
+## Mobile and tablet layouts
+
+Workspaces and history scroll with the page. On phones and short windows, the
+result editor becomes one scrollable sheet, with its render buttons at the end.
+Larger editors keep independent preview and control columns. Dialogs adapt to
+the visible viewport when the keyboard opens. See [responsive UI checks](docs/responsive-ui.md)
+for the layout rules and browser verification matrix.
+
 ## Import long recordings
 
 - **Browse or drop videos:** source imports accept up to **50 GiB per file** by default, including 10–40 GB recordings. Each file transfers in 8 MiB chunks with confirmed progress. Pause an upload, or select the same unchanged file after reloading to resume it. Imports continue while you open Exports or History; keep the browser tab open during transfer.

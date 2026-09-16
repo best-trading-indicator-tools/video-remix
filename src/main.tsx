@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles.css";
 import "./studio.css";
 import "./manual.css";
+import "./responsive.css";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

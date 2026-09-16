@@ -68,6 +68,7 @@ import ImportPanel from "./ImportPanel";
 import LongFormPanel from "./LongFormPanel";
 import ManualPromptEditor from "./ManualPromptEditor";
 import FinishingPresets from "./FinishingPresets";
+import { useDialogViewport } from "./useDialogViewport";
 import { compactBrollNotes } from "../shared/broll-notes";
 import { getVisualSources, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
@@ -283,6 +284,7 @@ function Section({
 }
 
 export default function App() {
+  useDialogViewport();
   const [mode, setMode] = useState<"auto" | "manual" | "shorts">("auto");
   const [autoById, setAutoById] = useState<Record<string, AutoPreset>>(() =>
     Object.fromEntries(
@@ -600,10 +602,10 @@ export default function App() {
     const getFocusable = () =>
       Array.from(
         dialog?.querySelectorAll<HTMLElement>(
-          'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), video[controls], [tabindex="0"]',
+          'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), summary, video[controls], [tabindex="0"]',
         ) || [],
-      );
-    getFocusable()[0]?.focus();
+      ).filter(element => element.checkVisibility() && !element.closest('[hidden]'));
+    (getFocusable()[0] || dialog)?.focus({ preventScroll: true });
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setShowHelp(false);
@@ -613,10 +615,10 @@ export default function App() {
         const focusable = getFocusable();
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
-        if (event.shiftKey && document.activeElement === first) {
+        if (event.shiftKey && (document.activeElement === first || !dialog?.contains(document.activeElement))) {
           event.preventDefault();
           last?.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
+        } else if (!event.shiftKey && (document.activeElement === last || !dialog?.contains(document.activeElement))) {
           event.preventDefault();
           first?.focus();
         }
@@ -626,7 +628,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", close);
       document.body.style.overflow = overflow;
-      previousFocus?.focus();
+      previousFocus?.focus({ preventScroll: true });
     };
   }, [showHelp, previewJob]);
 
@@ -2646,6 +2648,7 @@ export default function App() {
           <section
             className="export-preview-modal"
             role="dialog"
+            tabIndex={-1}
             aria-modal="true"
             aria-label={`Export preview: ${previewJob.sourceName}`}
             onClick={(event) => event.stopPropagation()}
@@ -2736,6 +2739,7 @@ export default function App() {
           <section
             className="help-modal"
             role="dialog"
+            tabIndex={-1}
             aria-modal="true"
             aria-label="Quick guide"
             onClick={(event) => event.stopPropagation()}

@@ -1,0 +1,110 @@
+/* Loaded last: shared sizing and scrolling rules for every workspace. */
+html { scrollbar-gutter: stable; scroll-padding-block: 24px; }
+body { min-width: 0; }
+main, .panel, .studio-grid > *, .panel-heading > *, .toolbar-actions,
+.render-cta, .job-main, .history-card, .prompt-editor { min-width: 0; }
+button, summary, label, legend, .job-notes, .job-phase, .job-error, .edit-plan-note,
+.edit-plan-error, .export-preview-footer, .history-availability { overflow-wrap: anywhere; }
+input, select, textarea { max-width: 100%; }
+/* WebKit otherwise includes long option text in the ancestor scroll width. */
+select { overflow: hidden; text-overflow: ellipsis; }
+textarea { resize: vertical; }
+.panel-heading, .toolbar-actions, .export-preview-footer,
+.own-footage-toolbar, .own-footage-upload { flex-wrap: wrap; }
+.panel-heading { height: auto; min-height: 64px; padding-block: 14px; gap: 12px; }
+.modal-heading > .icon-button, .edit-plan-heading > .icon-button { flex-shrink: 0; }
+.finishing-preset-select { flex-wrap: wrap; }
+.finishing-presets .finishing-preset-select input,
+.finishing-presets .finishing-preset-select select { flex: 1 1 150px; }
+.look-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 80px), 1fr)); }
+.shorts-settings-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr)); }
+.shorts-timestamp-pair { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.shorts-timestamp-pair > span { display: none; }
+.shorts-clock-row { grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr)); }
+.shorts-clock-row .secondary-button { justify-self: start; }
+
+/* Never clip a dialog's last controls behind a browser bar or keyboard. */
+.modal-backdrop {
+  --dialog-gap: 20px;
+  top: var(--dialog-top, 0px);
+  bottom: auto;
+  height: var(--dialog-height, 100dvh);
+  padding: var(--dialog-gap);
+  padding-top: max(var(--dialog-gap), env(safe-area-inset-top));
+  padding-bottom: max(var(--dialog-gap), env(safe-area-inset-bottom));
+  padding-left: max(var(--dialog-gap), env(safe-area-inset-left));
+  padding-right: max(var(--dialog-gap), env(safe-area-inset-right));
+  overflow: auto;
+  overscroll-behavior: contain;
+  container: dialog-viewport / size;
+}
+.help-modal, .export-preview-modal, .edit-plan-modal {
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overscroll-behavior: contain;
+  scrollbar-width: auto;
+  scrollbar-color: #738199 var(--surface);
+  scroll-padding-block: 20px;
+}
+.edit-plan-modal { height: 100%; }
+.edit-plan-modal > form { flex: 1 1 auto; }
+.edit-plan-heading { max-height: 30%; overflow-y: auto; }
+.edit-plan-footer { max-height: max(110px, calc(var(--dialog-height, 100dvh) * .25)); overflow-y: auto; }
+.edit-plan-loading { min-height: 0; overflow-y: auto; padding-block: 32px; }
+.edit-plan-playback, .edit-plan-fields { scrollbar-width: auto; }
+.export-preview-modal video { max-height: max(160px, calc(var(--dialog-height, 100dvh) - 230px)); object-fit: contain; }
+.edit-plan-playback video { max-height: max(160px, calc(var(--dialog-height, 100dvh) * .48)); }
+.modal-backdrop ::-webkit-scrollbar { width: 10px; height: 10px; }
+.modal-backdrop ::-webkit-scrollbar-thumb { background: #738199; border: 2px solid var(--surface); }
+
+/* One scroll owner on tablets, phones, short windows and with a keyboard open.
+   Headers and footers remain in the flow; neither can squeeze the editor shut. */
+@container dialog-viewport (max-width: 900px) or (max-height: 650px) {
+  .edit-plan-modal { display: block; height: auto; overflow-y: auto; }
+  .edit-plan-modal > form { display: block; overflow: visible; }
+  .edit-plan-body { display: block; overflow: visible; padding: 18px; }
+  .edit-plan-playback, .edit-plan-fields { overflow: visible; padding: 0; scrollbar-gutter: auto; }
+  .edit-plan-playback { margin-bottom: 28px; }
+  .edit-plan-heading { padding: 18px; max-height: none; overflow: visible; }
+  .edit-plan-heading h2 { font-size: 22px; }
+  .edit-plan-footer { padding: 18px; max-height: none; overflow: visible; }
+  .edit-framing-picture { max-width: 320px; margin-inline: auto; }
+  .export-preview-modal .modal-heading, .help-modal .modal-heading { position: static; }
+}
+
+@media (max-height: 750px), (max-width: 980px) {
+  .preview-panel, .render-bar { position: static; }
+}
+@media (max-width: 1180px) {
+  .job-card { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: start; }
+  .job-main { display: contents; }
+  .job-title { grid-column: 2; align-self: center; margin: 0; }
+  .job-main > :not(.job-title), .job-status, .job-actions { grid-column: 1 / -1; grid-row: auto; }
+  .job-status { justify-content: flex-start; }
+  .job-actions { flex-wrap: wrap; width: 100%; justify-content: flex-start; }
+}
+@media (max-width: 680px) {
+  .modal-backdrop { --dialog-gap: 8px; }
+  main { padding-inline: max(16px, env(safe-area-inset-left)) max(16px, env(safe-area-inset-right)); }
+  .site-header { padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  .site-footer { padding-bottom: max(28px, env(safe-area-inset-bottom)); }
+  .settings-tabs { height: auto; min-height: 50px; flex-wrap: wrap; gap: 4px 16px; padding-block: 8px; overflow: visible; }
+  .settings-tabs button { min-height: 40px; }
+  .shorts-workspace .shorts-timestamp-pair input,
+  .shorts-workspace .shorts-settings-grid select,
+  .own-footage select, .own-footage input[type=number],
+  .import-local textarea, .auto-panel textarea { font-size: 16px; }
+  .own-footage > summary, .finishing-presets > summary { flex-wrap: wrap; }
+  .shorts-draft-list, .pacing-removals { max-height: none; overflow: visible; }
+  .shorts-workspace .shorts-preview-button { flex-wrap: wrap; }
+  .shorts-preview-button > span { margin-left: 0; }
+  .job-card { grid-template-columns: 48px minmax(0, 1fr); align-items: start; }
+  .job-thumb { width: 48px; height: 66px; }
+  .job-source-name { overflow-wrap: anywhere; }
+  .job-actions .secondary-button, .job-actions .download-button { white-space: normal; }
+  .edit-plan-buttons { width: 100%; flex-direction: row; }
+  .edit-plan-buttons button { flex: 1 1 160px; }
+  .export-preview-footer > * { max-width: 100%; }
+  .history-card-actions > div { flex-wrap: wrap; }
+}
