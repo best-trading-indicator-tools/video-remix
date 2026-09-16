@@ -45,8 +45,10 @@ function moments(
   duration: number,
   sourceName: string,
   maximumShotDuration = 3.6,
+  effortRound = 0,
 ): Moment[] {
-  if (duration < 6) return [];
+  const opening = effortRound ? 0.25 : 3.5;
+  if (duration < (effortRound ? 2 : 6)) return [];
   if (!transcript?.segments.length)
     return [
       {
@@ -74,13 +76,13 @@ function moments(
         )
           last++;
         const selected = segment.words.slice(first, last + 1);
-        const start = selected[0]!.start;
+        const start = effortRound ? Math.max(opening, selected[0]!.start) : selected[0]!.start;
         const end = Math.min(
           duration - 0.35,
           Math.max(selected.at(-1)!.end + 0.25, start + 2.4),
           start + maximumShotDuration,
         );
-        if (start >= 3.5 && end - start >= 1.5)
+        if (selected.at(-1)!.end > start && start >= opening && end - start >= 1.5)
           grouped.push({
             start,
             end,
@@ -91,13 +93,13 @@ function moments(
       }
       return grouped;
     }
-    const start = segment.start;
+    const start = effortRound ? Math.max(opening, segment.start) : segment.start;
     const end = Math.min(
       duration - 0.35,
       Math.max(segment.end, start + 2.4),
       start + maximumShotDuration,
     );
-    return start >= 3.5 && end - start >= 1.5
+    return segment.end > start && start >= opening && end - start >= 1.5
       ? [{ start, end, text: segment.text.trim(), context }]
       : [];
   });
@@ -105,7 +107,7 @@ function moments(
 
 export function planSupportingVisuals({
   transcript, duration, sourceName, assets, mode = "off", visualSources, aiMatches,
-  brollCount, assetSources = {}, occupied = [],
+  brollCount, assetSources = {}, occupied = [], effortRound = 0, graphicStart = 0,
 }: {
   transcript?: Transcript;
   duration: number;
@@ -118,20 +120,23 @@ export function planSupportingVisuals({
   brollCount?: number;
   /** A previously downloaded stock clip can also be selected from the library. */
   assetSources?: Record<string, VisualSource>;
+  effortRound?: number;
+  graphicStart?: number;
   occupied?: Pick<SupportingVisual, "start" | "end">[];
 }): PlannedSupportingVisual[] {
   const sources = getVisualSources({ supportingVisuals: mode, visualSources });
   if (!sources.length) return [];
   const requested = targetCount(brollCount);
   const timingCount = Math.min(MAX_BROLL_COUNT, requested + occupied.length);
-  const legacyGraphics = visualSources === undefined && mode === "graphics";
+  const legacyGraphics = visualSources === undefined && mode === "graphics" && brollCount === undefined;
   const maximum = legacyGraphics ? Math.min(3, Math.max(1, Math.floor(duration / 12))) : requested;
-  const candidates = moments(transcript, duration, sourceName, shotDuration(duration, timingCount));
+  const candidates = moments(transcript, duration, sourceName, effortRound ? 1.5 : shotDuration(duration, timingCount), effortRound)
+    .filter(moment => occupied.every(shot => moment.start >= shot.end + (effortRound ? 0.15 : 0) || moment.end <= shot.start - (effortRound ? 0.15 : 0)));
   const used = new Set<string>();
   const result: PlannedSupportingVisual[] = [];
   const counts = new Map(sources.map(source => [source, 0]));
-  const gap = timingCount >= 6 ? 0.6 : 1.2;
-  const coverageBudget = duration * (legacyGraphics ? 0.3 : 0.6);
+  const gap = effortRound ? 0.15 : timingCount >= 6 ? 0.6 : 1.2;
+  const coverageBudget = duration * (effortRound ? 0.9 : legacyGraphics ? 0.3 : 0.6);
   const fits = (moment: Moment) => [...occupied, ...result].every(other =>
     moment.start >= other.end + gap - 1e-9 || moment.end + gap <= other.start + 1e-9) &&
     [...occupied, ...result].reduce((sum, item) => sum + item.end - item.start, 0) +
@@ -149,7 +154,7 @@ export function planSupportingVisuals({
       let proposed: PlannedSupportingVisual | undefined;
       if (source === "hyperframes" || source === "remotion") {
         const text = moment.text.replace(/\s+/gu, " ").trim();
-        if (!transcript?.segments.length || text.length < 12 || text.length > 100 || tokens(text).length < 2)
+        if (!transcript?.segments.length || moment.start < graphicStart || text.length < 12 || text.length > 100 || tokens(text).length < 2 || text.split(/\s+/u).length > Math.max(6, Math.floor((moment.end - moment.start) * 4)))
           continue;
         proposed = { ...moment, text, kind: "graphic", visualSource: source,
           reason: "Animated emphasis of the spoken phrase." };
@@ -214,10 +219,10 @@ const graphicAvailable = async (source: GraphicSource) => source === "hyperframe
 const renderCard = async (source: GraphicSource, options: GraphicOptions) => source === "hyperframes"
   ? renderGraphic(options) : (await import("./remotion-visuals.js")).renderRemotionGraphic(options);
 
-export async function prepareSupportingVisuals({
+async function prepareSupportingVisualsPass({
   source, job, transcript, assets, workDir, signal, onPhase, occupied = [], options = job.auto,
   inspect = inspectBrollWindows, findStock = findStockBroll, matchAI = matchBrollWithAI,
-  available = graphicAvailable, render = renderCard,
+  available = graphicAvailable, render = renderCard, effortRound = 0, excludedStockIds = [],
 }: {
   source: StoredSource;
   options?: StoredJob["auto"];
@@ -233,13 +238,16 @@ export async function prepareSupportingVisuals({
   matchAI?: typeof matchBrollWithAI;
   available?: typeof graphicAvailable;
   render?: typeof renderCard;
+  effortRound?: number;
+  excludedStockIds?: string[];
 }): Promise<SupportingVisual[]> {
   const selected = getVisualSources(options);
   if (!selected.length) return [];
   const duration = job.summary!.outputDuration;
   const requested = targetCount(options?.brollCount);
   const timingCount = Math.min(MAX_BROLL_COUNT, requested + occupied.length);
-  const matchingMoments = moments(transcript, duration, source.name, shotDuration(duration, timingCount));
+  const matchingMoments = moments(transcript, duration, source.name, effortRound ? 1.5 : shotDuration(duration, timingCount), effortRound)
+    .filter(moment => occupied.every(shot => moment.start >= shot.end + (effortRound ? 0.15 : 0) || moment.end <= shot.start - (effortRound ? 0.15 : 0)));
   const dimensions = geometry(source, job.settings);
   const usesAI = selected.some(source => source === "pixabay" || source === "pexels" || source === "library") && options?.brollMatching === "ai";
   const addNote = (text: string) => {
@@ -263,7 +271,7 @@ export async function prepareSupportingVisuals({
       addNote("AI stock search needs a speech transcript. Original footage was kept.");
     } else {
       const stock = await findStock({
-        moments: matchingMoments, targetCount: requested, providers: selected.filter((source): source is "pixabay" | "pexels" => source === "pixabay" || source === "pexels"),
+        moments: matchingMoments, targetCount: requested, searchRound: effortRound, excludedStockIds, providers: selected.filter((source): source is "pixabay" | "pexels" => source === "pixabay" || source === "pexels"),
         type: options?.stockVideoType || "all", language: transcript?.language,
         matching: usesAI ? "ai" : "tags", targetAspect: dimensions.width / dimensions.height,
         workDir, signal, onPhase: (phase) => onPhase(phase, 62),
@@ -281,7 +289,7 @@ export async function prepareSupportingVisuals({
   if (usesAI) {
     aiMatches = [];
     if (transcript?.segments.length && assets.length) {
-      const ai = await matchAI({ assets, moments: matchingMoments, targetCount: requested, workDir, signal,
+      const ai = await matchAI({ assets, moments: matchingMoments, targetCount: requested, effortRound, workDir, signal,
         onPhase: (phase) => onPhase(phase, 64) });
       aiMatches = ai.matches;
       ai.notes.forEach(addNote);
@@ -290,7 +298,8 @@ export async function prepareSupportingVisuals({
   }
   const plan = (candidates: StoredBroll[]) => planSupportingVisuals({
     transcript, duration, sourceName: source.name, assets: candidates,
-    visualSources: sources, aiMatches, brollCount: requested, assetSources, occupied,
+    visualSources: sources, aiMatches, brollCount: requested, assetSources, occupied, effortRound,
+    graphicStart: job.settings.hookText ? job.settings.hookDuration : 0,
   });
   let plans = plan(assets);
   const rejected = new Set<string>();
@@ -328,19 +337,21 @@ export async function prepareSupportingVisuals({
         ...(asset.selection ? { selection: asset.selection } : {}), ...(asset.stock ? { stock: asset.stock } : {}) });
       if (placement.reason) addNote(`B-roll at ${placement.start.toFixed(1)}s: ${asset.name} — ${placement.reason}`);
     } else {
-      const engine = placement.visualSource as GraphicSource;
-      try {
+      const engines = [placement.visualSource as GraphicSource, ...sources.filter((source): source is GraphicSource =>
+        (source === "hyperframes" || source === "remotion") && source !== placement.visualSource)];
+      for (const engine of engines) try {
         onPhase(`Creating ${VISUAL_SOURCE_LABELS[engine]} animated cards`, 65);
-        const output = path.join(workDir, `supporting-${engine}-${index}.mp4`);
+        const output = path.join(workDir, `supporting-${engine}-${effortRound}-${index}.mp4`);
         await render(engine, { text: placement.text, ...dimensions, duration: placement.end - placement.start,
           output, workDir, signal });
         result.push({ path: output, start: placement.start, end: placement.end, sourceStart: 0,
           label: placement.text, kind: "graphic", visualSource: engine });
         details.push({ name: placement.text, kind: "graphic", visualSource: engine, start: placement.start,
           end: placement.end, reason: placement.reason });
+        break;
       } catch {
         signal.throwIfAborted();
-        addNote(`A ${VISUAL_SOURCE_LABELS[engine]} animated card could not be rendered. The original footage was kept for that moment.`);
+        addNote(`A ${VISUAL_SOURCE_LABELS[engine]} animated card could not be rendered. Other selected renderers and later placements were tried.`);
       }
     }
   }
@@ -367,4 +378,68 @@ export async function prepareSupportingVisuals({
   job.supportingVisuals = details;
   if (job.notes) job.notes = compactBrollNotes(job.notes);
   return result;
+}
+
+/** Fulfil the requested total through up to three complementary passes. Successful
+ * placements stay fixed; retries use shorter slots and additional stock pages.
+ * Relevance and motion checks never weaken to satisfy the count. */
+export async function prepareSupportingVisuals(input: Parameters<typeof prepareSupportingVisualsPass>[0]): Promise<SupportingVisual[]> {
+  const options = input.options ?? input.job.auto;
+  if (!getVisualSources(options).length) return [];
+  const requested = targetCount(options?.brollCount);
+  const deadline = AbortSignal.any([input.signal, AbortSignal.timeout(480_000)]);
+  const result: SupportingVisual[] = [];
+  const details: NonNullable<StoredJob["supportingVisuals"]> = [];
+  const candidates = new Map<string, StoredBroll>();
+  const usedIds = new Set<string>();
+  const usedStock = new Set(input.excludedStockIds ?? []);
+  const baseChanges = [...input.job.summary!.changes];
+  const baseCallouts = structuredClone(input.job.settings.callouts);
+  let attempts = 0;
+  for (let round = 0; round < 3 && result.length < requested; round++) {
+    input.signal.throwIfAborted();
+    if (deadline.aborted) break;
+    attempts++;
+    input.onPhase(`Filling supporting visuals: ${result.length}/${requested} · pass ${round + 1}/3`, 62);
+    input.job.summary!.changes = [...baseChanges];
+    input.job.settings.callouts = structuredClone(baseCallouts);
+    // Existing library files may be tried again, but a chosen clip is never repeated.
+    try {
+      const extra = await prepareSupportingVisualsPass({ ...input, signal: deadline, effortRound: round,
+        options: { ...options!, brollCount: requested - result.length },
+        assets: input.assets.filter(asset => !usedIds.has(asset.id)),
+        occupied: [...(input.occupied ?? []), ...result], excludedStockIds: [...usedStock] });
+      result.push(...extra);
+      details.push(...(input.job.supportingVisuals ?? []));
+      for (const asset of input.job.brollCandidates ?? []) candidates.set(asset.id, asset);
+      for (const detail of details) {
+        if (detail.assetId) usedIds.add(detail.assetId);
+        if (detail.stock?.providerId) usedStock.add(detail.stock.providerId);
+      }
+    } catch (error) {
+      input.signal.throwIfAborted();
+      if (!deadline.aborted) throw error;
+      break;
+    }
+  }
+  input.job.supportingVisuals = details.sort((a, b) => a.start - b.start);
+  // Keep all used media ahead of optional alternatives in the retained pool.
+  input.job.brollCandidates = [...candidates.values()].sort((a,b) => Number(usedIds.has(b.id)) - Number(usedIds.has(a.id))).slice(0, 40);
+  input.job.summary!.changes = baseChanges;
+  input.job.settings.callouts = baseCallouts;
+  removeGraphicCalloutOverlaps(input.job, result);
+  const stock = details.filter(item => item.kind === "broll").length, cards = details.length - stock;
+  if (stock) input.job.summary!.changes.push(`${stock} B-roll cutaway${stock === 1 ? "" : "s"}`);
+  if (cards) input.job.summary!.changes.push(`${cards} animated card${cards === 1 ? "" : "s"}`);
+  if (stock && options?.brollMatching === "ai") { input.job.summary!.changes.push("AI visual matching"); input.job.summary!.usedAI = true; }
+  input.job.notes = (input.job.notes ?? []).filter(note => !/^(?:B-roll target:|Supporting visual target:|Visual mix —)/u.test(note));
+  if (result.length) input.job.notes = input.job.notes.filter(note => !/^No (?:suitable|relevant)|^AI found no spoken moment|^None of the /u.test(note));
+  const reason = result.length < requested ? (deadline.aborted ? "The eight-minute search/render budget was reached."
+    : "Available matching footage, readable spoken phrases, working renderers or free timeline space could not fill the remaining places.") : undefined;
+  input.job.notes.push(`Supporting visual target: ${result.length} of ${requested} shots added after ${attempts} pass${attempts === 1 ? "" : "es"}.${reason ? ` ${reason}` : ""}`);
+  input.job.visualFulfillment = { requested, placed: result.length, attempts, ...(reason ? { reason } : {}) };
+  const selected = getVisualSources(options);
+  if (selected.length > 1) input.job.notes.push(`Visual mix — ${selected.map(source => `${VISUAL_SOURCE_LABELS[source]}: ${details.filter(item => item.visualSource === source).length}`).join(" · ")}.`);
+  input.job.notes = compactBrollNotes(input.job.notes);
+  return result.sort((a,b) => a.start - b.start);
 }

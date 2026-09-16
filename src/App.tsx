@@ -2559,6 +2559,7 @@ export default function App() {
                                     ))}
                                 </ul>
                               )}
+                              {job.visualFulfillment && <p className="job-notes" role="status"><strong>Supporting visuals: {job.visualFulfillment.placed}/{job.visualFulfillment.requested}</strong>{job.visualFulfillment.placed < job.visualFulfillment.requested && <> · {job.visualFulfillment.reason || "Some requested visuals could not be added."}</>}</p>}
                               {!!job.notes?.length && (
                                 <ul className="job-notes">
                                   {compactBrollNotes(job.notes).map((note, index) => (

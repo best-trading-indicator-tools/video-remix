@@ -37,7 +37,7 @@ export interface AutoOptions {
   stockVideoType?: "all" | "animation";
   brollIds?: string[];
   brollMatching?: "tags" | "ai";
-  /** Desired cutaways per export; fewer are allowed when no suitable shots fit. */
+  /** Requested total; additional search/placement passes try to fill every slot. */
   brollCount?: number;
   /** Independent review of the final selected speech; unavailable checks remain visible. */
   editorialMode?: "off" | "check" | "repair";
@@ -327,6 +327,7 @@ export interface Attachment {
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
+  visualFulfillment?: { requested: number; placed: number; attempts: number; reason?: string };
   /** Mode actually used, kept separate from unset legacy preferences. */
   editorialModeApplied?: AutoOptions["editorialMode"];
   id: string;

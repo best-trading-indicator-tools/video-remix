@@ -351,7 +351,7 @@ export default function AutoPanel({
               {visualSources.length > 0 && (
                   <div className="broll-count">
                     <label className="auto-output-field">
-                      Supporting shots to aim for
+                      Total supporting shots
                       <input
                         type="number"
                         inputMode="numeric"
@@ -371,8 +371,8 @@ export default function AutoPanel({
                       />
                     </label>
                     <p id="auto-broll-count-note" className="auto-preferences-note">
-                      Aim for 1–{MAX_BROLL_COUNT} shots in total. We'll try every selected source when the edit has room.
-                      You may get fewer suitable shots. Higher targets take longer.
+                      Request 1–{MAX_BROLL_COUNT} visuals in total across your selected sources. We keep searching and adjusting placement to fill the count.
+                      Up to three passes try additional clips and shorter placements. Any unfilled places are reported with the result; higher counts take longer.
                     </p>
                     {brollCount < visualSources.length && <p className="auto-preferences-note" role="status">The target is smaller than your source selection. Not every source can appear in this edit.</p>}
                   </div>

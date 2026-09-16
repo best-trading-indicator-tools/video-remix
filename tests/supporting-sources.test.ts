@@ -156,7 +156,7 @@ test("a frozen stock candidate is replaced while the requested mixed-source tota
   assert.ok(job.notes?.some(note => note.includes("4 of 4 shots added")));
 });
 
-test("unavailable renderers leave other selected sources usable and rendering failures keep original footage", async () => {
+test("unavailable renderers and failed cards use another selected renderer to fill the total", async () => {
   const job = jobFor(["hyperframes", "remotion"]);
   const rendered: string[] = [];
   const result = await prepare(job, { available: async renderer => renderer === "remotion",
@@ -169,7 +169,7 @@ test("unavailable renderers leave other selected sources usable and rendering fa
   const remaining = await prepare(partial, { render: async renderer => {
     if (renderer === "remotion") throw new Error("private renderer filesystem diagnostic");
   } });
-  assert.equal(remaining.length, 3);
+  assert.equal(remaining.length, 6);
   assert.ok(remaining.every(shot => shot.visualSource === "hyperframes"));
   assert.ok(partial.notes?.some(note => /Remotion.*could not be rendered/u.test(note)));
   assert.ok(!JSON.stringify(partial.notes).includes("private renderer"));

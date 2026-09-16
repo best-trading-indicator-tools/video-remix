@@ -106,6 +106,7 @@ async function run(job: StoredJob, controller: AbortController) {
         const visuals = requested ? await prepareSupportingVisuals({ source, job,
           options: { ...options!, visualSources: stockProvidersForEdit(options), brollCount: requested },
           transcript: transcriptFromPlan(job), assets: [], occupied,
+          excludedStockIds: occupied.flatMap(shot => { const id = job.editPlan!.media.find(media => media.id === shot.mediaId)?.stock?.providerId; return id ? [id] : []; }),
           workDir, signal: controller.signal, onPhase: (phase, progress) => {
             job.phase = phase; job.progress = Math.max(job.progress, progress);
           } }) : [];
@@ -114,6 +115,7 @@ async function run(job: StoredJob, controller: AbortController) {
         const keptShots = job.editPlan.visuals.filter(item => item.enabled);
         job.notes = (job.notes || []).filter(note => !/^(?:B-roll target:|Supporting visual target:|Visual mix —)/u.test(note));
         job.notes.push(`Supporting visual target: ${keptShots.length} of ${options?.brollCount ?? DEFAULT_BROLL_COUNT} shots added or retained.`);
+        if (job.visualFulfillment) job.visualFulfillment = { ...job.visualFulfillment, requested: options?.brollCount ?? DEFAULT_BROLL_COUNT, placed: keptShots.length };
         const selected = getVisualSources(options);
         if (selected.length > 1) job.notes.push(`Visual mix — ${selected.map(source => {
           const count = keptShots.filter(shot => job.editPlan!.media.find(media => media.id === shot.mediaId)?.visualSource === source).length;

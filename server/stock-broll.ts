@@ -124,6 +124,7 @@ async function searchStock(
   signal: AbortSignal,
   fetcher: typeof fetch,
   cacheDir: string,
+  searchRound: number,
 ): Promise<StockHit[]> {
   const params = provider === "pexels" ? new URLSearchParams({ query, per_page: "12" }) : new URLSearchParams({
     q: query,
@@ -132,6 +133,7 @@ async function searchStock(
     per_page: "12",
     safesearch: "true",
   });
+  if (searchRound) params.set("page", String(searchRound + 1));
   const cacheKey = createHash("sha256").update(params.toString()).digest("hex");
   const cachePath = path.join(cacheDir, `stock-${provider}-${cacheKey}.json`);
   let data: z.infer<typeof responseSchema> | undefined;
@@ -233,6 +235,7 @@ async function downloadStock(
 export async function findStockBroll({
   moments,
   providers = ["pixabay"],
+  searchRound = 0, excludedStockIds = [],
   type = "all",
   language = "en",
   workDir,
@@ -248,6 +251,8 @@ export async function findStockBroll({
 }: {
   moments: SearchMoment[];
   providers?: StockProvider[];
+  searchRound?: number;
+  excludedStockIds?: string[];
   type?: "animation" | "all";
   language?: string;
   workDir: string;
@@ -262,6 +267,7 @@ export async function findStockBroll({
   inspect?: typeof inspectBrollWindows;
 }): Promise<{ assets: StoredBroll[]; notes: string[] }> {
   signal.throwIfAborted();
+  if (!Number.isInteger(searchRound) || searchRound < 0 || searchRound > 2) throw new Error("Invalid stock search pass");
   const assets: StoredBroll[] = [];
   const notes: string[] = [];
   const budget = brollSearchBudget(targetCount);
@@ -288,7 +294,7 @@ export async function findStockBroll({
   );
   onPhase(matching === "ai" ? "Understanding spoken ideas for stock search" : "Finding stock B-roll");
   const semantic = matching === "ai"
-    ? await planStockSearch({ moments, language, targetCount, signal, cacheDir, fetcher })
+    ? await planStockSearch({ moments, language, targetCount, searchRound, signal, cacheDir, fetcher })
     : undefined;
   if (semantic) notes.push(...semantic.notes);
   const selected = semantic ? semantic.briefs.map(brief => ({
@@ -297,9 +303,9 @@ export async function findStockBroll({
     query: brief.query, alternateQueries: brief.alternateQueries || [],
     reason: brief.reason, visual: brief.visual, momentIndex: brief.momentIndex,
   })) : lexical.map(moment => ({ ...moment, query: moment.words.slice(0, 3).join(" ").slice(0, 100),
-    alternateQueries: [] as string[], reason: undefined, visual: undefined, momentIndex: undefined }));
+    alternateQueries: searchRound && moment.words.length > 2 ? [moment.words.slice(0, 2).join(" ")] : [] as string[], reason: undefined, visual: undefined, momentIndex: undefined }));
   const queries = new Map<string, StockHit[]>();
-  const used = new Set<string>();
+  const used = new Set<string>(excludedStockIds);
   let downloads = 0;
   const unavailable = new Set<StockProvider>();
   if (type === "animation" && enabledProviders.includes("pexels")) { unavailable.add("pexels"); notes.push("Pexels has no animation-only filter. Animation-only searches use selected Pixabay footage."); }
@@ -316,7 +322,7 @@ export async function findStockBroll({
         try {
           hits = await searchStock(provider, query, type,
             semantic ? "en" : supportedLanguages.has(language) ? language : "en",
-            signal, fetcher, cacheDir);
+            signal, fetcher, cacheDir, searchRound);
           queries.set(identity, hits);
         } catch {
           signal.throwIfAborted();

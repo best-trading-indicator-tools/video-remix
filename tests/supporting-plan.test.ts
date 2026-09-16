@@ -258,3 +258,57 @@ test("rendered cards suppress colliding callouts, preserve touching intervals an
   assert.deepEqual(job.settings.callouts, []);
   assert.deepEqual(job.summary!.changes, ["Spoken hook", "Speech captions"]);
 });
+
+const effortFixture = (visualSources: NonNullable<StoredJob["auto"]>["visualSources"], count = 4) => {
+  const source = { id: "source", name: "camera advice.mp4", width: 1280, height: 720, fps: 24, hasAudio: true, duration: 10 } as StoredSource;
+  const job = { id: "effort", auto: { aspect: "9:16", targetDuration: 10, narration: false, visualSources, brollCount: count }, settings: { ...DEFAULT_SETTINGS, aspect: "9:16" },
+    summary: { title: "Camera advice", sourceDuration: 10, outputDuration: 10, changes: [], usedAI: false, narration: false, transcriptAvailable: true } } as StoredJob;
+  const transcript: Transcript = { language: "en", duration: 10, segments: ["Use soft window light.", "Steady the camera tripod.", "Check your audio microphone.", "Frame the subject carefully."].map((text, i) => ({start:i*2.4,end:i*2.4+2.1,text,words:[]})) };
+  return { source, job, transcript, assets: [], workDir: "/tmp", signal: new AbortController().signal, onPhase: () => {} };
+};
+
+test("four requested cards fill a ten-second short through tighter placements, without overwriting earlier files", async () => {
+  const input = effortFixture(["hyperframes", "remotion"]);
+  const outputs: string[] = [];
+  const result = await prepareSupportingVisuals({ ...input, available: async () => true,
+    render: async (_engine, options) => { outputs.push(options.output); } });
+  assert.equal(result.length, 4);
+  assert.ok(input.job.visualFulfillment!.attempts > 1);
+  assert.equal(new Set(outputs).size, 4, "Separate passes must never overwrite a retained rendered card");
+  assert.equal(input.job.supportingVisuals?.length, 4);
+  assert.ok(result.every((shot,i) => shot.end <= 10 && (!i || shot.start >= result[i-1]!.end)));
+  assert.ok(input.job.notes?.some(note => /4 of 4 shots added/.test(note)));
+});
+
+test("failed cards try another selected renderer and unavailable targets report a bounded shortage", async () => {
+  const input = effortFixture(["hyperframes", "remotion"], 1);
+  const engines: string[] = [];
+  const result = await prepareSupportingVisuals({ ...input, available: async () => true,
+    render: async engine => { engines.push(engine); if (engine === "hyperframes") throw new Error("renderer failure"); } });
+  assert.equal(result.length, 1); assert.equal(result[0]?.visualSource, "remotion");
+  assert.deepEqual(engines, ["hyperframes", "remotion"]);
+  const impossible = effortFixture(["hyperframes"], 10);
+  const empty = await prepareSupportingVisuals({ ...impossible, available: async () => false });
+  assert.equal(empty.length, 0); assert.equal(impossible.job.visualFulfillment!.attempts, 3);
+  assert.equal(impossible.job.visualFulfillment!.requested, 10);
+  assert.ok(impossible.job.visualFulfillment!.reason);
+});
+
+test("stock shortfalls trigger more searches and keep matched shots while rejecting already-used stock", async () => {
+  const input = effortFixture(["pexels"]);
+  const rounds: number[] = [];
+  const created: StoredBroll[] = input.transcript.segments.map((segment,i) => ({ ...asset(`asset-${i}`, segment.text),
+    filePath:`/tmp/shot-${i}.mp4`, thumbnailPath:"", stock:{providerId:`pexels:${i}`,rendition:"https://videos.pexels.com/video-files/test.mp4",contentHash:String(i),retrievedAt:"",licenseUrl:"https://www.pexels.com/license/"} }));
+  const result = await prepareSupportingVisuals({ ...input,
+    findStock: async options => {
+      rounds.push(options.searchRound!);
+      const clips = options.searchRound === 0 ? [created[2]!] : created.filter(asset => !options.excludedStockIds?.includes(asset.stock!.providerId));
+      return { assets: clips, notes: [] };
+    },
+    inspect: async () => [{sourceStart:0,duration:3,motion:1,cropRetention:1}],
+  });
+  assert.equal(result.length, 4);
+  assert.deepEqual(rounds, [0,1]);
+  assert.equal(new Set(input.job.supportingVisuals!.map(shot=>shot.stock!.providerId)).size, 4);
+  assert.equal(input.job.brollCandidates?.length, 4);
+});

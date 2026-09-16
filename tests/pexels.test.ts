@@ -22,7 +22,7 @@ test("Pexels supports safe existing video search, isolated auth, credits and cac
       assert.ok(url.searchParams.get("query")?.includes("ocean"));
       assert.equal(new Headers(init?.headers).get("Authorization"), "private-pexels-test-key");
       assert.ok(!url.href.includes("private-pexels"));
-      return Response.json({ videos: [hit(), hit(8, "https://127.0.0.1/private.mp4"), hit(9, "https://videos.pexels.com.attacker.test/video-files/a.mp4")] });
+      return Response.json({ videos: [hit(), ...(url.searchParams.get("page") === "2" ? [hit(10)] : []), hit(8, "https://127.0.0.1/private.mp4"), hit(9, "https://videos.pexels.com.attacker.test/video-files/a.mp4")] });
     }
     assert.equal(url.hostname, "videos.pexels.com");
     assert.equal(new Headers(init?.headers).get("Authorization"), null);
@@ -44,9 +44,12 @@ test("Pexels supports safe existing video search, isolated auth, credits and cac
     await findStockBroll(options);
     assert.equal(searches, 1); assert.equal(downloads, 2);
     for (const file of await readdir(options.cacheDir)) assert.ok(!(await readFile(path.join(options.cacheDir, file), "utf8")).includes("private-pexels-test-key"));
+    const retry = await findStockBroll({ ...options, searchRound: 1, excludedStockIds: ["pexels:7"] });
+    assert.deepEqual(retry.assets.map(asset => asset.stock!.providerId), ["pexels:10"]);
+    assert.equal(searches, 2); assert.equal(downloads, 3);
     const animation = await findStockBroll({ ...options, type: "animation" });
     assert.equal(animation.assets.length, 0); assert.match(animation.notes.join(" "), /animation-only/);
-    assert.equal(searches, 1);
+    assert.equal(searches, 2);
   } finally { if (old === undefined) delete process.env.PEXELS_API_KEY; else process.env.PEXELS_API_KEY = old; await rm(directory, { recursive: true, force: true }); }
 });
 
