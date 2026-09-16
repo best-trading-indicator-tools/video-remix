@@ -1,12 +1,22 @@
+import { cleanupTemporaryFiles } from "./temporary-cleanup.js";
 import { createApp } from "./app.js";
-import { config } from "./config.js";
+import { config, paths } from "./config.js";
 import { cleanupExpired, pumpQueue, stopQueue } from "./queue.js";
-import { initStore } from "./store.js";
+import { initStore, state } from "./store.js";
 import { stopIntelligence } from "./intelligence.js";
 import { initMediaImports, stopMediaImports } from "./media-imports.js";
 await initStore();
 await initMediaImports();
-await cleanupExpired();
+let maintaining = false;
+async function maintainWorkspace() {
+  if (maintaining) return;
+  maintaining = true;
+  try {
+    await cleanupExpired();
+    await cleanupTemporaryFiles({ analysis: paths.analysis, work: paths.work, protectedJobIds: () => new Set(state.jobs.map(job => job.id)) });
+  } finally { maintaining = false; }
+}
+await maintainWorkspace();
 const app = createApp();
 const server = app.listen(config.port, config.host, () => {
   console.log(
@@ -21,7 +31,7 @@ server.on("error", (error) => {
 });
 const cleanup = setInterval(
   () => {
-    void cleanupExpired().catch((error) =>
+    void maintainWorkspace().catch((error) =>
       console.error("Cleanup failed:", error),
     );
   },

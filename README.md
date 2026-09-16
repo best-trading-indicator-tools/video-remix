@@ -509,6 +509,15 @@ Do not copy only a live database file: committed changes may still be in its `-w
 sidecar. Videos and retained previews are separate files and need their own backup.
 Use one running app per workspace; a synced folder is not a multi-computer database server.
 
+Maintenance runs at startup and every 15 minutes. It removes expired stock API
+search caches after 24 hours, semantic search briefs after 7 days, and cached
+B-roll descriptions after 30 days. Abandoned render work directories become eligible
+after 48 hours; directories belonging to retained jobs stay protected. Each pass
+removes at most 500 items. Symlinks are skipped. This cleanup never scans publication
+records, migration backups, uploaded B-roll, model weights, or history previews.
+Existing source/export expiry still follows `RETENTION_HOURS`; this feature does
+not shorten that period.
+
 ### Export history
 
 History records completed exports independently of temporary video files: source
