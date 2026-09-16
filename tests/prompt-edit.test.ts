@@ -233,6 +233,22 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
       await assert.rejects(proposePromptEdit({ plan: makePlan(), prompt: "Refresh and edit B-roll", signal: signal(), canRefreshBroll: true }), /separately/);
     });
 
+    await t.test("additional B-roll retains existing shots and composes pending counts", async () => {
+      reply = { operations: [{ op: "add_broll", count: 2 }] };
+      const before = makePlan();
+      const added = await proposePromptEdit({ plan: before, prompt: "I need 2 more brolls", signal: signal(), canRefreshBroll: true });
+      assert.deepEqual(added.changes, { revision: 3, refreshBroll: true, preserveBroll: true, brollCount: 3 });
+      assert.deepEqual(applyEditPlanChanges(before, added.changes).visuals, before.visuals);
+      const again = await proposePromptEdit({ plan: before, prompt: "two more", signal: signal(), canRefreshBroll: true, pendingBrollCount: 3 });
+      assert.equal(again.changes.brollCount, 5);
+      await assert.rejects(proposePromptEdit({ plan: before, prompt: "more", signal: signal(), canRefreshBroll: true, pendingBrollCount: 9 }), /exceed 10/);
+      await assert.rejects(proposePromptEdit({ plan: before, prompt: "more", signal: signal() }), /Configure a stock provider/);
+      reply = { operations: [{ op: "refresh_broll", total: 4 }] };
+      const total = await proposePromptEdit({ plan: before, prompt: "4 total", signal: signal(), canRefreshBroll: true });
+      assert.equal(total.changes.brollCount, 4);
+      assert.equal(total.changes.preserveBroll, undefined);
+    });
+
     await t.test("ambiguous or unsupported mixed requests never partially apply the supported part", async () => {
       reply = { operations: [{ op: "hook", text: "This must not be applied" }], clarification: "Changing playback speed is not supported here. Should I only change the heading?" };
       const result = await propose(makePlan(), "Change the heading and double playback speed");

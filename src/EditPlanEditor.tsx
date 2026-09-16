@@ -4,7 +4,7 @@ import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityRepo
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
 import { focusPointAt, withTrackBounds } from "../shared/focus";
-import { hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
+import { VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
 import "./edit-plan.css";
@@ -21,13 +21,16 @@ const CENTER: FocalPoint = { x: 0.5, y: 0.5 };
 const DEFAULT_CAPTION_STYLE = { fontSize: 20, bottomPercent: 100 * 24 / 288 };
 
 interface PromptDraftAnchor { plan: EditPlan; changes: EditPlanChanges }
-interface PromptUndo { draft: EditPlan; refreshBroll: boolean; anchor: PromptDraftAnchor | null; appliedIdentity: string }
-const draftIdentity = (draft: EditPlan, refreshBroll: boolean) => JSON.stringify({ draft, refreshBroll });
+interface PromptUndo { draft: EditPlan; refreshBroll: boolean; brollCount: number; anchor: PromptDraftAnchor | null; appliedIdentity: string }
+const draftIdentity = (draft: EditPlan, refreshBroll: boolean, brollCount: number) => JSON.stringify({ draft, refreshBroll, brollCount });
 
 /** Keep server-retimed media implicit, while preserving later manual corrections. */
 function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: boolean, anchor: PromptDraftAnchor | null): EditPlanChanges {
   const changes: EditPlanChanges = { revision: plan.revision };
-  if (refreshBroll) changes.refreshBroll = true;
+  if (refreshBroll) {
+    changes.refreshBroll = true;
+    if (anchor?.changes.preserveBroll) changes.preserveBroll = true;
+  }
   if (plan.settings.hookText !== draft.settings.hookText) changes.hookText = draft.settings.hookText;
   if (differs(plan.cuts, draft.cuts)) changes.cuts = draft.cuts;
   for (const key of ["captions", "visuals"] as const) {
@@ -239,7 +242,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const cutTimingsChanged = !!plan && !!draft && differs((promptAnchor?.plan || plan).cuts.map(({ start, end }) => ({ start, end })), draft.cuts.map(({ start, end }) => ({ start, end })));
   const draftChanges = plan && draft ? collectDraftChanges(plan, draft, refreshBroll, promptAnchor) : null;
   const changed = !!draftChanges && Object.keys(draftChanges).length > 1;
-  const draftKey = draft ? draftIdentity(draft, refreshBroll) : "";
+  const draftKey = draft ? draftIdentity(draft, refreshBroll, brollCount) : "";
   const timelineCorrectionsChanged = draftChanges?.captions !== undefined || draftChanges?.visuals !== undefined;
   const explicitVisualChanges = draftChanges?.visuals !== undefined;
   const layoutIssues = draft ? textLayoutIssues(draft, knownOutputAspect) : [];
@@ -273,6 +276,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     if (!plan || !draft || savingRef.current) throw new Error("Wait for the current edit to finish loading.");
     if (!form.current?.reportValidity()) throw new Error("Correct the highlighted field before asking for an edit.");
     const changes = collectDraftChanges(plan, draft, refreshBroll, promptAnchor);
+    if (refreshBroll) changes.brollCount = brollCount;
     validateDraftChanges(plan, draft, changes);
     return request<PromptProposal>(`/api/jobs/${job.id}/edit-prompt`, {
       method: "POST", headers: { "Content-Type": "application/json" }, signal,
@@ -285,10 +289,11 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
     const next = structuredClone(proposal.plan);
     next.revision = plan.revision;
     const nextRefresh = !!proposal.changes.refreshBroll;
-    setPromptUndo({ draft: structuredClone(draft), refreshBroll, anchor: promptAnchor, appliedIdentity: draftIdentity(next, nextRefresh) });
+    setPromptUndo({ draft: structuredClone(draft), refreshBroll, brollCount, anchor: promptAnchor, appliedIdentity: draftIdentity(next, nextRefresh, proposal.changes.brollCount ?? brollCount) });
     setPromptAnchor({ plan: structuredClone(next), changes: structuredClone(proposal.changes) });
     setDraft(next);
     setRefreshBroll(nextRefresh);
+    if (proposal.changes.brollCount !== undefined) { setBrollCount(proposal.changes.brollCount); setBrollCountInput(String(proposal.changes.brollCount)); }
     setPreviewCut(0);
     setPreviewSourceTime(next.cuts[0]?.start || 0);
     setPreviewMode("framing");
@@ -364,7 +369,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 examples={savedEditExamples(draft)}
                 applied={!!promptUndo} canUndo={!!promptUndo && promptUndo.appliedIdentity === draftKey} onUndo={() => {
                   if (!promptUndo || promptUndo.appliedIdentity !== draftKey) return;
-                  setDraft(structuredClone(promptUndo.draft)); setRefreshBroll(promptUndo.refreshBroll); setPromptAnchor(promptUndo.anchor); setPromptUndo(null); setError("");
+                  setDraft(structuredClone(promptUndo.draft)); setRefreshBroll(promptUndo.refreshBroll); setBrollCount(promptUndo.brollCount); setBrollCountInput(String(promptUndo.brollCount)); setPromptAnchor(promptUndo.anchor); setPromptUndo(null); setError("");
                   setPreviewCut(0); setPreviewSourceTime(promptUndo.draft.cuts[0]?.start || 0);
                 }} />
               <details open className="edit-plan-section edit-framing-section">
@@ -442,7 +447,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <details open className="edit-plan-section">
                 <summary>B-roll & supporting visuals <span>{draft.visuals.length}</span></summary>
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
-                {hasStockVisuals(job.auto) && <div className="edit-broll-refresh">
+                {<div className="edit-broll-refresh">
                   <div><strong>Try another B-roll search</strong><p>Search for new Pixabay shots and render this video. Saved animations and uploaded B-roll stay in place. Your caption, cut and framing edits are included; narration stays saved.</p></div>
                   <div className="edit-broll-refresh-controls">
                     <label className="edit-plan-field">Supporting shots to aim for
@@ -508,7 +513,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
             </div>
           </div>
           <footer className="edit-plan-footer">
-            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will aim for {brollCount} total supporting shots, keeping saved animations and uploaded B-roll.</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
+            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will request {brollCount} total supporting shots. {promptAnchor?.changes.preserveBroll ? "All existing shots will be kept." : "Saved animations and uploaded B-roll will be kept."}</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
             <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>

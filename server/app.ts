@@ -25,7 +25,7 @@ import {
   type StoredBroll,
 } from "./store.js";
 import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
-import { DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
+import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
 import { getVisualSources, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
@@ -551,8 +551,6 @@ export function createApp() {
       throw new HttpError(409, "This edit has changed. Reload the saved plan.");
     if (parsed.data.brollCount !== undefined && !parsed.data.refreshBroll)
       throw new HttpError(400, "Choose a B-roll target when requesting a new stock search.");
-    if (parsed.data.refreshBroll && (!parent.auto || !hasStockVisuals(parent.auto)))
-      throw new HttpError(400, "New stock searches are available for Auto edits made with stock B-roll.");
     if (parsed.data.refreshBroll && !stockBrollConfigured())
       throw new HttpError(400, "Add a Pixabay API key in your local environment before finding B-roll again.");
     if (parsed.data.refreshBroll && parent.auto?.brollMatching === "ai" && !brollAIConfigured())
@@ -564,7 +562,8 @@ export function createApp() {
     const job: StoredJob = {
       id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
       variant: parent.variant, parentJobId: parent.id,
-      auto: parent.auto ? { ...parent.auto,
+      auto: parent.auto || parsed.data.refreshBroll ? { ...(parent.auto ?? DEFAULT_AUTO_OPTIONS),
+        ...(parsed.data.refreshBroll ? { visualSources: [...new Set([...getVisualSources(parent.auto), "pixabay" as const])] } : {}),
         ...(parsed.data.brollCount !== undefined ? { brollCount: parsed.data.brollCount } : {}),
         // Explicit caption edits belong to the user; final Auto checks must preserve them.
         ...(parsed.data.captions?.length ? { captions: "add" as const } : {}),
@@ -572,7 +571,7 @@ export function createApp() {
       status: "queued", progress: 0, createdAt: new Date().toISOString(),
       outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
       sourceTranscript: parent.sourceTranscript,
-      ...(parsed.data.refreshBroll ? { refreshBroll: true } : {}),
+      ...(parsed.data.refreshBroll ? { refreshBroll: true, preserveBroll: parsed.data.preserveBroll === true } : {}),
       notes: [parsed.data.refreshBroll
         ? "A new stock search was requested for this video. Its saved cuts, captions and narration are used."
         : "Saved footage and narration choices were kept. This revision renders only this video."],

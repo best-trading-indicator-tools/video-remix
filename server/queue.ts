@@ -97,7 +97,7 @@ async function run(job: StoredJob, controller: AbortController) {
     if (job.editPlan) {
       if (job.refreshBroll) {
         job.settings = structuredClone(job.editPlan.settings);
-        const occupied = preservedVisualsOnStockRefresh(job.editPlan).filter(item => item.enabled);
+        const occupied = preservedVisualsOnStockRefresh(job.editPlan, job.preserveBroll).filter(item => item.enabled);
         const options = job.auto;
         const requested = Math.max(0, (options?.brollCount ?? DEFAULT_BROLL_COUNT) - occupied.length);
         // Reuse saved graphics/library shots. Only the remaining stock slots
@@ -119,6 +119,7 @@ async function run(job: StoredJob, controller: AbortController) {
           return `${VISUAL_SOURCE_LABELS[source]}: ${count}`;
         }).join(" · ")}.`);
         delete job.refreshBroll;
+        delete job.preserveBroll;
         await saveStore();
       }
       job.phase = "Rendering your saved edit";

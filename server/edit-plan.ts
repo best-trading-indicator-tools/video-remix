@@ -32,6 +32,7 @@ const visualSchema = z.object({
 export const editPlanChangesSchema = z.object({
   revision: z.number().int().nonnegative(),
   refreshBroll: z.boolean().optional(),
+  preserveBroll: z.boolean().optional(),
   brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   hookText: safeText(120, true).optional(),
   captions: z.array(captionSchema).max(2000).optional(),
@@ -179,6 +180,8 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
     return carried ? withTrackBounds(cut) : cut;
   }) } : input;
   const changes = editPlanChangesSchema.parse(boundedInput);
+  if (changes.preserveBroll !== undefined && !changes.refreshBroll)
+    throw new Error("Keeping existing shots requires a new stock search.");
   if (changes.brollCount !== undefined && !changes.refreshBroll)
     throw new Error("Choose a B-roll target when requesting a new stock search.");
   if (changes.refreshBroll && changes.visuals !== undefined)

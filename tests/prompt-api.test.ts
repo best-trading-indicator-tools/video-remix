@@ -61,7 +61,7 @@ globalThis.fetch = async (input, init) => {
     server = spawn(process.execPath, ["--import", preload, "--import", "tsx", "server/index.ts"], {
       cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATA_DIR: path.join(directory, "data"),
         AUTO_AI: "false", WHISPER_CACHE_DIR: path.join(directory, "no-model"),
-        DEEPSEEK_API_KEY: "test-private-prompt-key", PIXABAY_API_KEY: "", RENDER_CONCURRENCY: "1" },
+        DEEPSEEK_API_KEY: "test-private-prompt-key", PIXABAY_API_KEY: "test-stock-key", PEXELS_API_KEY: "", RENDER_CONCURRENCY: "1" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     for (const stream of [server.stdout, server.stderr]) stream?.on("data", chunk => { log = (log + chunk.toString()).slice(-12000); });
@@ -112,6 +112,27 @@ globalThis.fetch = async (input, init) => {
         assert.ok(!text.includes(directory)); assert.ok(!text.includes("test-private-prompt-key"));
       }
     });
+    await t.test("adding stock to an originally plain edit keeps pending counts through follow-up prompts", async () => {
+      await reply([{ op: "add_broll", count: 2 }]);
+      const response = await request(route, { revision: plan.revision, prompt: "I need 2 more brolls" });
+      assert.equal(response.status, 200);
+      const addition = await response.json() as PromptEditResponse;
+      assert.equal(addition.changes.brollCount, 2);
+      assert.equal(addition.changes.preserveBroll, true);
+      assert.deepEqual(addition.plan.visuals, plan.visuals);
+      await reply([{ op: "hook", text: "A clearer headline" }]);
+      const followup = await request(route, { revision: plan.revision, prompt: "change the headline", draft: addition.changes });
+      assert.equal(followup.status, 200);
+      const combined = await followup.json() as PromptEditResponse;
+      assert.equal(combined.changes.brollCount, 2);
+      assert.equal(combined.changes.preserveBroll, true);
+      await reply([{ op: "add_broll", count: 2 }]);
+      const more = await request(route, { revision: plan.revision, prompt: "two more", draft: combined.changes });
+      assert.equal(more.status, 200);
+      assert.equal((await more.json()).changes.brollCount, 4);
+      assert.equal((await jobs()).length, beforeJobs, "Suggestions must not render or search stock");
+    });
+
     await t.test("clarification never applies partial operations or discards an unsaved draft", async () => {
       await reply([{ op: "hook", text: "Must not apply" }], "Which sentence should be shorter?");
       const response = await request(route, { revision: plan.revision, prompt: "Make that shorter",

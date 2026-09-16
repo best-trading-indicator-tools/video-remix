@@ -239,6 +239,8 @@ export interface EditPlan {
 export interface EditPlanChanges {
   revision: number;
   refreshBroll?: boolean;
+  /** Add stock in unused slots while retaining every saved shot. */
+  preserveBroll?: boolean;
   /** New stock search target; only supplied with refreshBroll. */
   brollCount?: number;
   hookText?: string;

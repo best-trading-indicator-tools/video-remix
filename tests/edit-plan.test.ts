@@ -328,3 +328,11 @@ test("imported ASR edge overlaps preserve both phrases while editor submissions 
   assert.deepEqual(parseCaptionCues(captionCuesSrt(parsed)), parsed);
   assert.throws(() => applyEditPlanChanges(makePlan(), { revision: 3, captions: [parsed[0]!, { ...parsed[1]!, start: 2 }] }), /cannot overlap/);
 });
+
+ test("additive stock searches retain every saved shot, including locked stock", async () => {
+  const { preservedVisualsOnStockRefresh } = await import("../server/plan-storage.js");
+  const plan = { media: [{ id: "stock", kind: "broll", visualSource: "pixabay" }, { id: "card", kind: "graphic" }],
+    visuals: [{ id: "a", mediaId: "stock", enabled: true, locked: true }, { id: "b", mediaId: "card", enabled: true, locked: true }] };
+  assert.deepEqual(preservedVisualsOnStockRefresh(plan as any, true), plan.visuals);
+  assert.deepEqual(preservedVisualsOnStockRefresh(plan as any), [plan.visuals[1]]);
+ });

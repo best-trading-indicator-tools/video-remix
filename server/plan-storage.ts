@@ -26,10 +26,10 @@ export function transcriptFromPlan(job: StoredJob): Transcript | undefined {
 }
 
 /** A stock search must not regenerate or remove saved animation/library choices. */
-export function preservedVisualsOnStockRefresh(plan: EditPlan) {
+export function preservedVisualsOnStockRefresh(plan: EditPlan, preserveAll = false) {
   return plan.visuals.filter(visual => {
     const media = plan.media.find(item => item.id === visual.mediaId);
-    return media?.kind === "graphic" || media?.visualSource === "library";
+    return preserveAll || media?.kind === "graphic" || media?.visualSource === "library";
   });
 }
 
@@ -75,7 +75,7 @@ export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual
       await snapshot(asset.filePath, { name: asset.name, kind: "broll", duration: asset.duration,
         assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock,
         visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock ? "pixabay" : "library") });
-    const preserved = preservedVisualsOnStockRefresh(plan);
+    const preserved = preservedVisualsOnStockRefresh(plan, job.preserveBroll);
     const next: EditPlan["visuals"] = [];
     for (const visual of visuals) {
       const detail = job.supportingVisuals?.find(item => item.start === visual.start && item.name === visual.label);

@@ -27,7 +27,8 @@ const operationSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("trim"), start: seconds.optional(), end: seconds.optional() }).strict().refine(hasPatch),
   z.object({ op: z.literal("cuts"), cuts: z.array(z.object({ start: seconds, end: seconds, focalPoint: focalPointSchema.optional() }).strict()).min(1).max(60) }).strict(),
   z.object({ op: z.literal("visual"), id, enabled: z.boolean().optional(), mediaId: id.optional(), start: seconds.optional(), end: seconds.optional(), sourceStart: seconds.optional(), focalPoint: focalPointSchema.optional() }).strict().refine(hasPatch),
-  z.object({ op: z.literal("refresh_broll") }).strict(),
+  z.object({ op: z.literal("refresh_broll"), total: z.number().int().min(1).max(MAX_BROLL_COUNT).optional() }).strict(),
+  z.object({ op: z.literal("add_broll"), count: z.number().int().min(1).max(MAX_BROLL_COUNT) }).strict(),
 ]);
 const responseSchema = z.object({
   operations: z.array(operationSchema).max(80),
@@ -68,11 +69,13 @@ Support ONLY these operations, with exactly these fields:
 {"op":"trim","start":0,"end":10} (current OUTPUT seconds, start/end each optional; omitted means unchanged edge; only one trim OR cuts operation)
 {"op":"cuts","cuts":[{"start":10,"end":20}]} (explicit ORIGINAL SOURCE seconds; one to 60 pieces; keep specified order; focalPoint optional on each piece)
 {"op":"visual","id":"existing supporting-shot ID","enabled":false,"mediaId":"existing video/graphic media ID","start":2,"end":4,"sourceStart":0,"focalPoint":{"x":0.5,"y":0.5}} (all except op/id optional; only include requested changes)
-{"op":"refresh_broll"} (only when canRefreshBroll is true; requests a stock search when the user later renders; never combine with visual operations)
-All caption/visual start/end times reference the RESULTING OUTPUT after any trim/cuts. sourceStart refers to the supporting clip, not the main source. Trimming automatically retimes existing complete captions and supporting shots; do not restate unchanged captions/visuals. Operations changing a caption/shot use its existing ID. Changing a shot's media/timing/crop explicitly unlocks only that shot. Disabling a shot preserves its lock. Do not invent or add media/shots. Replacing a clip must use the supplied media ID and a valid interval within that clip. At most ${MAX_BROLL_COUNT} shots can be enabled; enabled shots cannot overlap. Each shot is at least 0.5 seconds. Captions cannot overlap. Each source cut is at least 0.04 seconds. Narration is locked: its total duration cannot change. No audio/narration/voice changes, music, color/filter/speed changes, output resolution/aspect changes, generation, upload, publishing, or other settings are supported here.
+{"op":"refresh_broll","total":4} (total optional, total supporting shots including cards; searches for replacements when rendered)
+{"op":"add_broll","count":2} (adds exactly this many additional stock shots while retaining existing shots; use for "2 more B-rolls", not refresh_broll)
+Both stock operations require canRefreshBroll=true. Use at most one stock operation, never combine with visual operations. Generic requests to add more B-roll are supported, even if this video has no existing stock. Search occurs only when the user renders. Use pendingBrollCount as the already-requested total when continuing a draft. Never expose internal field names in clarification; explain missing setup in plain language.
+All caption/visual start/end times reference the RESULTING OUTPUT after any trim/cuts. sourceStart refers to the supporting clip, not the main source. Trimming automatically retimes existing complete captions and supporting shots; do not restate unchanged captions/visuals. Operations changing a caption/shot use its existing ID. Changing a shot's media/timing/crop explicitly unlocks only that shot. Disabling a shot preserves its lock. Do not invent media IDs; new stock is requested with add_broll or refresh_broll. Replacing a clip must use the supplied media ID and a valid interval within that clip. At most ${MAX_BROLL_COUNT} shots can be enabled; enabled shots cannot overlap. Each shot is at least 0.5 seconds. Captions cannot overlap. Each source cut is at least 0.04 seconds. Narration is locked: its total duration cannot change. No audio/narration/voice changes, music, color/filter/speed changes, output resolution/aspect changes, generation, upload, publishing, or other settings are supported here.
 For explicit instructions, change only requested fields. Relative requests like 'slightly larger' may use a small reasonable adjustment within limits. For vague requests like 'make it better', unavailable media, a specific new stock subject, or any unsupported/ambiguous part, return operations:[] and a short clarification; do not partially fulfill mixed requests. If a requested value is already set, return operations:[]. Never claim to have rendered, searched, generated, saved, or applied anything. No URLs or paths. Use the request's language for clarification.`;
 
-function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?: Transcript) {
+function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?: Transcript, pendingBrollCount?: number) {
   const media = plan.media.filter(item => item.kind !== "audio");
   if (plan.captions.length > 300 || plan.visuals.length > 60 || plan.cuts.length > 60 || media.length > 120)
     throw new PromptEditError(413, "This edit has too many captions or saved shots for one prompt. Use the manual editor for this edit.");
@@ -85,7 +88,7 @@ function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?:
     throw new PromptEditError(413, "This edit has too much selected speech for one prompt. Use the manual editor for this edit.");
   const context = {
     revision: plan.revision, outputDuration: plan.outputDuration, sourceDuration: plan.sourceDuration,
-    playbackSpeed: plan.settings.speed, narrationLocked: plan.narration, canRefreshBroll,
+    playbackSpeed: plan.settings.speed, narrationLocked: plan.narration, canRefreshBroll, pendingBrollCount,
     hook: plan.settings.hookText, fit: plan.settings.fit, focalPoint: plan.settings.focalPoint ?? { x: 0.5, y: 0.5 },
     captionStyle: plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 },
     cuts: plan.cuts.map((cut, index) => ({ index, ...cut })),
@@ -99,8 +102,10 @@ function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?:
   return context;
 }
 
-function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Transcript | undefined, canRefreshBroll: boolean) {
+function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Transcript | undefined, canRefreshBroll: boolean, pendingBrollCount?: number) {
   const changes: EditPlanChanges = { revision: plan.revision };
+  if (operations.filter(op => op.op === "add_broll" || op.op === "refresh_broll").length > 1)
+    throw new PromptEditError(422, "Request one B-roll search at a time.");
   const timing = operations.filter(operation => operation.op === "trim" || operation.op === "cuts");
   if (timing.length > 1) throw new PromptEditError(422, "Use one trim or one source sequence change in a prompt.");
   const timingOperation = timing[0];
@@ -161,7 +166,15 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
       case "refresh_broll":
         if (!canRefreshBroll) throw new PromptEditError(422, "Searching again is unavailable for this edit. You can change its saved supporting shots.");
         changes.refreshBroll = true;
+        if (operation.total !== undefined) changes.brollCount = operation.total;
         break;
+      case "add_broll": {
+        if (!canRefreshBroll) throw new PromptEditError(422, "Configure a stock provider before adding B-roll.");
+        const total = Math.max(baseline.visuals.filter(shot => shot.enabled).length, pendingBrollCount ?? 0) + operation.count;
+        if (total > MAX_BROLL_COUNT) throw new PromptEditError(422, `This request would exceed ${MAX_BROLL_COUNT} supporting shots. Request fewer additional clips.`);
+        changes.refreshBroll = true; changes.preserveBroll = true; changes.brollCount = total;
+        break;
+      }
     }
   }
   if (!same(cuts, plan.cuts)) changes.cuts = cuts;
@@ -209,13 +222,15 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
     if (visual.locked !== prior.locked) actions.push("unlock this shot");
     summary.push(`Supporting shot ${position}: ${actions.join(", ")}.`);
   }
-  if (changes.refreshBroll) summary.push("Find supporting B-roll again when you render this edit.");
+  if (changes.refreshBroll) summary.push(changes.preserveBroll
+    ? `Keep existing shots and search for additional B-roll when rendered, for ${changes.brollCount} supporting shots in total.`
+    : `Find supporting B-roll again when you render this edit.${changes.brollCount ? ` Request ${changes.brollCount} supporting shots in total.` : ""}`);
   return { changes, summary };
 }
 
 /** One bounded text-only proposal. No saved plan, footage or provider search is mutated. */
-export async function proposePromptEdit({ plan, prompt, signal, sourceTranscript, canRefreshBroll = false }: {
-  plan: EditPlan; prompt: string; signal: AbortSignal; sourceTranscript?: Transcript; canRefreshBroll?: boolean;
+export async function proposePromptEdit({ plan, prompt, signal, sourceTranscript, canRefreshBroll = false, pendingBrollCount }: {
+  plan: EditPlan; prompt: string; signal: AbortSignal; sourceTranscript?: Transcript; canRefreshBroll?: boolean; pendingBrollCount?: number;
 }): Promise<{ changes: EditPlanChanges; summary: string[]; clarification?: string }> {
   signal.throwIfAborted();
   if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 2000 || /[\u0000-\u0008\u000b-\u001f\u007f]/u.test(prompt))
@@ -224,7 +239,7 @@ export async function proposePromptEdit({ plan, prompt, signal, sourceTranscript
   const model = process.env.DEEPSEEK_TEXT_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
   if (!apiKey) throw new PromptEditError(503, "Prompt editing needs DEEPSEEK_API_KEY in the server’s local .env file.");
   if (!/^[a-zA-Z0-9._:-]{1,96}$/u.test(model)) throw new PromptEditError(503, "The configured DeepSeek text model is invalid.");
-  const context = contextFor(plan, canRefreshBroll, sourceTranscript);
+  const context = contextFor(plan, canRefreshBroll, sourceTranscript, pendingBrollCount);
   let raw: unknown;
   try {
     raw = await jsonCompletion({ model, apiKey, signal, maxTokens: 3000, temperature: 0,
@@ -243,7 +258,7 @@ export async function proposePromptEdit({ plan, prompt, signal, sourceTranscript
     operation.op === "hook" && operation.text.trim() && !normalized(prompt).includes(normalized(operation.text))))
     return { changes: { revision: plan.revision }, summary: [], clarification: "There is no selected speech available to ground a rewritten heading. Include the exact heading you want to use." };
   try {
-    const result = compile(plan, parsed.data.operations, sourceTranscript, canRefreshBroll);
+    const result = compile(plan, parsed.data.operations, sourceTranscript, canRefreshBroll, pendingBrollCount);
     return result.summary.length ? result : { ...result, clarification: "The requested settings already match this edit, or no specific change was identified. Try a more specific request." };
   } catch (error) {
     if (error instanceof PromptEditError) throw error;
