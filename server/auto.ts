@@ -79,7 +79,7 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   };
 }
 
-async function sourceTranscript(
+export async function sourceTranscript(
   source: StoredSource,
   workDir: string,
   signal: AbortSignal,

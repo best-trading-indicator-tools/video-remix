@@ -21,7 +21,8 @@ const ideaSchema = z.object({
   summary: z.string().trim().min(1).max(180).refine(text => !/[\u0000-\u001f]|https?:|file:|data:/iu.test(text)),
   setupUnit: unitId.nullable(), payoffUnit: unitId, qualificationUnits: z.array(unitId).max(12),
 }).strict();
-const responseSchema = z.object({ ideas: z.array(ideaSchema).max(8) }).strict();
+export const sourceIdeaResponseSchema = z.object({ ideas: z.array(ideaSchema).max(8) }).strict();
+const responseSchema = sourceIdeaResponseSchema;
 type IdeaResponse = z.infer<typeof responseSchema>;
 interface ContextUnit { id: number; start: number; end: number; text: string; truncated: boolean }
 export interface IdeaCoverage {
@@ -30,7 +31,7 @@ export interface IdeaCoverage {
 }
 
 /** Bounded contiguous sections, spread from the opening to the ending when sampled. */
-export function buildIdeaContext(transcript: Transcript, sourceDuration: number, targetDuration: number) {
+export function buildIdeaContext(transcript: Transcript, sourceDuration: number, targetDuration: number, allSections = false) {
   const units = spokenUnits(transcript, targetDuration).filter(unit => unit.start >= 0 &&
     unit.end <= sourceDuration + 0.001 && unit.end > unit.start);
   const contextUnits: ContextUnit[] = units.map((unit, id) => ({ id, start: unit.start, end: unit.end,
@@ -51,8 +52,9 @@ export function buildIdeaContext(transcript: Transcript, sourceDuration: number,
     // Overlap neighboring units so a question at one boundary can retain its answer.
     index = Math.max(index + 1, end - 2);
   }
-  const indices = Array.from({ length: Math.min(MAX_BATCHES, sections.length) }, (_, index) =>
-    sections.length <= MAX_BATCHES ? index : Math.round(index * (sections.length - 1) / (MAX_BATCHES - 1)));
+  const limit = allSections ? sections.length : MAX_BATCHES;
+  const indices = Array.from({ length: Math.min(limit, sections.length) }, (_, index) =>
+    sections.length <= limit ? index : Math.round(index * (sections.length - 1) / (limit - 1)));
   const batches = indices.map(index => sections[index]!);
   const seen = new Set(batches.flatMap(batch => batch.filter(unit => !unit.truncated).map(unit => unit.id)));
   const coverage: IdeaCoverage = { totalUnits: units.length, reviewedUnits: seen.size,
@@ -61,7 +63,7 @@ export function buildIdeaContext(transcript: Transcript, sourceDuration: number,
   return { units, batches, coverage };
 }
 
-function anchoredCandidate(idea: z.infer<typeof ideaSchema>, batch: ContextUnit[], units: Candidate[],
+export function anchoredCandidate(idea: z.infer<typeof ideaSchema>, batch: ContextUnit[], units: Candidate[],
   sourceDuration: number, targetDuration: number): Candidate | undefined {
   if (idea.lastUnit < idea.firstUnit || idea.lastUnit - idea.firstUnit >= MAX_UNITS) return;
   const supplied = new Map(batch.map(unit => [unit.id, unit]));

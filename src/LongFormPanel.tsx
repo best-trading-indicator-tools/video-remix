@@ -5,6 +5,7 @@ import { createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUT
 import { focusPointAt, validFocusTrack } from "../shared/focus";
 import Slider from "./Slider";
 import CropDragOverlay from "./CropDragOverlay";
+import ClipDiscovery from "./ClipDiscovery";
 import "./shorts.css";
 
 type Props = {
@@ -244,6 +245,15 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   };
 
   return <div className="shorts-workspace" hidden={!active}>
+    <ClipDiscovery source={source} active={active} remaining={MAX_SHORTS - drafts.length} onKeep={clips => {
+      if (!source) return;
+      const added = clips.slice(0, MAX_SHORTS - drafts.length).map(clip => ({
+        ...createShortDraft(source, crypto.randomUUID(), crypto.randomUUID(), clip.start), title: clip.title,
+        cuts: [{ id: crypto.randomUUID(), start: formatSourceClock(clip.start), end: formatSourceClock(clip.end) }],
+      }));
+      setDrafts(current => [...current, ...added].slice(0, MAX_SHORTS));
+      if (added[0]) { setActiveId(added[0].id); seek(clips[0].start); }
+    }} />
     <section className="shorts-player panel">
       <div className="panel-heading"><h2><Play size={16} /> Source preview</h2><span className="shorts-kicker">SOURCE CLOCK</span></div>
       {source ? <>

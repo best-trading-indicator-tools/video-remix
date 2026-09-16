@@ -568,3 +568,9 @@ while preserving saved cards and uploaded library shots. Both searches happen
 when rendering the reviewed revision. An edit originally made without stock can
 also request it. Follow-up prompts retain the pending shot count; undo restores
 it along with the prior draft. The current limit is ten supporting shots total.
+
+### Find my best clips
+
+In **Short clips → Find my best clips**, enter an optional editorial brief, a maximum of 1–20 suggestions, and minimum/maximum whole-second lengths. Discovery transcribes locally and reviews the transcript section by section with the configured DeepSeek account. It works with existing shorts and long recordings. Successful sections are cached by transcript, model, brief and length range; cancelled or interrupted requests can reuse them on retry. Semantic review has a 15-minute budget and reports partial coverage explicitly.
+
+Preview suggestions, inspect their speech and neighboring context, dismiss them, or **Keep clip / Keep all visible** to create ordinary editable timestamp drafts. Nothing renders until you use the normal render controls. **Find other moments** excludes the current suggestion set; export history never blocks discovery. Counts are best effort, and clips keep original speech rather than generating quotations. This speech-based feature requires the local transcription model and configured DeepSeek; silent footage can still be cut manually.
