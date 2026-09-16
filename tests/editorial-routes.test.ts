@@ -30,9 +30,9 @@ const passingReply = (request: EditorialReviewRequest) => {
 test("saved editorial review updates evidence reports without rendering, editing, or spending a repair attempt", { timeout: 30_000 }, async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "editorial-route-test-"));
   const environment = { DATA_DIR: process.env.DATA_DIR, AUTO_AI: process.env.AUTO_AI, DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
-    DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL, PIXABAY_API_KEY: process.env.PIXABAY_API_KEY };
+    DEEPSEEK_TEXT_MODEL: process.env.DEEPSEEK_TEXT_MODEL, PEXELS_API_KEY: "", PIXABAY_API_KEY: process.env.PIXABAY_API_KEY };
   Object.assign(process.env, { DATA_DIR: path.join(directory, "data"), AUTO_AI: "true", DEEPSEEK_API_KEY: "editorial-route-test-key",
-    DEEPSEEK_TEXT_MODEL: "editorial-route-test-model", PIXABAY_API_KEY: "" });
+    DEEPSEEK_TEXT_MODEL: "editorial-route-test-model", PEXELS_API_KEY: "", PIXABAY_API_KEY: "" });
   const servers: Server[] = [];
   let mode: "pass" | "hold" | "fail" = "pass";
   const pending: { signal: AbortSignal; release: () => void }[] = [];

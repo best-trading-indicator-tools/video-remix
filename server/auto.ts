@@ -37,7 +37,7 @@ import { graphicsAvailable } from "./visuals.js";
 import { remotionAvailable } from "./remotion-visuals.js";
 import { brollAIConfigured } from "./broll-ai.js";
 
-import { stockBrollConfigured } from "./stock-broll.js";
+import { configuredStockProviders, stockBrollConfigured } from "./stock-broll.js";
 import { geometry } from "./engine.js";
 import { discoverSourceIdeas, novelIdeaCandidates } from "./source-ideas.js";
 import { editorialModel } from "./editorial-provider.js";
@@ -62,6 +62,7 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
     remotionGraphics,
     brollAI: brollAIConfigured(),
     stockBroll: stockBrollConfigured(),
+    stockProviders: configuredStockProviders(),
     brollAIModel: process.env.DEEPSEEK_MODEL || "deepseek-flash",
     model: process.env.WHISPER_MODEL || "small",
     ...(!transcription

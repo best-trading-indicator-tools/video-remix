@@ -4,15 +4,15 @@ import type { AutoOptions, VisualSource } from "../shared/types.js";
 import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { autoBatchSchema, autoOptionsSchema } from "../server/schema.js";
 
-const choices: VisualSource[] = ["pixabay", "hyperframes", "remotion", "library"];
+const choices: VisualSource[] = ["pixabay", "pexels", "hyperframes", "remotion", "library"];
 
 test("every independent source and source combination is accepted and resolved in canonical order", () => {
-  for (let mask = 0; mask < 16; mask++) {
+  for (let mask = 0; mask < 32; mask++) {
     const expected = choices.filter((_source, index) => mask & (1 << index));
     const selected = [...expected].reverse();
     const parsed = autoOptionsSchema.parse({ visualSources: selected, supportingVisuals: "both" });
     assert.deepEqual(getVisualSources(parsed), expected);
-    assert.equal(hasStockVisuals(parsed), expected.includes("pixabay"));
+    assert.equal(hasStockVisuals(parsed), (expected.includes("pixabay") || expected.includes("pexels")));
     assert.equal(hasLibraryVisuals(parsed), expected.includes("library"));
     assert.equal(hasGraphicVisuals(parsed), expected.includes("hyperframes") || expected.includes("remotion"));
     assert.deepEqual(parsed.visualSources, selected, "Resolving source order must not mutate the saved preference");
@@ -28,7 +28,7 @@ test("legacy modes keep their existing source behavior when explicit selections 
     const options = autoOptionsSchema.parse({ supportingVisuals });
     assert.equal(options.visualSources, undefined);
     assert.deepEqual(getVisualSources(options), expected);
-    assert.equal(hasStockVisuals(options), expected.includes("pixabay"));
+    assert.equal(hasStockVisuals(options), (expected.includes("pixabay") || expected.includes("pexels")));
     assert.equal(hasLibraryVisuals(options), expected.includes("library"));
     assert.equal(hasGraphicVisuals(options), expected.includes("hyperframes"));
   }
@@ -49,8 +49,8 @@ test("an explicitly empty list disables visuals despite stale legacy modes and s
 
 test("duplicate and unsupported source selections are rejected at the API boundary", () => {
   for (const visualSources of [
-    ["pixabay", "pixabay"], ["remotion", "remotion"], ["pexels"], ["graphics"], ["stock"],
-    ["Pixabay"], ["off"], ["pixabay", "hyperframes", "remotion", "library", "pixabay"],
+    ["pixabay", "pixabay"], ["remotion", "remotion"], ["unknown"], ["graphics"], ["stock"],
+    ["Pixabay"], ["off"], ["pixabay", "pexels", "hyperframes", "remotion", "library", "pixabay"],
     [null], [1], "pixabay", null, {},
   ]) assert.equal(autoOptionsSchema.safeParse({ visualSources }).success, false, JSON.stringify(visualSources));
 });

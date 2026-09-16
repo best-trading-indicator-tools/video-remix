@@ -6,7 +6,7 @@ import { publicEditPlan } from "./plan-storage.js";
 import { isActive, isRunning } from "./queue.js";
 import { state } from "./store.js";
 import { brollAIConfigured } from "./broll-ai.js";
-import { stockBrollConfigured } from "./stock-broll.js";
+import { stockBrollConfigured, stockProvidersForEdit } from "./stock-broll.js";
 import { proposePromptEdit, PromptEditError } from "./prompt-edit.js";
 import { proposeManualPrompt } from "./manual-prompt.js";
 import { settingsSchema } from "./schema.js";
@@ -96,7 +96,7 @@ export function installPromptEditRoutes(app: Express) {
       } catch (error) {
         throw new PromptEditError(400, error instanceof Error ? error.message : "Check your current draft before describing another edit.");
       }
-      const canRefreshBroll = stockBrollConfigured() &&
+      const canRefreshBroll = stockBrollConfigured(stockProvidersForEdit(parent.auto)) &&
         (parent.auto?.brollMatching !== "ai" || brollAIConfigured());
       const proposal = await proposePromptEdit({ plan: effective, prompt, signal: controller.signal,
         sourceTranscript: parent.sourceTranscript, canRefreshBroll, pendingBrollCount: draft?.refreshBroll ? draft.brollCount : undefined });

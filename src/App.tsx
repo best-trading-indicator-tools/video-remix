@@ -2850,7 +2850,7 @@ export default function App() {
               <h3>A couple of good things to know</h3>
               <p>
                 B-roll is optional and off by default. Choose Stock B-roll to
-                find existing videos on Pixabay, or upload your own library. A
+                find existing videos on Pixabay or Pexels, or upload your own library. A
                 few short cutaways match the spoken content while your main
                 audio continues. Animated text cards are a separate option.
               </p>

@@ -105,7 +105,7 @@ test("timestamp shorts preserve distant sequence order, names, portrait resoluti
     ]);
     server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
       env: { ...process.env, HOST: "127.0.0.1", PORT: String(port), DATA_DIR: path.join(directory, "data"),
-        RENDER_CONCURRENCY: "1", AUTO_AI: "false", DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: "",
+        RENDER_CONCURRENCY: "1", AUTO_AI: "false", DEEPSEEK_API_KEY: "", PEXELS_API_KEY: "", PIXABAY_API_KEY: "",
         WHISPER_CACHE_DIR: path.join(directory, "no-model"), MAX_FILE_SIZE_MB: "10" },
       stdio: ["ignore", "pipe", "pipe"],
     });

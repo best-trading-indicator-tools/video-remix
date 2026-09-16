@@ -31,7 +31,7 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
     server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
       cwd: process.cwd(), env: { ...process.env, PORT: new URL(base).port, HOST: "127.0.0.1", DATA_DIR: data,
         MAX_FILE_SIZE_MB: "2", MAX_LARGE_FILE_SIZE_GB: "50", RETENTION_HOURS: "1", RENDER_CONCURRENCY: "1",
-        AUTO_AI: "false", DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: "" },
+        AUTO_AI: "false", DEEPSEEK_API_KEY: "", PEXELS_API_KEY: "", PIXABAY_API_KEY: "" },
       stdio: ["ignore", "pipe", "pipe"],
     });
     server.stdout?.on("data", chunk => { log = (log + chunk).slice(-20000); });

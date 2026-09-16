@@ -7,11 +7,20 @@ import { probeMedia } from "./engine.js";
 import type { StoredBroll } from "./store.js";
 import { brollTokens } from "./broll-text.js";
 import { brollSearchBudget, planStockSearch, type SearchMoment } from "./broll-search.js";
-import { DEFAULT_BROLL_COUNT } from "../shared/types.js";
+import { getVisualSources } from "../shared/visual-sources.js";
+import { DEFAULT_BROLL_COUNT, type AutoOptions } from "../shared/types.js";
 import { inspectBrollWindows } from "./broll-motion.js";
 
-export const stockBrollConfigured = () =>
-  Boolean(process.env.PIXABAY_API_KEY?.trim());
+export type StockProvider = "pixabay" | "pexels";
+export const configuredStockProviders = (): StockProvider[] => (["pixabay", "pexels"] as const)
+  .filter(provider => Boolean(process.env[provider === "pixabay" ? "PIXABAY_API_KEY" : "PEXELS_API_KEY"]?.trim()));
+export const stockBrollConfigured = (providers: readonly StockProvider[] = ["pixabay", "pexels"]) =>
+  configuredStockProviders().some(provider => providers.includes(provider));
+export function stockProvidersForEdit(options?: AutoOptions): StockProvider[] {
+  const selected = getVisualSources(options).filter((source): source is StockProvider => source === "pixabay" || source === "pexels");
+  return selected.length ? selected : configuredStockProviders();
+}
+const providerLabel = (provider: StockProvider) => provider === "pexels" ? "Pexels" : "Pixabay";
 const rendition = z.object({
   url: z.string(),
   width: z.number().positive(),
@@ -19,6 +28,7 @@ const rendition = z.object({
   size: z.number().nonnegative(),
 });
 const hitSchema = z.object({
+  provider: z.enum(["pixabay", "pexels"]).default("pixabay"),
   id: z.number().int().positive(),
   pageURL: z.string(),
   type: z.enum(["animation", "film"]),
@@ -59,6 +69,31 @@ function trustedUrl(value: string, hostname: string, prefix: string) {
   }
 }
 
+
+/** Pexels does not supply tags or file sizes. Use the source page title for
+ * lexical matching; actual downloaded bytes are always bounded independently. */
+const pexelsVideo = z.object({ id: z.number().int().positive(), url: z.string(), duration: z.number(),
+  user: z.object({ name: z.string().max(200) }), video_files: z.array(z.unknown()).max(100) });
+function normalizePexels(raw: unknown) {
+  const response = z.object({ videos: z.array(z.unknown()).max(200) }).parse(raw);
+  return response.videos.flatMap(value => {
+    const parsed = pexelsVideo.safeParse(value);
+    if (!parsed.success || !trustedUrl(parsed.data.url, "www.pexels.com", "/video/")) return [];
+    const item = parsed.data;
+    const tags = new URL(item.url).pathname.split("/").filter(Boolean).at(-1)!.replace(/-\d+$/u, "").replace(/-/gu, ", ");
+    const files = item.video_files.flatMap(value => {
+      const result = z.object({ link: z.string(), file_type: z.literal("video/mp4"), width: z.number().positive(), height: z.number().positive() }).safeParse(value);
+      return result.success ? [{ url: result.data.link, width: result.data.width, height: result.data.height, size: 1 }] : [];
+    });
+    return [{ provider: "pexels", id: item.id, pageURL: item.url, type: "film", tags, duration: item.duration,
+      user: item.user.name, videos: Object.fromEntries(files.map((file, index) => [String(index), file])) }];
+  });
+}
+function trustedVideoUrl(value: string) {
+  return trustedUrl(value, "cdn.pixabay.com", "/video/") ||
+    trustedUrl(value, "videos.pexels.com", "/video-files/") || trustedUrl(value, "videos.pexels.com", "/videos/");
+}
+
 async function boundedBody(
   response: Response,
   maximum: number,
@@ -82,6 +117,7 @@ async function boundedBody(
 }
 
 async function searchStock(
+  provider: StockProvider,
   query: string,
   type: "animation" | "all",
   language: string,
@@ -89,7 +125,7 @@ async function searchStock(
   fetcher: typeof fetch,
   cacheDir: string,
 ): Promise<StockHit[]> {
-  const params = new URLSearchParams({
+  const params = provider === "pexels" ? new URLSearchParams({ query, per_page: "12" }) : new URLSearchParams({
     q: query,
     video_type: type,
     lang: language,
@@ -97,7 +133,7 @@ async function searchStock(
     safesearch: "true",
   });
   const cacheKey = createHash("sha256").update(params.toString()).digest("hex");
-  const cachePath = path.join(cacheDir, `stock-pixabay-${cacheKey}.json`);
+  const cachePath = path.join(cacheDir, `stock-${provider}-${cacheKey}.json`);
   let data: z.infer<typeof responseSchema> | undefined;
   try {
     const cached = JSON.parse(await readFile(cachePath, "utf8"));
@@ -111,21 +147,21 @@ async function searchStock(
     signal.throwIfAborted();
   }
   if (!data) {
-    params.set("key", process.env.PIXABAY_API_KEY!.trim());
+    if (provider === "pixabay") params.set("key", process.env.PIXABAY_API_KEY!.trim());
     const response = await fetcher(
-      `https://pixabay.com/api/videos/?${params}`,
+      provider === "pexels" ? `https://api.pexels.com/v1/videos/search?${params}` : `https://pixabay.com/api/videos/?${params}`,
       {
         signal: AbortSignal.any([signal, AbortSignal.timeout(12000)]),
         redirect: "error",
+        ...(provider === "pexels" ? { headers: { Authorization: process.env.PEXELS_API_KEY!.trim() } } : {}),
       },
     );
     if (!response.ok) {
       await response.body?.cancel();
       throw new Error("Stock search unavailable");
     }
-    data = responseSchema.parse(
-      JSON.parse((await boundedBody(response, 1024 ** 2)).toString("utf8")),
-    );
+    const raw = JSON.parse((await boundedBody(response, 1024 ** 2)).toString("utf8"));
+    data = responseSchema.parse(provider === "pexels" ? { hits: normalizePexels(raw) } : raw);
     await mkdir(cacheDir, { recursive: true });
     const temporary = `${cachePath}.${randomUUID()}.tmp`;
     try {
@@ -142,8 +178,8 @@ async function searchStock(
     const parsed = hitSchema.safeParse(value);
     return parsed.success &&
       (type === "all" || parsed.data.type === "animation") &&
-      trustedUrl(parsed.data.pageURL, "pixabay.com", "/videos/")
-      ? [parsed.data]
+      (provider === "pexels" ? trustedUrl(parsed.data.pageURL, "www.pexels.com", "/video/") : trustedUrl(parsed.data.pageURL, "pixabay.com", "/videos/"))
+      ? [{ ...parsed.data, provider }]
       : [];
   });
 }
@@ -155,7 +191,7 @@ async function downloadStock(
   fetcher: typeof fetch,
 ) {
   if (
-    !trustedUrl(url, "cdn.pixabay.com", "/video/") ||
+    !trustedVideoUrl(url) ||
     !new URL(url).pathname.endsWith(".mp4")
   )
     throw new Error("Invalid stock video URL");
@@ -196,6 +232,7 @@ async function downloadStock(
 /** Small, user-triggered searches. Stock files live only for this render. */
 export async function findStockBroll({
   moments,
+  providers = ["pixabay"],
   type = "all",
   language = "en",
   workDir,
@@ -210,6 +247,7 @@ export async function findStockBroll({
   inspect = inspectBrollWindows,
 }: {
   moments: SearchMoment[];
+  providers?: StockProvider[];
   type?: "animation" | "all";
   language?: string;
   workDir: string;
@@ -229,11 +267,12 @@ export async function findStockBroll({
   const budget = brollSearchBudget(targetCount);
   if (!Number.isFinite(targetAspect) || targetAspect < 0.1 || targetAspect > 10)
     throw new Error("Invalid stock target aspect ratio");
-  if (!stockBrollConfigured())
+  const enabledProviders = [...new Set(providers)].filter(provider => configuredStockProviders().includes(provider));
+  if (!enabledProviders.length)
     return {
       assets,
       notes: [
-        "Stock B-roll needs PIXABAY_API_KEY on the server. Original footage was kept.",
+        "Stock B-roll needs a configured Pixabay or Pexels API key for the selected provider. Original footage was kept.",
       ],
     };
   // Requested shots plus two spare ideas, with at most two queries and three
@@ -260,37 +299,38 @@ export async function findStockBroll({
   })) : lexical.map(moment => ({ ...moment, query: moment.words.slice(0, 3).join(" ").slice(0, 100),
     alternateQueries: [] as string[], reason: undefined, visual: undefined, momentIndex: undefined }));
   const queries = new Map<string, StockHit[]>();
-  const used = new Set<number>();
+  const used = new Set<string>();
   let downloads = 0;
-  let searchUnavailable = false;
+  const unavailable = new Set<StockProvider>();
+  if (type === "animation" && enabledProviders.includes("pexels")) { unavailable.add("pexels"); notes.push("Pexels has no animation-only filter. Animation-only searches use selected Pixabay footage."); }
   for (const moment of selected) {
     signal.throwIfAborted();
     if (downloads >= budget.downloadLimit) break;
-    const pool = new Map<number, { hit: StockHit; query: string }>();
-    for (const query of [moment.query, ...moment.alternateQueries]) {
-      if (searchUnavailable) break;
-      const identity = query.toLowerCase().replace(/\s+/gu, " ");
+    const pool = new Map<string, { hit: StockHit; query: string }>();
+    for (const query of [moment.query, ...moment.alternateQueries]) for (const provider of enabledProviders) {
+      if (unavailable.has(provider)) continue;
+      const identity = `${provider}:${query.toLowerCase().replace(/\s+/gu, " ")}`;
       let hits = queries.get(identity);
       if (!hits) {
-        onPhase("Finding existing B-roll on Pixabay");
+        onPhase(`Finding existing B-roll on ${providerLabel(provider)}`);
         try {
-          hits = await searchStock(query, type,
+          hits = await searchStock(provider, query, type,
             semantic ? "en" : supportedLanguages.has(language) ? language : "en",
             signal, fetcher, cacheDir);
           queries.set(identity, hits);
         } catch {
           signal.throwIfAborted();
-          notes.push("Pixabay search was unavailable. The edit continues with any clips already matched.");
-          searchUnavailable = true;
-          break;
+          notes.push(`${providerLabel(provider)} search was unavailable. Other selected providers and already matched clips were still tried.`);
+          unavailable.add(provider);
+          continue;
         }
       }
-      for (const hit of hits) if (!pool.has(hit.id)) pool.set(hit.id, { hit, query });
+      for (const hit of hits) { const key = `${hit.provider}:${hit.id}`; if (!pool.has(key)) pool.set(key, { hit, query }); }
     }
     const prefersFilm = type === "all" &&
       !/\b(animation|animated|cartoon|3d|diagram)\b/iu.test(`${moment.query} ${moment.visual || ""}`);
     const ranked = [...pool.values()]
-      .filter(({ hit }) => !used.has(hit.id))
+      .filter(({ hit }) => !used.has(`${hit.provider}:${hit.id}`))
       .map(({ hit, query }) => ({
         hit, query,
         score: brollTokens(hit.tags).filter((word) =>
@@ -305,7 +345,7 @@ export async function findStockBroll({
             video.size > 0 &&
             video.size <= maxBytes() &&
             Math.max(video.width, video.height) <= 1920 &&
-            trustedUrl(video.url, "cdn.pixabay.com", "/video/") &&
+            trustedVideoUrl(video.url) &&
             new URL(video.url).pathname.endsWith(".mp4"),
         )
         .sort((a, b) => {
@@ -321,7 +361,7 @@ export async function findStockBroll({
     }).slice(0, 3);
     for (const { hit, file, query } of chosen) {
       if (downloads >= budget.downloadLimit) break;
-      used.add(hit.id);
+      used.add(`${hit.provider}:${hit.id}`);
       downloads++;
       const id = randomUUID();
       const filePath = path.join(workDir, `stock-${id}.mp4`);
@@ -342,7 +382,7 @@ export async function findStockBroll({
         }
         assets.push({
           id,
-          name: `${hit.tags.slice(0, 140)} · Pixabay ${hit.id}.mp4`,
+          name: `${hit.tags.slice(0, 140)} · ${providerLabel(hit.provider)} ${hit.id}.mp4`,
           tags: hit.tags
             .split(",")
             .map((tag) => tag.trim())
@@ -359,10 +399,10 @@ export async function findStockBroll({
             targetAspect, motion: window.motion, cropRetention: window.cropRetention,
             query, ...(moment.reason ? { reason: moment.reason } : {}),
             ...(moment.visual ? { visual: moment.visual, momentIndex: moment.momentIndex } : {}) },
-          stock: { providerId: `pixabay:${hit.id}`, rendition: file.url, contentHash,
-            retrievedAt: new Date().toISOString(), licenseUrl: "https://pixabay.com/service/license-summary/" },
+          stock: { providerId: `${hit.provider}:${hit.id}`, rendition: file.url, contentHash,
+            retrievedAt: new Date().toISOString(), licenseUrl: hit.provider === "pexels" ? "https://www.pexels.com/license/" : "https://pixabay.com/service/license-summary/" },
           attribution: {
-            provider: "Pixabay",
+            provider: providerLabel(hit.provider),
             creator: hit.user,
             url: hit.pageURL,
           },
@@ -375,7 +415,7 @@ export async function findStockBroll({
         );
       }
     }
-    if (searchUnavailable) break;
+    if (unavailable.size === enabledProviders.length) break;
   }
   return { assets, notes: [...new Set(notes)] };
 }

@@ -1,3 +1,4 @@
+import { stockProvidersForEdit } from "./stock-broll.js";
 import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
@@ -103,7 +104,7 @@ async function run(job: StoredJob, controller: AbortController) {
         // Reuse saved graphics/library shots. Only the remaining stock slots
         // are searched, without mutating the persisted visual preferences.
         const visuals = requested ? await prepareSupportingVisuals({ source, job,
-          options: { ...options!, visualSources: ["pixabay"], brollCount: requested },
+          options: { ...options!, visualSources: stockProvidersForEdit(options), brollCount: requested },
           transcript: transcriptFromPlan(job), assets: [], occupied,
           workDir, signal: controller.signal, onPhase: (phase, progress) => {
             job.phase = phase; job.progress = Math.max(job.progress, progress);

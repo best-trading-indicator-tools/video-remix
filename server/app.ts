@@ -29,7 +29,7 @@ import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, randomizeSettings } from "../sh
 import { getVisualSources, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { clonePlanFiles, planMediaPath, publicEditPlan } from "./plan-storage.js";
-import { stockBrollConfigured } from "./stock-broll.js";
+import { stockBrollConfigured, stockProvidersForEdit } from "./stock-broll.js";
 import { brollAIConfigured } from "./broll-ai.js";
 import { fingerprintFile, publicationChangesSchema } from "./history.js";
 import { historyThumbnailExists, historyThumbnailPath, historyThumbnailUrl } from "./history-thumbnails.js";
@@ -551,8 +551,8 @@ export function createApp() {
       throw new HttpError(409, "This edit has changed. Reload the saved plan.");
     if (parsed.data.brollCount !== undefined && !parsed.data.refreshBroll)
       throw new HttpError(400, "Choose a B-roll target when requesting a new stock search.");
-    if (parsed.data.refreshBroll && !stockBrollConfigured())
-      throw new HttpError(400, "Add a Pixabay API key in your local environment before finding B-roll again.");
+    if (parsed.data.refreshBroll && !stockBrollConfigured(stockProvidersForEdit(parent.auto)))
+      throw new HttpError(400, "Add a Pixabay or Pexels API key for the selected stock provider before finding B-roll again.");
     if (parsed.data.refreshBroll && parent.auto?.brollMatching === "ai" && !brollAIConfigured())
       throw new HttpError(400, "Add a DeepSeek API key in your local environment before finding AI B-roll again.");
     let plan;
@@ -563,7 +563,7 @@ export function createApp() {
       id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
       variant: parent.variant, parentJobId: parent.id,
       auto: parent.auto || parsed.data.refreshBroll ? { ...(parent.auto ?? DEFAULT_AUTO_OPTIONS),
-        ...(parsed.data.refreshBroll ? { visualSources: [...new Set([...getVisualSources(parent.auto), "pixabay" as const])] } : {}),
+        ...(parsed.data.refreshBroll ? { visualSources: [...new Set([...getVisualSources(parent.auto), ...stockProvidersForEdit(parent.auto)])] } : {}),
         ...(parsed.data.brollCount !== undefined ? { brollCount: parsed.data.brollCount } : {}),
         // Explicit caption edits belong to the user; final Auto checks must preserve them.
         ...(parsed.data.captions?.length ? { captions: "add" as const } : {}),

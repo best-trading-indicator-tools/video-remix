@@ -138,7 +138,7 @@ export function planSupportingVisuals({
       moment.end - moment.start <= coverageBudget + 1e-9;
   const origin = (asset: BrollAsset): VisualSource => assetSources[asset.id] ??
     (visualSources === undefined && mode === "library" ? "library" :
-      asset.stock || asset.attribution?.provider === "Pixabay" ? "pixabay" : "library");
+      asset.stock?.providerId.startsWith("pexels:") || asset.attribution?.provider === "Pexels" ? "pexels" : asset.stock || asset.attribution?.provider === "Pixabay" ? "pixabay" : "library");
 
   for (const [momentIndex, moment] of candidates.entries()) {
     if (result.length >= maximum) break;
@@ -241,7 +241,7 @@ export async function prepareSupportingVisuals({
   const timingCount = Math.min(MAX_BROLL_COUNT, requested + occupied.length);
   const matchingMoments = moments(transcript, duration, source.name, shotDuration(duration, timingCount));
   const dimensions = geometry(source, job.settings);
-  const usesAI = selected.some(source => source === "pixabay" || source === "library") && options?.brollMatching === "ai";
+  const usesAI = selected.some(source => source === "pixabay" || source === "pexels" || source === "library") && options?.brollMatching === "ai";
   const addNote = (text: string) => {
     job.notes ??= [];
     if (!job.notes.includes(text)) job.notes.push(text);
@@ -258,12 +258,12 @@ export async function prepareSupportingVisuals({
   for (const asset of assets) assetSources[asset.id] = "library";
   if (selected.includes("library") && !assets.length)
     addNote("No library clips were selected. Other selected visual sources were still tried.");
-  if (selected.includes("pixabay")) {
+  if (selected.includes("pixabay") || selected.includes("pexels")) {
     if (usesAI && !transcript?.segments.length) {
       addNote("AI stock search needs a speech transcript. Original footage was kept.");
     } else {
       const stock = await findStock({
-        moments: matchingMoments, targetCount: requested,
+        moments: matchingMoments, targetCount: requested, providers: selected.filter((source): source is "pixabay" | "pexels" => source === "pixabay" || source === "pexels"),
         type: options?.stockVideoType || "all", language: transcript?.language,
         matching: usesAI ? "ai" : "tags", targetAspect: dimensions.width / dimensions.height,
         workDir, signal, onPhase: (phase) => onPhase(phase, 62),
@@ -271,7 +271,7 @@ export async function prepareSupportingVisuals({
       for (const asset of stock.assets) {
         if (!assets.some(existing => existing.id === asset.id)) {
           assets.push(asset);
-          assetSources[asset.id] = "pixabay";
+          assetSources[asset.id] = asset.stock?.providerId.startsWith("pexels:") ? "pexels" : "pixabay";
         }
       }
       stock.notes.forEach(addNote);
@@ -312,7 +312,7 @@ export async function prepareSupportingVisuals({
     addNote("A stock shot had insufficient motion in its final interval. Other matched shots were tried.");
     plans = plan(assets.filter(asset => !rejected.has(asset.id)));
   }
-  if (selected.some(source => source === "pixabay" || source === "library")) job.brollCandidates = assets.slice(0, 40);
+  if (selected.some(source => source === "pixabay" || source === "pexels" || source === "library")) job.brollCandidates = assets.slice(0, 40);
   const result: SupportingVisual[] = [];
   const details: NonNullable<RenderJob["supportingVisuals"]> = [];
   for (const [index, placement] of plans.entries()) {
@@ -357,7 +357,7 @@ export async function prepareSupportingVisuals({
     const breakdown = selected.map(source => `${VISUAL_SOURCE_LABELS[source]}: ${details.filter(item => item.visualSource === source).length}`).join(" · ");
     addNote(`Visual mix — ${breakdown}.`);
   }
-  if (selected.some(source => source === "pixabay" || source === "library") && !footageCount)
+  if (selected.some(source => source === "pixabay" || source === "pexels" || source === "library") && !footageCount)
     addNote(cardCount ? "No suitable stock or library footage fit this edit. Selected animated cards were used."
       : usesAI ? "No suitable AI B-roll match fit this edit. Original footage was kept."
       : "No relevant B-roll was found for this edit. Original footage was kept.");

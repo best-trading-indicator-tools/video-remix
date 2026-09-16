@@ -74,7 +74,7 @@ export async function refreshPlanBroll(job: StoredJob, visuals: SupportingVisual
     for (const asset of job.brollCandidates || [])
       await snapshot(asset.filePath, { name: asset.name, kind: "broll", duration: asset.duration,
         assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock,
-        visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock ? "pixabay" : "library") });
+        visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock?.providerId.startsWith("pexels:") ? "pexels" : asset.stock ? "pixabay" : "library") });
     const preserved = preservedVisualsOnStockRefresh(plan, job.preserveBroll);
     const next: EditPlan["visuals"] = [];
     for (const visual of visuals) {
@@ -145,7 +145,7 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
     for (const asset of job.brollCandidates || [])
       await snapshot(asset.filePath, { name: asset.name, kind: "broll", duration: asset.duration,
         assetId: asset.id, attribution: asset.attribution, selection: asset.selection, stock: asset.stock,
-        visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock ? "pixabay" : "library") });
+        visualSource: job.supportingVisuals?.find(item => item.assetId === asset.id)?.visualSource ?? (asset.stock?.providerId.startsWith("pexels:") ? "pexels" : asset.stock ? "pixabay" : "library") });
     const plannedVisuals: EditPlan["visuals"] = [];
     for (const visual of visuals) {
       const detail = job.supportingVisuals?.find(item => item.start === visual.start && item.name === visual.label);

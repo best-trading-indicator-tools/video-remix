@@ -31,7 +31,7 @@ test("Auto treats previous batches as a preference while preserving same-batch r
     await writeFile(path.join(directory, "scripts", "transcribe.py"), "# Availability-only fixture\n");
     process.chdir(directory);
     Object.assign(process.env, { DATA_DIR: path.join(directory, "data"), AUTO_AI: "false", AUTO_LOCAL_AI: "false",
-      DEEPSEEK_API_KEY: "history-planning-test-key", DEEPSEEK_TEXT_MODEL: "history-planning-test-model", PIXABAY_API_KEY: "",
+      DEEPSEEK_API_KEY: "history-planning-test-key", DEEPSEEK_TEXT_MODEL: "history-planning-test-model", PEXELS_API_KEY: "", PIXABAY_API_KEY: "",
       WHISPER_MODEL: "history-planning-test", WHISPER_CACHE_DIR: path.join(directory, "models") });
     const { config, paths } = await import("../server/config.js");
     const { AutoSkipError, prepareAutoRemix } = await import("../server/auto.js");

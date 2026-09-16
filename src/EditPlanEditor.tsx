@@ -448,7 +448,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 <summary>B-roll & supporting visuals <span>{draft.visuals.length}</span></summary>
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
                 {<div className="edit-broll-refresh">
-                  <div><strong>Try another B-roll search</strong><p>Search for new Pixabay shots and render this video. Saved animations and uploaded B-roll stay in place. Your caption, cut and framing edits are included; narration stays saved.</p></div>
+                  <div><strong>Try another B-roll search</strong><p>Search for new stock shots and render this video. Saved animations and uploaded B-roll stay in place. Your caption, cut and framing edits are included; narration stays saved.</p></div>
                   <div className="edit-broll-refresh-controls">
                     <label className="edit-plan-field">Supporting shots to aim for
                       <input type="number" inputMode="numeric" min={1} max={MAX_BROLL_COUNT} step={1} required
@@ -465,7 +465,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                       if (event.currentTarget.form?.reportValidity()) void submit(true);
                     }}><RotateCcw size={14} />Find B-roll again &amp; render</button>
                   </div>
-                  <p id="edit-broll-count-note">Aim for 1–{MAX_BROLL_COUNT} supporting shots in total, including saved animations and uploaded B-roll. New Pixabay shots fill the remaining places when suitable matches are available.</p>
+                  <p id="edit-broll-count-note">Aim for 1–{MAX_BROLL_COUNT} supporting shots in total, including saved animations and uploaded B-roll. New stock shots fill the remaining places when suitable matches are available.</p>
                   {explicitVisualChanges && <p className="edit-plan-note">Render or reset your shot changes first.</p>}
                 </div>}
                 <fieldset disabled={saving || cutTimingsChanged}>

@@ -81,7 +81,7 @@ test("export history survives new batches, renamed reuploads, deletion and expir
         ...process.env, PORT: String(port), HOST: "127.0.0.1", DATA_DIR: dataDirectory,
         RENDER_CONCURRENCY: "2", AUTO_AI: "false", RETENTION_HOURS: "1",
         WHISPER_CACHE_DIR: path.join(directory, "model-not-installed"),
-        DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: "", MAX_FILES: "8", MAX_FILE_SIZE_MB: "3",
+        DEEPSEEK_API_KEY: "", PEXELS_API_KEY: "", PIXABAY_API_KEY: "", MAX_FILES: "8", MAX_FILE_SIZE_MB: "3",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });

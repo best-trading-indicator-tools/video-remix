@@ -106,7 +106,7 @@ test("manual preview API renders the actual edit without creating exports and ma
       "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-t", "12", fixture]);
     server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], {
       cwd: process.cwd(), env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATA_DIR: dataDirectory,
-        AUTO_AI: "false", DEEPSEEK_API_KEY: "", PIXABAY_API_KEY: "" }, stdio: ["ignore", "pipe", "pipe"],
+        AUTO_AI: "false", DEEPSEEK_API_KEY: "", PEXELS_API_KEY: "", PIXABAY_API_KEY: "" }, stdio: ["ignore", "pipe", "pipe"],
     });
     for (const stream of [server.stdout, server.stderr]) stream?.on("data", chunk => { processLog = (processLog + chunk.toString()).slice(-16000); });
     let ready = false;

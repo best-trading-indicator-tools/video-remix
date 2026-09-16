@@ -23,7 +23,7 @@ export const isAutoTargetDuration = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 export const DEFAULT_BROLL_COUNT = 4;
 export const MAX_BROLL_COUNT = 10;
-export type VisualSource = "pixabay" | "hyperframes" | "remotion" | "library";
+export type VisualSource = "pixabay" | "pexels" | "hyperframes" | "remotion" | "library";
 export interface AutoOptions {
   aspect: Aspect;
   /** Maximum output length in whole seconds, starting at 1. */
@@ -86,6 +86,7 @@ export interface AutoCapabilities {
   brollAI?: boolean;
   brollAIModel?: string;
   stockBroll?: boolean;
+  stockProviders?: ("pixabay" | "pexels")[];
   message?: string;
 }
 export interface RemixSettings {
@@ -173,7 +174,7 @@ export interface VideoSource {
 }
 export interface BrollAsset extends VideoSource {
   tags: string[];
-  attribution?: { provider: "Pixabay"; creator: string; url: string };
+  attribution?: { provider: "Pixabay" | "Pexels"; creator: string; url: string };
   selection?: {
     sourceStart: number;
     duration: number;

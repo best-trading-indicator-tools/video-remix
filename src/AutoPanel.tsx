@@ -73,7 +73,8 @@ export default function AutoPanel({
   const librarySelected = hasLibraryVisuals(options);
   const graphicsSelected = hasGraphicVisuals(options);
   const visualChoices: { id: VisualSource; description: string; icon: typeof Film; available: boolean; setup: string }[] = [
-    { id: "pixabay", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockBroll, setup: "Add a Pixabay API key to enable stock search." },
+    { id: "pixabay", description: "Moving stock footage", icon: Film, available: capabilities?.stockProviders?.includes("pixabay") ?? !!capabilities?.stockBroll, setup: "Add a Pixabay API key to enable stock search." },
+    { id: "pexels", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockProviders?.includes("pexels"), setup: "Add a Pexels API key to enable stock search." },
     { id: "hyperframes", description: "Animated cards", icon: Layers3, available: !!capabilities?.motionGraphics, setup: "HyperFrames renderer is unavailable on this engine." },
     { id: "remotion", description: "Animated cards", icon: Shapes, available: !!capabilities?.remotionGraphics, setup: "Remotion renderer is unavailable on this engine." },
     { id: "library", description: "Your uploaded clips", icon: FolderOpen, available: true, setup: "" },
@@ -81,7 +82,7 @@ export default function AutoPanel({
   const toggleVisualSource = (source: VisualSource, enabled: boolean) => onChange({
     ...options,
     visualSources: enabled ? [...visualSources, source] : visualSources.filter((item) => item !== source),
-    ...(source === "pixabay" && enabled && !options.brollMatching && capabilities?.brollAI
+    ...((source === "pixabay" || source === "pexels") && enabled && !options.brollMatching && capabilities?.brollAI
       ? { brollMatching: "ai" as const } : {}),
   });
   const brollCount = options.brollCount ?? DEFAULT_BROLL_COUNT;
@@ -309,7 +310,7 @@ export default function AutoPanel({
                   {visualChoices.map(({ id, description, icon: Icon, available, setup }) => {
                     const checked = visualSources.includes(id);
                     return <label className={`auto-visual-choice ${checked ? "is-selected" : ""} ${!available ? "is-unavailable" : ""}`} key={id}>
-                      <input type="checkbox" aria-label={`${VISUAL_SOURCE_LABELS[id]} ${id === "pixabay" ? "stock footage" : id === "library" ? "uploaded clips" : "animated cards"}`}
+                      <input type="checkbox" aria-label={`${VISUAL_SOURCE_LABELS[id]} ${(id === "pixabay" || id === "pexels") ? "stock footage" : id === "library" ? "uploaded clips" : "animated cards"}`}
                         checked={checked} disabled={!available && !checked}
                         onChange={(event) => toggleVisualSource(id, event.target.checked)} />
                       <span className="auto-visual-icon" aria-hidden="true"><Icon size={18} /></span>
@@ -322,6 +323,7 @@ export default function AutoPanel({
                 {visualSources.length > 0 ? <button type="button" className="auto-visual-clear" onClick={() => onChange({ ...options, visualSources: [] })}>Use original footage only</button>
                   : <p className="auto-visual-empty">Original footage only. No supporting shots will be added.</p>}
               </fieldset>
+              <p className="auto-preferences-note">Stock videos provided by <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a> and <a href="https://pixabay.com" target="_blank" rel="noreferrer">Pixabay</a>. Creator credits accompany each selected clip.</p>
               {graphicsSelected && <p className="auto-preferences-note">Animated cards use text and shapes to illustrate key points from the speech. Your main audio continues underneath.</p>}
               {stockSelected && (
                 <div className="broll-matching">
@@ -339,35 +341,11 @@ export default function AutoPanel({
                   >
                     <option value="all">Any moving stock video</option>
                     <option value="animation">
-                      Animations &amp; motion graphics only
+                      Animations only · Pixabay
                     </option>
                   </select>
-                  <p className="auto-preferences-note">
-                    Finds existing clips from{" "}
-                    <a
-                      href="https://pixabay.com/videos/"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Pixabay
-                    </a>{" "}
-                    using your speech. Each selected interval is checked for
-                    motion and crop suitability. If nothing fits, your original
-                    picture stays.
-                  </p>
-                  {!capabilities?.stockBroll && (
-                    <p className="auto-preferences-note" role="status">
-                      Stock search needs a free{" "}
-                      <a
-                        href="https://pixabay.com/api/docs/"
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Pixabay API key
-                      </a>{" "}
-                      configured on the server. Until then, Pixabay shots are skipped.
-                    </p>
-                  )}
+                  <p className="auto-preferences-note">Searches your selected stock libraries using the speech. Each chosen interval is checked for motion and crop suitability. Animation-only filtering is available on Pixabay.</p>
+                  {!capabilities?.stockBroll && <p className="auto-preferences-note" role="status">Add a free Pixabay or Pexels API key on the server to enable stock search.</p>}
                 </div>
               )}
               {visualSources.length > 0 && (

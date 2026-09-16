@@ -313,7 +313,7 @@ test("B-roll defaults off, stock requires no uploads, and missing key keeps the 
       supportingVisuals: "stock",
     };
     assert.deepEqual(await prepareSupportingVisuals(args), []);
-    assert.ok(job.notes?.some((note) => note.includes("PIXABAY_API_KEY")));
+    assert.ok(job.notes?.some((note) => note.includes("Pixabay or Pexels API key")));
   } finally {
     if (originalKey !== undefined) process.env.PIXABAY_API_KEY = originalKey;
   }

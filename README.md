@@ -550,3 +550,20 @@ diagnostics and read [the benchmark guide](benchmarks/README.md) to evaluate own
 or licensed speech examples with the same review rubric. Synthetic technical
 fixtures do not substitute for reviewing real speech, stock relevance, or actual
 post performance.
+
+### Pexels and adding stock after export
+
+Select **Pexels**, **Pixabay**, or both under Supporting visuals. Pexels uses
+`PEXELS_API_KEY` in the real private `.env`; restart the backend after adding a key.
+Pexels searches existing videos and uses the same motion, framing, relevance and
+bounded download checks as Pixabay. Searches are cached for 24 hours. Provider
+failures do not prevent another selected provider from being tried. Animation-only
+filtering is available on Pixabay. Source pages, creator names and license links
+are retained with each stock asset. [Videos provided by Pexels](https://www.pexels.com).
+
+In **Edit this result**, “add 2 more B-rolls” requests two additional stock shots
+while retaining existing placements. “Find B-roll again” replaces stock choices
+while preserving saved cards and uploaded library shots. Both searches happen
+when rendering the reviewed revision. An edit originally made without stock can
+also request it. Follow-up prompts retain the pending shot count; undo restores
+it along with the prior draft. The current limit is ten supporting shots total.
