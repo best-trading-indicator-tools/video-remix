@@ -1,0 +1,16 @@
+.finishing-presets { border: 1px solid #465267; background: #11171e; border-radius: 9px; margin: 12px 0 22px; color: #eff3f9; }
+.finishing-presets > summary { display: flex; align-items: center; gap: 8px; padding: 14px; cursor: pointer; font-size: 12px; font-weight: 600; list-style: none; }
+.finishing-presets > summary::after { content: "+"; margin-left: auto; color: #ffbc92; font-size: 16px; }
+.finishing-presets[open] > summary::after { content: "−"; }
+.finishing-presets > summary > span { color: #bbc5d3; font-size: 10px; font-weight: 400; }
+.finishing-preset-body { padding: 0 14px 16px; display: grid; gap: 10px; }
+.finishing-preset-body > p { margin: 0; font-size: 11px; line-height: 1.7; color: #bcc7d6; }
+.finishing-preset-body > label { font-size: 11px; color: #e0e7f1; margin: 4px 0 0; }
+.finishing-preset-select { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.finishing-presets .finishing-preset-select input, .finishing-presets .finishing-preset-select select { flex: 1; min-width: 0; width: 100%; background: #0c1117; color: #eff3f9; border: 1px solid #465267; border-radius: 6px; padding: 10px; font: inherit; font-size: 12px; }
+.finishing-preset-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.finishing-presets button.secondary-button { padding: 10px; font-size: 11px; flex-shrink: 0; }
+.finishing-preset-body > .finishing-preset-message { color: #b0e4c8; }
+.finishing-preset-body > .finishing-preset-error { color: #ffb9a8; }
+.finishing-presets :focus-visible { outline: 2px solid #ffbc92; outline-offset: 2px; }
+@media(max-width:680px) { .finishing-presets .finishing-preset-select input, .finishing-presets .finishing-preset-select select { font-size: 16px; } }

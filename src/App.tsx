@@ -63,11 +63,11 @@ import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
 import LongFormPanel from "./LongFormPanel";
 import ManualPromptEditor from "./ManualPromptEditor";
+import FinishingPresets from "./FinishingPresets";
 import { compactBrollNotes } from "../shared/broll-notes";
 import { getVisualSources, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 
-type Preset = { id: string; name: string; settings: RemixSettings };
 type AutoPreset = { options: AutoOptions; variants: number };
 const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
 function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
@@ -160,29 +160,6 @@ function storedObject<T extends object>(key: string, fallback: T): T {
     return fallback;
   }
 }
-const initialPresets = (): Preset[] => {
-  try {
-    const value: unknown = JSON.parse(
-      localStorage.getItem("remix-presets") || "[]",
-    );
-    return Array.isArray(value)
-      ? value
-          .filter(
-            (item): item is Preset =>
-              typeof item?.id === "string" &&
-              typeof item?.name === "string" &&
-              !!item?.settings,
-          )
-          .map((item) => ({
-            ...item,
-            settings: { ...DEFAULT_SETTINGS, ...item.settings },
-          }))
-      : [];
-  } catch {
-    return [];
-  }
-};
-
 async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const data = await response.json().catch(() => null);
@@ -344,9 +321,6 @@ export default function App() {
   const [variants, setVariants] = useState(1);
   const [variation, setVariation] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [presets, setPresets] = useState<Preset[]>(initialPresets);
-  const [presetName, setPresetName] = useState("");
-  const [savingPreset, setSavingPreset] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showHelp, setShowHelp] = useState(false);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
@@ -605,13 +579,6 @@ export default function App() {
     setLiveOutputTime(0);
   }, [liveInterval?.start, liveInterval?.end, usingRendered, sourcePreview, selected?.id]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem("remix-presets", JSON.stringify(presets));
-    } catch {
-      /* The app remains usable when browser storage is full. */
-    }
-  }, [presets]);
 
   useEffect(() => {
     if (!showHelp && !previewJob) return;
@@ -926,27 +893,6 @@ export default function App() {
     } catch (error) {
       notify((error as Error).message, "error");
     }
-  };
-
-  const savePreset = () => {
-    if (!presetName.trim()) return;
-    setPresets((current) => [
-      ...current,
-      {
-        id: crypto.randomUUID(),
-        name: presetName.trim().slice(0, 32),
-        settings: {
-          ...settings,
-          audioId: null,
-          subtitleId: null,
-          trimStart: 0,
-          trimEnd: null,
-        },
-      },
-    ]);
-    setPresetName("");
-    setSavingPreset(false);
-    notify("Preset saved in this browser.", "success");
   };
 
   const batchGroups = Object.values(
@@ -1604,6 +1550,7 @@ export default function App() {
                     role="tabpanel"
                     aria-labelledby={`tab-${tab}`}
                   >
+                    <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={updateSettings} />
                     {selected && <ManualPromptEditor key={selected.id} sourceId={selected.id} settings={settings}
                       disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}
                     {(tab === "essentials" || tab === "all") && (
@@ -1611,15 +1558,6 @@ export default function App() {
                         <Section
                           title="Color looks"
                           icon={<WandSparkles size={13} />}
-                          trailing={
-                            <button
-                              className="text-button"
-                              onClick={() => setSavingPreset(!savingPreset)}
-                            >
-                              <Plus size={11} />
-                              Save preset
-                            </button>
-                          }
                         >
                           <div className="look-grid">
                             {MANUAL_LOOKS.map((look) => <button key={look.id} type="button" className={`look-button ${activeColorLook(settings) === look.id ? "active" : ""}`} aria-pressed={activeColorLook(settings) === look.id} title={look.description} onClick={() => replaceSettings(applyColorLook(settings, look.id))}>
@@ -1627,38 +1565,6 @@ export default function App() {
                             </button>)}
                           </div>
                           <p className="field-hint">Color looks keep your framing, timing and audio settings.</p>
-                          {!!presets.length && <div className="saved-editing-presets"><h4>Saved editing presets</h4><div className="preset-grid">
-                            {presets.map((preset) => <div className="preset-wrap" key={preset.id}>
-                              <button className="preset-chip" title="Apply saved editing settings; current trim and attachments stay in place" onClick={() => replaceSettings({ ...preset.settings, trimStart: settings.trimStart, trimEnd: settings.trimEnd, audioId: settings.audioId, subtitleId: settings.subtitleId })}>{preset.name}</button>
-                              <button className="delete-preset" aria-label={`Delete preset ${preset.name}`} onClick={() => setPresets((current) => current.filter((item) => item.id !== preset.id))}><X size={10} /></button>
-                            </div>)}
-                          </div></div>}
-                          {savingPreset && (
-                            <form
-                              className="preset-save-form"
-                              onSubmit={(event) => {
-                                event.preventDefault();
-                                savePreset();
-                              }}
-                            >
-                              <input
-                                autoFocus
-                                aria-label="Preset name"
-                                placeholder="Name your preset"
-                                maxLength={32}
-                                value={presetName}
-                                onChange={(event) =>
-                                  setPresetName(event.target.value)
-                                }
-                              />
-                              <button
-                                disabled={!presetName.trim()}
-                                aria-label="Save preset"
-                              >
-                                <Check size={16} />
-                              </button>
-                            </form>
-                          )}
                         </Section>
                         <Section
                           title="Frame it right"

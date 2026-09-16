@@ -584,3 +584,9 @@ Speaker changes require a sustained lead and a minimum shot hold; silence and am
 **Layout** includes Single frame, Two people · stacked, and Full scene + speaker. Stacked layouts expose separate subject positions; the scene layout keeps the complete source above a speaker close-up. These use regions of the same original recording, not invented camera angles. A five-second rendered preview shows the actual composition. Full-shot contain/blur options remain available in Single frame. Switching layouts disables old automatic tracking until you choose it again.
 
 Local architecture attribution: [Sieve fast-asd / TalkNet](https://github.com/sieve-community/fast-asd), MIT license retained in `scripts/vendor/talknet/LICENSE`. The Sieve cloud application is not used.
+
+### Named finishing presets
+
+Open **Finishing presets** in Auto remix, Manual, or the Short clips editor to name and save the current finish. Each mode has its own preset collection. Auto presets include aspect ratio, existing-caption handling, stock/animation sources, requested shot count, and matching preferences. Manual presets include framing, color, audio level and caption style. Short presets include format, layout, face/speaker tracking method, normalization and cleanup; they can also be applied to checked shorts together.
+
+Applying a preset preserves each target's footage, timestamps, playback speed, hook text, captions, attachments and manually chosen subject positions. Source-specific media IDs and credentials are never stored in presets. Automatic framing for a batch of short drafts is prepared before those exports are queued. Older manual presets migrate to the new selector with source-specific fields removed. Up to 60 named presets are saved locally in this browser; storage failures are shown. The existing Apply to all controls can copy applied preferences to other videos when wanted.

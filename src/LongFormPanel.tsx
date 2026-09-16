@@ -6,6 +6,7 @@ import { focusPointAt, validFocusTrack } from "../shared/focus";
 import Slider from "./Slider";
 import CropDragOverlay from "./CropDragOverlay";
 import ClipDiscovery from "./ClipDiscovery";
+import FinishingPresets from "./FinishingPresets";
 import "./shorts.css";
 
 type Props = {
@@ -200,11 +201,24 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   };
   const render = async () => {
     if (!targets.length || rendering) return;
-    const checked = targets.map(item => ({ draft: item, result: validateShortDraft(item, sources.find(source => source.id === item.sourceId)) }));
-    const invalid = checked.find(item => item.result.errors.length);
+    const invalid = targets.map(item => ({ draft: item, result: validateShortDraft({ ...item, autoFocus: false }, sources.find(source => source.id === item.sourceId)) })).find(item => item.result.errors.length);
     if (invalid) { selectDraft(invalid.draft); setError(`${invalid.draft.title || "Untitled short"}: ${invalid.result.errors[0]}`); return; }
     setRendering(true); setError("");
     try {
+      const prepared: ShortDraft[] = [];
+      for (const item of targets) {
+        if (!item.autoFocus || item.fit !== "crop" || item.focusAnalysis?.signature === shortFocusSignature(item)) { prepared.push(item); continue; }
+        const cuts = validateShortDraft({ ...item, autoFocus: false }, sources.find(source => source.id === item.sourceId)).settings!.segments!;
+        const result = await post<FocusResult>("/api/speaker-focus", { sourceId: item.sourceId, cuts, seed: item.focalPoint, mode: item.focusMode || "face" });
+        const ready: ShortDraft = { ...item, cuts: item.cuts.map(({ focusTrack: _previous, ...cut }, index) => ({ ...cut,
+          focusTrack: result.tracks.find(track => track.cutIndex === index)?.keyframes })),
+          focusAnalysis: { signature: shortFocusSignature(item), status: result.status, reason: result.reason, multipleFaces: result.multipleFaces } };
+        prepared.push(ready);
+        setDrafts(current => current.map(value => value.id === ready.id && shortFocusSignature(value) === shortFocusSignature(item) ? ready : value));
+      }
+      const checked = prepared.map(item => ({ draft: item, result: validateShortDraft(item, sources.find(source => source.id === item.sourceId)) }));
+      const failure = checked.find(item => !item.result.settings);
+      if (failure) throw new Error(`${failure.draft.title}: ${failure.result.errors[0]}`);
       const result = await post<{ jobs: RenderJob[] }>("/api/jobs", {
         items: checked.map(({ draft, result }) => ({ sourceId: draft.sourceId, title: draft.title.trim(), settings: result.settings })), variants: 1, randomize: false,
       });
@@ -287,6 +301,8 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
     <section className="shorts-editor panel">
       <div className="panel-heading"><h2><Scissors size={16} /> Build a short</h2><button className="secondary-button" disabled={!source || drafts.length >= MAX_SHORTS} onClick={addDraft}><Plus size={15} />New short</button></div>
       {draft ? <div className="shorts-editor-body">
+        <FinishingPresets mode="shorts" settings={draft} disabled={rendering} onApply={patch => updateDraft({ ...patch, focusAnalysis: undefined })}
+          onApplySelected={selectedIds.length ? patch => setDrafts(current => current.map(item => selectedIds.includes(item.id) ? { ...item, ...patch, focusAnalysis: undefined, updatedAt: new Date().toISOString() } : item)) : undefined} />
         <div className="shorts-title-row"><label htmlFor="shorts-title">Short name<input id="shorts-title" value={draft.title} maxLength={100} placeholder="Name this moment" onChange={event => updateDraft({ title: event.target.value })} /></label><button className="icon-button" title="Duplicate short" aria-label="Duplicate short" disabled={drafts.length >= MAX_SHORTS} onClick={duplicate}><Copy size={16} /></button></div>
         {!draftSource && <div className="shorts-message"><strong>Source unavailable</strong><p>Reimport {draft.sourceName}, then reconnect this draft. Your sequences are saved.</p>{matchingShortSource(draft, sources) ? <button className="secondary-button" onClick={() => reconnect(draft, matchingShortSource(draft, sources)!)}><Link2 size={14} />Reconnect matching video</button> : source && <button className="secondary-button" onClick={() => reconnect(draft, source)}><Link2 size={14} />Reconnect to selected source</button>}</div>}
         <div className="shorts-section-label"><h3>Sequences</h3><span>{draft.cuts.length} / {MAX_SHORT_CUTS}</span></div>
@@ -369,7 +385,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
         })}</div> : <p className="shorts-collection-empty">Every short you create appears here. Select clips from several source videos and render them together.</p>}
         <div className="shorts-collection-actions">{drafts.length > 0 && <button className="text-button" onClick={() => setSelectedIds(selectedIds.length === drafts.length ? [] : drafts.map(item => item.id))}>{selectedIds.length === drafts.length ? "Clear selection" : "Select all shorts"}</button>}</div>
       </div>
-      <div className="shorts-render-bar"><div><strong>From long-form to ready to share.</strong><p>Your original file stays intact. Each short becomes its own MP4.</p></div><div className="shorts-render-controls"><label htmlFor="shorts-render-scope">Render scope<select id="shorts-render-scope" value={scope} onChange={event => setScope(event.target.value as typeof scope)}><option value="current">This short</option><option value="selected">Selected shorts ({selectedIds.length})</option><option value="all">All shorts ({drafts.length})</option></select></label><button className="primary-button" disabled={!engineReady || !targets.length || rendering || (scope === "current" && !validation?.settings)} onClick={() => void render()}>{rendering ? <LoaderCircle size={16} className="spin" /> : <Clapperboard size={16} />}<span>{rendering ? "Preparing…" : `Render ${targets.length === 1 ? "this short" : `${targets.length} shorts`}`}</span><ArrowRight size={15} /></button></div></div>
+      <div className="shorts-render-bar"><div><strong>From long-form to ready to share.</strong><p>Your original file stays intact. Each short becomes its own MP4.</p></div><div className="shorts-render-controls"><label htmlFor="shorts-render-scope">Render scope<select id="shorts-render-scope" value={scope} onChange={event => setScope(event.target.value as typeof scope)}><option value="current">This short</option><option value="selected">Selected shorts ({selectedIds.length})</option><option value="all">All shorts ({drafts.length})</option></select></label><button className="primary-button" disabled={!engineReady || !targets.length || rendering || !!focusBusyId || (scope === "current" && !validation?.settings)} onClick={() => void render()}>{rendering ? <LoaderCircle size={16} className="spin" /> : <Clapperboard size={16} />}<span>{rendering ? "Preparing…" : `Render ${targets.length === 1 ? "this short" : `${targets.length} shorts`}`}</span><ArrowRight size={15} /></button></div></div>
       {error && <p className="shorts-batch-error shorts-error" role="alert">{error}</p>}
     </section>
   </div>;
