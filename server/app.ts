@@ -303,7 +303,7 @@ export function createApp() {
       throw new HttpError(503, "Install FFmpeg and ffprobe before exporting.");
     // Resolve every source and library selection before adding any jobs.
     const preparedItems = items.map(({ sourceId, variants, options }) => {
-      try { validateFootage(options.ownFootage); }
+      try { if (options.ownFootage) options.ownFootage = validateFootage(options.ownFootage); }
       catch (error) { throw new HttpError(400, (error as Error).message); }
       const source = state.sources.find((item) => item.id === sourceId);
       if (!source)
@@ -583,7 +583,7 @@ export function createApp() {
     let plan;
     try { plan = applyEditPlanChanges(parent.editPlan, parsed.data, parent.sourceTranscript); }
     catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "Invalid edit changes."); }
-    try { validateFootage(plan.settings.ownFootage, parent); }
+    try { if (plan.settings.ownFootage) plan.settings.ownFootage = validateFootage(plan.settings.ownFootage, parent); }
     catch (error) { throw new HttpError(400, (error as Error).message); }
     if (parsed.data.refreshBroll && parsed.data.brollMaxCoverage !== undefined) {
       const keptSeconds = preservedVisualsOnStockRefresh(plan, parsed.data.preserveBroll).filter(shot => shot.enabled)
@@ -649,7 +649,7 @@ export function createApp() {
         "FFmpeg and ffprobe must be installed before exporting. See the README for setup.",
       );
     for (const item of items) {
-      try { validateFootage(item.settings.ownFootage); }
+      try { if (item.settings.ownFootage) item.settings.ownFootage = validateFootage(item.settings.ownFootage); }
       catch (error) { throw new HttpError(400, (error as Error).message); }
       const source = state.sources.find(
         (source) => source.id === item.sourceId,

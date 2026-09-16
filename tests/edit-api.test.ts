@@ -540,6 +540,17 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.equal(digest(await download(completedRevision.footageAssets![0]!.url)), digest(snapshot));
       assert.deepEqual((await planOf(completedRevision.id)).settings.ownFootage, ownFootage);
       assert.equal(digest(await download(original.downloadUrl!)), digest(originalBytes));
+      const latest = await planOf(completedRevision.id);
+      const appendedResponse = await request(`/api/jobs/${completedRevision.id}/revisions`, "POST", {
+        revision: latest.revision, ownFootage: [{ ...ownFootage[0], appendToEnd: true, at: 0, start: 0.5, end: 1 }],
+      });
+      assert.equal(appendedResponse.status, 201, await appendedResponse.clone().text());
+      const appended = await completed((await appendedResponse.json() as RenderJob).id);
+      assert.ok(Math.abs(appended.summary!.outputDuration - (plan.outputDuration + asset.duration)) < 0.05);
+      assert.equal(appended.qualityReport?.issues.some(issue => issue.code === "duration-mismatch"), false);
+      await stop(); await start(true);
+      const appendedPlan = await planOf(appended.id);
+      assert.deepEqual(appendedPlan.settings.ownFootage, [{ ...ownFootage[0], appendToEnd: true, at: 0, start: 0, end: asset.duration }]);
     });
   } finally {
     await stop();

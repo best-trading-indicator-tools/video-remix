@@ -314,7 +314,7 @@ export interface ExportConfiguration {
   settings: RemixSettings;
   auto?: AutoOptions;
   actual: { captions: string; narration: boolean; visualCount: number; visualCoveragePercent: number; visualSources: string[];
-    ownFootage?: { name: string; at: number; start: number; end: number; mode: "insert" | "cover" }[] };
+    ownFootage?: { name: string; at: number; start: number; end: number; mode: "insert" | "cover"; appendToEnd?: boolean }[] };
 }
 export interface PostMetrics {
   platform: PublishingPlatform;

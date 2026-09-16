@@ -1,6 +1,6 @@
 import { access, link, copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import { ownFootageSchema, type OwnFootagePlacement } from "../shared/own-footage.js";
+import { ownFootageSchema, resolveFootagePlacement, type OwnFootagePlacement } from "../shared/own-footage.js";
 import { paths } from "./config.js";
 import { state, type StoredJob } from "./store.js";
 import type { ResolvedFootage } from "./footage-composition.js";
@@ -13,29 +13,33 @@ export function footageFile(job: StoredJob, assetId: string): string {
 
 export function validateFootage(placements: OwnFootagePlacement[] = [], job?: StoredJob) {
   ownFootageSchema.parse(placements);
-  for (const item of placements) {
+  return placements.map(item => {
     const media = job?.footageFiles?.[item.assetId] ?? state.broll.find(asset => asset.id === item.assetId);
     if (!media) throw new Error("One of your uploaded clips is no longer available. Upload it again or remove its placement.");
-    if (item.end > media.duration + 0.001) throw new Error("Your selected footage ends beyond the uploaded clip.");
-  }
+    const resolved = resolveFootagePlacement(item, media.duration);
+    if (resolved.end - resolved.start < 0.1) throw new Error("Select at least 0.1 seconds of your footage");
+    if (resolved.end > media.duration + 0.001) throw new Error("Your selected footage ends beyond the uploaded clip.");
+    return resolved;
+  });
 }
 
 export function previewFootage(placements: OwnFootagePlacement[] = []): ResolvedFootage[] {
-  validateFootage(placements);
-  return placements.map(placement => {
+  return validateFootage(placements).map(placement => {
     const asset = state.broll.find(asset => asset.id === placement.assetId)!;
     return { placement, name: asset.name, path: asset.filePath, duration: asset.duration, hasAudio: asset.hasAudio };
   });
 }
 
 export async function retainFootage(job: StoredJob, signal: AbortSignal): Promise<ResolvedFootage[]> {
-  const placements = job.settings.ownFootage ?? [];
+  let placements = job.settings.ownFootage ?? [];
   for (const item of placements) if (job.footageFiles?.[item.assetId]) {
     try { await access(footageFile(job, item.assetId)); }
     catch { delete job.footageFiles[item.assetId]; }
   }
-  validateFootage(placements, job);
+  placements = validateFootage(placements, job);
   if (!placements.length) return [];
+  job.settings.ownFootage = placements;
+  if (job.editPlan) job.editPlan.settings.ownFootage = structuredClone(placements);
   await mkdir(path.join(paths.plans, job.id), { recursive: true });
   job.footageFiles ??= {};
   for (const placement of placements) {

@@ -639,7 +639,12 @@ inspected.
 ### Place your own footage
 
 Open **Your footage** in Auto, Manual, Short clips, or Edit this result. Upload a
-video, choose its in/out points, and place it on the base edit's clock:
+video, then either append it automatically or place a selected part:
+
+- **Add the whole clip at the end** uses the entire uploaded clip after the final
+  edit. Placement mode and all three timing fields are hidden. Each export finds
+  its own ending automatically, including after cuts or speed changes. Multiple
+  appended clips play in their listed order. Audio and framing remain adjustable.
 
 - **Insert** adds a segment and lengthens the export. Use the clip's audio or mute
   that inserted segment. Original captions and later shots move around the insert.

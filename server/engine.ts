@@ -16,7 +16,7 @@ import type { RemixSettings } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
-import { footageTimeline, ownFootageSchema } from "../shared/own-footage.js";
+import { footageTimeline, ownFootageSchema, resolveFootagePlacement } from "../shared/own-footage.js";
 import { composeFootage, type ResolvedFootage } from "./footage-composition.js";
 
 export interface MediaInfo {
@@ -558,13 +558,14 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       );
   const duration = clipLength / s.speed;
   const fps = s.fps === "source" ? source.fps : Number(s.fps);
-  const placements = ownFootageSchema.parse(s.ownFootage ?? []);
-  const footage = placements.map(placement => {
+  const footage = ownFootageSchema.parse(s.ownFootage ?? []).map(placement => {
     const clip = options.ownFootage?.find(item => item.placement.id === placement.id && item.placement.assetId === placement.assetId);
     if (!clip) throw new Error("Your uploaded footage is unavailable. Choose the clip again.");
-    if (placement.end > clip.duration + 0.001) throw new Error("Your footage selection extends beyond the uploaded clip.");
-    return { ...clip, placement };
+    const resolved = resolveFootagePlacement(placement, clip.duration);
+    if (resolved.end > clip.duration + 0.001) throw new Error("Your footage selection extends beyond the uploaded clip.");
+    return { ...clip, placement: resolved };
   });
+  const placements = footage.map(clip => clip.placement);
   const footageTimes = footageTimeline(placements, duration, fps);
   let exportDuration = footageTimes.duration;
   const { width, height } = geometry(source, s);

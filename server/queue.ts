@@ -275,7 +275,7 @@ async function run(job: StoredJob, controller: AbortController) {
       supportingVisuals = supportingVisuals.filter(visible);
       job.supportingVisuals = job.supportingVisuals?.filter(visible);
       if (job.editPlan) for (const shot of job.editPlan.visuals) if (!visible(shot)) shot.enabled = false;
-      for (const clip of ownFootage.filter(clip => clip.placement.at >= baseDuration))
+      for (const clip of ownFootage.filter(clip => !clip.placement.appendToEnd && clip.placement.at >= baseDuration))
         (job.notes ??= []).push(clip.placement.mode === "insert" ? `${clip.name}: the requested position is past this edit's end. The clip was appended at ${baseDuration.toFixed(2)}s.` : `${clip.name}: the cover position is past this edit's end and was omitted. Adjust its timestamp in Edit this result.`);
     }
     await saveStore();

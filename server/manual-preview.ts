@@ -61,7 +61,8 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
     preview.timeShift = 0;
   }
   if (length <= 0.04) throw new PreviewError(400, "Choose a longer interval to preview.");
-  if (preview.ownFootage) preview.ownFootage = preview.ownFootage.filter(item => item.at < length / settings.speed);
+  if (preview.ownFootage) preview.ownFootage = preview.ownFootage.filter(item => item.appendToEnd
+    ? fullLength <= length + 1e-9 : item.at < length / settings.speed);
   // Limit unusual panoramic source formats as well as ordinary 720p exports.
   // The renderer scales display pixels first, so this preserves crop positions.
   const output = geometry(source, preview);
