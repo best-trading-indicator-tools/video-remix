@@ -56,7 +56,7 @@ export function installEditorialReviewRoutes(app: Express, options: ReviewRouteO
       const previous = { report: job.editorialReport, repair: job.editorialRepair, phase: job.phase };
       const nextReport = structuredClone(report);
       const nextRepair = job.editorialRepair ? { ...job.editorialRepair, finalReport: structuredClone(report) } : undefined;
-      const nextPhase = job.qualityReport?.status === "review" || report.status !== "pass" ? "Needs review" : "Ready to preview";
+      const nextPhase = job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || report.status !== "pass" ? "Needs review" : "Ready to preview";
       const historyUpdates = state.history.filter(entry => entry.jobId === job.id).map(entry => ({
         entry, previousReport: entry.editorialReport, previousRepair: entry.editorialRepair,
         report: structuredClone(report), repair: entry.editorialRepair ? { ...entry.editorialRepair, finalReport: structuredClone(report) } : undefined,

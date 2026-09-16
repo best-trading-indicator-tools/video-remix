@@ -39,6 +39,7 @@ import { correctionRecord, measurementsCsv, measurementsSchema, measurementSumma
 import { installManualPreviewRoutes } from "./manual-preview.js";
 import { assertLinkedSourceUnchanged, ImportError, installMediaImportRoutes } from "./media-imports.js";
 import { installPromptEditRoutes } from "./prompt-routes.js";
+import { installFinishedReviewRoutes } from "./finished-review-routes.js";
 import { installEditorialReviewRoutes } from "./editorial-routes.js";
 import { installSpeakerFocusRoutes } from "./speaker-focus-routes.js";
 import { installPacingRoutes } from "./pacing-routes.js";
@@ -561,6 +562,7 @@ export function createApp() {
   });
   installPromptEditRoutes(app);
   installEditorialReviewRoutes(app);
+  installFinishedReviewRoutes(app);
   app.post("/api/jobs/:id/revisions", async (req, res) => {
     const parent = state.jobs.find(item => item.id === req.params.id);
     if (!parent?.editPlan) throw new HttpError(404, "This export has no saved editable plan.");

@@ -58,6 +58,7 @@ import {
   type VideoSource,
 } from "../shared/types";
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
+import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
 import JobRecoveryNotice from "./JobRecoveryNotice";
@@ -93,6 +94,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
+      finishedReview: options?.finishedReview !== false,
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
       visualSources: getVisualSources(options),
       supportingVisuals: [
@@ -323,6 +325,10 @@ export default function App() {
   const [jobs, setJobs] = useState<RenderJob[]>([]);
   const [editorialRetries, setEditorialRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
   const editorialRequests = useRef(new Set<string>());
+  const [finishedRetries, setFinishedRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
+  const finishedRequests = useRef(new Set<string>());
+  const exportVideoRef = useRef<HTMLVideoElement>(null);
+  const pendingExportSeek = useRef<number | null>(null);
   const [variants, setVariants] = useState(1);
   const [variation, setVariation] = useState(false);
   const [starting, setStarting] = useState(false);
@@ -885,6 +891,20 @@ export default function App() {
     } finally {
       editorialRequests.current.delete(job.id);
     }
+  };
+
+  const retryFinishedReview = async (job: RenderJob) => {
+    if (finishedRequests.current.has(job.id)) return;
+    finishedRequests.current.add(job.id);
+    setFinishedRetries(current => ({ ...current, [job.id]: { pending: true, error: "" } }));
+    try {
+      const result = await api<RenderJob>(`/api/jobs/${job.id}/finished-review`, { method: "POST" });
+      setJobs(current => current.map(item => item.id === result.id ? result : item));
+      setPreviewJob(current => current?.id === result.id ? result : current);
+      setFinishedRetries(current => ({ ...current, [job.id]: { pending: false, error: "" } }));
+    } catch (error) {
+      setFinishedRetries(current => ({ ...current, [job.id]: { pending: false, error: (error as Error).message } }));
+    } finally { finishedRequests.current.delete(job.id); }
   };
 
   const clearBatch = async (batchId: string) => {
@@ -2443,6 +2463,10 @@ export default function App() {
                                 </div>
                               )}
                               <QualityReportSummary report={job.qualityReport} compact />
+                              <FinishedReviewSummary report={job.finishedReviewReport} compact
+                                onSeek={time => { pendingExportSeek.current = time; setPreviewJob(job); }}
+                                onRetry={job.status === "completed" ? () => void retryFinishedReview(job) : undefined}
+                                retrying={finishedRetries[job.id]?.pending} retryError={finishedRetries[job.id]?.error} />
                               <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} compact
                                 onRetry={job.status === "completed" && job.auto && job.editable ? () => void retryEditorialReview(job) : undefined}
                                 retrying={editorialRetries[job.id]?.pending} retryError={editorialRetries[job.id]?.error} />
@@ -2494,11 +2518,11 @@ export default function App() {
                                 <p className="job-error">{job.error}</p>
                               )}
                             </div>
-                            <div className={`job-status ${job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "quality-review" : ""}`}>
+                            <div className={`job-status ${job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || (job.editorialReport && job.editorialReport.status !== "pass") ? "quality-review" : ""}`}>
                               {job.status === "completed" ? (
                                 <>
                                   <Check size={12} />
-                                  {job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "Review" : "Rendered"}
+                                  {job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || (job.editorialReport && job.editorialReport.status !== "pass") ? "Review" : "Rendered"}
                                 </>
                               ) : job.status === "processing" ? (
                                 <>
@@ -2643,12 +2667,18 @@ export default function App() {
               </IconButton>
             </div>
             <video
+              ref={exportVideoRef}
+              onLoadedMetadata={event => { if (pendingExportSeek.current !== null) { event.currentTarget.currentTime = pendingExportSeek.current; pendingExportSeek.current = null; } }}
               src={`/api/jobs/${previewJob.id}/video`}
               controls
               playsInline
               autoPlay
             />
             <QualityReportSummary report={previewJob.qualityReport} />
+            <FinishedReviewSummary report={previewJob.finishedReviewReport}
+              onSeek={time => { if (exportVideoRef.current) exportVideoRef.current.currentTime = time; }}
+              onRetry={previewJob.status === "completed" ? () => void retryFinishedReview(previewJob) : undefined}
+              retrying={finishedRetries[previewJob.id]?.pending} retryError={finishedRetries[previewJob.id]?.error} />
             <EditorialReportSummary report={previewJob.editorialReport} repair={previewJob.editorialRepair}
               onRetry={previewJob.status === "completed" && previewJob.auto && previewJob.editable ? () => void retryEditorialReview(previewJob) : undefined}
               retrying={editorialRetries[previewJob.id]?.pending} retryError={editorialRetries[previewJob.id]?.error} />

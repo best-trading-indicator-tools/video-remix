@@ -1,3 +1,4 @@
+import { finishedTimeline } from "../shared/finished-review.js";
 import type { QualityIssue, QualityReport, RemixSettings } from "../shared/types.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
 import { geometry, probeMedia, type MediaInfo } from "./engine.js";
@@ -75,6 +76,9 @@ export async function inspectExport({ output, source, settings, audioPath, suppo
     const sourceLength = settings.segments
       ? settings.segments.reduce((sum, cut) => sum + cut.end - cut.start, 0)
       : Math.min(settings.trimEnd ?? source.duration, source.duration) - settings.trimStart;
+    // Graphics move on the final clock when user footage is inserted. Do not
+    // exempt the original interval from freeze detection after it has moved.
+    supportingVisuals = finishedTimeline(settings, source.duration, source.fps).retime(supportingVisuals);
     const expectedDuration = footageTimeline(settings.ownFootage, sourceLength / settings.speed, settings.fps === "source" ? source.fps : Number(settings.fps)).duration;
     if (!Number.isFinite(expectedDuration) || expectedDuration <= 0) throw new Error("Invalid expected duration");
     const expectedSize = geometry(source, settings);

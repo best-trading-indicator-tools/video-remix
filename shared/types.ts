@@ -1,3 +1,4 @@
+import type { FinishedReviewReport } from "./finished-review.js";
 import type { VisualIdentity, HistoryMatch } from "./visual-identity.js";
 import type { PacingOptions } from "./pacing.js";
 import type { OwnFootagePlacement, OwnFootageAsset } from "./own-footage.js";
@@ -49,6 +50,7 @@ export interface AutoOptions {
   brollMaxCoverage?: number;
   /** Independent review of the final selected speech; unavailable checks remain visible. */
   editorialMode?: "off" | "check" | "repair";
+  finishedReview?: boolean;
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
@@ -333,6 +335,7 @@ export interface ExportMeasurements {
 }
 export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
 export interface ExportHistoryEntry {
+  finishedReviewReport?: FinishedReviewReport;
   sourcePicture?: VisualIdentity;
   outputPicture?: VisualIdentity;
   match?: HistoryMatch;
@@ -369,6 +372,7 @@ export interface Attachment {
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface RenderJob {
+  finishedReviewReport?: FinishedReviewReport;
   footageAssets?: OwnFootageAsset[];
   visualFulfillment?: { requested: number; placed: number; attempts: number; reason?: string };
   /** Mode actually used, kept separate from unset legacy preferences. */

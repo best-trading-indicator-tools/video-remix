@@ -127,6 +127,21 @@ test("local export checks find broken video and sound while respecting intention
       assert.deepEqual(codes(report), ["missing-audio"], "A graphic exception cannot hide missing narration");
     });
 
+    await t.test("an inserted still is flagged while a later intentional graphic keeps its shifted exemption", async () => {
+      const output = path.join(directory, "inserted-still.mp4");
+      await runLocal("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "color=red:size=320x180:rate=24:d=2",
+        "-f", "lavfi", "-i", "color=blue:size=320x180:rate=24:d=2", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=2",
+        "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=6", "-filter_complex", "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
+        "-map", "[v]", "-map", "3:a", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", output]);
+      const ownFootage = [{ id: "11111111-1111-4111-8111-111111111111", assetId: "22222222-2222-4222-8222-222222222222",
+        mode: "insert" as const, at: 0, start: 0, end: 2, audio: "mute" as const, fit: "contain" as const }];
+      const report = await inspectExport({ ...options, output, settings: { ...settings, ownFootage },
+        supportingVisuals: [{ kind: "graphic", path: "not-read-by-quality", start: 0, end: 2, label: "Intentional title card" }] });
+      const freezes = report.issues.filter(issue => issue.code === "frozen-frames");
+      assert.ok(freezes.some(issue => (issue.start ?? 99) < 0.5), JSON.stringify(report));
+      assert.ok(!freezes.some(issue => (issue.start ?? 0) >= 1.9 && (issue.end ?? 99) <= 4.1), JSON.stringify(report));
+    });
+
     await t.test("long exports use bounded samples and explicitly report limited timeline coverage", async () => {
       const long = await fixture("long", "testsrc2=size=160x90:rate=4", undefined, 184);
       const longSource = await probeMedia(long);

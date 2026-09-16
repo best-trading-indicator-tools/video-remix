@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditorialReportSummary from "./EditorialReportSummary";
 import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, Image, LoaderCircle, Play, Plus, RefreshCw, Search, X } from "lucide-react";
-import type { ExportHistoryEntry, ExportMeasurements, ExportReview, PostMetrics, VideoSource } from "../shared/types";
+import type { ExportHistoryEntry, ExportMeasurements, ExportReview, PostMetrics, VideoSource, RenderJob } from "../shared/types";
 import "./history.css";
 import { PLATFORM_NAMES, REACH_LABELS, latestPostObservations, validPublicationUrl } from "../shared/publishing";
 import { ConfigurationHistory, SettingsSnapshot } from "./ConfigurationHistory";
@@ -226,6 +227,16 @@ function HistoryCard({ entry, stockUses, onSaved }: {
   stockUses: Map<string, number>;
   onSaved: (entry: ExportHistoryEntry) => void;
 }) {
+  const [reviewing, setReviewing] = useState(false);
+  const [reviewError, setReviewError] = useState("");
+  const recheckFinished = async () => {
+    if (reviewing) return;
+    setReviewing(true); setReviewError("");
+    try { const job = await request<RenderJob>(`/api/jobs/${encodeURIComponent(entry.jobId)}/finished-review`, { method: "POST" });
+      onSaved({ ...entry, finishedReviewReport: job.finishedReviewReport });
+    } catch (error) { setReviewError((error as Error).message); }
+    finally { setReviewing(false); }
+  };
   const [adding, setAdding] = useState(false);
   const [platform, setPlatform] = useState<Publication["platform"]>("instagram");
   const [publishedAt, setPublishedAt] = useState(localDateTime);
@@ -281,6 +292,8 @@ function HistoryCard({ entry, stockUses, onSaved }: {
         <span>{shot.name}</span><small>{timeText(shot.sourceStart)}–{timeText(shot.sourceStart + shot.duration)}{(stockUses.get(shot.identity) || 0) > 1 ? ` · Used in ${stockUses.get(shot.identity)} listed exports` : ""}</small>
       </li>)}</ul></>}
     </details>
+    <FinishedReviewSummary report={entry.finishedReviewReport} compact videoUrl={entry.available ? `/api/jobs/${encodeURIComponent(entry.jobId)}/video` : undefined}
+      onRetry={entry.available ? () => void recheckFinished() : undefined} retrying={reviewing} retryError={reviewError} />
     <EditorialReportSummary report={entry.editorialReport} repair={entry.editorialRepair} compact />
     <SettingsSnapshot entry={entry} />
     <MeasurementEditor entry={entry} onSaved={onSaved} />

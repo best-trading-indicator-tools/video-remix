@@ -1,3 +1,4 @@
+import { reviewJobFinished } from "./finished-review-jobs.js";
 import { visualIdentity } from "./visual-identity.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
 import { copyFile, mkdir, rm, stat } from "node:fs/promises";
@@ -105,6 +106,7 @@ async function run(job: StoredJob, controller: AbortController) {
   let thumbnail: HistoryThumbnail | undefined;
   const savedRepair = job.editorialRepair;
   delete job.qualityReport;
+  delete job.finishedReviewReport;
   delete job.editorialReport;
   // Keep the saved correction history through failed retries; its budget belongs to this job.
   delete job.editorialModeApplied;
@@ -308,6 +310,11 @@ async function run(job: StoredJob, controller: AbortController) {
     const outputGeometry = geometry(source, job.settings);
     job.qualityReport.issues.push(...textLayoutIssues({ settings: job.settings, captions }, outputGeometry.width / outputGeometry.height));
     if (job.qualityReport.issues.length) job.qualityReport.status = "review";
+    if (job.auto?.finishedReview !== false) {
+      job.phase = "Reviewing the finished picture and sound";
+      await saveStore();
+      job.finishedReviewReport = await reviewJobFinished(job, source, controller.signal, workDir, captions);
+    }
     if (job.auto && subtitlePath) {
       job.captionPath = path.join(paths.outputs, `${job.id}.srt`);
       if (job.settings.ownFootage?.some(item => item.mode === "insert")) {
@@ -376,7 +383,7 @@ async function run(job: StoredJob, controller: AbortController) {
     job.status = status;
     job.phase =
       status === "completed"
-        ? job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "Needs review" : "Ready to preview"
+        ? job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || (job.editorialReport && job.editorialReport.status !== "pass") ? "Needs review" : "Ready to preview"
         : status === "skipped"
           ? "Skipped"
           : status === "queued" && job.retry?.nextRetryAt ? retryPhase(job) : undefined;

@@ -120,6 +120,7 @@ export const autoOptionsSchema = z
     ownFootage: ownFootageSchema.optional(),
     brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   brollMaxCoverage: z.number().int().min(0).max(100).optional(),
+    finishedReview: z.boolean().optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
     stockVideoType: z.enum(["all", "animation"]).optional(),
   })

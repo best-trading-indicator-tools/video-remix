@@ -56,7 +56,13 @@ test("Auto pipelines overlap after selection, respect capacity and release provi
       try {
         assert.equal(String(url), "https://api.deepseek.com/chat/completions");
         assert.equal(new Headers(init?.headers).get("Authorization"), "Bearer parallel-test-key");
-        const input = JSON.parse(JSON.parse(String(init?.body)).messages[1].content).input;
+        const content = JSON.parse(String(init?.body)).messages[1].content;
+        // The unrelated manual export now also checks its finished pictures.
+        if (Array.isArray(content)) {
+          const context = JSON.parse(content[0].text);
+          return envelope({ samples: context.samples.map((sample: { id: string }) => ({ id: sample.id, inspected: true, caption: null, issues: [] })) });
+        }
+        const input = JSON.parse(content).input;
         if (input.task?.startsWith("Find complete")) {
           discoveryCalls++;
           if (holdDiscovery) { holdDiscovery = false; discoveryGate = gate(init?.signal); await discoveryGate.promise; }
@@ -103,7 +109,7 @@ test("Auto pipelines overlap after selection, respect capacity and release provi
         const id = randomUUID();
         return { id, batchId, sourceId: source.id, sourceName: source.name, variant: index + 1, status: "queued", progress: 0,
           settings: { ...DEFAULT_SETTINGS }, createdAt: new Date().toISOString(), outputPath: path.join(paths.outputs, `${id}.mp4`),
-          auto: { aspect: "16:9", targetDuration: 4, narration: false, captions: "keep", editorialMode: "check", visualSources: [] } };
+          auto: { finishedReview: false, aspect: "16:9", targetDuration: 4, narration: false, captions: "keep", editorialMode: "check", visualSources: [] } };
       });
     };
     const settled = (items: StoredJob[]) => items.every(job => !["queued", "processing"].includes(job.status) && !isRunning(job.id));

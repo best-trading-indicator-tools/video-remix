@@ -1,0 +1,26 @@
+.finished-review { margin-top: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--canvas); color: var(--text); min-width: 0; }
+.finished-review > summary { display: flex; align-items: center; gap: 10px; padding: 14px 16px; cursor: pointer; font-size: 13px; line-height: 1.5; }
+.finished-review.pass > summary { color: #a8dec7; }
+.finished-review.review > summary, .finished-review.partial > summary, .finished-review.unavailable > summary { color: #e7be78; }
+.finished-review-body { padding: 0 16px 16px; }
+.finished-review-body p { margin: 10px 0; color: var(--subtle); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.finished-review-scope { display: flex; align-items: flex-start; gap: 8px; }
+.finished-review-scope svg { flex-shrink: 0; margin-top: 3px; }
+.finished-checks { display: grid; gap: 14px; list-style: none; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.finished-checks > li { display: grid; grid-template-columns: 95px minmax(0,1fr); align-items: start; gap: 12px; }
+.finished-checks strong { font-size: 12px; line-height: 1.5; }
+.finished-checks p { margin: 4px 0 0; }
+.finished-check-state { padding: 4px 7px; border: 1px solid var(--line); border-radius: 5px; color: var(--subtle); font-size: 10px; text-align: center; }
+.finished-check-state.review, .finished-check-state.unavailable { color: #e7be78; }
+.finished-check-state.pass { color: #a8dec7; }
+.finished-findings { display: grid; gap: 12px; list-style: none; padding: 0; margin: 16px 0; }
+.finished-findings li { padding: 12px; border-left: 3px solid #e7be78; background: var(--surface); border-radius: 6px; }
+.finished-finding-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; line-height: 1.5; }
+.finished-finding-title strong { flex: 1 1 180px; }
+.finished-finding-title .secondary-button { padding: 6px 10px; min-height: 36px; font-size: 12px; text-decoration: none; }
+.finished-review-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; margin-top: 14px; }
+.finished-review-actions .secondary-button { font-size: 12px; min-height: 40px; padding: 8px 12px; }
+.finished-review-actions > span { color: var(--muted); font-size: 11px; }
+.finished-review-actions > p { color: #f5aaa7; flex-basis: 100%; }
+.finished-review.empty { padding: 0 16px 14px; }
+@media (max-width: 480px) { .finished-checks > li { grid-template-columns: 1fr; gap: 6px; } .finished-check-state { justify-self: start; min-width: 88px; } }

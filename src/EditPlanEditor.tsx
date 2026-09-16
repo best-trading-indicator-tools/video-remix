@@ -1,3 +1,4 @@
+import FinishedReviewSummary from "./FinishedReviewSummary";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
@@ -75,8 +76,8 @@ function validateDraftChanges(plan: EditPlan, draft: EditPlan, changes: EditPlan
 export function QualityReportSummary({ report, compact = false }: { report?: QualityReport; compact?: boolean }) {
   if (!report) return null;
   return <details className={`quality-report ${report.status} ${compact ? "compact" : ""}`} open={!compact && report.status === "review"}>
-    <summary>{report.status === "review" ? <AlertTriangle size={14} /> : <Check size={14} />}<strong>{report.status === "review" ? "Needs review" : "Checks passed"}</strong><span>{report.scope === "sampled" ? "Sampled video checks" : "Full video checks"}</span></summary>
-    {report.issues.length ? <ul>{report.issues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}{issue.start !== undefined && <span> ({seconds(issue.start)}{issue.end !== undefined ? `–${seconds(issue.end)}` : ""})</span>}</li>)}</ul> : <p>No issues were found in the checked footage.</p>}
+    <summary>{report.status === "review" ? <AlertTriangle size={14} /> : <Check size={14} />}<strong>{report.status === "review" ? "Technical review needed" : "Technical checks passed"}</strong><span>{report.scope === "sampled" ? "Sampled scan" : "Full timeline scan"}</span></summary>
+    {report.issues.length ? <ul>{report.issues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}{issue.start !== undefined && <span> ({seconds(issue.start)}{issue.end !== undefined ? `–${seconds(issue.end)}` : ""})</span>}</li>)}</ul> : <p>No technical issues were found in the checked footage. This scan checks dimensions, duration, audio levels, black frames and freezes; picture meaning and caption wording are reviewed separately.</p>}
     {report.scope === "sampled" && <p>Only sampled sections were checked. Review the full export before posting.</p>}
   </details>;
 }
@@ -367,6 +368,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <h3>{previewMode === "export" ? "Current export" : "Draft framing"}</h3><p>{previewMode === "export" ? "Review this version as you make corrections. Render to see your updated video." : "Adjust the crop and captions against the source footage. Render your revision to review the final result."}</p>
               <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
               <QualityReportSummary report={job.qualityReport} />
+              <FinishedReviewSummary report={job.finishedReviewReport} compact videoUrl={`/api/jobs/${job.id}/video`} />
               {changed ? <p className="editorial-coverage">Your draft changes have not received an editorial check. The saved export's findings are available in Exports and History. Render the revision to review its final result.</p>
                 : <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} />}
             </aside>

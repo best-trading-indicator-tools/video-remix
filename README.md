@@ -490,7 +490,7 @@ and publication notes. Reimporting identical bytes under a new filename or batch
 reveals earlier exports. Auto prefers unused excerpts, but history similarity is
 advisory: it can reuse an excerpt and render again with your current B-roll and
 settings. Explicit edits of a saved result remain available as revisions. A
-different encoding is a different fingerprint.
+different encoding has a different exact fingerprint; sampled picture matching can still identify it as a possible re-export.
 Available older exports are migrated when the server starts; sources already removed
 before this feature cannot be reconstructed. Deleting a batch or automatic media
 expiry keeps the history. Publication dates and links are local records of posts you
@@ -604,3 +604,76 @@ Auto remix offers **Original**, **Natural**, **Tight**, and **Custom** pacing. N
 In **Short clips → Refine the pacing**, analyze locally, listen around each suggested trim, uncheck anything to keep, then apply. The original sequences and review choices survive browser reload, and **Undo pacing changes** restores those sequences. Changing timestamps invalidates an old review. This uses the existing local speech model and cached transcript; it makes no paid API request.
 
 Filler removal is off by default. When enabled, it only proposes isolated, high-confidence “um”, “uh”, “erm” (English), “euh” (French), or “äh”/“ähm” (German). Meaningful words and repeated phrases are retained. Unreliable or missing word timings leave that sequence untouched. Transcription can still miss speech: preview suggested edits before exporting. Trims respect the 60-sequence limit. Very short audio fades soften joins without shortening the export or moving caption timing.
+
+### Export settings, posting outcomes and picture history
+
+Each new History entry keeps an immutable settings snapshot and a profile ID, plus
+actual caption mode, supporting-shot count and coverage. **Settings & posting
+outcomes** groups comparable settings. Record TikTok, Instagram or YouTube posts
+with their account, URL and publication date, then attach dated results and notes
+to that particular post. Reach can be unknown, normal, suspected restriction,
+confirmed restriction (with the platform notice), or resolved. Low views alone do
+not establish a restriction, and the comparison describes associations rather than
+proving that a setting caused an outcome. JSON/CSV measurement exports retain these
+records. Earlier entries without saved settings remain explicitly unknown.
+
+History also retains small, local picture signatures for original sources and
+finished exports. Six independently sought frames can recognize likely re-encodes,
+resizes and centered portrait crops of similar duration; static/blank or
+insufficient samples are not treated as identity evidence. These are **possible
+picture matches**, with previews to compare. They do not map a re-export's clock
+onto an older source or reserve/exclude clips. Exact-source overlap warnings also
+catch shorter excerpts inside an earlier cut. Every history match is advisory.
+Heavy rearrangement, arbitrary crops and overlays can prevent recognition. Retained
+signatures survive media expiry; an old file that is already gone cannot be newly
+inspected.
+
+### Place your own footage
+
+Open **Your footage** in Auto, Manual, Short clips, or Edit this result. Upload a
+video, choose its in/out points, and place it on the base edit's clock:
+
+- **Insert** adds a segment and lengthens the export. Use the clip's audio or mute
+  that inserted segment. Original captions and later shots move around the insert.
+- **Cover** replaces the picture while the original soundtrack continues. Your
+  cover takes priority over an automatic supporting shot at that time.
+
+Choose crop or contain framing for each placement. Settings stay per video;
+**Use for all videos** copies them across the selected workflow. In Short clips,
+the footage panel can copy placements to every short. An insert beyond the edit's
+end is appended with a note; a cover beyond its end is omitted with a note. Assets
+used by a saved edit are retained for revisions even if removed from the library.
+
+Auto's **Maximum B-roll coverage** limits the combined stock, library and animation
+coverage throughout every best-effort pass. The default is 60%; 0% requests none.
+Shot count is a target, subject to the coverage budget and available good matches.
+Explicitly placed personal footage is controlled separately by your timestamps.
+
+### Review the finished picture and sound
+
+**Review finished picture & sound** is on by default in Auto (and runs for manual
+exports). Auto has a per-video switch. The report remains separate from both the
+transcript-based editorial review and technical FFmpeg checks:
+
+- Up to 12 output frames are compared with corresponding source pictures. Checks
+  look for a replacement hiding a demonstration, misleading use of illustrative
+  stock, and visibly cropped or conflicting text.
+- Local Whisper transcribes the actual exported soundtrack. Confident timed words
+  are compared with authored captions, or clear subtitle text read from sampled
+  frames when no caption sidecar exists. Missing or weak evidence is reported as
+  unavailable, never silently counted as a successful check.
+- Audio up to 180 seconds is transcribed in full; longer videos sample three
+  20-second windows. Picture review always uses samples and can miss problems
+  between them. Reports show exact coverage and timestamped findings.
+
+Click a finding's time to preview it. **Recheck picture & sound** reviews the
+existing MP4 without rerendering; unchanged rendered-audio evidence is cached.
+Reports and their service-failure reasons are saved with export history. Findings,
+partial checks and unavailable services never prevent downloading the export.
+
+Picture inspection sends sampled source/output JPEGs and recognized speech to
+DeepSeek; audio transcription stays local. `DEEPSEEK_VISION_MODEL` defaults to
+`deepseek-flash`, independently of the text model. See the provider's
+[vision API documentation](https://api-docs.deepseek.com/guides/vision/).
+`AUTO_AI=false` disables this review. The review has a bounded processing budget
+and does not automatically alter the rendered video or predict platform eligibility.
