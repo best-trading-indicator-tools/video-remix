@@ -271,7 +271,7 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     await t.test("publication updates validate timestamps and platform URLs without corrupting export history", async () => {
       assert.equal((await request(`/api/history/${randomUUID()}`, "PATCH", { publications: [] })).status, 404);
       for (const invalid of [
-        { publications: [{ platform: "youtube", publishedAt: publications[0]!.publishedAt }] },
+        { publications: [{ platform: "unsupported", publishedAt: publications[0]!.publishedAt }] },
         { publications: [{ ...publications[0], publishedAt: "not-a-date" }] },
         { publications: [{ ...publications[0], url: "https://www.tiktok.com/@creator/video/1234567890" }] },
         { publications: [{ ...publications[0], url: "https://instagram.com.example.org/reel/123" }] },
@@ -544,6 +544,24 @@ test("export history survives new batches, renamed reuploads, deletion and expir
       assert.equal((await history()).length, expectedHistoryCount);
       assert.equal((await history()).filter(item => item.jobId === regenerated.id).length, 1);
       assert.equal((await request(`/api/jobs/${regenerated.id}/retry`, "POST")).status, 409, "Completed exports retain the existing retry guard");
+    });
+    await t.test("per-post outcomes and settings survive restart with validated publication links", async () => {
+      const target = (await history())[0]!;
+      assert.ok(target.configuration?.profileId);
+      const postA = { id: randomUUID(), platform: "youtube", account: "@first", publishedAt: new Date().toISOString(), url: "https://youtube.com/shorts/example" };
+      const postB = { ...postA, id: randomUUID(), account: "@second" };
+      assert.equal((await request(`/api/history/${target.id}`, "PATCH", { publications: [postA, postB] })).status, 200);
+      const observation = { platform: "youtube", publicationId: postA.id, measuredAt: new Date().toISOString(), reachAssessment: "suspected", feedback: "Test observation" };
+      assert.equal((await request(`/api/history/${target.id}/measurements`, "PATCH", { posts: [{ ...observation, publicationId: randomUUID() }] })).status, 400);
+      assert.equal((await request(`/api/history/${target.id}/measurements`, "PATCH", { posts: [{ ...observation, platform: "tiktok" }] })).status, 400);
+      const posts = [observation, { ...observation, publicationId: postB.id, reachAssessment: "normal" }];
+      assert.equal((await request(`/api/history/${target.id}/measurements`, "PATCH", { posts })).status, 200);
+      assert.equal((await request(`/api/history/${target.id}`, "PATCH", { publications: [postB] })).status, 400);
+      await stop(); await start();
+      const restored = (await history()).find(item => item.id === target.id)!;
+      assert.deepEqual(restored.configuration, target.configuration);
+      assert.deepEqual(restored.measurements?.posts, posts);
+      assert.deepEqual(restored.publications, [postA, postB]);
     });
   } finally {
     await stop();

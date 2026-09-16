@@ -150,3 +150,9 @@ a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-of
   .history-search { flex-basis: 100%; }
   .history-form-actions .secondary-button { flex: 1 1 100%; }
 }
+.settings-profile { margin-left: 12px; color: var(--accent); font-size: 12px; }
+.history-settings h4 { margin: 20px 0 12px; }
+.settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-top: 14px; }
+.settings-grid > div { padding: 12px 16px; background: var(--surface-raised); min-width: 0; }
+.settings-grid dt { color: var(--subtle); font-size: 12px; margin-bottom: 6px; }
+.settings-grid dd { color: var(--text); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; margin: 0; max-height: 140px; overflow: auto; }

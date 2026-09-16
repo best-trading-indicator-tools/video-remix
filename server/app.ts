@@ -199,6 +199,10 @@ export function createApp() {
     if (!entry) throw new HttpError(404, "History entry not found.");
     const parsed = measurementsSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "Check the review counts, time and platform metrics. Leave unknown values blank.");
+    for (const post of parsed.data.posts || []) {
+      if (post.publicationId && !entry.publications.some(item => item.id === post.publicationId && item.platform === post.platform))
+        throw new HttpError(400, "Choose a recorded post on the same platform for these results.");
+    }
     entry.measurements = parsed.data;
     await saveStore();
     res.json(publicHistory().find(item => item.id === entry.id));
@@ -213,6 +217,10 @@ export function createApp() {
     if (!entry) throw new HttpError(404, "History entry not found.");
     const parsed = publicationChangesSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "Use a valid publication date and an HTTPS link on the selected platform.");
+    for (const post of entry.measurements?.posts || []) {
+      if (post.publicationId && !parsed.data.publications.some(item => item.id === post.publicationId && item.platform === post.platform))
+        throw new HttpError(400, "Remove this post's result snapshots before removing its publication record or changing its platform.");
+    }
     entry.publications = parsed.data.publications;
     await saveStore();
     res.json(publicHistory().find(item => item.id === entry.id));

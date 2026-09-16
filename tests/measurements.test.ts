@@ -12,6 +12,24 @@ const entry = (id: string, overrides: Partial<ExportHistoryEntry> = {}): ExportH
   cuts: [{ start: 0, end: 10 }], sourceText: "Source speech", outputDuration: 10, createdAt: firstTime,
   revision: 1, stockShots: [], publications: [], ...overrides,
 });
+
+test("posting outcomes distinguish suspected reach from confirmed notices and count separate posts", () => {
+  const base = { platform: "youtube" as const, measuredAt: firstTime };
+  assert.ok(measurementsSchema.safeParse({ posts: [{ ...base, reachAssessment: "suspected", feedback: "Lower reach than usual" }] }).success);
+  assert.equal(measurementsSchema.safeParse({ posts: [{ ...base, reachAssessment: "confirmed" }] }).success, false);
+  assert.ok(measurementsSchema.safeParse({ posts: [{ ...base, reachAssessment: "confirmed", platformNotice: "Restricted by platform" }] }).success);
+  const row = entry("posting", { measurements: { posts: [
+    { ...base, publicationId: "first", views: 10 },
+    { ...base, publicationId: "first", measuredAt: lastTime, views: 20 },
+    { ...base, publicationId: "second", views: 30 },
+  ] } });
+  const summary = measurementSummary([row]);
+  assert.equal(summary.totals.posts, 2);
+  assert.equal(summary.totals.totalViews, 50);
+  assert.equal(summary.totals.platforms.find(item => item.platform === "youtube")?.posts, 2);
+  assert.match(measurementsCsv([row]), /reach_assessment/);
+  assert.match(measurementsCsv([row]), /export_configuration/);
+});
 const plan = (): EditPlan => ({
   version: 1, revision: 1, sourceId: "source", sourceDuration: 20, outputDuration: 10, createdAt: firstTime,
   settings: { ...DEFAULT_SETTINGS }, cuts: [{ start: 0, end: 10 }], narration: false,
@@ -47,7 +65,7 @@ test("measurement documents enforce bounded counts, complete review pairs, plain
     { review: { approach: "a".repeat(81) } }, { review: { benchmarkCase: "a".repeat(81) } },
     { review: { notes: "a".repeat(501) } }, { review: { notes: "bad\u0000text" } },
     { review: { originalityScore: 99 } }, { path: "/tmp/private" },
-    { posts: [{ platform: "youtube", measuredAt: lastTime }] },
+    { posts: [{ platform: "unsupported", measuredAt: lastTime }] },
     { posts: [{ platform: "instagram", measuredAt: "yesterday" }] },
     { posts: [{ platform: "instagram", measuredAt: lastTime, views: -1 }] },
     { posts: [{ platform: "instagram", measuredAt: lastTime, views: 1.5 }] },
@@ -56,7 +74,7 @@ test("measurement documents enforce bounded counts, complete review pairs, plain
     { posts: [{ platform: "instagram", measuredAt: lastTime, averageWatchSeconds: -1 }] },
     { posts: [{ platform: "instagram", measuredAt: lastTime, platformNotice: "a".repeat(501) }] },
     { posts: [{ platform: "instagram", measuredAt: lastTime, revenue: 1 }] },
-    { posts: Array.from({ length: 21 }, () => ({ platform: "tiktok", measuredAt: lastTime })) },
+    { posts: Array.from({ length: 201 }, () => ({ platform: "tiktok", measuredAt: lastTime })) },
   ]) assert.equal(measurementsSchema.safeParse(invalid).success, false, JSON.stringify(invalid));
 });
 

@@ -6,6 +6,8 @@ import type { EditSegment, ExportHistoryEntry } from "../shared/types.js";
 import type { EditorialPlan } from "./diversity.js";
 import type { StoredJob, StoredSource } from "./store.js";
 import { cutsDuration, retimeTranscript } from "./auto-plan.js";
+import { exportConfiguration } from "./export-configuration.js";
+import { validPublicationUrl } from "../shared/publishing.js";
 
 /** Content identity survives a rename/reimport; memory usage stays bounded. */
 export async function fingerprintFile(filePath: string, signal?: AbortSignal, onBytes?: (bytes: number) => void): Promise<string> {
@@ -84,6 +86,7 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     ...(job.parentJobId ? { parentJobId: job.parentJobId } : {}),
     stockShots,
     publications: [],
+    configuration: exportConfiguration(job, outputDuration),
     ...(job.corrections ? { corrections: structuredClone(job.corrections) } : {}),
     ...(job.editorialReport ? { editorialReport: structuredClone(job.editorialReport) } : {}),
     ...(job.editorialRepair ? { editorialRepair: structuredClone(job.editorialRepair) } : {}),
@@ -99,11 +102,12 @@ export function upsertHistory(entries: ExportHistoryEntry[], entry: ExportHistor
   const prior = entries.filter(item => item.jobId === entry.jobId);
   const publications = prior.length ? prior.flatMap(item => item.publications) : entry.publications;
   const distinctPublications = publications.filter((item, index) => !publications.slice(0, index).some(previous =>
-    previous.platform === item.platform && previous.publishedAt === item.publishedAt && previous.url === item.url));
+    item.id ? previous.id === item.id : !previous.id && previous.platform === item.platform && previous.account === item.account && previous.publishedAt === item.publishedAt && previous.url === item.url));
   const measurements = prior.find(item => item.measurements)?.measurements ?? entry.measurements;
+  const configuration = prior.find(item => item.configuration)?.configuration ?? entry.configuration;
   const thumbnailUrl = entry.thumbnailUrl ?? prior.find(item => item.thumbnailUrl)?.thumbnailUrl;
   const thumbnailKind = entry.thumbnailKind ?? prior.find(item => item.thumbnailUrl)?.thumbnailKind;
-  const updated = structuredClone({ ...entry, publications: distinctPublications, ...(measurements ? { measurements } : {}),
+  const updated = structuredClone({ ...entry, configuration, publications: distinctPublications, ...(measurements ? { measurements } : {}),
     ...(thumbnailUrl ? { thumbnailUrl, ...(thumbnailKind ? { thumbnailKind } : {}) } : {}) });
   const result: ExportHistoryEntry[] = [];
   let inserted = false;
@@ -125,17 +129,15 @@ export function previousEditorialPlans(entries: ExportHistoryEntry[], sourceFing
 }
 
 const publication = z.object({
-  platform: z.enum(["instagram", "tiktok"]),
+  id: z.uuid().optional(),
+  platform: z.enum(["instagram", "tiktok", "youtube"]),
+  account: z.string().trim().max(100).optional(),
   publishedAt: z.iso.datetime({ offset: true }),
   url: z.string().url().max(2000).optional(),
 }).strict().refine(item => {
   if (!item.url) return true;
-  try {
-    const url = new URL(item.url);
-    const domain = `${item.platform}.com`;
-    return url.protocol === "https:" && !url.username && !url.password && !url.port &&
-      (url.hostname === domain || url.hostname.endsWith(`.${domain}`));
-  } catch { return false; }
+  return validPublicationUrl(item.platform, item.url);
 }, "Use an HTTPS link on the selected platform without credentials or a custom port");
 
-export const publicationChangesSchema = z.object({ publications: z.array(publication).max(10) }).strict();
+export const publicationChangesSchema = z.object({ publications: z.array(publication).max(50)
+  .refine(items => new Set(items.flatMap(item => item.id ? [item.id] : [])).size === items.filter(item => item.id).length, "Publication IDs must be unique") }).strict();

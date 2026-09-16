@@ -31,6 +31,33 @@ const job = (): StoredJob => ({
   }],
 });
 
+test("history retains immutable settings and groups matching editing choices without conflating different filters", () => {
+  const completed = job();
+  const first = historyEntry(source(), completed)!;
+  assert.equal(first.configuration?.settings.speed, completed.settings.speed);
+  assert.equal(first.configuration?.actual.visualCoveragePercent, 50);
+  completed.settings.hookText = "A different title";
+  assert.equal(historyEntry(source(), completed)!.configuration?.profileId, first.configuration?.profileId);
+  completed.settings.speed = 1.1;
+  const changed = historyEntry(source(), completed)!;
+  assert.notEqual(changed.configuration?.profileId, first.configuration?.profileId);
+  assert.equal(upsertHistory([first], changed)[0]!.configuration?.settings.speed, 1, "Reconciliation cannot rewrite the original export settings");
+  assert.equal(first.configuration?.settings.hookText, "A rewritten headline");
+});
+
+test("YouTube publications accept only platform URLs and preserve separate accounts", () => {
+  const publishedAt = "2026-09-16T10:00:00Z";
+  for (const url of ["https://youtube.com/shorts/example", "https://youtu.be/example"]) {
+    assert.ok(publicationChangesSchema.safeParse({ publications: [{ platform: "youtube", publishedAt, url, account: "@creator" }] }).success);
+  }
+  for (const url of ["https://youtube.com.bad.test/shorts/a", "https://youtu.be:8080/a", "https://a:b@youtube.com/a", "https://instagram.com/reel/a"]) {
+    assert.equal(publicationChangesSchema.safeParse({ publications: [{ platform: "youtube", publishedAt, url }] }).success, false);
+  }
+  const first = historyEntry(source(), job())!;
+  first.publications = ["@one", "@two"].map(account => ({ platform: "youtube", publishedAt, account }));
+  assert.equal(upsertHistory([first], first)[0]!.publications.length, 2);
+});
+
 test("content fingerprints survive rename, timestamp changes and reimport while changed bytes differ", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "history-fingerprint-"));
   try {
@@ -182,12 +209,12 @@ test("publication notes accept matching HTTPS platform links and reject unsafe o
     { platform: "tiktok", publishedAt, url: "file:///private/video.mp4" },
     { platform: "tiktok", publishedAt, url: "javascript:alert(1)" },
     { platform: "tiktok", publishedAt, url: "not a URL" },
-    { platform: "youtube", publishedAt },
+    { platform: "unsupported", publishedAt },
     { platform: "tiktok", publishedAt: "2026-02-30T00:00:00Z" },
     { platform: "tiktok", publishedAt: "yesterday" },
     { platform: "tiktok", publishedAt, filePath: "/private/video.mp4" },
   ]) assert.equal(publicationChangesSchema.safeParse({ publications: [item] }).success, false, JSON.stringify(item));
   assert.equal(publicationChangesSchema.safeParse({ publications: [], statePath: "/private/state.json" }).success, false);
-  assert.equal(publicationChangesSchema.safeParse({ publications: Array.from({ length: 11 }, () => ({ platform: "tiktok", publishedAt })) }).success, false);
+  assert.equal(publicationChangesSchema.safeParse({ publications: Array.from({ length: 51 }, () => ({ platform: "tiktok", publishedAt })) }).success, false);
   assert.equal(publicationChangesSchema.safeParse({ publications: [] }).success, true);
 });

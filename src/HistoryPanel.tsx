@@ -3,9 +3,11 @@ import EditorialReportSummary from "./EditorialReportSummary";
 import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, Image, LoaderCircle, Play, Plus, RefreshCw, Search, X } from "lucide-react";
 import type { ExportHistoryEntry, ExportMeasurements, ExportReview, PostMetrics, VideoSource } from "../shared/types";
 import "./history.css";
+import { PLATFORM_NAMES, REACH_LABELS, latestPostObservations, validPublicationUrl } from "../shared/publishing";
+import { ConfigurationHistory, SettingsSnapshot } from "./ConfigurationHistory";
 
 type Publication = ExportHistoryEntry["publications"][number];
-const platformName = (platform: Publication["platform"]) => platform === "instagram" ? "Instagram" : "TikTok";
+const platformName = (platform: Publication["platform"]) => PLATFORM_NAMES[platform];
 const dateText = (value: string) => new Date(value).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
 const timeText = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
 const localDateTime = () => {
@@ -39,7 +41,7 @@ const draftReview = (review: ExportReview = {}): ReviewDraft => ({
   brollReviewed: review.brollReviewed?.toString() ?? "", brollAccepted: review.brollAccepted?.toString() ?? "",
   captionCorrections: review.captionCorrections?.toString() ?? "", correctionSeconds: review.correctionSeconds?.toString() ?? "", notes: review.notes || "",
 });
-const draftPost = (): PostDraft => ({ platform: "instagram", measuredAt: localDateTime(), views: "", averageWatchSeconds: "", completionPercent: "", saves: "", shares: "", platformNotice: "" });
+const draftPost = (): PostDraft => ({ platform: "instagram", measuredAt: localDateTime(), views: "", averageWatchSeconds: "", completionPercent: "", saves: "", shares: "", platformNotice: "", publicationId: "", reachAssessment: "unknown", feedback: "" });
 const optionalNumber = (value: string) => value.trim() === "" ? undefined : Number(value);
 const measuredNumber = (value: number | null | undefined, unit = "") => typeof value !== "number" || !Number.isFinite(value) ? "—" : `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${unit}`;
 
@@ -86,13 +88,17 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
     event.preventDefault();
     const timestamp = new Date(post.measuredAt);
     if (!Number.isFinite(timestamp.getTime())) { setError("Choose when you measured these results."); return; }
+    if (post.reachAssessment === "confirmed" && !post.platformNotice.trim()) { setError("Paste or summarize the platform notice to mark a restriction as confirmed."); return; }
     const snapshot: PostMetrics = {
+      ...(post.publicationId ? { publicationId: post.publicationId } : {}),
+      reachAssessment: post.reachAssessment as PostMetrics["reachAssessment"],
+      ...(post.feedback.trim() ? { feedback: post.feedback.trim() } : {}),
       platform: post.platform as PostMetrics["platform"], measuredAt: timestamp.toISOString(),
       views: optionalNumber(post.views), averageWatchSeconds: optionalNumber(post.averageWatchSeconds), completionPercent: optionalNumber(post.completionPercent),
       saves: optionalNumber(post.saves), shares: optionalNumber(post.shares),
       ...(post.platformNotice.trim() ? { platformNotice: post.platformNotice.trim() } : {}),
     };
-    if ([snapshot.views, snapshot.averageWatchSeconds, snapshot.completionPercent, snapshot.saves, snapshot.shares, snapshot.platformNotice].every((value) => value === undefined)) {
+    if ([snapshot.views, snapshot.averageWatchSeconds, snapshot.completionPercent, snapshot.saves, snapshot.shares, snapshot.platformNotice, snapshot.feedback, snapshot.reachAssessment === "unknown" ? undefined : snapshot.reachAssessment].every((value) => value === undefined)) {
       setError("Record at least one observed result or platform notice. Leave unknown values blank."); return;
     }
     if (await save({ ...entry.measurements, posts: [...(entry.measurements?.posts || []), snapshot] }, "Platform results saved.")) { setPost(draftPost()); setAddingPost(false); }
@@ -134,19 +140,24 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
       </fieldset>
     </form>
     <div className="measurement-posts"><h4>Results recorded after posting</h4>
-      <p className="measurement-note">Track one post per platform for this export. Later observations update that same post's results in comparisons.</p>
+      <p className="measurement-note">Choose the published post and account for each observation. Later observations update that post in comparisons; earlier observations stay visible below.</p>
       {(entry.measurements?.posts || []).map((snapshot, index) => <div className="measurement-snapshot" key={`${snapshot.platform}-${snapshot.measuredAt}-${index}`}>
         <div><strong>{platformName(snapshot.platform)}</strong><span>Measured {dateText(snapshot.measuredAt)}</span>
           <p>Views {measuredNumber(snapshot.views)} · Average watch {measuredNumber(snapshot.averageWatchSeconds, "s")} · Completion {measuredNumber(snapshot.completionPercent, "%")} · Saves {measuredNumber(snapshot.saves)} · Shares {measuredNumber(snapshot.shares)}</p>
+          {snapshot.reachAssessment && <p>{REACH_LABELS[snapshot.reachAssessment]}{snapshot.publicationId && ` · ${entry.publications.find(item => item.id === snapshot.publicationId)?.account || "Recorded post"}`}</p>}
+          {snapshot.feedback && <p>{snapshot.feedback}</p>}
           {snapshot.platformNotice && <p className="measurement-notice">Platform notice: {snapshot.platformNotice}</p>}
         </div><button type="button" className="icon-button" aria-label={`Remove ${platformName(snapshot.platform)} result snapshot`} disabled={saving} onClick={() => void save({ ...entry.measurements, posts: entry.measurements?.posts?.filter((_, itemIndex) => itemIndex !== index) }, "Result snapshot removed.")}><X size={14} /></button>
       </div>)}
       {!entry.measurements?.posts?.length && <p className="measurement-note">No platform results recorded.</p>}
-      {!addingPost && <button type="button" className="secondary-button measurement-add-post" disabled={saving || (entry.measurements?.posts?.length || 0) >= 20} onClick={() => { setPost(draftPost()); setAddingPost(true); setError(""); setSaved(""); }}><Plus size={14} />Add platform results</button>}
-      {(entry.measurements?.posts?.length || 0) >= 20 && <p className="measurement-note">20 observations are saved. Remove an earlier snapshot before adding another.</p>}
+      {!addingPost && <button type="button" className="secondary-button measurement-add-post" disabled={saving || (entry.measurements?.posts?.length || 0) >= 200} onClick={() => { setPost(draftPost()); setAddingPost(true); setError(""); setSaved(""); }}><Plus size={14} />Add platform results</button>}
+      {(entry.measurements?.posts?.length || 0) >= 200 && <p className="measurement-note">200 observations are saved. Remove an earlier snapshot before adding another.</p>}
       {addingPost && <form className="measurement-post-form" onSubmit={(event) => void savePost(event)}><fieldset disabled={saving}><legend>New results snapshot</legend>
         <div className="measurement-fields">
-          <label>Results platform<select value={post.platform} onChange={(event) => setPost({ ...post, platform: event.target.value })}><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select></label>
+          <label>Results platform<select value={post.platform} onChange={(event) => setPost({ ...post, platform: event.target.value, publicationId: "" })}><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="youtube">YouTube</option></select></label>
+          <label className="measurement-wide">Published post<select value={post.publicationId} onChange={(event) => setPost({ ...post, publicationId: event.target.value })}><option value="">Unlinked observation · legacy / post not recorded</option>{entry.publications.filter(item => item.id && item.platform === post.platform).map(item => <option key={item.id} value={item.id}>{item.account || "Account not recorded"} · {dateText(item.publishedAt)}{item.url ? ` · ${item.url}` : ""}</option>)}</select><span>Use “Record publication” below to add a post and account first.</span></label>
+          <label className="measurement-wide">Reach assessment<select value={post.reachAssessment} onChange={(event) => setPost({ ...post, reachAssessment: event.target.value })}>{Object.entries(REACH_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><span>Your observation, not an automatic shadowban diagnosis. Low views alone do not confirm a restriction.</span></label>
+          <label className="measurement-wide">Posting feedback<textarea rows={2} maxLength={1000} placeholder="What happened after posting? Include when you checked and what changed." value={post.feedback} onChange={(event) => setPost({ ...post, feedback: event.target.value })} /></label>
           <label>Measured date and time<input type="datetime-local" required value={post.measuredAt} onChange={(event) => setPost({ ...post, measuredAt: event.target.value })} /></label>
           {([
             ["views", "Views"], ["averageWatchSeconds", "Average watch time (seconds)"], ["completionPercent", "Completion (%)"], ["saves", "Saves"], ["shares", "Shares"],
@@ -170,11 +181,7 @@ interface MeasurementGroup {
   automaticRepair?: { logs: number; attempts: number; accepted: number; rejected: number; unavailable: number };
 }
 function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[] | null; entries: ExportHistoryEntry[] }) {
-  const latest = entries.flatMap((entry) => (["instagram", "tiktok"] as const).flatMap((platform) => {
-    const snapshot = entry.measurements?.posts?.filter((post) => post?.platform === platform && Number.isFinite(Date.parse(post.measuredAt))).reduce<PostMetrics | undefined>((latest, post) =>
-      !latest || Date.parse(post.measuredAt) >= Date.parse(latest.measuredAt) ? post : latest, undefined);
-    return snapshot ? [{ entry, snapshot }] : [];
-  }));
+  const latest = entries.flatMap(entry => latestPostObservations(entry).map(snapshot => ({ entry, snapshot })));
   return <details className="measurement-comparison">
     <summary>Compare recorded results</summary>
     <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Acceptance rates use only explicit human verdicts, including rejections. Undecided exports stay outside that denominator. Automatic repairs are counted separately. Each export is counted separately, including revisions; download measurements to compare editing modes and model versions.</p>
@@ -195,7 +202,7 @@ function MeasurementComparison({ groups, entries }: { groups: MeasurementGroup[]
         <td>{measuredNumber(group.medianCorrectionSeconds, "s")}<small>{group.correctionTimeExports} exports timed · Average {measuredNumber(group.averageCorrectionSeconds, "s")}</small></td>
       </tr>)}
     </tbody></table></div></> : <p className="measurement-note">{groups === null ? "Comparison data is not available yet." : "Record reviews on the exports below to start comparing approaches."}</p>}
-    {!!latest.length && <><h3>Latest platform results for listed exports</h3><p className="measurement-note">One latest snapshot per export and platform. Compare similar cases measured after similar amounts of time.</p><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Latest platform results"><table className="measurement-table"><thead><tr><th>Export / approach</th><th>Platform / measured</th><th>Views</th><th>Average watch</th><th>Completion</th><th>Saves</th><th>Shares</th><th>Platform notice</th></tr></thead><tbody>{latest.map(({ entry, snapshot }) => <tr key={`${entry.id}-${snapshot.platform}`}><th>{entry.title || entry.sourceName}<small>{entry.measurements?.review?.approach || "Approach not recorded"} · {entry.measurements?.review?.benchmarkCase || "Case not recorded"}</small></th><td>{platformName(snapshot.platform)}<small>{dateText(snapshot.measuredAt)}</small></td><td>{measuredNumber(snapshot.views)}</td><td>{measuredNumber(snapshot.averageWatchSeconds, "s")}</td><td>{measuredNumber(snapshot.completionPercent, "%")}</td><td>{measuredNumber(snapshot.saves)}</td><td>{measuredNumber(snapshot.shares)}</td><td>{snapshot.platformNotice || "—"}</td></tr>)}</tbody></table></div></>}
+    {!!latest.length && <><h3>Latest platform results for listed exports</h3><p className="measurement-note">One latest snapshot per recorded post (or legacy platform observation). Compare similar cases measured after similar amounts of time.</p><p className="measurement-table-hint">Swipe to compare →</p><div className="measurement-table-scroll" tabIndex={0} role="region" aria-label="Latest platform results"><table className="measurement-table"><thead><tr><th>Export / approach</th><th>Platform / measured</th><th>Views</th><th>Average watch</th><th>Completion</th><th>Saves</th><th>Shares</th><th>Platform notice</th></tr></thead><tbody>{latest.map(({ entry, snapshot }) => <tr key={`${entry.id}-${snapshot.platform}-${snapshot.publicationId || "legacy"}`}><th>{entry.title || entry.sourceName}<small>{entry.measurements?.review?.approach || "Approach not recorded"} · {entry.measurements?.review?.benchmarkCase || "Case not recorded"}</small></th><td>{platformName(snapshot.platform)}<small>{dateText(snapshot.measuredAt)}</small></td><td>{measuredNumber(snapshot.views)}</td><td>{measuredNumber(snapshot.averageWatchSeconds, "s")}</td><td>{measuredNumber(snapshot.completionPercent, "%")}</td><td>{measuredNumber(snapshot.saves)}</td><td>{measuredNumber(snapshot.shares)}</td><td>{REACH_LABELS[snapshot.reachAssessment || "unknown"]}<small>{snapshot.platformNotice || snapshot.feedback || ""}</small></td></tr>)}</tbody></table></div></>}
   </details>;
 }
 
@@ -223,6 +230,9 @@ function HistoryCard({ entry, stockUses, onSaved }: {
   const [platform, setPlatform] = useState<Publication["platform"]>("instagram");
   const [publishedAt, setPublishedAt] = useState(localDateTime);
   const [url, setUrl] = useState("");
+  const [account, setAccount] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const save = async (publications: Publication[]) => {
@@ -235,7 +245,7 @@ function HistoryCard({ entry, stockUses, onSaved }: {
       });
       onSaved({ ...entry, ...updated });
       setAdding(false);
-      setUrl("");
+      setUrl(""); setAccount(""); setEditingId(null); setEditingIndex(null);
     } catch (reason) { setError((reason as Error).message); }
     finally { setSaving(false); }
   };
@@ -244,15 +254,11 @@ function HistoryCard({ entry, stockUses, onSaved }: {
     const date = new Date(publishedAt);
     if (!Number.isFinite(date.getTime())) { setError("Choose the date and time you published this video."); return; }
     const trimmedUrl = url.trim();
-    if (trimmedUrl) {
-      try {
-        const parsed = new URL(trimmedUrl);
-        const domain = platform === "instagram" ? "instagram.com" : "tiktok.com";
-        if (parsed.protocol !== "https:" || parsed.username || parsed.password ||
-          !(parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`))) throw new Error("Invalid publication URL");
-      } catch { setError(`Use an HTTPS link to your ${platformName(platform)} post, or leave the link blank.`); return; }
+    if (trimmedUrl && !validPublicationUrl(platform, trimmedUrl)) {
+      setError(`Use an HTTPS link to your ${platformName(platform)} post, or leave the link blank.`); return;
     }
-    void save([...entry.publications, { platform, publishedAt: date.toISOString(), ...(trimmedUrl ? { url: trimmedUrl } : {}) }]);
+    const record: Publication = { id: editingId || crypto.randomUUID(), platform, publishedAt: date.toISOString(), ...(account.trim() ? { account: account.trim() } : {}), ...(trimmedUrl ? { url: trimmedUrl } : {}) };
+    void save(editingIndex !== null ? entry.publications.map((item, index) => index === editingIndex ? record : item) : [...entry.publications, record]);
   };
   return <article className="history-card" aria-label={`History for ${entry.title || entry.sourceName}`}>
     <div className="history-card-top">
@@ -275,11 +281,13 @@ function HistoryCard({ entry, stockUses, onSaved }: {
       </li>)}</ul></>}
     </details>
     <EditorialReportSummary report={entry.editorialReport} repair={entry.editorialRepair} compact />
+    <SettingsSnapshot entry={entry} />
     <MeasurementEditor entry={entry} onSaved={onSaved} />
     <div className="history-publications" aria-label="Recorded publications">
       {entry.publications.map((publication, index) => <div className="history-publication" key={`${publication.platform}-${publication.publishedAt}-${index}`}>
-        <CalendarDays size={14} /><div><strong>{platformName(publication.platform)}</strong><span>{dateText(publication.publishedAt)}</span></div>
+        <CalendarDays size={14} /><div><strong>{platformName(publication.platform)}{publication.account ? ` · ${publication.account}` : ""}</strong><span>{dateText(publication.publishedAt)}</span></div>
         {publication.url && <a href={publication.url} target="_blank" rel="noreferrer" aria-label={`View ${platformName(publication.platform)} post`}><ExternalLink size={15} /></a>}
+        {<button type="button" className="secondary-button" disabled={saving} onClick={() => { setEditingIndex(index); setEditingId(publication.id || null); setPlatform(publication.platform); const date = new Date(publication.publishedAt); setPublishedAt(new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0,16)); setAccount(publication.account || ""); setUrl(publication.url || ""); setAdding(true); setError(""); }}>Edit record</button>}
         <button type="button" className="icon-button" disabled={saving} aria-label={`Remove ${platformName(publication.platform)} publication record`} title="Remove publication record" onClick={() => void save(entry.publications.filter((_, itemIndex) => itemIndex !== index))}><X size={14} /></button>
       </div>)}
     </div>
@@ -287,17 +295,18 @@ function HistoryCard({ entry, stockUses, onSaved }: {
       <p>Record a post you published.</p>
       <fieldset disabled={saving}><legend className="visually-hidden">Publication details</legend>
         <div className="history-publication-fields">
-          <label>Platform<select value={platform} onChange={(event) => setPlatform(event.target.value as Publication["platform"])}><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select></label>
+          <label>Platform<select value={platform} onChange={(event) => setPlatform(event.target.value as Publication["platform"])}><option value="instagram">Instagram</option><option value="tiktok">TikTok</option><option value="youtube">YouTube</option></select></label>
+          <label>Account / channel<input maxLength={100} value={account} placeholder="@youraccount" onChange={(event) => setAccount(event.target.value)} /></label>
           <label>Published date and time<input type="datetime-local" required value={publishedAt} onChange={(event) => setPublishedAt(event.target.value)} /></label>
-          <label className="history-publication-url">Post link <span>(optional)</span><input type="url" value={url} placeholder={platform === "instagram" ? "https://www.instagram.com/reel/…" : "https://www.tiktok.com/@…/video/…"} onChange={(event) => setUrl(event.target.value)} /></label>
+          <label className="history-publication-url">Post link <span>(optional)</span><input type="url" value={url} placeholder={platform === "instagram" ? "https://www.instagram.com/reel/…" : platform === "youtube" ? "https://www.youtube.com/shorts/…" : "https://www.tiktok.com/@…/video/…"} onChange={(event) => setUrl(event.target.value)} /></label>
         </div>
-        <div className="history-form-actions"><button type="button" className="secondary-button" onClick={() => { setAdding(false); setError(""); }}>Cancel</button><button className="secondary-button" type="submit">{saving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}Save publication record</button></div>
+        <div className="history-form-actions"><button type="button" className="secondary-button" onClick={() => { setAdding(false); setEditingId(null); setEditingIndex(null); setError(""); }}>Cancel</button><button className="secondary-button" type="submit">{saving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}Save publication record</button></div>
       </fieldset>
     </form>}
     {error && <p className="history-error" role="alert">{error}</p>}
     <div className="history-card-actions">
       <span className={`history-availability ${entry.available ? "available" : ""}`}>{entry.available ? "Export file available" : "Export file expired or removed · History kept"}</span>
-      <div>{!adding && <button type="button" className="secondary-button" disabled={saving} onClick={() => { setAdding(true); setError(""); }}><Plus size={13} />Record publication</button>}
+      <div>{!adding && <button type="button" className="secondary-button" disabled={saving} onClick={() => { setAdding(true); setEditingId(null); setEditingIndex(null); setUrl(""); setAccount(""); setPublishedAt(localDateTime()); setError(""); }}><Plus size={13} />Record publication</button>}
         {entry.available && <>
           <a className="secondary-button" href={`/api/jobs/${encodeURIComponent(entry.jobId)}/video`} target="_blank" rel="noreferrer"><ExternalLink size={13} />Preview</a>
           <a className="secondary-button" href={`/api/jobs/${encodeURIComponent(entry.jobId)}/download`} download><Download size={13} />MP4</a>
@@ -351,6 +360,7 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
     {source && <div className="history-source-filter"><div><strong>Earlier exports from this source</strong><span>{source.name}</span></div><button className="secondary-button" onClick={onClearSource}><X size={13} />Show all history</button></div>}
     <div className="history-toolbar"><label className="history-search"><Search size={16} /><span className="visually-hidden">Search history by title or source</span><input type="search" placeholder="Search by title or source…" value={search} onChange={(event) => setSearch(event.target.value)} /></label>
       <button className="secondary-button" disabled={loading} onClick={() => setReload((value) => value + 1)}><RefreshCw className={loading ? "spin" : ""} size={14} />Refresh</button></div>
+    <ConfigurationHistory entries={visible} />
     <MeasurementComparison groups={measurementGroups} entries={visible} />
     {error && <p className="history-error" role="alert">{error}</p>}
     {loading && !entries.length ? <div className="history-empty" role="status"><LoaderCircle className="spin" size={24} /><p>Loading export history…</p></div> :

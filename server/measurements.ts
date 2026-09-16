@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { CorrectionRecord, EditPlan, ExportHistoryEntry, PostMetrics } from "../shared/types.js";
+import { latestPostObservations as latestPosts } from "../shared/publishing.js";
 
 const count = z.number().finite().int().min(0).max(1_000_000_000_000);
 const corrections = z.number().finite().int().min(0).max(100_000);
@@ -27,7 +28,10 @@ const reviewSchema = z.object({
   .refine(review => review.brollAccepted === undefined || review.brollAccepted <= review.brollReviewed!,
     "Accepted B-roll shots cannot exceed reviewed shots");
 const postSchema = z.object({
-  platform: z.enum(["instagram", "tiktok"]),
+  platform: z.enum(["instagram", "tiktok", "youtube"]),
+  publicationId: z.uuid().optional(),
+  reachAssessment: z.enum(["unknown", "normal", "suspected", "confirmed", "resolved"]).optional(),
+  feedback: text(1000).optional(),
   measuredAt: z.iso.datetime({ offset: true }),
   views: count.optional(),
   averageWatchSeconds: seconds.optional(),
@@ -35,12 +39,13 @@ const postSchema = z.object({
   saves: count.optional(),
   shares: count.optional(),
   platformNotice: text(500).optional(),
-}).strict();
+}).strict().refine(post => post.reachAssessment !== "confirmed" || Boolean(post.platformNotice?.trim()),
+  "A confirmed restriction needs the notice received from the platform");
 
 /** Replace the submitted measurement document; unspecified metrics stay unknown. */
 export const measurementsSchema = z.object({
   review: reviewSchema.optional(),
-  posts: z.array(postSchema).max(20).optional(),
+  posts: z.array(postSchema).max(200).optional(),
 }).strict();
 
 /** Count changed caption content and shot decisions, excluding timing-only captions and lock toggles. */
@@ -164,17 +169,6 @@ function measuredCorrections(entry: ExportHistoryEntry) {
   };
 }
 
-/** Later array entries win timestamp ties; snapshots are never summed together. */
-function latestPosts(entry: ExportHistoryEntry): PostMetrics[] {
-  const latest = new Map<PostMetrics["platform"], PostMetrics>();
-  for (const post of entry.measurements?.posts || []) {
-    if (!post || !["instagram", "tiktok"].includes(post.platform) || !Number.isFinite(Date.parse(post.measuredAt))) continue;
-    const previous = latest.get(post.platform);
-    if (!previous || Date.parse(post.measuredAt) >= Date.parse(previous.measuredAt)) latest.set(post.platform, post);
-  }
-  return [...latest.values()].sort((a, b) => a.platform.localeCompare(b.platform));
-}
-
 function summarizePosts(posts: PostMetrics[]): PostMeasurementStats {
   const stats: PostMeasurementStats = {
     posts: posts.length, postsWithViews: 0, totalViews: null, postsWithWatchTime: 0, watchTimeViews: 0, averageWatchSeconds: null,
@@ -269,7 +263,7 @@ function summarize(entries: ExportHistoryEntry[]): MeasurementStats {
   }
   const posts = entries.flatMap(latestPosts);
   Object.assign(stats, summarizePosts(posts));
-  stats.platforms = (["instagram", "tiktok"] as const).map(platform => ({
+  stats.platforms = (["instagram", "tiktok", "youtube"] as const).map(platform => ({
     platform, ...summarizePosts(posts.filter(post => post.platform === platform)),
   }));
   const ratio = (value: number, denominator: number) => denominator > 0 ? value / denominator : null;
@@ -318,7 +312,8 @@ export function measurementsCsv(entries: ExportHistoryEntry[]): string {
     "repair_policy_version", "repair_model_version", "automatic_repair_attempts", "automatic_repairs_accepted", "automatic_repairs_rejected", "automatic_repairs_unavailable", "repair_stop_reason",
     "verdict", "issue_reasons",
     "opening_clear", "ending_complete", "broll_reviewed", "broll_accepted", "caption_corrections", "broll_changes", "correction_seconds", "review_notes",
-    "platform", "measured_at", "views", "average_watch_seconds", "completion_percent", "saves", "shares", "platform_notice"];
+    "platform", "measured_at", "views", "average_watch_seconds", "completion_percent", "saves", "shares", "platform_notice",
+    "publication_id", "account", "post_url", "published_at", "reach_assessment", "feedback", "settings_profile", "export_configuration"];
   const rows: unknown[][] = [columns];
   for (const entry of entries) {
     const review = entry.measurements?.review;
@@ -345,6 +340,11 @@ export function measurementsCsv(entries: ExportHistoryEntry[]): string {
       nonnegative(post?.averageWatchSeconds, 86400) ? post.averageWatchSeconds : undefined,
       nonnegative(post?.completionPercent, 100) ? post.completionPercent : undefined,
       whole(post?.saves) ? post.saves : undefined, whole(post?.shares) ? post.shares : undefined, post?.platformNotice,
+      post?.publicationId, entry.publications.find(item => item.id && item.id === post?.publicationId)?.account,
+      entry.publications.find(item => item.id && item.id === post?.publicationId)?.url,
+      entry.publications.find(item => item.id && item.id === post?.publicationId)?.publishedAt,
+      post?.reachAssessment, post?.feedback, entry.configuration?.profileId,
+      entry.configuration ? JSON.stringify(entry.configuration) : undefined,
     ]);
   }
   return rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";

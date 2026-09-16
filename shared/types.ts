@@ -285,8 +285,27 @@ export interface ExportReview {
   correctionSeconds?: number;
   notes?: string;
 }
+export type PublishingPlatform = "instagram" | "tiktok" | "youtube";
+export type ReachAssessment = "unknown" | "normal" | "suspected" | "confirmed" | "resolved";
+export interface Publication {
+  id?: string;
+  platform: PublishingPlatform;
+  publishedAt: string;
+  account?: string;
+  url?: string;
+}
+export interface ExportConfiguration {
+  version: 1;
+  profileId: string;
+  settings: RemixSettings;
+  auto?: AutoOptions;
+  actual: { captions: string; narration: boolean; visualCount: number; visualCoveragePercent: number; visualSources: string[] };
+}
 export interface PostMetrics {
-  platform: "instagram" | "tiktok";
+  platform: PublishingPlatform;
+  publicationId?: string;
+  reachAssessment?: ReachAssessment;
+  feedback?: string;
   measuredAt: string;
   views?: number;
   averageWatchSeconds?: number;
@@ -301,6 +320,7 @@ export interface ExportMeasurements {
 }
 export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
 export interface ExportHistoryEntry {
+  configuration?: ExportConfiguration;
   editorialMode?: AutoOptions["editorialMode"];
   id: string;
   jobId: string;
@@ -315,7 +335,7 @@ export interface ExportHistoryEntry {
   revision: number;
   parentJobId?: string;
   stockShots: { identity: string; name: string; sourceStart: number; duration: number }[];
-  publications: { platform: "instagram" | "tiktok"; publishedAt: string; url?: string }[];
+  publications: Publication[];
   available?: boolean;
   /** A retained frame of this export, independent of the temporary video file. */
   thumbnailUrl?: string;
