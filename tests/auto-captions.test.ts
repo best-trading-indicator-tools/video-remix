@@ -60,7 +60,8 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
       const job: StoredJob = { id: randomUUID(), batchId: randomUUID(), sourceId: source.id, sourceName: source.name,
         variant: 1, status: "processing", progress: 0, createdAt: new Date().toISOString(),
         outputPath: path.join(directory, `${randomUUID()}.mp4`), settings: { ...DEFAULT_SETTINGS },
-        auto: { ...DEFAULT_AUTO_OPTIONS, captions, narration, editorialMode: "off" } };
+        auto: { ...DEFAULT_AUTO_OPTIONS, captions, narration, editorialMode: "off",
+          captionStyle: { fontSize: 22, bottomPercent: 18, fontFamily: "poppins", color: "#ffe66d", bold: true } } };
       const result = await prepareAutoRemix({ source, job, workDir, signal: new AbortController().signal, onPhase: () => undefined });
       job.settings = result.settings; job.summary = result.summary; job.notes = result.notes;
       await captureEditPlan({ source, job, visuals: [], subtitlePath: result.subtitlePath, audioPath: result.audioPath,
@@ -97,6 +98,8 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
       assert.ok(result.subtitlePath);
       assert.match(await readFile(result.subtitlePath, "utf8"), /morning/u);
       assert.equal(job.editPlan?.captionMode, "generated");
+      assert.deepEqual(result.settings.captionStyle, job.auto!.captionStyle);
+      assert.deepEqual(job.editPlan?.settings.captionStyle, job.auto!.captionStyle);
     });
     await t.test("Keep original adds no captions even on clean footage, and Add explicitly enables them", async () => {
       const kept = await prepare(clean, "keep");

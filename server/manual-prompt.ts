@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { RemixSettings } from "../shared/types.js";
 import { manualPreviewInterval } from "../shared/manual.js";
 import { settingsSchema, captionStyleSchema, focalPointSchema } from "./schema.js";
+import { captionStyleDescription } from "../shared/caption-style.js";
 import { geometry } from "./engine.js";
 import { jsonCompletion } from "./ai-json.js";
 import { PromptEditError } from "./prompt-edit.js";
@@ -35,7 +36,7 @@ trimStart 0–86400 seconds, trimEnd 0.01–86400 seconds or null for source end
 segments [{"start":10,"end":20,"focalPoint":{"x":0.5,"y":0.5}}] (1–60 cuts in requested order; focalPoint optional), or null to remove an existing sequence;
 hookText literal plain heading up to 200 characters, hookDuration 0.5–30 seconds;
 normalizeAudio boolean, qualityCleanup boolean (free local denoising and mild sharpening), autoMotion boolean (gentle crop movement);
-focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, right/bottom 1; either field may be omitted); captionStyle {"fontSize":20,"bottomPercent":8.333333333333334}, fontSize 12–40, bottomPercent 5–80 (larger means HIGHER on screen; either field may be omitted).
+focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, right/bottom 1; either field may be omitted); captionStyle fields are optional: fontSize 12–40; bottomPercent 5–80 (larger means HIGHER); fontFamily classic/poppins/anton/serif; color, outlineColor and backgroundColor as six-digit #RRGGBB; bold, italic and uppercase booleans; outlineWidth and shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100. A background box replaces the outline. Only added SRT captions can be styled, never text already baked into source pixels.
 For a simple trim, provide trimStart/trimEnd only. The compiler removes existing segments and resets an inherited timeShift to 0 to honor those source timestamps. For explicit source sequences, provide segments only, not trimStart/trimEnd; sequence selection resets inherited timeShift to 0. timeShift moves the complete trim window while preserving its duration and clamps at the source edges; it does not work with segments. Never combine nonzero timeShift with segments. Global focalPoint replaces existing per-cut crop overrides. Do not restate unchanged fields or reset other filters.
 No speech or transcript is available. You cannot invent or rewrite a heading from the video; only use exact heading text explicitly supplied by the user, or remove it with an empty string. Caption style affects an existing subtitle attachment; it does not create, rewrite, translate or retime caption text. You cannot add/change audio or subtitle attachments, voices, music, B-roll, generated footage, callouts, metadata/device identity, stripMetadata, custom LUTs, subject tracking, publishing or other settings. AI upscaling and generative enhancement are unavailable; qualityCleanup is only local cleanup and resolution is ordinary resizing.
 If any part is unsupported, ambiguous, or would require speech/video analysis, return patch:{} plus clarification. Never partially fulfill mixed requests. For 'make it better' ask which changes; for specific aesthetic requests such as 'slightly warmer with less saturation', propose restrained changes. If the requested settings already match, return patch:{}. Never claim anything is rendered, saved, published or applied. No media URLs, file paths or attachment IDs. Write clarification in the request's language.`;
@@ -108,6 +109,8 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
     summary.push(`Focal point: ${display(next.focalPoint!.x * 100)}% across, ${display(next.focalPoint!.y * 100)}% down.`);
   if (!same(next.captionStyle, settings.captionStyle) && !same(next.captionStyle, settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 / 12 }))
     summary.push(`Caption size: ${display(next.captionStyle!.fontSize)}; position: ${display(next.captionStyle!.bottomPercent)}% from the bottom${next.subtitleId ? "" : " (applies when captions are attached)"}.`);
+  if (captionStyle && Object.keys(captionStyle).some(key => !["fontSize", "bottomPercent"].includes(key)))
+    summary.push(captionStyleDescription(next.captionStyle));
   const timelineChanged = next.trimStart !== settings.trimStart || next.trimEnd !== settings.trimEnd || next.timeShift !== settings.timeShift || !same(next.segments, settings.segments);
   if (timelineChanged) {
     if (settings.segments && !next.segments) summary.push("Replace the previous sequence with one continuous source interval.");

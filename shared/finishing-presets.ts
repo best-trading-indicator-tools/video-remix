@@ -1,5 +1,6 @@
 import { NATURAL_PACING, pacingOptionsSchema } from "./pacing.js";
 import { z } from "zod";
+import { captionStyleSchema } from "./caption-style.js";
 import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "./types.js";
 import { getVisualSources } from "./visual-sources.js";
 import type { AutoOptions } from "./types.js";
@@ -12,6 +13,7 @@ const framing = {
   normalizeAudio: z.boolean().default(false), qualityCleanup: z.boolean().default(false),
 };
 const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
+  captionStyle: captionStyleSchema.optional(),
   visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"])).max(5).transform(values => [...new Set(values)]),
   brollCount: z.number().int().min(1).max(10).default(DEFAULT_BROLL_COUNT),
   brollMaxCoverage: z.number().int().min(0).max(100).default(DEFAULT_BROLL_MAX_COVERAGE),
@@ -23,7 +25,7 @@ const manualSchema = z.object({ ...framing, fps: z.enum(["source", "24", "30", "
   hue: z.number().min(-180).max(180), gamma: z.number().min(0.1).max(3), temperature: z.number().min(-1).max(1),
   noise: z.number().min(0).max(1), sharpness: z.number().min(0).max(2), blend: z.number().min(0).max(1), frameBlend: z.number().min(0).max(0.5),
   volume: z.number().min(0).max(2), muted: z.boolean(), mirror: z.boolean(), autoMotion: z.boolean().default(false),
-  captionStyle: z.object({ fontSize: z.number().min(12).max(40), bottomPercent: z.number().min(5).max(80) }).default({fontSize:20,bottomPercent:100/12}),
+  captionStyle: captionStyleSchema.default({fontSize:20,bottomPercent:100/12}),
 });
 const base = { id: z.string().min(1).max(100), name: z.string().trim().min(1).max(60).refine(value => !/[\u0000-\u001f\u007f]/u.test(value)) };
 const schema = z.discriminatedUnion("mode", [

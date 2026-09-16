@@ -61,7 +61,6 @@
 .edit-framing-picture { position: relative; overflow: hidden; border-radius: 8px; background: #07080a; margin-bottom: 14px; }
 .edit-framing-picture > video.edit-framing-video, .edit-framing-picture > video.edit-framing-blur { display: block; position: absolute; inset: 0; width: 100%; height: 100%; max-height: none; border-radius: 0; margin: 0; background: transparent; }
 .edit-framing-picture > video.edit-framing-blur { object-fit: cover; filter: blur(15px) brightness(.7); transform: scale(1.06); pointer-events: none; }
-.edit-framing-caption { position: absolute; z-index: 1; left: 5%; right: 5%; text-align: center; color: #fff; font-family: Arial, sans-serif; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; text-shadow: 1px 1px 2px #000, -1px -1px 2px #000, 1px -1px 2px #000, -1px 1px 2px #000; pointer-events: none; }
 .edit-framing-hook, .edit-framing-callout { position: absolute; left: 7%; right: 7%; z-index: 1; text-align: center; color: #fff; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; text-shadow: 1px 1px 3px #000; pointer-events: none; }
 .edit-framing-hook { top: 8%; }
 .edit-framing-callout { top: 24%; }

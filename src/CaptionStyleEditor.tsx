@@ -1,0 +1,95 @@
+import { useEffect, useState, type CSSProperties } from "react";
+import { RotateCcw, Check } from "lucide-react";
+import { CAPTION_FONTS, CAPTION_PRESETS, DEFAULT_CAPTION_STYLE, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
+import "./caption-style.css";
+
+export function CaptionOverlay({ style, height, text }: { style?: CaptionStyle; height: number; text: string }) {
+  const s = resolveCaptionStyle(style), scale = height / 288;
+  const box = s.background === "box";
+  const color = s.backgroundColor;
+  const background = `rgba(${parseInt(color.slice(1, 3), 16)},${parseInt(color.slice(3, 5), 16)},${parseInt(color.slice(5, 7), 16)},${s.backgroundOpacity / 100})`;
+  const lettering: CSSProperties = {
+    fontFamily: CAPTION_FONTS[s.fontFamily].css, fontSize: s.fontSize * scale,
+    fontWeight: s.bold ? 700 : 400, fontStyle: s.italic ? "italic" : "normal",
+    color: s.color, letterSpacing: s.letterSpacing * scale,
+    WebkitTextStroke: !box && s.outlineWidth ? `${s.outlineWidth * scale}px ${s.outlineColor}` : undefined,
+    textShadow: s.shadow ? `${s.shadow * scale}px ${s.shadow * scale}px 0 #000` : "none",
+    ...(box ? { backgroundColor: background, padding: `${3 * scale}px`, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" } : {}),
+  };
+  return <div className="caption-overlay" style={{ bottom: `${s.bottomPercent}%`, textAlign: s.alignment }}><span style={lettering}>{s.uppercase ? text.toUpperCase() : text}</span></div>;
+}
+
+function NumberControl({ label, value, min, max, step = 1, suffix, onChange }: {
+  label: string; value: number; min: number; max: number; step?: number; suffix?: string; onChange: (value: number) => void;
+}) {
+  const [input, setInput] = useState(String(Number(value.toFixed(2))));
+  useEffect(() => setInput(String(Number(value.toFixed(2)))), [value]);
+  const commit = () => { const n = Number(input); const next = input.trim() && Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : value; onChange(next); setInput(String(Number(next.toFixed(2)))); };
+  return <div className="caption-number"><label><span>{label}{suffix && <small>{suffix}</small>}</span>
+    <input aria-label={label} type="number" min={min} max={max} step="any" value={input}
+      onChange={event => { setInput(event.target.value); const n = event.target.valueAsNumber; if (Number.isFinite(n) && n >= min && n <= max) onChange(n); }}
+      onBlur={commit} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} />
+  </label><input aria-label={`${label} slider`} type="range" min={min} max={max} step={step} value={value} onChange={event => onChange(event.target.valueAsNumber)} /></div>;
+}
+function ColorControl({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+  const [input, setInput] = useState(value);
+  useEffect(() => setInput(value), [value]);
+  return <label className="caption-color"><span>{label}</span><span className="caption-color-inputs">
+    <input type="color" aria-label={`${label} picker`} value={value} onChange={event => onChange(event.target.value)} />
+    <input type="text" aria-label={label} value={input} maxLength={7} pattern="#[0-9a-fA-F]{6}" spellCheck={false} onChange={event => {
+      const next = event.target.value; setInput(next); if (/^#[0-9a-fA-F]{6}$/u.test(next)) onChange(next);
+    }} onBlur={() => setInput(value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} />
+  </span></label>;
+}
+
+export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count." }: {
+  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string;
+}) {
+  const s = resolveCaptionStyle(value);
+  const patch = (change: Partial<CaptionStyle>) => onChange({ ...s, ...change });
+  return <section className="caption-styler" aria-label="Caption styling">
+    <header><div><h4>Caption look</h4><p>One style for all added captions.</p></div>
+      <button type="button" className="caption-reset" aria-label="Reset caption style" onClick={() => onChange({ ...DEFAULT_CAPTION_STYLE })}><RotateCcw size={14} />Reset</button></header>
+    <div className="caption-looks" role="group" aria-label="Caption look presets">
+      {CAPTION_PRESETS.map(preset => {
+        const selected = Object.entries(preset.style).every(([key, v]) => s[key as keyof CaptionStyle] === v);
+        return <button type="button" key={preset.id} aria-pressed={selected} title={preset.description} onClick={() => onChange({ ...preset.style })}>
+          <span className={`caption-look-sample look-${preset.id}`} style={{ fontFamily: CAPTION_FONTS[preset.style.fontFamily!].css, color: preset.style.color }}>Aa</span>
+          <span>{preset.name}{selected && <Check size={12} />}</span>
+        </button>;
+      })}
+    </div>
+    <div className="caption-type-preview" aria-label="Live caption style preview">
+      <span className="caption-preview-label">Type preview</span>
+      <CaptionOverlay style={{ ...s, bottomPercent: 26 }} height={360} text={sample.trim().slice(0, 120) || "Make every word count."} />
+    </div>
+    <div className="caption-style-grid">
+      <label className="caption-field">Font family<select value={s.fontFamily} onChange={event => patch({ fontFamily: event.target.value as CaptionStyle["fontFamily"] })}>
+        {Object.entries(CAPTION_FONTS).map(([id, font]) => <option key={id} value={id}>{font.label}</option>)}
+      </select></label>
+      <ColorControl label="Text color" value={s.color} onChange={color => patch({ color })} />
+    </div>
+    <div className="caption-emphasis" role="group" aria-label="Caption emphasis">
+      {([['bold', 'Bold'], ['italic', 'Italic'], ['uppercase', 'ALL CAPS']] as const).map(([key, name]) => <button type="button" key={key} aria-pressed={s[key]} onClick={() => patch({ [key]: !s[key] })}>{name}</button>)}
+    </div>
+    <NumberControl label="Caption font size" value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
+    <p className="caption-style-note">Size scales with your export resolution.</p>
+    <details className="caption-more"><summary>Outline, background &amp; placement</summary>
+      <div className="caption-style-grid">
+        <label className="caption-field">Background<select value={s.background} onChange={event => patch({ background: event.target.value as CaptionStyle["background"] })}><option value="none">None · use outline</option><option value="box">Solid box</option></select></label>
+        <label className="caption-field">Text alignment<select value={s.alignment} onChange={event => patch({ alignment: event.target.value as CaptionStyle["alignment"] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+      </div>
+      {s.background === "box" ? <>
+        <ColorControl label="Background color" value={s.backgroundColor} onChange={backgroundColor => patch({ backgroundColor })} />
+        <NumberControl label="Background opacity" value={s.backgroundOpacity} min={0} max={100} suffix="%" onChange={backgroundOpacity => patch({ backgroundOpacity })} />
+        <p className="caption-style-note">The box replaces the text outline.</p>
+      </> : <>
+        <ColorControl label="Outline color" value={s.outlineColor} onChange={outlineColor => patch({ outlineColor })} />
+        <NumberControl label="Outline thickness" value={s.outlineWidth} min={0} max={5} step={0.1} onChange={outlineWidth => patch({ outlineWidth })} />
+      </>}
+      <NumberControl label="Shadow" value={s.shadow} min={0} max={5} step={0.1} onChange={shadow => patch({ shadow })} />
+      <NumberControl label="Letter spacing" value={s.letterSpacing} min={0} max={4} step={0.1} onChange={letterSpacing => patch({ letterSpacing })} />
+      <NumberControl label="Distance from bottom" value={s.bottomPercent} min={5} max={80} step={0.1} suffix="%" onChange={bottomPercent => patch({ bottomPercent })} />
+    </details>
+  </section>;
+}

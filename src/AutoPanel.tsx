@@ -1,4 +1,5 @@
 import OwnFootagePanel from "./OwnFootagePanel";
+import CaptionStyleEditor from "./CaptionStyleEditor";
 import { useEffect, useState } from "react";
 import {
   Check,
@@ -279,6 +280,10 @@ export default function AutoPanel({
                   ? "Adds captions from speech. Any captions already in the original picture remain visible."
                   : "Auto checks for captions baked into the selected footage. If found or uncertain, it keeps the original voice and adds no captions, hook or callouts."}
             </p>
+            {options.captions !== "keep" && <details className="auto-caption-appearance">
+              <summary>Caption appearance</summary>
+              <CaptionStyleEditor value={options.captionStyle} onChange={captionStyle => onChange({ ...options, captionStyle })} />
+            </details>}
             <label className="auto-output-field">
               Editorial review
               <select value={options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>

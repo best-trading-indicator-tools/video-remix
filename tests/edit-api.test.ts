@@ -234,9 +234,10 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
     });
 
     await t.test("framing edits persist without replanning and completed exports expose review findings", async () => {
+      const captionStyle = { fontSize: 40, bottomPercent: 70, fontFamily: "poppins", color: "#ffe66d", bold: true, uppercase: true, background: "box", backgroundColor: "#10151c", backgroundOpacity: 65, alignment: "center", shadow: 1, letterSpacing: 0.5 };
       const response = await request(`/api/jobs/${revised.id}/revisions`, "POST", {
         revision: revisedPlan.revision,
-        framing: { fit: "crop", captionStyle: { fontSize: 40, bottomPercent: 70 } },
+        framing: { fit: "crop", captionStyle },
         cuts: revisedPlan.cuts.map(cut => ({ ...cut, focalPoint: { x: 0.1, y: 0.5 } })),
       });
       assert.equal(response.status, 201, await response.clone().text());
@@ -245,7 +246,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.deepEqual(framedPlan.captions, revisedPlan.captions);
       assert.deepEqual(framedPlan.visuals, revisedPlan.visuals);
       assert.deepEqual(framedPlan.cuts[0]!.focalPoint, { x: 0.1, y: 0.5 });
-      assert.deepEqual(framedPlan.settings.captionStyle, { fontSize: 40, bottomPercent: 70 });
+      assert.deepEqual(framedPlan.settings.captionStyle, captionStyle);
       assert.equal(framed.qualityReport?.status, "review");
       assert.ok(framed.qualityReport?.issues.some(issue => issue.code === "text-collision"));
       assert.ok(framed.downloadUrl, "A review finding keeps the technically completed output available");

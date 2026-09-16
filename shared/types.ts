@@ -4,11 +4,12 @@ import type { PacingOptions } from "./pacing.js";
 import type { OwnFootagePlacement, OwnFootageAsset } from "./own-footage.js";
 import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog } from "./editorial-repair.js";
+import type { CaptionStyle } from "./caption-style.js";
+export type { CaptionStyle } from "./caption-style.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
 export interface FocalPoint { x: number; y: number }
 /** A subject center in source coordinates, at an original source timestamp. */
 export interface FocusKeyframe extends FocalPoint { time: number }
-export interface CaptionStyle { fontSize: number; bottomPercent: number }
 export interface QualityIssue { code: string; message: string; start?: number; end?: number }
 export interface QualityReport { status: "pass" | "review"; checkedAt: string; scope: "full" | "sampled"; issues: QualityIssue[] }
 export interface EditSegment {
@@ -38,6 +39,7 @@ export interface AutoOptions {
   pacing?: PacingOptions;
   /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
   captions?: "auto" | "add" | "keep";
+  captionStyle?: CaptionStyle;
   supportingVisuals?: "off" | "stock" | "library" | "graphics" | "both";
   /** Independent sources to mix. An empty list keeps the original footage. */
   visualSources?: VisualSource[];

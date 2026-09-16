@@ -9,6 +9,8 @@ import { focusPointAt, withTrackBounds } from "../shared/focus";
 import { VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
+import CaptionStyleEditor, { CaptionOverlay } from "./CaptionStyleEditor";
+import { DEFAULT_CAPTION_STYLE } from "../shared/caption-style";
 import "./edit-plan.css";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
@@ -20,7 +22,6 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 const differs = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second);
 const seconds = (value: number) => `${value.toFixed(2)}s`;
 const CENTER: FocalPoint = { x: 0.5, y: 0.5 };
-const DEFAULT_CAPTION_STYLE = { fontSize: 20, bottomPercent: 100 * 24 / 288 };
 
 interface PromptDraftAnchor { plan: EditPlan; changes: EditPlanChanges }
 interface PromptUndo { draft: EditPlan; refreshBroll: boolean; brollCount: number; brollMaxCoverage: number; anchor: PromptDraftAnchor | null; appliedIdentity: string }
@@ -353,7 +354,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   focalPoint={focusPointAt(activeCut.focusTrack, previewSourceTime, activeCut.focalPoint || focalPoint)} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
                     {draft.settings.hookText && previewOutputTime < draft.settings.hookDuration && <div className="edit-framing-hook" style={{ fontSize: `${height * Math.min(1, draft.settings.aspect === "original" ? 1 : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])) * 0.054}px` }}>{draft.settings.hookText}</div>}
                     {(draft.settings.callouts || []).filter((callout) => callout.start <= previewOutputTime && callout.end > previewOutputTime).map((callout, index) => <div className="edit-framing-callout" key={index} style={{ fontSize: `${height * 0.026}px` }}>{callout.text}</div>)}
-                    {!!draft.captions.length && <div className="edit-framing-caption" style={{ bottom: `${captionStyle.bottomPercent}%`, fontSize: `${captionStyle.fontSize / 288 * height}px` }}>{activeCaption?.text || draft.captions[0]?.text}</div>}
+                    {activeCaption && <CaptionOverlay style={captionStyle} height={height} text={activeCaption.text} />}
                     {platformGuide !== "off" && <div className={`edit-platform-guide ${platformGuide}`} aria-hidden="true"><span className="guide-top">App header</span><span className="guide-right" style={{ width: `${guideRight}%`, bottom: `${guideBottom}%` }}>Actions</span><span className="guide-bottom" style={{ height: `${guideBottom}%` }}>Post text &amp; navigation</span></div>}
                   </>} />
                 <label className="edit-plan-field edit-guide-field">Platform interface guide
@@ -363,7 +364,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   <label className="edit-framing-slider"><span>Bottom occupied area<output>{guideBottom}%</output></span><input type="range" aria-label="Guide bottom occupied area" min={5} max={40} step={1} value={guideBottom} onChange={(event) => setGuideBottom(event.target.valueAsNumber)} /></label>
                   <label className="edit-framing-slider"><span>Right occupied area<output>{guideRight}%</output></span><input type="range" aria-label="Guide right occupied area" min={5} max={30} step={1} value={guideRight} onChange={(event) => setGuideRight(event.target.valueAsNumber)} /></label>
                 </div>}
-                <p className="edit-plan-note">Approximate framing and text preview. Guides appear only here; app controls vary by device.{!!draft.captions.length && " A sample caption appears when no line is active."}</p>
+                <p className="edit-plan-note">Approximate framing and text preview. Guides appear only here; app controls vary by device. Captions appear at their saved times.</p>
               </>}
               <h3>{previewMode === "export" ? "Current export" : "Draft framing"}</h3><p>{previewMode === "export" ? "Review this version as you make corrections. Render to see your updated video." : "Adjust the crop and captions against the source footage. Render your revision to review the final result."}</p>
               <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
@@ -391,8 +392,6 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   </label>
                   <p className="edit-plan-note">Choose the subject's position within the original picture. Crop positions move the visible area when the frame is filled; each cut can have its own position.</p>
                   <FocalControls label="Default crop position" value={focalPoint} onChange={(point) => updateFraming({ focalPoint: point })} disabled={draft.settings.fit === "contain"} />
-                  <label className="edit-framing-slider"><span>Caption size<output>{captionStyle.fontSize}</output></span><input type="range" aria-label="Caption font size" min={12} max={40} step={1} value={captionStyle.fontSize} onChange={(event) => updateFraming({ captionStyle: { ...captionStyle, fontSize: event.target.valueAsNumber } })} /></label>
-                  <label className="edit-framing-slider"><span>Caption distance from bottom<output>{captionStyle.bottomPercent.toFixed(1)}%</output></span><input type="range" aria-label="Caption distance from bottom" min={5} max={80} step={0.1} value={captionStyle.bottomPercent} onChange={(event) => updateFraming({ captionStyle: { ...captionStyle, bottomPercent: event.target.valueAsNumber } })} /></label>
                   {!!layoutIssues.length && <div className="edit-layout-issues" role="status"><strong><AlertTriangle size={14} />Text placement to review</strong><ul>{layoutIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul></div>}
                 </fieldset>
               </details>
@@ -408,6 +407,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 {cutTimingsChanged && <p className="edit-plan-note">Render your new cut points first. Caption and B-roll timings will follow the revised cuts automatically.</p>}
                 <fieldset disabled={saving || cutTimingsChanged}>
                   <legend className="visually-hidden">Caption corrections</legend>
+                  <CaptionStyleEditor value={draft.settings.captionStyle} sample={activeCaption?.text || draft.captions[0]?.text} onChange={captionStyle => updateFraming({ captionStyle })} />
                   {!!draft.captions.length && <button type="button" className="secondary-button edit-plan-remove-all-captions" onClick={() => {
                     setDraft({ ...draft, captions: [] }); setPreviewMode("framing"); setError("");
                   }}><X size={14} />Remove added captions</button>}

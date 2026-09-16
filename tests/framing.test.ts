@@ -133,3 +133,38 @@ test("invalid focal points and caption settings fail before rendering", async ()
     path: landscape, kind: "broll", label: "Invalid", start: 0.5, end: 1.5, focalPoint: { x: 2, y: 0.5 },
   }]), /Supporting visuals/u);
 });
+
+test("caption fonts, colors, outlines, alignment and translucent boxes change real exported pixels", async () => {
+  const fontSource = path.join(directory, "caption-hd.mp4");
+  await ffmpeg(["-f", "lavfi", "-i", "color=black:size=720x1280:rate=10:duration=1", "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", fontSource]);
+  const styledCaptions = path.join(directory, "styled.srt");
+  await writeFile(styledCaptions, "1\n00:00:00,000 --> 00:00:01,800\n<font color=\"#ffffff\">Hi</font>\n");
+  const style = { fontSize: 20, bottomPercent: 20, fontFamily: "poppins" as const, color: "#ff0000", outlineColor: "#00ff00", outlineWidth: 2 };
+  const scan = async (file: string) => {
+    const { width } = await probeMedia(file);
+    const { stdout } = await ffmpeg(["-ss", "0.5", "-i", file, "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"]);
+    let redCount = 0, greenCount = 0, blueCount = 0, redX = 0;
+    for (let i = 0; i < stdout.length; i += 3) {
+      const [r, g, b] = [stdout[i]!, stdout[i + 1]!, stdout[i + 2]!];
+      if (r > 150 && g < 100 && b < 100) { redCount++; redX += i / 3 % width; }
+      if (g > 140 && r < 110 && b < 110) greenCount++;
+      if (b > 140 && r < 110 && g < 110) blueCount++;
+    }
+    return { redCount, greenCount, blueCount, redX: redX / Math.max(1, redCount), width, pixels: stdout };
+  };
+  const renderStyle = async (patch: Partial<NonNullable<RemixSettings["captionStyle"]>>) => scan(await render(fontSource,
+    { trimEnd: 1, captionStyle: { ...style, ...patch } }, undefined, styledCaptions));
+  const left = await renderStyle({ alignment: "left" }), right = await renderStyle({ alignment: "right" });
+  assert.ok(left.redCount > 30 && left.greenCount > 30, `Selected red fill and green outline override embedded SRT styling: red=${left.redCount}, green=${left.greenCount}`);
+  assert.ok(right.redX - left.redX > left.width * 0.4, "Alignment must move actual glyphs");
+  const anton = await renderStyle({ alignment: "left", fontFamily: "anton" });
+  assert.notDeepEqual(anton.pixels, left.pixels, "Bundled font choice changes rendered letterforms");
+  const bold = await renderStyle({ alignment: "left", bold: true });
+  assert.ok(bold.redCount > left.redCount, "The bundled bold face adds real glyph weight");
+  const box = await renderStyle({ background: "box", backgroundColor: "#0000ff", backgroundOpacity: 100 });
+  const transparent = await renderStyle({ background: "box", backgroundColor: "#0000ff", backgroundOpacity: 0 });
+  assert.ok(box.blueCount > 100, "The background uses its chosen color");
+  assert.equal(transparent.blueCount, 0, "A fully transparent box must not cover the video");
+  const upper = await renderStyle({ alignment: "left", uppercase: true, italic: true, letterSpacing: 1, shadow: 1 });
+  assert.notDeepEqual(upper.pixels, left.pixels, "Uppercase, italic and spacing reach the render");
+});

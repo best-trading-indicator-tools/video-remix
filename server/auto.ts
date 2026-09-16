@@ -441,6 +441,7 @@ export async function prepareAutoRemix({
   const blur = Math.abs(source.width / source.height - targetRatio) > 0.12;
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS,
+    ...(options.captionStyle ? { captionStyle: options.captionStyle } : {}),
     aspect: options.aspect,
     fit: blur ? "blur" : "crop",
     resolution: "1080",

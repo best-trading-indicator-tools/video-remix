@@ -1,4 +1,6 @@
 import OwnFootagePanel from "./OwnFootagePanel";
+import CaptionStyleEditor from "./CaptionStyleEditor";
+import { captionStyleSchema } from "../shared/caption-style";
 import {
   useCallback,
   useEffect,
@@ -95,6 +97,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
+      captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
       finishedReview: options?.finishedReview !== false,
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
       visualSources: getVisualSources(options),
@@ -2074,11 +2077,10 @@ export default function App() {
                             Burned into the export. Use timings for your final
                             edited video.
                           </p>
-                          {settings.subtitleId && <details className="manual-subsection">
-                            <summary>Caption size &amp; placement</summary>
-                            <Slider label="Caption size" value={settings.captionStyle?.fontSize ?? 20} defaultValue={20} min={12} max={40} step={1} onChange={(fontSize) => updateSettings({ captionStyle: { fontSize, bottomPercent: settings.captionStyle?.bottomPercent ?? 100 / 12 } })} />
-                            <Slider label="Caption bottom spacing" value={settings.captionStyle?.bottomPercent ?? 100 / 12} defaultValue={100 / 12} min={5} max={80} step={0.1} unit="%" onChange={(bottomPercent) => updateSettings({ captionStyle: { fontSize: settings.captionStyle?.fontSize ?? 20, bottomPercent } })} />
-                          </details>}
+                          <details className="manual-subsection">
+                            <summary>Caption appearance</summary>
+                            <CaptionStyleEditor value={settings.captionStyle} onChange={captionStyle => updateSettings({ captionStyle })} />
+                          </details>
                           {attachmentError && (
                             <p className="inline-error">{attachmentError}</p>
                           )}

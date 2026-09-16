@@ -5,7 +5,8 @@ import type { EditPlan, EditPlanChanges, EditPlanVisual, EditSegment, Transcript
 import { jsonCompletion } from "./ai-json.js";
 import { applyEditPlanChanges } from "./edit-plan.js";
 import { retimeTranscript } from "./auto-plan.js";
-import { focalPointSchema } from "./schema.js";
+import { focalPointSchema, captionStyleSchema } from "./schema.js";
+import { captionStyleDescription } from "../shared/caption-style.js";
 
 export class PromptEditError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -21,7 +22,7 @@ const operationSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("hook"), text: z.string().max(120) }).strict(),
   z.object({ op: z.literal("caption"), id, text: z.string().min(1).max(500).optional(), start: seconds.optional(), end: seconds.optional() }).strict().refine(hasPatch),
   z.object({ op: z.literal("remove_captions"), ids: z.union([z.literal("all"), z.array(id).min(1).max(300)]) }).strict(),
-  z.object({ op: z.literal("caption_style"), fontSize: z.number().finite().min(12).max(40).optional(), bottomPercent: z.number().finite().min(5).max(80).optional() }).strict().refine(hasPatch),
+  captionStyleSchema.partial().extend({ op: z.literal("caption_style") }).strict().refine(hasPatch),
   z.object({ op: z.literal("framing"), fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional() }).strict().refine(hasPatch),
   z.object({ op: z.literal("cut_focal_point"), index: z.number().int().nonnegative(), focalPoint: focalPointSchema }).strict(),
   z.object({ op: z.literal("trim"), start: seconds.optional(), end: seconds.optional() }).strict().refine(hasPatch),
@@ -63,7 +64,7 @@ Support ONLY these operations, with exactly these fields:
 {"op":"hook","text":"plain text, at most 120 characters; empty removes heading"}
 {"op":"caption","id":"existing caption ID","text":"optional plain text","start":0,"end":1} (text/start/end each optional; provide at least one)
 {"op":"remove_captions","ids":["existing caption ID"]} or {"op":"remove_captions","ids":"all"}
-{"op":"caption_style","fontSize":20,"bottomPercent":8.333333333333334} (each optional; fontSize 12–40, bottomPercent 5–80, larger bottomPercent moves captions UP)
+{"op":"caption_style","fontSize":20,"bottomPercent":18,"fontFamily":"poppins","color":"#ffffff","bold":true,"italic":false,"uppercase":false,"outlineWidth":1.2,"outlineColor":"#151515","shadow":0,"letterSpacing":0,"alignment":"center","background":"none","backgroundColor":"#10151c","backgroundOpacity":80} (each optional; fontSize 12–40, bottomPercent 5–80 moving UP with larger values; fontFamily classic/poppins/anton/serif, six-digit hex colors, outlineWidth and shadow 0–5, letterSpacing 0–4, alignment left/center/right, background none/box, backgroundOpacity 0–100; a box replaces the outline. Only added captions can be styled; captions baked into source pixels cannot be restyled.)
 {"op":"framing","fit":"crop|contain|blur","focalPoint":{"x":0.5,"y":0.5}} (each optional; global focalPoint also replaces existing source-cut overrides)
 {"op":"cut_focal_point","index":0,"focalPoint":{"x":0.5,"y":0.5}} (zero-based index in resulting cuts; x/y 0–1, left/top 0, center 0.5, right/bottom 1)
 {"op":"trim","start":0,"end":10} (current OUTPUT seconds, start/end each optional; omitted means unchanged edge; only one trim OR cuts operation)
@@ -209,6 +210,7 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
   if (changes.framing?.captionStyle) {
     const style = changes.framing.captionStyle;
     summary.push(`Set caption size to ${style.fontSize} and position to ${displaySeconds(style.bottomPercent)}% from the bottom.`);
+    if (Object.keys(style).some(key => !["fontSize", "bottomPercent"].includes(key))) summary.push(captionStyleDescription(style));
   }
   if (changes.visuals) for (const visual of next.visuals) {
     const prior = baseline.visuals.find(shot => shot.id === visual.id)!;

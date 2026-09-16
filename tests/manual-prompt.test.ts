@@ -138,12 +138,13 @@ test("manual prompts compile private bounded settings proposals without mutating
 
     await t.test("caption and focal patches preserve untouched nested values and locked-in cut positions", async () => {
       const settings = makeSettings();
-      settings.captionStyle = { fontSize: 18, bottomPercent: 15 };
+      settings.captionStyle = { fontSize: 18, bottomPercent: 15, fontFamily: "poppins", color: "#ffffff", outlineWidth: 1.5 };
       settings.focalPoint = { x: 0.3, y: 0.6 };
       settings.segments = [{ start: 10, end: 20, focalPoint: { x: 0.2, y: 0.4 } }, { start: 40, end: 45 }];
-      reply = { patch: { captionStyle: { fontSize: 24 }, focalPoint: { x: 0.7 } } };
+      reply = { patch: { captionStyle: { fontSize: 24, color: "#ffe66d", bold: true }, focalPoint: { x: 0.7 } } };
       const result = await propose(settings, "Make captions 24 and frame the right side");
-      assert.deepEqual(result.settings.captionStyle, { fontSize: 24, bottomPercent: 15 });
+      assert.deepEqual(result.settings.captionStyle, { fontSize: 24, bottomPercent: 15, fontFamily: "poppins", color: "#ffe66d", outlineWidth: 1.5, bold: true });
+      assert.match(result.summary.join(" "), /Poppins/);
       assert.deepEqual(result.settings.focalPoint, { x: 0.7, y: 0.6 });
       assert.deepEqual(result.settings.segments![0]!.focalPoint, { x: 0.7, y: 0.6 });
       assert.deepEqual(result.settings.segments![1], settings.segments[1]);

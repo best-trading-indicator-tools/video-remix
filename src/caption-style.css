@@ -1,0 +1,54 @@
+@font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
+@font-face { font-family: "Caption Anton"; src: url("/caption-fonts/Anton-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Caption Serif"; src: url("/caption-fonts/DMSerifDisplay-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Caption Serif"; src: url("/caption-fonts/DMSerifDisplay-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+.caption-overlay { position: absolute; z-index: 1; left: 2.6%; right: 2.6%; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
+.caption-overlay span { font-synthesis: weight style; paint-order: stroke fill; }
+.caption-styler { min-width: 0; margin: 14px 0 24px; padding: 18px; background: var(--field); border: 1px solid var(--line); border-radius: 12px; }
+.caption-styler header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
+.caption-styler h4 { margin: 0; font-size: 15px; color: var(--text); }
+.caption-styler header p, .caption-style-note { font-size: 12px; line-height: 1.5; color: var(--subtle); margin: 5px 0 0; }
+.caption-reset { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; color: var(--subtle); background: transparent; border: 0; padding: 4px; font-size: 12px; }
+.caption-reset:hover { color: var(--accent); }
+.caption-looks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.caption-looks button { min-width: 0; display: grid; justify-items: center; gap: 8px; padding: 12px 4px 9px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface); color: var(--text); }
+.caption-looks button:hover { background: var(--surface-hover); border-color: var(--subtle); }
+.caption-looks button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+.caption-look-sample { font-size: 28px; line-height: 1.3; }
+.caption-looks button > span:last-child { display: flex; align-items: center; gap: 4px; font-size: 11px; }
+.caption-look-sample.look-box { background: #080b10; padding: 0 6px; font-weight: 700; }
+.caption-look-sample.look-clean { font-weight: 700; }
+.caption-type-preview { position: relative; min-height: 154px; margin: 14px 0 18px; border: 1px solid #404b59; border-radius: 9px; background: linear-gradient(125deg, #465260, #24333b 50%, #17232a); overflow: hidden; }
+.caption-preview-label { position: absolute; top: 10px; left: 12px; font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: #e0e5ec; }
+.caption-type-preview .caption-overlay { left: 7%; right: 7%; }
+.caption-style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.caption-field, .caption-color { display: flex; min-width: 0; flex-direction: column; gap: 8px; font-size: 12px; color: var(--subtle); }
+.caption-styler select, .caption-styler input[type="text"], .caption-styler input[type="number"] { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 7px; font-size: 13px; }
+.caption-color-inputs { display: flex; gap: 6px; min-width: 0; }
+.caption-color input[type="color"] { flex: 0 0 40px; width: 40px; height: 42px; padding: 5px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
+.caption-color input[type="text"] { font-family: monospace; }
+.caption-emphasis { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.caption-emphasis button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 12px; }
+.caption-emphasis button[aria-pressed="true"] { color: var(--accent-bright); background: var(--accent-dark); border-color: var(--accent); }
+.caption-emphasis button:first-child { font-weight: 750; }
+.caption-emphasis button:nth-child(2) { font-style: italic; }
+.caption-number { margin-top: 16px; min-width: 0; }
+.caption-number label { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; color: var(--subtle); }
+.caption-number label span { min-width: 0; }
+.caption-number small { margin-left: 5px; color: var(--muted); }
+.caption-number input[type="number"] { flex: 0 0 76px; width: 76px; text-align: center; font-variant-numeric: tabular-nums; }
+.caption-number input[type="range"] { display: block; width: 100%; min-height: 28px; margin: 5px 0 0; accent-color: var(--accent); }
+.caption-more { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 14px; }
+.caption-styler .caption-more > summary { font-size: 12px; color: var(--text); line-height: 1.6; padding: 2px 0 10px; cursor: pointer; }
+.caption-more > .caption-color { margin-top: 14px; }
+.auto-caption-appearance { grid-column: 1 / -1; min-width: 0; }
+.auto-caption-appearance > summary { min-height: 40px; padding: 10px 0; color: var(--text); font-size: 13px; cursor: pointer; }
+@media (max-width: 480px) {
+  .caption-styler { padding: 13px; }
+  .caption-style-grid { grid-template-columns: minmax(0, 1fr); }
+  .caption-looks { gap: 5px; }
+  .caption-styler header { gap: 8px; }
+}

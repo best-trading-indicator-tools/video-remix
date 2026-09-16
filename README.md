@@ -74,6 +74,22 @@ would require reconstructing the image behind it and is not part of this feature
 
 Use your own footage or footage you have permission to repurpose. Review the resulting cut and captions before posting. Editing or changing file metadata does **not** guarantee that TikTok, Instagram, or another platform will classify a video as original, recommend it, or permit monetization.
 
+### Caption appearance
+
+Choose a look in **Auto → Caption appearance**, **Manual → Captions → Caption appearance**,
+or **Edit this result → Captions**. Clean, Punch, Editorial and Box presets are starting
+points; customize the font family, size, text color, bold/italic/case, outline, shadow,
+letter spacing, alignment, bottom spacing and background opacity. A background box
+replaces the outline. The type sample and draft preview update immediately; render
+a revision to check the final placement and wrapping in the MP4.
+
+Poppins, Anton and DM Serif are bundled locally with their font licenses. Classic
+sans keeps the existing system-font fallback. Size scales with export resolution.
+One style applies to all added captions, including imported SRT cues; embedded SRT
+font overrides are replaced by that style. Caption wording and timing stay saved
+unchanged. Baked-in source captions cannot be restyled. Finishing presets and saved
+revisions retain the look, and prompt edits can change individual style properties.
+
 ### Complete-idea selection
 
 Auto considers shorter sentence-aligned ideas and their neighboring context,

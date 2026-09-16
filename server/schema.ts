@@ -11,7 +11,8 @@ export const focusTrackSchema = z.array(z.object({ time: n(0, 86400), x: n(0, 1)
   .refine(points => points.every((point, index) => !index || point.time > points[index - 1]!.time), "Focus keyframes must use increasing source timestamps");
 export const focusPointsWithinCut = (cut: { start: number; end: number; focusTrack?: unknown }) => validFocusTrack(cut.focusTrack, cut.start, cut.end);
 export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) <= MAX_FOCUS_POINTS_TOTAL;
-export const captionStyleSchema = z.object({ fontSize: n(12, 40), bottomPercent: n(5, 80) }).strict();
+export { captionStyleSchema } from "../shared/caption-style.js";
+import { captionStyleSchema } from "../shared/caption-style.js";
 export const settingsSchema = z
   .object({
     ownFootage: ownFootageSchema.optional(),
@@ -111,6 +112,7 @@ export const autoOptionsSchema = z
     narration: z.boolean().default(false),
     pacing: pacingOptionsSchema.optional(),
     captions: z.enum(["auto", "add", "keep"]).optional(),
+    captionStyle: captionStyleSchema.optional(),
     supportingVisuals: z
       .enum(["off", "stock", "library", "graphics", "both"])
       .optional(),

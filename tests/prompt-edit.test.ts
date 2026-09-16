@@ -90,7 +90,7 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
       reply = { operations: [
         { op: "hook", text: "Units matter" },
         { op: "caption", id: "caption-2", text: "Micrograms are smaller than milligrams.", start: 6.2, end: 7.1 },
-        { op: "caption_style", fontSize: 24 },
+        { op: "caption_style", fontSize: 24, fontFamily: "poppins", color: "#ffe66d", bold: true, outlineWidth: 1.5, background: "box", backgroundOpacity: 70 },
         { op: "framing", fit: "blur" },
         { op: "cut_focal_point", index: 1, focalPoint: { x: 0.2, y: 0.6 } },
       ] };
@@ -101,6 +101,11 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
       assert.equal(next.captions[1]!.start, 6.2);
       assert.deepEqual(next.visuals, plan.visuals);
       assert.equal(next.settings.captionStyle?.fontSize, 24);
+      assert.equal(next.settings.captionStyle?.fontFamily, "poppins");
+      assert.equal(next.settings.captionStyle?.color, "#ffe66d");
+      assert.equal(next.settings.captionStyle?.bold, true);
+      assert.equal(next.settings.captionStyle?.backgroundOpacity, 70);
+      assert.match(result.summary.join(" "), /Poppins/);
       assert.equal(next.settings.captionStyle?.bottomPercent, 100 * 24 / 288);
       assert.equal(next.settings.fit, "blur");
       assert.deepEqual(next.cuts[0], plan.cuts[0]);

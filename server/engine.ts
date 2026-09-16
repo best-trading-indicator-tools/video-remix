@@ -12,6 +12,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
 import type { RemixSettings } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
@@ -376,10 +378,8 @@ function validateSettings(settings: RemixSettings): void {
     (settings.segments?.reduce((sum, segment) => sum + (segment.focusTrack?.length ?? 0), 0) ?? 0) > MAX_FOCUS_POINTS_TOTAL)
     throw new Error("Focus tracks need bounded, ordered source timestamps and coordinates between 0 and 1");
   const style = settings.captionStyle;
-  if (style !== undefined && (!style || typeof style !== "object" ||
-    !Number.isFinite(style.fontSize) || style.fontSize < 12 || style.fontSize > 40 ||
-    !Number.isFinite(style.bottomPercent) || style.bottomPercent < 5 || style.bottomPercent > 80))
-    throw new Error("Caption style needs a font size from 12 to 40 and a bottom margin from 5 to 80 percent");
+  if (style !== undefined && !captionStyleSchema.safeParse(style).success)
+    throw new Error("Caption style needs supported fonts, hex colors and values within their allowed ranges");
 }
 
 function validFocalPoint(value: unknown): boolean {
@@ -465,7 +465,7 @@ async function fontOption(): Promise<string> {
   return "font=Sans";
 }
 
-async function canonicalSubtitles(filePath: string): Promise<string> {
+async function canonicalSubtitles(filePath: string, uppercase = false): Promise<string> {
   const local = await localFile(filePath);
   if ((await stat(local)).size > 2 * 1024 * 1024)
     throw new Error("Subtitles must be smaller than 2 MB");
@@ -500,9 +500,11 @@ async function canonicalSubtitles(filePath: string): Promise<string> {
     if (end <= start) throw new Error("Subtitle end must be after its start");
     const beginStamp = `${match[1]}:${match[2]}:${match[3]},${match[4]}`;
     const endStamp = `${match[5]}:${match[6]}:${match[7]},${match[8]}`;
-    canonical.push(
-      `${canonical.length + 1}\n${beginStamp} --> ${endStamp}\n${lines.join("\n")}`,
-    );
+    // The chosen caption style applies to every cue, including imported SRTs.
+    // Remove embedded styling before case conversion; timings and source text stay saved unchanged.
+    const plain = lines.join("\n").replace(/<\/?(?:b|i|u|s|font)(?:\s[^>]*)?>/giu, "")
+      .replace(/\{\\[^}]*\}/gu, "");
+    canonical.push(`${canonical.length + 1}\n${beginStamp} --> ${endStamp}\n${uppercase ? plain.toUpperCase() : plain}`);
   }
   // A canonical numeric cue header ensures the subtitle filter's independent
   // demuxer cannot interpret an uploaded file as a playlist or another format.
@@ -733,14 +735,22 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       temporary.push(filePath);
       await writeFile(
         filePath,
-        await canonicalSubtitles(options.subtitlePath),
+        await canonicalSubtitles(options.subtitlePath, s.captionStyle?.uppercase),
         "utf8",
       );
+      const fontsName = `caption-fonts-${randomUUID()}`;
+      const fontsLink = path.join(workDir, fontsName);
+      let fontDirectory: string | undefined;
+      for (const url of [new URL("../public/caption-fonts", import.meta.url), new URL("../../dist/caption-fonts", import.meta.url)]) {
+        try { await access(new URL(`${url.href}/Poppins-Regular.ttf`)); fontDirectory = fileURLToPath(url); break; } catch { /* Try the production assets. */ }
+      }
+      if (!fontDirectory) throw new Error("Bundled caption fonts are missing. Restore public/caption-fonts or run npm run build.");
+      await symlink(fontDirectory, fontsLink, "dir"); temporary.push(fontsLink);
       filters.push(
         // FFmpeg's SRT-to-ASS decoder uses a 384 x 288 script canvas. ASS
         // margins are script pixels, so converting here preserves percentages
         // across source resolutions and portrait/landscape exports.
-        `subtitles=filename=${filename}:charenc=UTF-8:force_style='FontName=DejaVu Sans,FontSize=${decimal(s.captionStyle?.fontSize ?? 20)},PrimaryColour=&H00FFFFFF,OutlineColour=&H00151515,BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=${Math.round((s.captionStyle?.bottomPercent ?? (100 / 12)) * 288 / 100)}'`,
+        `subtitles=filename=${filename}:fontsdir=${fontsName}:charenc=UTF-8:force_style='${captionAssStyle(s.captionStyle)}'`,
       );
     }
     const args = [

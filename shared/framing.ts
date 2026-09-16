@@ -1,4 +1,5 @@
 import type { EditPlan, QualityIssue } from "./types.js";
+import { resolveCaptionStyle } from "./caption-style.js";
 
 export function wrapEditorialText(text: string, columns: number): string {
   return text
@@ -43,10 +44,13 @@ export function textLayoutIssues(plan: Pick<EditPlan, "settings" | "captions">, 
     const columns = Math.max(8, Math.floor(aspect * 0.84 / (size * 0.64)));
     boxes.push({ kind: "callout", top: 0.24 - size * 0.45, bottom: 0.24 + size * (wrapEditorialText(callout.text, columns).split("\n").length * 1.25 + 0.45), start: callout.start, end: callout.end });
   }
-  const captionSize = (settings.captionStyle?.fontSize ?? 20) / 288;
-  const captionBottom = 1 - (settings.captionStyle?.bottomPercent ?? 100 * 24 / 288) / 100;
-  const captionColumns = Math.max(8, Math.floor(aspect * 0.9 / (captionSize * 0.55)));
-  for (const caption of captions) boxes.push({ kind: "caption", top: captionBottom - captionSize * wrappedLines(caption.text, captionColumns) * 1.2, bottom: captionBottom, start: caption.start, end: caption.end });
+  const style = resolveCaptionStyle(settings.captionStyle);
+  const captionSize = style.fontSize / 288;
+  const captionBottom = 1 - style.bottomPercent / 100;
+  const letterWidth = { classic: 0.55, poppins: 0.6, anton: 0.48, serif: 0.57 }[style.fontFamily] * (style.bold ? 1.04 : 1) * (style.uppercase ? 1.1 : 1);
+  const captionColumns = Math.max(8, Math.floor(aspect * 0.9 / (captionSize * letterWidth + style.letterSpacing / 288)));
+  const padding = ((style.background === "box" ? 3 : style.outlineWidth) + style.shadow) / 288;
+  for (const caption of captions) boxes.push({ kind: "caption", top: captionBottom - captionSize * wrappedLines(style.uppercase ? caption.text.toUpperCase() : caption.text, captionColumns) * 1.2 - padding, bottom: captionBottom + padding, start: caption.start, end: caption.end });
   const issues: QualityIssue[] = [];
   for (let index = 0; index < boxes.length; index++) {
     const box = boxes[index]!;
