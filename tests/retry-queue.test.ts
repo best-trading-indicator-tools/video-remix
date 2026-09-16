@@ -2,7 +2,7 @@ import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { access, chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -38,9 +38,13 @@ const args = process.argv.slice(2);
 if (args.includes('-progress')) {
   const cfg = JSON.parse(fs.readFileSync(${JSON.stringify(control)}, 'utf8'));
   const output = args.at(-1), id = require('node:path').basename(output, '.mp4');
-  const counts = JSON.parse(fs.readFileSync(${JSON.stringify(attempts)}, 'utf8'));
+  const attemptsPath = ${JSON.stringify(attempts)};
+  const counts = JSON.parse(fs.readFileSync(attemptsPath, 'utf8'));
   counts[id] = (counts[id] || 0) + 1;
-  fs.writeFileSync(${JSON.stringify(attempts)}, JSON.stringify(counts));
+  // The parent polls this file while the encoder runs. Publish only complete JSON.
+  const temporary = attemptsPath + '.' + process.pid + '.tmp';
+  fs.writeFileSync(temporary, JSON.stringify(counts));
+  fs.renameSync(temporary, attemptsPath);
   if (cfg.id === id && (cfg.hold || counts[id] <= cfg.failures)) {
     fs.writeFileSync(output, 'partial render');
     if (cfg.hold) { setInterval(() => {}, 1000); return; }
@@ -81,7 +85,12 @@ child.on('exit', code => process.exit(code ?? 1));
       state.jobs.push(item); return item;
     };
     const counts = async () => JSON.parse(await readFile(attempts, "utf8"));
-    const fault = async (item: StoredJob, failures = 0, hold = false) => writeFile(control, JSON.stringify({ id: item.id, failures, hold }));
+    const fault = async (item: StoredJob, failures = 0, hold = false) => {
+      // A retry may start while the parent changes the fault configuration.
+      const temporary = `${control}.${randomUUID()}.tmp`;
+      await writeFile(temporary, JSON.stringify({ id: item.id, failures, hold }));
+      await rename(temporary, control);
+    };
     const settled = (item: StoredJob) => !["queued", "processing"].includes(item.status) && !isRunning(item.id);
 
     await t.test("two failures recover with the exact saved plan; backoff releases its worker", async () => {
@@ -139,8 +148,16 @@ child.on('exit', code => process.exit(code ?? 1));
       assert.equal(saved.jobs.find((entry: StoredJob) => entry.id === item.id).cancelledByUser, true);
     });
 
-    await t.test("explicit cancellation stops an active encoder and manual retry clears that intent", async () => {
-      const item = job(); await fault(item, 0, true); pumpQueue();
+    await t.test("explicit cancellation stops an active encoder and manual retry clears that intent", async t => {
+      const item = job();
+      t.after(async () => {
+        // An assertion failure must not leave the held encoder blocking later cases.
+        if (!settled(item)) {
+          await cancelJob(item);
+          await until(() => settled(item), "Cancellation fixture cleanup did not settle");
+        }
+      });
+      await fault(item, 0, true); pumpQueue();
       await until(async () => (await counts())[item.id] === 1, "Encoder did not start");
       await cancelJob(item); await until(() => settled(item), "Active cancel did not settle");
       assert.equal(item.status, "cancelled");
