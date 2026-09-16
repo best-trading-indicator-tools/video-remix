@@ -726,6 +726,8 @@ export function createApp() {
     if (state.jobs.filter(isActive).length >= 300)
       throw new HttpError(429, "Your render queue is full.");
     if (job.status === "skipped") job.allowRepeatedFootage = true;
+    delete job.retry;
+    delete job.cancelledByUser;
     job.status = "queued";
     job.progress = 0;
     delete job.error;

@@ -1990,6 +1990,22 @@ h1 > span {
   border-radius: 4px;
   transition: width 0.3s;
 }
+.job-recovery {
+  margin-top: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid #ffc397;
+  border-radius: 10px;
+  background: #151b23;
+  color: #f1f3f7;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.job-recovery-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.job-recovery-heading svg { color: #ffc397; flex-shrink: 0; }
+.job-recovery-heading span, .job-recovery-context { color: #bac4d2; }
+.job-recovery p { margin: 6px 0 0; }
 .job-error {
   color: var(--accent);
   font-size: 12px;

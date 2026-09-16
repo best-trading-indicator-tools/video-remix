@@ -59,6 +59,7 @@ import {
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
+import JobRecoveryNotice from "./JobRecoveryNotice";
 import HistoryPanel from "./HistoryPanel";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
@@ -2484,7 +2485,8 @@ export default function App() {
                               {retryStatus && !source && <p id={`retry-source-${job.id}`} className="job-skip-note">
                                 The source video is no longer available. Import it again to start a new edit.
                               </p>}
-                              {job.error && (
+                              <JobRecoveryNotice job={job} />
+                              {job.error && !job.retry && (
                                 <p className="job-error">{job.error}</p>
                               )}
                             </div>

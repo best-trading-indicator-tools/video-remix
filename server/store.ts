@@ -13,6 +13,7 @@ import { config, paths } from "./config.js";
 import { fingerprintFile, historyEntry, upsertHistory } from "./history.js";
 import { migrateLegacyPlanResolutions } from "./plan-migrations.js";
 import { retainHistoryThumbnail } from "./history-thumbnails.js";
+import { recoverInterruptedJob } from "./job-recovery.js";
 export interface StoredSource extends VideoSource {
   filePath: string;
   thumbnailPath: string;
@@ -74,11 +75,6 @@ export async function initStore() {
     state.history = Array.isArray(saved.history) ? saved.history : [];
     for (const job of state.jobs)
       if (job.status === "processing") {
-        job.status = "failed";
-        job.error =
-          "The app stopped during this render. Retry to start it again.";
-        job.finishedAt = new Date().toISOString();
-        job.phase = undefined;
         await Promise.all([
           rm(path.join(paths.work, job.id), { recursive: true, force: true }),
           rm(job.outputPath, { force: true }),
@@ -87,6 +83,8 @@ export async function initStore() {
         delete job.captionPath;
         delete job.captionUrl;
         delete job.downloadUrl;
+        delete job.outputSize;
+        recoverInterruptedJob(job);
       }
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== "ENOENT")

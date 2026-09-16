@@ -390,6 +390,8 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `MAX_LARGE_FILE_SIZE_GB` | `50`                 | Resumable and linked source import limit in GiB; accepts 1–1024.     |
 | `MAX_FILES`          | `30`                     | Maximum files in one upload; accepts 1–100.                          |
 | `RENDER_CONCURRENCY` | `2`                      | Simultaneous processing jobs; accepts 1–4.                           |
+| `RENDER_MAX_RETRIES` | `3`                      | Additional attempts after a failed/interrupted export; 0–10.         |
+| `RENDER_RETRY_DELAY_SECONDS` | `5`               | Initial retry delay; 1–300 seconds, triples up to five minutes.      |
 | `RETENTION_HOURS`    | `24`                     | Retention window for finished jobs and source files; accepts 1–720.  |
 | `WHISPER_MODEL`      | `small`                  | Local speech model; run setup for the chosen model before use.       |
 | `WHISPER_CACHE_DIR`  | `DATA_DIR/models`        | Persistent speech-model cache.                                       |
@@ -406,6 +408,8 @@ RENDER_CONCURRENCY=1 RETENTION_HOURS=48 npm start
 ```
 
 The queue processes two videos at once by default, including multiple Auto versions of the same source. Initial analysis and clip selection for identical source content run one at a time; after cuts are chosen, B-roll searches, editorial checks and rendering can overlap. Chosen excerpts are temporarily reserved so later versions can prefer different footage. A version that has no unused alternative waits without occupying a worker until the earlier export settles; cancelled or failed exports release their reservations. Saved revisions and manual exports can run immediately when a slot is free. Export cards explain why a job is queued, and the collection header shows processing/queued counts and capacity. Increase `RENDER_CONCURRENCY` in the private `.env` (maximum 4) and restart the backend to change capacity; additional workers use more CPU and memory.
+
+Recoverable failures and backend interruptions retry automatically up to three times, after 5, 15 and 45 seconds by default. Waiting retries release their processing slot. The retry budget and schedule survive restarts; saved edit plans are reused when available. Export cards show the reason, interrupted stage, next retry time and exhausted retry budget. Missing media, invalid inputs, permissions, credentials and full disks require intervention. Pressing **Cancel** stops automatic retries, including after a restart. **Retry** starts a fresh retry budget. Older cancelled records lack a recorded reason and require a manual Retry; they are never silently restarted.
 
 Sources and queue manifests are stored on disk so they survive backend restarts. Automatic cleanup removes expired finished jobs and sources while protecting files referenced by active jobs. Download anything you want to keep before its retention period expires. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
 

@@ -20,6 +20,7 @@ import { textLayoutIssues } from "../shared/framing.js";
 import { parseCaptionCues } from "./edit-plan.js";
 import { footageOverlap } from "./diversity.js";
 import { readFile } from "node:fs/promises";
+import { canRetryRender, recoverInterruptedJob, retryPhase, scheduleJobRetry } from "./job-recovery.js";
 const running = new Map<string, AbortController>();
 // Only initial analysis and clip selection need exclusive access to a source.
 // Once cuts are chosen, expensive stock searches, reviews and exports can overlap.
@@ -27,6 +28,7 @@ const selecting = new Set<string>();
 const selected = new Set<string>();
 const waitingFor = new Map<string, string[]>();
 let stopped = false;
+let retryTimer: ReturnType<typeof setTimeout> | undefined;
 export const isActive = (job: StoredJob) =>
   job.status === "queued" || job.status === "processing";
 export const isRunning = (jobId: string) => running.has(jobId);
@@ -49,6 +51,9 @@ export function autoSourceBusy(
 }
 export function pumpQueue() {
   if (stopped) return;
+  clearTimeout(retryTimer);
+  retryTimer = undefined;
+  const now = Date.now();
   for (const [id, dependencies] of waitingFor) {
     if (!dependencies.some(dependency => running.has(dependency))) waitingFor.delete(id);
   }
@@ -56,6 +61,7 @@ export function pumpQueue() {
     const job = state.jobs.find(
       (item) =>
         item.status === "queued" &&
+        (!item.retry?.nextRetryAt || Date.parse(item.retry.nextRetryAt) <= now) &&
         !running.has(item.id) &&
         !waitingFor.has(item.id) &&
         !autoSourceBusy(item, state.jobs, state.sources, selecting),
@@ -65,13 +71,23 @@ export function pumpQueue() {
     running.set(job.id, controller);
     if (job.auto && !job.editPlan) selecting.add(job.id);
     job.status = "processing";
-    job.phase = "Preparing your edit";
+    if (job.retry) delete job.retry.nextRetryAt;
+    job.phase = job.retry ? `Starting automatic retry ${job.retry.count} of ${job.retry.limit}` : "Preparing your edit";
     void run(job, controller);
   }
   for (const job of state.jobs.filter(item => item.status === "queued")) {
-    job.phase = waitingFor.has(job.id) ? "Waiting for another version to finish before choosing unused footage"
+    job.phase = job.retry?.nextRetryAt && Date.parse(job.retry.nextRetryAt) > now ? retryPhase(job)
+      : waitingFor.has(job.id) ? "Waiting for another version to finish before choosing unused footage"
       : autoSourceBusy(job, state.jobs, state.sources, selecting) ? "Waiting for another clip selection from this source"
       : "Waiting for a processing slot";
+  }
+  // A delayed retry holds no worker slot. One timer wakes the nearest due job;
+  // retries that are already due wait for a worker to finish without busy polling.
+  const next = state.jobs.filter(job => job.status === "queued" && job.retry?.nextRetryAt)
+    .map(job => Date.parse(job.retry!.nextRetryAt!)).filter(time => time > now);
+  if (next.length) {
+    retryTimer = setTimeout(pumpQueue, Math.max(1, Math.min(...next) - Date.now()));
+    retryTimer.unref();
   }
 }
 async function run(job: StoredJob, controller: AbortController) {
@@ -79,6 +95,7 @@ async function run(job: StoredJob, controller: AbortController) {
   let status: "completed" | "failed" | "cancelled" | "skipped" | "queued" = "failed";
   let reservationIds: string[] = [];
   let errorMessage: string | undefined;
+  let retryable = true;
   let outputSize: number | undefined;
   let thumbnail: HistoryThumbnail | undefined;
   const savedRepair = job.editorialRepair;
@@ -277,6 +294,7 @@ async function run(job: StoredJob, controller: AbortController) {
     outputSize = (await stat(job.outputPath)).size;
     status = "completed";
   } catch (error) {
+    retryable = canRetryRender(error);
     // Exhausted in-flight reservations are provisional. Release this worker and
     // retry selection after those jobs settle; a failed/cancelled job reserves nothing.
     const unsettled = reservationIds.filter(id => state.jobs.find(other => other.id === id)?.status !== "completed");
@@ -317,14 +335,21 @@ async function run(job: StoredJob, controller: AbortController) {
         await rm(job.captionPath, { force: true }).catch(() => undefined);
       delete job.captionPath;
     }
-    if (controller.signal.aborted) status = "cancelled";
+    if (controller.signal.aborted) {
+      recoverInterruptedJob(job);
+      status = job.status as typeof status;
+      errorMessage = job.error;
+    } else if (status === "failed") {
+      scheduleJobRetry(job, errorMessage || "Rendering failed.", "failure", retryable);
+      status = job.status as typeof status;
+    }
     job.status = status;
     job.phase =
       status === "completed"
         ? job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "Needs review" : "Ready to preview"
         : status === "skipped"
           ? "Skipped"
-          : undefined;
+          : status === "queued" && job.retry?.nextRetryAt ? retryPhase(job) : undefined;
     job.error = status === "failed" ? errorMessage : undefined;
     if (status === "completed") {
       job.outputSize = outputSize;
@@ -361,17 +386,27 @@ async function run(job: StoredJob, controller: AbortController) {
   }
 }
 export async function cancelJob(job: StoredJob) {
+  if (!isActive(job)) return;
+  // Persist intent before aborting so even a simultaneous process crash cannot
+  // make startup recovery resurrect a job the user deliberately stopped.
+  job.cancelledByUser = true;
+  if (job.retry) delete job.retry.nextRetryAt;
   if (job.status === "queued") {
     waitingFor.delete(job.id);
     job.status = "cancelled";
     job.finishedAt = new Date().toISOString();
-  } else if (job.status === "processing") {
-    running.get(job.id)?.abort();
+    delete job.phase;
+    delete job.error;
   }
-  await saveStore();
+  const saved = saveStore();
+  if (job.status === "processing") running.get(job.id)?.abort();
+  await saved;
+  pumpQueue();
 }
 export async function stopQueue() {
   stopped = true;
+  clearTimeout(retryTimer);
+  retryTimer = undefined;
   for (const controller of running.values()) controller.abort();
   const deadline = Date.now() + 5000;
   while (running.size && Date.now() < deadline)

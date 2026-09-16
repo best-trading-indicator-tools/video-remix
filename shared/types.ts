@@ -347,6 +347,17 @@ export interface RenderJob {
   createdAt: string;
   finishedAt?: string;
   error?: string;
+  /** Explicit user cancellation, persisted before stopping the worker. */
+  cancelledByUser?: boolean;
+  retry?: {
+    count: number;
+    limit: number;
+    cause: "failure" | "restart";
+    reason: string;
+    lastPhase?: string;
+    nextRetryAt?: string;
+    stopped?: "limit" | "needs-attention";
+  };
   downloadUrl?: string;
   outputSize?: number;
   editable?: boolean;

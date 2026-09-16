@@ -266,10 +266,13 @@ test("startup recovery removes interrupted auto-edit artifacts, preserves comple
 
   await initStore();
   const recovered = state.jobs.find((item) => item.id === interrupted.id)!;
-  assert.equal(recovered.status, "failed");
-  assert.match(recovered.error!, /app stopped during this render/i);
-  assert.ok(recovered.finishedAt);
-  assert.equal(recovered.phase, undefined);
+  assert.equal(recovered.status, "queued");
+  assert.equal(recovered.error, undefined);
+  assert.equal(recovered.finishedAt, undefined);
+  assert.match(recovered.phase!, /automatic retry 1 of 3/i);
+  assert.equal(recovered.retry?.cause, "restart");
+  assert.equal(recovered.retry?.lastPhase, "Rendering your edit");
+  assert.ok(recovered.retry?.nextRetryAt);
   assert.equal(recovered.captionPath, undefined);
   assert.equal(recovered.captionUrl, undefined);
   assert.equal(recovered.downloadUrl, undefined);
@@ -306,8 +309,29 @@ test("startup recovery removes interrupted auto-edit artifacts, preserves comple
   const savedRecovery = saved.jobs.find(
     (item: StoredJob) => item.id === interrupted.id,
   );
-  assert.equal(savedRecovery.status, "failed");
+  assert.equal(savedRecovery.status, "queued");
+  assert.deepEqual(savedRecovery.retry, recovered.retry);
   assert.equal(savedRecovery.captionPath, undefined);
   assert.equal(savedRecovery.downloadUrl, undefined);
   assert.deepEqual(savedRecovery.summary, summary);
+});
+
+test("startup preserves deliberate cancellation, delayed retries and exhausted interruption budgets", async () => {
+  const cancelled = job({ status: "processing", cancelledByUser: true });
+  const exhausted = job({ status: "processing", retry: { count: 3, limit: 3, cause: "failure", reason: "Temporary failure" } });
+  const nextRetryAt = new Date(Date.now() + 45000).toISOString();
+  const delayed = job({ retry: { count: 2, limit: 3, cause: "failure", reason: "Temporary failure", nextRetryAt } });
+  const legacy = job({ status: "cancelled" });
+  state.jobs.push(cancelled, exhausted, delayed, legacy);
+  await saveStore();
+  await initStore();
+  assert.equal(state.jobs[0].status, "cancelled");
+  assert.equal(state.jobs[0].retry, undefined);
+  assert.equal(state.jobs[1].status, "failed");
+  assert.equal(state.jobs[1].retry?.stopped, "limit");
+  assert.equal(state.jobs[1].retry?.count, 3);
+  assert.equal(state.jobs[2].status, "queued");
+  assert.deepEqual(state.jobs[2].retry, delayed.retry);
+  assert.equal(state.jobs[3].status, "cancelled");
+  assert.equal(state.jobs[3].cancelledByUser, undefined);
 });

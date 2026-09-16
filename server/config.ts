@@ -22,6 +22,8 @@ export const config = {
   importChunkSize: 8 * 1024 * 1024,
   maxFiles: numberEnv("MAX_FILES", 30, 1, 100),
   concurrency: numberEnv("RENDER_CONCURRENCY", 2, 1, 4),
+  renderRetries: numberEnv("RENDER_MAX_RETRIES", 3, 0, 10),
+  retryDelayMs: numberEnv("RENDER_RETRY_DELAY_SECONDS", 5, 1, 300) * 1000,
   retentionMs: numberEnv("RETENTION_HOURS", 24, 1, 720) * 3600000,
   aiEnabled: process.env.AUTO_AI !== "false",
 };
