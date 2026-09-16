@@ -1,3 +1,4 @@
+import { historyRecords, reconcileHistory } from "./store.js";
 import { visualIdentity } from "./visual-identity.js";
 import { relatedHistory } from "./history.js";
 import express, { type ErrorRequestHandler } from "express";
@@ -182,7 +183,7 @@ export function createApp() {
   })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   app.get("/api/history", (_req, res) => res.json({ entries: publicHistory() }));
   app.get("/api/history/:id/thumbnail", async (req, res, next) => {
-    const entry = state.history.find(item => item.id === req.params.id);
+    const entry = historyRecords({ id: String(req.params.id) })[0];
     if (!entry || !await historyThumbnailExists(entry.id)) throw new HttpError(404, "History preview is unavailable.");
     res.type("image/jpeg").setHeader("Cache-Control", "private, max-age=86400");
     res.sendFile(historyThumbnailPath(entry.id), (error) => {
@@ -199,7 +200,7 @@ export function createApp() {
     } else throw new HttpError(400, "Choose JSON or CSV for the measurements export.");
   });
   app.patch("/api/history/:id/measurements", async (req, res) => {
-    const entry = state.history.find(item => item.id === req.params.id);
+    const entry = historyRecords({ id: String(req.params.id) })[0];
     if (!entry) throw new HttpError(404, "History entry not found.");
     const parsed = measurementsSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "Check the review counts, time and platform metrics. Leave unknown values blank.");
@@ -208,7 +209,7 @@ export function createApp() {
         throw new HttpError(400, "Choose a recorded post on the same platform for these results.");
     }
     entry.measurements = parsed.data;
-    await saveStore();
+    await saveStore([entry]);
     res.json(publicHistory().find(item => item.id === entry.id));
   });
   app.get("/api/sources/:id/history", (req, res) => {
@@ -218,7 +219,7 @@ export function createApp() {
     res.json({ entries: publicHistory().filter(entry => matches.has(entry.id)).map(entry => ({ ...entry, match: matches.get(entry.id)?.kind === "exact" ? undefined : matches.get(entry.id) })) });
   });
   app.patch("/api/history/:id", async (req, res) => {
-    const entry = state.history.find(item => item.id === req.params.id);
+    const entry = historyRecords({ id: String(req.params.id) })[0];
     if (!entry) throw new HttpError(404, "History entry not found.");
     const parsed = publicationChangesSchema.safeParse(req.body);
     if (!parsed.success) throw new HttpError(400, "Use a valid publication date and an HTTPS link on the selected platform.");
@@ -227,7 +228,7 @@ export function createApp() {
         throw new HttpError(400, "Remove this post's result snapshots before removing its publication record or changing its platform.");
     }
     entry.publications = parsed.data.publications;
-    await saveStore();
+    await saveStore([entry]);
     res.json(publicHistory().find(item => item.id === entry.id));
   });
   app.get("/api/broll", (_req, res) =>

@@ -1,3 +1,4 @@
+import { historyRecords, reconcileHistory } from "./store.js";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { rm } from "node:fs/promises";
@@ -30,11 +31,11 @@ export function installFinishedReviewRoutes(app: Express, dependencies: Finished
         return res.status(409).json({ error: "The export changed or was removed during review." });
       const previous = job.finishedReviewReport;
       const previousPhase = job.phase;
-      const history = state.history.filter(entry => entry.jobId === job.id).map(entry => ({ entry, previous: entry.finishedReviewReport }));
+      const history = historyRecords({ jobId: job.id }).map(entry => ({ entry, previous: entry.finishedReviewReport }));
       job.finishedReviewReport = report;
       job.phase = report.status !== "pass" || job.qualityReport?.status === "review" || (job.editorialReport && job.editorialReport.status !== "pass") ? "Needs review" : "Ready to preview";
       for (const item of history) item.entry.finishedReviewReport = structuredClone(report);
-      try { await saveStore(); }
+      try { await saveStore(history.map(item => item.entry)); }
       catch {
         job.finishedReviewReport = previous; job.phase = previousPhase;
         for (const item of history) item.entry.finishedReviewReport = item.previous;

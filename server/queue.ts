@@ -1,3 +1,4 @@
+import { historyRecords, reconcileHistory } from "./store.js";
 import { reviewJobFinished } from "./finished-review-jobs.js";
 import { visualIdentity } from "./visual-identity.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
@@ -187,7 +188,7 @@ async function run(job: StoredJob, controller: AbortController) {
         signal: controller.signal,
         previous: state.jobs,
         reserved: reservations,
-        historyPlans: previousEditorialPlans(state.history, source.fingerprint),
+        historyPlans: previousEditorialPlans(historyRecords({ fingerprint: source.fingerprint }), source.fingerprint),
         onPhase: (phase, progress) => {
           job.phase = phase;
           job.progress = Math.max(job.progress, Math.round(progress));
@@ -405,7 +406,7 @@ async function run(job: StoredJob, controller: AbortController) {
     // when exporting, so the later completion sees the earlier export's history.
     if (status === "completed" && job.auto && source?.fingerprint) {
       const cuts = job.settings.segments || [{ start: job.settings.trimStart, end: job.settings.trimEnd ?? source.duration }];
-      const earlier = previousEditorialPlans(state.history.filter(entry => entry.jobId !== job.id), source.fingerprint);
+      const earlier = previousEditorialPlans(historyRecords({ fingerprint: source.fingerprint }).filter(entry => entry.jobId !== job.id), source.fingerprint);
       if (earlier.some(plan => footageContainment(cuts, plan.cuts) >= 0.8))
         job.notes = [...new Set([...(job.notes || []), "This edit reuses footage from an earlier export. Open History to compare."])];
     }
@@ -413,12 +414,12 @@ async function run(job: StoredJob, controller: AbortController) {
       job.notes = [...new Set([...(job.notes || []), "The picture resembles an earlier source or export. Open History to compare this possible re-export; rendering is allowed."])];
     const entry = source && historyEntry(source, job);
     if (entry && thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
-    if (entry) state.history = upsertHistory(state.history, entry);
+    const historyUpdates = entry ? upsertHistory(historyRecords({ jobId: entry.jobId }), entry) : [];
     running.delete(job.id);
     selecting.delete(job.id);
     selected.delete(job.id);
     if (status !== "queued") waitingFor.delete(job.id);
-    await saveStore().catch((error) =>
+    await saveStore(historyUpdates).catch((error) =>
       console.error("Unable to save render result:", error),
     );
     pumpQueue();

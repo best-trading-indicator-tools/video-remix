@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type {
   Attachment,
@@ -16,6 +16,7 @@ import { retainHistoryThumbnail } from "./history-thumbnails.js";
 import { recoverInterruptedJob } from "./job-recovery.js";
 import type { VisualIdentity } from "../shared/visual-identity.js";
 import { visualIdentity } from "./visual-identity.js";
+import { WorkspaceDatabase, type HistoryFilter } from "./database.js";
 export interface StoredSource extends VideoSource {
   picture?: VisualIdentity;
   filePath: string;
@@ -60,24 +61,36 @@ export const state: State = {
   broll: [],
   history: [],
 };
-let writes = Promise.resolve();
+let database: WorkspaceDatabase | undefined;
+let replacementHistory: ExportHistoryEntry[] | undefined;
+Object.defineProperty(state, "history", {
+  get: () => replacementHistory ?? (database ? [...database.history()] : []),
+  set: (entries: ExportHistoryEntry[]) => { replacementHistory = entries; },
+  enumerable: true,
+});
+export function historyRecords(filter: HistoryFilter = {}): ExportHistoryEntry[] {
+  if (!replacementHistory && database) return [...database.history(filter)];
+  return (replacementHistory || []).filter(entry =>
+    (filter.id === undefined || entry.id === filter.id) &&
+    (filter.jobId === undefined || entry.jobId === filter.jobId) &&
+    (filter.fingerprint === undefined || entry.sourceFingerprint === filter.fingerprint));
+}
+export function* iterateHistory() {
+  if (replacementHistory) yield* replacementHistory;
+  else if (database) yield* database.history();
+}
+export async function reconcileHistory(entry: ExportHistoryEntry) {
+  const previous = historyRecords({ jobId: entry.jobId });
+  await saveStore(upsertHistory(previous, entry));
+}
 export async function initStore() {
-  await Promise.all(
-    Object.values(paths).map((dir) => mkdir(dir, { recursive: true })),
-  );
+  await Promise.all(Object.values(paths).map((dir) => mkdir(dir, { recursive: true })));
+  database?.close();
+  database = new WorkspaceDatabase(path.join(config.dataDir, "remixer.sqlite"));
+  replacementHistory = undefined;
   try {
-    const saved = JSON.parse(
-      await readFile(path.join(config.dataDir, "state.json"), "utf8"),
-    ) as State;
-    if (
-      !Array.isArray(saved.sources) ||
-      !Array.isArray(saved.jobs) ||
-      !Array.isArray(saved.attachments)
-    )
-      throw new Error("Invalid state file");
-    Object.assign(state, saved);
-    state.broll = Array.isArray(saved.broll) ? saved.broll : [];
-    state.history = Array.isArray(saved.history) ? saved.history : [];
+    await database.initialize();
+    Object.assign(state, database.loadActive());
     for (const job of state.jobs)
       if (job.status === "processing") {
         await Promise.all([
@@ -92,11 +105,8 @@ export async function initStore() {
         recoverInterruptedJob(job);
       }
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
-      throw new Error(
-        "Unable to read saved workspace. Keep a backup of data/state.json before repairing it.",
-        { cause: error },
-      );
+    database.close(); database = undefined;
+    throw new Error("Unable to open saved workspace. Preserve remixer.sqlite and state.json before repairing it.", { cause: error });
   }
   await migrateLegacyPlanResolutions(state.sources, state.jobs);
   // Migrate still-available exports before retention cleanup removes their files.
@@ -109,39 +119,31 @@ export async function initStore() {
     }
     source.picture ??= await visualIdentity(source.filePath, source.duration);
     for (const job of completed) {
-      job.outputPicture ??= state.history.find(entry => entry.jobId === job.id)?.outputPicture ?? await visualIdentity(job.outputPath, job.summary?.outputDuration ?? 0);
+      job.outputPicture ??= historyRecords({ jobId: job.id })[0]?.outputPicture ?? await visualIdentity(job.outputPath, job.summary?.outputDuration ?? 0);
       const entry = historyEntry(source, job);
-      if (entry) state.history = upsertHistory(state.history, entry);
+      if (entry) await reconcileHistory(entry);
     }
   }
   // Backfill available legacy exports before startup retention removes them.
   // Two workers bound local media work; retained frames need no source/video file.
   const completedJobs = new Map(state.jobs.filter(job => job.status === "completed").map(job => [job.id, job]));
-  let nextPreview = 0;
-  await Promise.all(Array.from({ length: Math.min(2, state.history.length) }, async () => {
-    while (nextPreview < state.history.length) {
-      const entry = state.history[nextPreview++]!;
-      const source = state.sources.find(item => item.fingerprint === entry.sourceFingerprint);
-      const cut = entry.cuts[0];
-      const sourceFrame = source && cut && cut.end <= source.duration
-        ? { filePath: source.filePath, start: cut.start, end: cut.end, fileSignature: source.fileSignature } : undefined;
-      const thumbnail = await retainHistoryThumbnail(entry, completedJobs.get(entry.jobId)?.outputPath, undefined, sourceFrame);
-      if (thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
-      else { delete entry.thumbnailUrl; delete entry.thumbnailKind; }
-    }
-  }));
+  for (const entry of iterateHistory()) {
+    const source = state.sources.find(item => item.fingerprint === entry.sourceFingerprint);
+    const cut = entry.cuts[0];
+    const sourceFrame = source && cut && cut.end <= source.duration
+      ? { filePath: source.filePath, start: cut.start, end: cut.end, fileSignature: source.fileSignature } : undefined;
+    const thumbnail = await retainHistoryThumbnail(entry, completedJobs.get(entry.jobId)?.outputPath, undefined, sourceFrame);
+    const before = JSON.stringify([entry.thumbnailUrl, entry.thumbnailKind]);
+    if (thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
+    else { delete entry.thumbnailUrl; delete entry.thumbnailKind; }
+    if (before !== JSON.stringify([entry.thumbnailUrl, entry.thumbnailKind])) await saveStore([entry]);
+  }
   await saveStore();
 }
-export function saveStore() {
-  const contents = JSON.stringify(state);
-  writes = writes
-    .catch(() => undefined)
-    .then(async () => {
-      const destination = path.join(config.dataDir, "state.json");
-      await writeFile(`${destination}.tmp`, contents, { mode: 0o600 });
-      await rename(`${destination}.tmp`, destination);
-    });
-  return writes;
+export async function saveStore(history: ExportHistoryEntry[] = []) {
+  if (!database) throw new Error("Workspace database is not initialized");
+  database.save(state, replacementHistory ? [...replacementHistory.filter(entry => !history.some(update => update.id === entry.id)), ...history] : history, replacementHistory !== undefined);
+  replacementHistory = undefined;
 }
 export function publicSource(source: StoredSource): VideoSource {
   const {

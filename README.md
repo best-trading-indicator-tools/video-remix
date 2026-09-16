@@ -311,7 +311,7 @@ For a future cloud integration, extract the chosen short intervals locally, enha
 
 ## Run locally
 
-Requirements: **Node.js 22.12 or newer**, npm, and **FFmpeg / ffprobe** on your `PATH`. Local transcription also needs **Python 3.10–3.13**. Use an FFmpeg build with `libx264`, AAC encoding, `drawtext`, and the libass `subtitles` filter.
+Requirements: **Node.js 22.13 or newer**, npm, and **FFmpeg / ffprobe** on your `PATH`. Local transcription also needs **Python 3.10–3.13**. Use an FFmpeg build with `libx264`, AAC encoding, `drawtext`, and the libass `subtitles` filter.
 
 On macOS with Homebrew:
 
@@ -319,7 +319,7 @@ On macOS with Homebrew:
 brew install node ffmpeg tesseract python@3.12
 ```
 
-On Debian/Ubuntu, install Node.js 22.12+ using your preferred method, then:
+On Debian/Ubuntu, install Node.js 22.13+ using your preferred method, then:
 
 ```sh
 sudo apt-get update
@@ -489,6 +489,25 @@ The frontend uses React, TypeScript, and Vite. The Express API validates uploads
 - **Text or subtitles fail:** check your FFmpeg build includes `drawtext` and `subtitles`, and install a system font. The Docker image includes these dependencies.
 - **Slow exports:** reduce resolution, frame rate, or render concurrency. Encoding speed depends on clip duration, effects, and available CPU.
 - **Uploads rejected:** check the per-file size and batch limits in your configuration.
+
+### Workspace storage and migration
+
+Workspace records are stored in `data/remixer.sqlite` (or `DATA_DIR/remixer.sqlite`).
+SQLite runs inside Node, with no account or database server. Sources, jobs, attachments,
+B-roll and history each have individual rows. Routine saves update only changed rows;
+history is read on demand and publication updates write only the affected history record.
+
+On first startup the app imports `state.json` in one transaction, leaves the original
+untouched, and creates `state.json.pre-sqlite.bak`. Invalid data stops startup instead
+of silently creating an empty workspace. Once migration succeeds, SQLite is authoritative;
+editing the old JSON does not change the workspace. Both legacy files may be kept as
+migration backups, but they do not contain later edits.
+
+For a current backup, stop the app first and copy the data directory, or use SQLite's
+online backup command (`sqlite3 data/remixer.sqlite '.backup data/remixer-backup.sqlite'`).
+Do not copy only a live database file: committed changes may still be in its `-wal`
+sidecar. Videos and retained previews are separate files and need their own backup.
+Use one running app per workspace; a synced folder is not a multi-computer database server.
 
 ### Export history
 

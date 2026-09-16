@@ -1,3 +1,4 @@
+import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -177,7 +178,7 @@ test("the queue renders only verified repairs, protects manual edits, and retain
         subtitlePath: expectedSrt, supportingVisuals: [], workDir: expectedWork, signal: new AbortController().signal, onProgress: () => {} });
       assert.equal(await frameDigest(repaired.outputPath, 1), await frameDigest(expectedOutput, 1), "Burned hook/caption and selected source frame must use the final plan");
       assert.equal(await frameDigest(repaired.outputPath, 5), await frameDigest(expectedOutput, 5), "Restored ending and its caption must be rendered");
-      const stored = JSON.parse(await readFile(path.join(directory, "data", "state.json"), "utf8")) as { jobs: StoredJob[]; history: { jobId: string; editorialRepair?: unknown; editorialMode?: string }[] };
+      const stored = JSON.parse(await readWorkspaceFile(path.join(directory, "data", "state.json"), "utf8")) as { jobs: StoredJob[]; history: { jobId: string; editorialRepair?: unknown; editorialMode?: string }[] };
       assert.deepEqual(stored.jobs.find(job => job.id === repaired.id)!.editPlan, JSON.parse(JSON.stringify(repaired.editPlan)));
       assert.deepEqual(stored.history.find(entry => entry.jobId === repaired.id)!.editorialRepair, JSON.parse(JSON.stringify(repaired.editorialRepair)));
       assert.equal(stored.history.find(entry => entry.jobId === repaired.id)!.editorialMode, "repair");

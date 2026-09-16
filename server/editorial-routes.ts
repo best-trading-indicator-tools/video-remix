@@ -1,3 +1,4 @@
+import { historyRecords, reconcileHistory } from "./store.js";
 import { createHash } from "node:crypto";
 import type { Express } from "express";
 import type { EditorialReviewer } from "../shared/editorial.js";
@@ -57,7 +58,7 @@ export function installEditorialReviewRoutes(app: Express, options: ReviewRouteO
       const nextReport = structuredClone(report);
       const nextRepair = job.editorialRepair ? { ...job.editorialRepair, finalReport: structuredClone(report) } : undefined;
       const nextPhase = job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || report.status !== "pass" ? "Needs review" : "Ready to preview";
-      const historyUpdates = state.history.filter(entry => entry.jobId === job.id).map(entry => ({
+      const historyUpdates = historyRecords({ jobId: job.id }).map(entry => ({
         entry, previousReport: entry.editorialReport, previousRepair: entry.editorialRepair,
         report: structuredClone(report), repair: entry.editorialRepair ? { ...entry.editorialRepair, finalReport: structuredClone(report) } : undefined,
       }));
@@ -68,7 +69,7 @@ export function installEditorialReviewRoutes(app: Express, options: ReviewRouteO
         update.entry.editorialReport = update.report;
         if (update.repair) update.entry.editorialRepair = update.repair;
       }
-      try { await saveStore(); }
+      try { await saveStore(historyUpdates.map(update => update.entry)); }
       catch {
         // Roll back only fields owned by this request. Publication measurements,
         // repairs and job state changed elsewhere must not be overwritten.

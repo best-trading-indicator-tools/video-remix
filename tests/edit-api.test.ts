@@ -1,3 +1,4 @@
+import { readWorkspaceFile, writeWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
@@ -303,7 +304,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       // no cloud speech service or installed local voice model is involved.
       await stop();
       const statePath = path.join(dataDirectory, "state.json");
-      const saved = JSON.parse(await readFile(statePath, "utf8")) as {
+      const saved = JSON.parse(await readWorkspaceFile(statePath, "utf8")) as {
         jobs: (RenderJob & { editPlan: EditPlan; planFiles: Record<string, string> })[];
       };
       const parent = saved.jobs.find((item) => item.id === narrationParent.id)!;
@@ -321,7 +322,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       parent.editPlan.narration = true;
       parent.planFiles[audioId] = audioName;
       parent.summary!.narration = true;
-      await writeFile(statePath, JSON.stringify(saved));
+      await writeWorkspaceFile(statePath, JSON.stringify(saved));
       await start();
       const narratedPlan = await planOf(parent.id);
       assert.equal(narratedPlan.narration, true);
@@ -366,7 +367,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
     await t.test("explicit stock refresh changes only one saved edit and caption-only revisions never repeat the search", async () => {
       await stop();
       const statePath = path.join(dataDirectory, "state.json");
-      const saved = JSON.parse(await readFile(statePath, "utf8"));
+      const saved = JSON.parse(await readWorkspaceFile(statePath, "utf8"));
       const parent = saved.jobs.find((item: RenderJob) => item.id === narrationParent.id);
       parent.auto.supportingVisuals = "library";
       parent.auto.visualSources = ["pixabay", "remotion"];
@@ -392,7 +393,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
         { start: 4, end: 7, text: "Mountain snow hiking.", words: [] },
       ] };
       parent.editPlan.captions = [{ id: "saved-speech", start: 4, end: 6.5, text: "Sunset sea coast." }];
-      await writeFile(statePath, JSON.stringify(saved));
+      await writeWorkspaceFile(statePath, JSON.stringify(saved));
       await start();
       const noKey = await request(`/api/jobs/${parent.id}/revisions`, "POST", { revision: parent.editPlan.revision, refreshBroll: true });
       assert.equal(noKey.status, 400);
@@ -433,9 +434,9 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       assert.equal(noAIKey.status, 400);
       assert.match(await noAIKey.text(), /DeepSeek/u);
       await stop();
-      const tagged = JSON.parse(await readFile(statePath, "utf8"));
+      const tagged = JSON.parse(await readWorkspaceFile(statePath, "utf8"));
       tagged.jobs.find((item: RenderJob) => item.id === parent.id).auto.brollMatching = "tags";
-      await writeFile(statePath, JSON.stringify(tagged));
+      await writeWorkspaceFile(statePath, JSON.stringify(tagged));
       await start(true);
       const before = await planOf(parent.id);
       const count = (await jobs()).length;
@@ -482,7 +483,7 @@ test("saved Auto plans support isolated corrections and durable B-roll without r
       const requests = await readFile(requestLog, "utf8");
       assert.match(requests, /sunset/iu);
       assert.doesNotMatch(requests, /mountain|snow|hiking/iu);
-      const persisted = JSON.parse(await readFile(statePath, "utf8"));
+      const persisted = JSON.parse(await readWorkspaceFile(statePath, "utf8"));
       assert.equal(persisted.jobs.find((item: RenderJob) => item.id === refreshed.id).refreshBroll, undefined);
       await stop();
       await start(true);

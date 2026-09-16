@@ -1,3 +1,4 @@
+import { readWorkspaceFile, writeWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
@@ -65,13 +66,13 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     "This edit reuses footage from an earlier export. Open History to compare."), "Reused source footage is explained without preventing the export");
   const clearLegacyThumbnails = async () => {
     const statePath = path.join(dataDirectory, "state.json");
-    const saved = JSON.parse(await readFile(statePath, "utf8")) as { history: ExportHistoryEntry[] };
+    const saved = JSON.parse(await readWorkspaceFile(statePath, "utf8")) as { history: ExportHistoryEntry[] };
     for (const entry of saved.history) {
       delete entry.thumbnailUrl;
       delete entry.thumbnailKind;
     }
     await rm(path.join(dataDirectory, "history-thumbnails"), { recursive: true, force: true });
-    await writeFile(statePath, JSON.stringify(saved));
+    await writeWorkspaceFile(statePath, JSON.stringify(saved));
   };
   const start = async () => {
     processLog = "";
@@ -421,13 +422,13 @@ test("export history survives new batches, renamed reuploads, deletion and expir
     await t.test("normal retention cleanup expires jobs and source files while preserving reusable history", async () => {
       await stop();
       const statePath = path.join(dataDirectory, "state.json");
-      const saved = JSON.parse(await readFile(statePath, "utf8")) as { jobs: RenderJob[]; sources: VideoSource[] };
+      const saved = JSON.parse(await readWorkspaceFile(statePath, "utf8")) as { jobs: RenderJob[]; sources: VideoSource[] };
       // Age only the isolated fixture's temporary exports and sources. Startup
       // invokes the production expiry path; the history ledger is untouched.
       const old = "2000-01-01T00:00:00.000Z";
       for (const job of saved.jobs) { job.createdAt = old; job.finishedAt = old; }
       for (const source of saved.sources) source.createdAt = old;
-      await writeFile(statePath, JSON.stringify(saved));
+      await writeWorkspaceFile(statePath, JSON.stringify(saved));
       await start();
       assert.deepEqual(await jobs(), []);
       assert.deepEqual(await readdir(path.join(dataDirectory, "outputs")), []);

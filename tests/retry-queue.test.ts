@@ -1,3 +1,4 @@
+import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -134,7 +135,7 @@ child.on('exit', code => process.exit(code ?? 1));
       await sleep(400); pumpQueue();
       assert.equal(item.status, "cancelled");
       assert.equal((await counts())[item.id], 1);
-      const saved = JSON.parse(await readFile(path.join(config.dataDir, "state.json"), "utf8"));
+      const saved = JSON.parse(await readWorkspaceFile(path.join(config.dataDir, "state.json"), "utf8"));
       assert.equal(saved.jobs.find((entry: StoredJob) => entry.id === item.id).cancelledByUser, true);
     });
 

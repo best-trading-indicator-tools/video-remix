@@ -1,3 +1,4 @@
+import { readWorkspaceFile, failWorkspaceWrites } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import express from "express";
 import { randomUUID } from "node:crypto";
@@ -137,7 +138,7 @@ test("saved editorial review updates evidence reports without rendering, editing
       assert.deepEqual(state.history[0]!.publications, historyBefore!.publications);
       assert.deepEqual(state.history[0]!.measurements, historyBefore!.measurements);
       assert.deepEqual(await Promise.all(Object.values(assets).map(file => readFile(file))), bytes);
-      const saved = JSON.parse(await readFile(path.join(directory, "data", "state.json"), "utf8"));
+      const saved = JSON.parse(await readWorkspaceFile(path.join(directory, "data", "state.json"), "utf8"));
       assert.deepEqual(saved.jobs[0].editorialReport, result.editorialReport);
       assert.deepEqual(saved.history[0].editorialReport, result.editorialReport);
       assert.deepEqual(await readdir(path.join(directory, "data", "outputs")), [], "No new render artifact is created");
@@ -221,12 +222,12 @@ test("saved editorial review updates evidence reports without rendering, editing
       const response = await post(job!.id, {}, undefined, short);
       assert.equal(response.status, 504); assert.ok(pending[0]!.signal.aborted);
       assert.deepEqual(job!.editorialReport, before); pending[0]!.release(); mode = "pass";
-      await mkdir(path.join(directory, "data", "state.json.tmp"));
+      await failWorkspaceWrites(path.join(directory, "data"), true);
       try {
         assert.equal((await post(job!.id)).status, 503);
         assert.deepEqual(job!.editorialReport, before); assert.deepEqual(job!.editorialRepair, repair);
         assert.deepEqual(state.history[0]!.editorialReport, before);
-      } finally { await rm(path.join(directory, "data", "state.json.tmp"), { recursive: true, force: true }); }
+      } finally { await failWorkspaceWrites(path.join(directory, "data"), false); }
     });
     await t.test("provider failure becomes an honest saved report without exposing provider diagnostics", async () => {
       const [job] = await seed(); mode = "fail";

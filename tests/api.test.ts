@@ -35,6 +35,8 @@ test(
         cwd: process.cwd(),
         env: {
           ...process.env,
+          // This suite exercises storage and rendering, not installed speech/cloud models.
+          AUTO_AI: "false", DEEPSEEK_API_KEY: "",
           PORT: String(port),
           HOST: "127.0.0.1",
           DATA_DIR: path.join(directory, "data"),

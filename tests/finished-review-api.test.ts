@@ -1,3 +1,4 @@
+import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -88,7 +89,7 @@ test("automatic finished reviews persist and HTTP rechecks update only the repor
       assert.equal(result.outputPath, undefined); assert.equal(result.sourceTranscript, undefined);
       assert.equal(state.jobs.length, 1); assert.deepEqual(job.settings, settings);
       assert.equal(createHash("sha256").update(await readFile(job.outputPath)).digest("hex"), before);
-      const persisted = JSON.parse(await readFile(path.join(directory, "data", "state.json"), "utf8"));
+      const persisted = JSON.parse(await readWorkspaceFile(path.join(directory, "data", "state.json"), "utf8"));
       assert.deepEqual(persisted.history[0].finishedReviewReport, result.finishedReviewReport);
       assert.deepEqual(persisted.jobs[0].finishedReviewReport, result.finishedReviewReport);
     });

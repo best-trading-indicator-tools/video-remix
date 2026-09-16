@@ -1,3 +1,4 @@
+import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
@@ -126,7 +127,7 @@ test("cancelling a queued job persists cancellation without starting a worker", 
   assert.equal(item.status, "cancelled");
   assert.equal(isRunning(item.id), false);
   const saved = JSON.parse(
-    await readFile(path.join(directory, "state.json"), "utf8"),
+    await readWorkspaceFile(path.join(directory, "state.json"), "utf8"),
   );
   assert.equal(saved.jobs[0].status, "cancelled");
 });
@@ -200,7 +201,7 @@ test("cleanup claims expired records immediately and protects queued source and 
   await assert.rejects(access(expiredWork), { code: "ENOENT" });
   await access(activeWork);
   const saved = JSON.parse(
-    await readFile(path.join(directory, "state.json"), "utf8"),
+    await readWorkspaceFile(path.join(directory, "state.json"), "utf8"),
   );
   assert.deepEqual(
     saved.jobs.map((item: StoredJob) => item.id),
@@ -304,7 +305,7 @@ test("startup recovery removes interrupted auto-edit artifacts, preserves comple
   assert.equal(publicReady.captionUrl, completed.captionUrl);
   assert.deepEqual(publicReady.summary, summary);
   const saved = JSON.parse(
-    await readFile(path.join(directory, "state.json"), "utf8"),
+    await readWorkspaceFile(path.join(directory, "state.json"), "utf8"),
   );
   const savedRecovery = saved.jobs.find(
     (item: StoredJob) => item.id === interrupted.id,

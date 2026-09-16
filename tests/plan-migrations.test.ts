@@ -1,3 +1,4 @@
+import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -79,7 +80,7 @@ test("saved Auto plans retain legacy native resolution while new exact exports s
       assert.equal(loaded(fresh.id).editPlan!.resolutionSizing, "exact", "New capture carries an explicit sizing marker");
       assert.equal(loaded(fresh.id).editPlan!.settings.resolution, "1080", "A new exact plan never falls back to a native cap");
       assert.deepEqual(loaded(manual.id), JSON.parse(JSON.stringify(manual)), "Queued manual exports are untouched");
-      const persisted = JSON.parse(await readFile(path.join(directory, "state.json"), "utf8")) as { jobs: StoredJob[] };
+      const persisted = JSON.parse(await readWorkspaceFile(path.join(directory, "state.json"), "utf8")) as { jobs: StoredJob[] };
       assert.equal(persisted.jobs.find(job => job.id === legacy.id)!.editPlan!.settings.resolution, "source");
     });
 

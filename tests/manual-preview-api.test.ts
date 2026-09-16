@@ -1,3 +1,4 @@
+import { readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -230,7 +231,7 @@ test("manual preview API renders the actual edit without creating exports and ma
       assert.equal((await fetch(`${base}${plain.url}`)).status, 404, "Old previews are evicted");
       assert.deepEqual((await (await fetch(`${base}/api/jobs`)).json()).jobs, []);
       assert.deepEqual((await (await fetch(`${base}/api/history`)).json()).entries, []);
-      const saved = JSON.parse(await readFile(path.join(dataDirectory, "state.json"), "utf8"));
+      const saved = JSON.parse(await readWorkspaceFile(path.join(dataDirectory, "state.json"), "utf8"));
       assert.deepEqual(saved.jobs, []);
       assert.deepEqual(saved.history, []);
       assert.equal(await readFile(path.join(previewDirectory, "keep-notes.txt"), "utf8"), "unrelated file");

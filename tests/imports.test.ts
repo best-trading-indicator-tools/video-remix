@@ -1,3 +1,4 @@
+import { readWorkspaceFile, writeWorkspaceFile, failWorkspaceWrites } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
@@ -164,13 +165,13 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
 
       const broken = await (await json("/api/imports", { name: "retryable.mp4", size: bytes.length, lastModified: 1, identity })).json() as ImportSession;
       assert.equal((await chunk(broken.id, 0, bytes)).status, 200);
-      await mkdir(path.join(data, "state.json.tmp"));
+      await failWorkspaceWrites(data, true);
       try {
         assert.equal((await json(`/api/imports/${broken.id}/finish`, {})).status, 202);
         assert.equal((await waitImport(broken.id, "failed")).source, undefined);
         const after = (await (await fetch(`${base}/api/sources`)).json()).sources;
         assert.equal(after.some((source: { id: string }) => source.id === broken.id), false);
-      } finally { await rm(path.join(data, "state.json.tmp"), { recursive: true, force: true }); }
+      } finally { await failWorkspaceWrites(data, false); }
       await stop(); await start();
       assert.equal((await getImport(broken.id)).status, "failed");
       assert.equal((await json(`/api/imports/${broken.id}/finish`, {})).status, 202);
@@ -286,9 +287,9 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
       assert.equal((await stat(original)).blocks, sparseInfo.blocks);
       await stop();
       const statePath = path.join(data, "state.json");
-      const saved = JSON.parse(await readFile(statePath, "utf8"));
+      const saved = JSON.parse(await readWorkspaceFile(statePath, "utf8"));
       saved.sources.find((source: { id: string }) => source.id === ready.id).createdAt = "2000-01-01T00:00:00.000Z";
-      await writeFile(statePath, JSON.stringify(saved));
+      await writeWorkspaceFile(statePath, JSON.stringify(saved));
       await start();
       await access(original);
       await assert.rejects(access(managed), { code: "ENOENT" });
