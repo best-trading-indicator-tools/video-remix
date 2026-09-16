@@ -14,7 +14,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
-import type { RemixSettings } from "../shared/types.js";
+import type { CaptionStyle, RemixSettings } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
@@ -511,6 +511,39 @@ async function canonicalSubtitles(filePath: string, uppercase = false): Promise<
   return `${canonical.join("\n\n")}\n`;
 }
 
+async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefined, workDir: string, temporary: string[]) {
+  const filename = `captions-${randomUUID()}.srt`;
+  const filePath = path.join(workDir, filename);
+  temporary.push(filePath);
+  await writeFile(filePath, await canonicalSubtitles(subtitlePath, style?.uppercase), "utf8");
+  const fontsName = `caption-fonts-${randomUUID()}`;
+  const fontsLink = path.join(workDir, fontsName);
+  let fontDirectory: string | undefined;
+  for (const url of [new URL("../public/caption-fonts", import.meta.url), new URL("../../dist/caption-fonts", import.meta.url)]) {
+    try { await access(new URL(`${url.href}/Poppins-Regular.ttf`)); fontDirectory = fileURLToPath(url); break; } catch { /* Try production assets. */ }
+  }
+  if (!fontDirectory) throw new Error("Bundled caption fonts are missing. Restore public/caption-fonts or run npm run build.");
+  await symlink(fontDirectory, fontsLink, "dir"); temporary.push(fontsLink);
+  // The SRT decoder uses a 384 × 288 script canvas at every output resolution.
+  return `subtitles=filename=${filename}:fontsdir=${fontsName}:charenc=UTF-8:force_style='${captionAssStyle(style)}'`;
+}
+
+/** Caption an already composed MP4. Copy its soundtrack without changing audio or timing. */
+export async function burnOutputCaptions(options: { input: string; output: string; subtitlePath: string; style?: CaptionStyle; workDir: string; signal: AbortSignal }) {
+  options.signal.throwIfAborted();
+  const input = await localFile(options.input), workDir = path.resolve(options.workDir);
+  await mkdir(workDir, { recursive: true });
+  const temporary: string[] = [];
+  try {
+    const filter = await subtitleFilter(options.subtitlePath, options.style, workDir, temporary);
+    await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "2", ...SAFE_INPUT,
+      "-i", input, "-map", "0:v:0", "-map", "0:a:0?", "-vf", filter, "-filter_threads", "1", "-filter_complex_threads", "1",
+      "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "2",
+      "-c:a", "copy", "-map_metadata", "0", "-map_chapters", "-1", "-movflags", "+faststart+use_metadata_tags", path.resolve(options.output)],
+      { cwd: workDir, signal: options.signal });
+  } finally { await Promise.all(temporary.map(file => rm(file, { force: true }).catch(() => undefined))); }
+}
+
 export interface RenderOptions {
   maximumOutputDuration?: number;
   ownFootage?: ResolvedFootage[];
@@ -730,28 +763,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       );
     }
     if (options.subtitlePath) {
-      const filename = `captions-${randomUUID()}.srt`;
-      const filePath = path.join(workDir, filename);
-      temporary.push(filePath);
-      await writeFile(
-        filePath,
-        await canonicalSubtitles(options.subtitlePath, s.captionStyle?.uppercase),
-        "utf8",
-      );
-      const fontsName = `caption-fonts-${randomUUID()}`;
-      const fontsLink = path.join(workDir, fontsName);
-      let fontDirectory: string | undefined;
-      for (const url of [new URL("../public/caption-fonts", import.meta.url), new URL("../../dist/caption-fonts", import.meta.url)]) {
-        try { await access(new URL(`${url.href}/Poppins-Regular.ttf`)); fontDirectory = fileURLToPath(url); break; } catch { /* Try the production assets. */ }
-      }
-      if (!fontDirectory) throw new Error("Bundled caption fonts are missing. Restore public/caption-fonts or run npm run build.");
-      await symlink(fontDirectory, fontsLink, "dir"); temporary.push(fontsLink);
-      filters.push(
-        // FFmpeg's SRT-to-ASS decoder uses a 384 x 288 script canvas. ASS
-        // margins are script pixels, so converting here preserves percentages
-        // across source resolutions and portrait/landscape exports.
-        `subtitles=filename=${filename}:fontsdir=${fontsName}:charenc=UTF-8:force_style='${captionAssStyle(s.captionStyle)}'`,
-      );
+      filters.push(await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary));
     }
     const args = [
       "-hide_banner",

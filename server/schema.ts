@@ -48,6 +48,7 @@ export const settingsSchema = z
       .transform(() => "none"),
     audioId: z.string().uuid().nullable(),
     subtitleId: z.string().uuid().nullable(),
+    automaticCaptions: z.enum(["off", "auto", "add"]).optional(),
     segments: z
       .array(
         z

@@ -133,6 +133,8 @@ export interface RemixSettings {
   device: string;
   audioId: string | null;
   subtitleId: string | null;
+  /** Manual exports transcribe their final soundtrack locally. */
+  automaticCaptions?: "off" | "auto" | "add";
   segments?: EditSegment[];
   callouts?: TimedCallout[];
   normalizeAudio?: boolean;

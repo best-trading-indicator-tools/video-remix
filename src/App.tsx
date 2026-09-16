@@ -645,6 +645,7 @@ export default function App() {
   }, [showHelp, previewJob]);
 
   const updateSettings = (patch: Partial<RemixSettings>) => {
+    if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
     if (selected)
       setSettingsById((current) => ({
         ...current,
@@ -773,6 +774,7 @@ export default function App() {
         [sourceId]: {
           ...(current[sourceId] || defaultSettings),
           [kind === "audio" ? "audioId" : "subtitleId"]: attachment.id,
+          ...(kind === "subtitle" ? { automaticCaptions: undefined } : {}),
         },
       }));
       notify(
@@ -940,7 +942,7 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
-  const manualDefaults = { ...DEFAULT_SETTINGS, normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+  const manualDefaults = { ...DEFAULT_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length;
@@ -2031,6 +2033,21 @@ export default function App() {
                           title="Captions"
                           icon={<Subtitles size={14} />}
                         >
+                          <SelectField label="Caption mode" value={settings.automaticCaptions || "off"}
+                            onChange={value => updateSettings({ automaticCaptions: value as "off" | "auto" | "add" })}>
+                            <option value="off">Original captions / import SRT</option>
+                            <option value="auto">Automatic · avoid duplicates</option>
+                            <option value="add">Automatic · add new</option>
+                          </SelectField>
+                          {settings.automaticCaptions && settings.automaticCaptions !== "off" ? (
+                            <div className="field-hint" role="status">
+                              <p>Free, local speech recognition. Captions follow the finished audio, including cuts, speed changes and added clips. Generated on export, not in the quick preview.</p>
+                              <p>{settings.automaticCaptions === "auto"
+                                ? "Keeps existing captions. If the check is uncertain, no new captions are added."
+                                : "Adds new captions even if the video already contains text."}</p>
+                              {autoCapabilities && !autoCapabilities.transcription && <p>Local speech setup is required: run <code>npm run setup:auto</code>, then reload this page.</p>}
+                            </div>
+                          ) : <>
                           <input
                             ref={subtitleInput}
                             className="visually-hidden"
@@ -2077,6 +2094,7 @@ export default function App() {
                             Burned into the export. Use timings for your final
                             edited video.
                           </p>
+                          </>}
                           <details className="manual-subsection">
                             <summary>Caption appearance</summary>
                             <CaptionStyleEditor value={settings.captionStyle} onChange={captionStyle => updateSettings({ captionStyle })} />

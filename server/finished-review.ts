@@ -94,7 +94,7 @@ async function audioEvidence(output: string, duration: number, workDir: string, 
 export async function reviewFinishedVideo(input: {
   output: string; sourcePath?: string; sourceDuration: number; sourceFps: number; settings: RemixSettings;
   visuals: { start: number; end: number; kind: "broll" | "graphic"; name?: string }[];
-  captions: CaptionCue[]; workDir: string; cacheFile?: string; signal: AbortSignal;
+  captions: CaptionCue[]; captionsAreOutputTimed?: boolean; workDir: string; cacheFile?: string; signal: AbortSignal;
 }, dependencies: FinishedReviewDependencies = {}): Promise<FinishedReviewReport> {
   input.signal.throwIfAborted();
   const report: FinishedReviewReport = { version: FINISHED_REVIEW_VERSION, checkedAt: new Date().toISOString(), status: "unavailable", issues: [],
@@ -192,7 +192,7 @@ export async function reviewFinishedVideo(input: {
     }
     if (report.picture.reason) for (const item of report.checks.filter(item => item.name !== "caption-speech" && item.status === "unavailable")) item.detail = report.picture.reason;
     if (transcript) {
-      const authored = prepared.captions(input.captions);
+      const authored = input.captionsAreOutputTimed ? input.captions : prepared.captions(input.captions);
       const result = compareRenderedCaptions(authored.length ? authored : observedCaptions, transcript, report.audio.windows);
       report.audio.captionWindowsCompared = result.compared;
       report.issues.push(...result.issues);

@@ -84,6 +84,17 @@ test("finished review uses decoded export/source images and the rendered audio, 
       await reviewFinishedVideo({ ...input, cacheFile: path.join(directory, "audio-cache.json") }, { transcriber, vision: async samples => pass(samples) });
       assert.equal(transcriptions, 1, "Unchanged output reuses only its rendered-audio evidence");
     });
+    await t.test("captions transcribed after composition are not shifted again by uploaded inserts", async () => {
+      const settings = { ...DEFAULT_SETTINGS, trimEnd: 2, ownFootage: [{
+        id: "11111111-1111-4111-8111-111111111111", assetId: "22222222-2222-4222-8222-222222222222",
+        mode: "insert" as const, at: 1, start: 0, end: 2, audio: "clip" as const, fit: "contain" as const,
+      }] };
+      const report = await reviewFinishedVideo({ ...input, settings, captionsAreOutputTimed: true }, {
+        transcriber: async () => speech(caption.text), vision: async samples => pass(samples),
+      });
+      assert.equal(report.audio.captionWindowsCompared, 1, "One final-clock caption spanning the insert is checked whole");
+      assert.ok(!report.issues.some(issue => issue.check === "caption-speech"));
+    });
     await t.test("provider failure preserves completed audio checks and names the safe reason", async () => {
       const report = await reviewFinishedVideo(input, { transcriber: async () => speech(caption.text), vision: async () => { throw new AIRequestError("rate-limit"); } });
       assert.equal(report.status, "partial"); assert.match(report.picture.reason || "", /limited requests/u);

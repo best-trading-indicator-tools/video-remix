@@ -36,9 +36,10 @@ trimStart 0–86400 seconds, trimEnd 0.01–86400 seconds or null for source end
 segments [{"start":10,"end":20,"focalPoint":{"x":0.5,"y":0.5}}] (1–60 cuts in requested order; focalPoint optional), or null to remove an existing sequence;
 hookText literal plain heading up to 200 characters, hookDuration 0.5–30 seconds;
 normalizeAudio boolean, qualityCleanup boolean (free local denoising and mild sharpening), autoMotion boolean (gentle crop movement);
-focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, right/bottom 1; either field may be omitted); captionStyle fields are optional: fontSize 12–40; bottomPercent 5–80 (larger means HIGHER); fontFamily classic/poppins/anton/serif; color, outlineColor and backgroundColor as six-digit #RRGGBB; bold, italic and uppercase booleans; outlineWidth and shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100. A background box replaces the outline. Only added SRT captions can be styled, never text already baked into source pixels.
+automaticCaptions "off"|"auto"|"add": off keeps original/imported captions; auto transcribes the finished soundtrack locally at export and avoids duplicating existing captions; add explicitly adds new automatic captions even if text already exists. Enabling auto/add replaces any imported SRT attachment. Use auto for ordinary automatic-caption requests.
+focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, right/bottom 1; either field may be omitted); captionStyle fields are optional: fontSize 12–40; bottomPercent 5–80 (larger means HIGHER); fontFamily classic/poppins/anton/serif; color, outlineColor and backgroundColor as six-digit #RRGGBB; bold, italic and uppercase booleans; outlineWidth and shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100. A background box replaces the outline. Only added imported or automatic captions can be styled, never text already baked into source pixels.
 For a simple trim, provide trimStart/trimEnd only. The compiler removes existing segments and resets an inherited timeShift to 0 to honor those source timestamps. For explicit source sequences, provide segments only, not trimStart/trimEnd; sequence selection resets inherited timeShift to 0. timeShift moves the complete trim window while preserving its duration and clamps at the source edges; it does not work with segments. Never combine nonzero timeShift with segments. Global focalPoint replaces existing per-cut crop overrides. Do not restate unchanged fields or reset other filters.
-No speech or transcript is available. You cannot invent or rewrite a heading from the video; only use exact heading text explicitly supplied by the user, or remove it with an empty string. Caption style affects an existing subtitle attachment; it does not create, rewrite, translate or retime caption text. You cannot add/change audio or subtitle attachments, voices, music, B-roll, generated footage, callouts, metadata/device identity, stripMetadata, custom LUTs, subject tracking, publishing or other settings. AI upscaling and generative enhancement are unavailable; qualityCleanup is only local cleanup and resolution is ordinary resizing.
+No speech or transcript is available during this proposal. You cannot invent or rewrite a heading from the video; only use exact heading text explicitly supplied by the user, or remove it with an empty string. Caption style affects imported or automatic captions. You may enable automaticCaptions, but cannot invent, rewrite or translate caption text. You cannot add/change audio or subtitle attachments, voices, music, B-roll, generated footage, callouts, metadata/device identity, stripMetadata, custom LUTs, subject tracking, publishing or other settings. AI upscaling and generative enhancement are unavailable; qualityCleanup is only local cleanup and resolution is ordinary resizing.
 If any part is unsupported, ambiguous, or would require speech/video analysis, return patch:{} plus clarification. Never partially fulfill mixed requests. For 'make it better' ask which changes; for specific aesthetic requests such as 'slightly warmer with less saturation', propose restrained changes. If the requested settings already match, return patch:{}. Never claim anything is rendered, saved, published or applied. No media URLs, file paths or attachment IDs. Write clarification in the request's language.`;
 
 function effective(settings: RemixSettings, source: Source) {
@@ -64,6 +65,7 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
     throw new PromptEditError(422, "Time shift applies to one continuous trim. Change the source cuts directly for a sequence.");
   const { focalPoint, captionStyle, segments, ...simple } = patch;
   const next: RemixSettings = { ...structuredClone(settings), ...simple };
+  if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") next.subtitleId = null;
   if (focalPoint) next.focalPoint = { ...(settings.focalPoint ?? { x: 0.5, y: 0.5 }), ...focalPoint };
   if (captionStyle) next.captionStyle = { ...(settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 / 12 }), ...captionStyle };
   if (own(patch, "segments")) {
@@ -82,6 +84,10 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
   if (output.width > 16384 || output.height > 16384)
     throw new PromptEditError(422, "The requested format exceeds the renderer’s output size limit. Choose a standard aspect ratio or a lower resolution.");
   const summary: string[] = [];
+  if ((next.automaticCaptions || "off") !== (settings.automaticCaptions || "off"))
+    summary.push(next.automaticCaptions === "auto" ? "Automatic captions: on, avoiding duplicates."
+      : next.automaticCaptions === "add" ? "Automatic captions: add new, even if captions already exist." : "Automatic captions: off.");
+  if (settings.subtitleId && !next.subtitleId) summary.push("Use automatic captions instead of the imported SRT file.");
   const numericLabels = {
     speed: "Playback speed", volume: "Volume", zoom: "Zoom", saturation: "Saturation", brightness: "Brightness", contrast: "Contrast",
     hue: "Hue", gamma: "Gamma", temperature: "Temperature", noise: "Grain", sharpness: "Sharpness", blend: "Previous-frame blend",
@@ -108,7 +114,7 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
   if ((!same(next.focalPoint, settings.focalPoint) && !same(next.focalPoint, settings.focalPoint ?? { x: 0.5, y: 0.5 })) || sourceCropOverridesChanged)
     summary.push(`Focal point: ${display(next.focalPoint!.x * 100)}% across, ${display(next.focalPoint!.y * 100)}% down.`);
   if (!same(next.captionStyle, settings.captionStyle) && !same(next.captionStyle, settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 / 12 }))
-    summary.push(`Caption size: ${display(next.captionStyle!.fontSize)}; position: ${display(next.captionStyle!.bottomPercent)}% from the bottom${next.subtitleId ? "" : " (applies when captions are attached)"}.`);
+    summary.push(`Caption size: ${display(next.captionStyle!.fontSize)}; position: ${display(next.captionStyle!.bottomPercent)}% from the bottom${next.subtitleId || (next.automaticCaptions && next.automaticCaptions !== "off") ? "" : " (applies when captions are attached)"}.`);
   if (captionStyle && Object.keys(captionStyle).some(key => !["fontSize", "bottomPercent"].includes(key)))
     summary.push(captionStyleDescription(next.captionStyle));
   const timelineChanged = next.trimStart !== settings.trimStart || next.trimEnd !== settings.trimEnd || next.timeShift !== settings.timeShift || !same(next.segments, settings.segments);

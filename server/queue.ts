@@ -28,6 +28,7 @@ import { retainFootage } from "./footage-storage.js";
 import { captionsAfterInserts, footageTimeline } from "../shared/own-footage.js";
 import { captionCuesSrt } from "./edit-plan.js";
 import { writeFile } from "node:fs/promises";
+import { addManualCaptions, wantsManualCaptions } from "./manual-captions.js";
 const running = new Map<string, AbortController>();
 // Only initial analysis and clip selection need exclusive access to a source.
 // Once cuts are chosen, expensive stock searches, reviews and exports can overlap.
@@ -140,6 +141,8 @@ async function run(job: StoredJob, controller: AbortController) {
     await mkdir(workDir, { recursive: true });
     let audioPath = audio?.filePath;
     let subtitlePath = subtitle?.filePath;
+    const automaticManual = !job.auto && !job.editPlan && wantsManualCaptions(job.settings);
+    if (automaticManual) subtitlePath = undefined;
     let supportingVisuals: SupportingVisual[] = [];
     if (job.editPlan) {
       if (job.refreshBroll) {
@@ -279,6 +282,7 @@ async function run(job: StoredJob, controller: AbortController) {
       for (const clip of ownFootage.filter(clip => !clip.placement.appendToEnd && clip.placement.at >= baseDuration))
         (job.notes ??= []).push(clip.placement.mode === "insert" ? `${clip.name}: the requested position is past this edit's end. The clip was appended at ${baseDuration.toFixed(2)}s.` : `${clip.name}: the cover position is past this edit's end and was omitted. Adjust its timestamp in Edit this result.`);
     }
+    if (automaticManual) job.phase = "Preparing the soundtrack for automatic captions";
     await saveStore();
     await renderVideo({
       ownFootage,
@@ -294,11 +298,23 @@ async function run(job: StoredJob, controller: AbortController) {
       onProgress: (progress) => {
         job.progress = Math.max(
           job.progress,
-          Math.min(99, Math.round(job.auto ? 65 + progress * 0.34 : progress)),
+          Math.min(99, Math.round(job.auto ? 65 + progress * 0.34 : automaticManual ? progress * 0.6 : progress)),
         );
       },
     });
     if (controller.signal.aborted) throw new Error("Cancelled");
+    if (automaticManual) {
+      const result = await addManualCaptions({ output: job.outputPath, settings: job.settings, workDir,
+        signal: controller.signal, onPhase: (phase, progress) => {
+          job.phase = phase; job.progress = Math.max(job.progress, Math.round(progress));
+        } });
+      subtitlePath = result.subtitlePath;
+      job.notes = [...new Set([...(job.notes || []), result.note, ...(result.detail ? [result.detail] : [])])];
+      if (job.summary && subtitlePath) {
+        job.summary.transcriptAvailable = true;
+        job.summary.changes = [...new Set([...job.summary.changes, "Automatic captions"])];
+      }
+    }
     await assertLinkedSourceUnchanged(source);
     job.phase = "Checking the rendered video";
     job.qualityReport = await inspectExport({ output: job.outputPath, source,
@@ -316,9 +332,9 @@ async function run(job: StoredJob, controller: AbortController) {
       await saveStore();
       job.finishedReviewReport = await reviewJobFinished(job, source, controller.signal, workDir, captions);
     }
-    if (job.auto && subtitlePath) {
+    if ((job.auto || automaticManual) && subtitlePath) {
       job.captionPath = path.join(paths.outputs, `${job.id}.srt`);
-      if (job.settings.ownFootage?.some(item => item.mode === "insert")) {
+      if (job.auto && job.settings.ownFootage?.some(item => item.mode === "insert")) {
         const baseDuration = job.editPlan!.outputDuration;
         await writeFile(job.captionPath, captionCuesSrt(captionsAfterInserts(captions, job.settings.ownFootage, baseDuration, job.settings.fps === "source" ? source.fps : Number(job.settings.fps))), "utf8");
       } else await copyFile(subtitlePath, job.captionPath);

@@ -158,6 +158,23 @@ test("manual prompts compile private bounded settings proposals without mutating
       assert.match(centered.summary.join(" "), /Focal point: 50% across, 50% down/);
     });
 
+    await t.test("automatic captions can replace SRT while keeping styling and other attachments", async () => {
+      reply = { patch: { automaticCaptions: "auto", captionStyle: { fontFamily: "poppins", color: "#ffee00" } } };
+      const settings = makeSettings();
+      const result = await propose(settings, "Add automatic captions in yellow Poppins");
+      assert.equal(result.settings.automaticCaptions, "auto");
+      assert.equal(result.settings.subtitleId, null);
+      assert.equal(result.settings.audioId, settings.audioId);
+      assert.equal(result.settings.captionStyle?.color, "#ffee00");
+      assert.match(result.summary.join(" "), /avoiding duplicates/);
+      assert.doesNotMatch(result.summary.join(" "), /when captions are attached/);
+      assert.equal(settings.subtitleId, makeSettings().subtitleId, "Proposals do not mutate the saved attachment");
+      reply = { patch: { automaticCaptions: "off" } };
+      const off = await propose(result.settings, "Turn off automatic captions");
+      assert.equal(off.settings.automaticCaptions, "off");
+      assert.match(off.summary.join(" "), /Automatic captions: off/);
+    });
+
     await t.test("unknown controls, attachment IDs, unsafe values and nested keys cannot enter a proposal", async () => {
       const invalid = [
         { audioId: null }, { subtitleId: null }, { device: "Other camera" }, { stripMetadata: true }, { callouts: [] },

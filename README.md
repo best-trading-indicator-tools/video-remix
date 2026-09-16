@@ -268,6 +268,27 @@ their media snapshots follow the export retention period; keep the source video
 available to make further revisions. Older exports created before this feature
 need a new Auto edit to gain a saved plan.
 
+### Automatic captions in Manual
+
+Open **Manual → Advanced (or All controls) → Captions → Caption mode**.
+Choose **Automatic · avoid duplicates** to transcribe the finished soundtrack
+with the free local Whisper model. Cuts, playback speed, replacement audio, and
+inserted clips are already composed before transcription, so captions use the
+final export clock. Choose your font and colors under **Caption appearance**.
+Automatic captions are generated on export; the quick preview does not include them.
+The export also includes a downloadable SRT file.
+
+The duplicate check samples the rendered picture with local OCR. Existing or
+uncertain captions are left alone, with a reason in the export notes. Choose
+**Automatic · add new** to override this check. Text already baked into a source
+cannot be removed or restyled. **Original captions / import SRT** keeps the existing
+workflow; imported SRT and automatic captions are mutually exclusive. Settings
+are per video, support **Apply to all**, and are included in Manual finishing presets.
+
+Run `npm run setup:auto` once if the local speech model is not installed. Silent
+exports and exports without usable speech receive no generated captions. Model
+or transcription failures are reported instead of claiming captions were added.
+
 ### Edit with a prompt
 
 In **Edit this result**, describe changes such as “remove the B-roll”, “make

@@ -46,6 +46,8 @@ import { installSpeakerFocusRoutes } from "./speaker-focus-routes.js";
 import { installPacingRoutes } from "./pacing-routes.js";
 import { installClipDiscoveryRoutes } from "./clip-discovery-routes.js";
 import { footageFile, validateFootage } from "./footage-storage.js";
+import { wantsManualCaptions } from "./manual-captions.js";
+import { transcriptionAvailable } from "./transcription.js";
 
 class HttpError extends Error {
   constructor(
@@ -654,6 +656,10 @@ export function createApp() {
           .join("; ")}`,
       );
     const { items, variants, randomize } = parsed.data;
+    for (const item of items) if (wantsManualCaptions(item.settings) && item.settings.subtitleId)
+      throw new HttpError(400, "Choose automatic captions or an imported SRT file, not both.");
+    if (items.some(item => wantsManualCaptions(item.settings)) && !await transcriptionAvailable())
+      throw new HttpError(503, "Automatic captions need the local speech model. Run npm run setup:auto, then try again.");
     if (state.jobs.filter(isActive).length + items.length * variants > 300)
       throw new HttpError(
         429,

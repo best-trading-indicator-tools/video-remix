@@ -26,6 +26,7 @@ const manualSchema = z.object({ ...framing, fps: z.enum(["source", "24", "30", "
   noise: z.number().min(0).max(1), sharpness: z.number().min(0).max(2), blend: z.number().min(0).max(1), frameBlend: z.number().min(0).max(0.5),
   volume: z.number().min(0).max(2), muted: z.boolean(), mirror: z.boolean(), autoMotion: z.boolean().default(false),
   captionStyle: captionStyleSchema.default({fontSize:20,bottomPercent:100/12}),
+  automaticCaptions: z.enum(["off", "auto", "add"]).optional(),
 });
 const base = { id: z.string().min(1).max(100), name: z.string().trim().min(1).max(60).refine(value => !/[\u0000-\u001f\u007f]/u.test(value)) };
 const schema = z.discriminatedUnion("mode", [
