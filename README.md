@@ -523,7 +523,13 @@ npm run build
 npm test
 ```
 
-FFmpeg and ffprobe must be installed for media integration tests. Local transcription tests use the cached speech model when present; the spoken fixture uses macOS `say`. Tests skip those optional checks when their prerequisites are absent and never download weights. GitHub Actions runs the build and tests on pushes to `main` and on manual dispatch.
+FFmpeg and ffprobe must be installed for media integration tests. Local transcription tests use the cached speech model when present; the spoken fixture uses macOS `say`. Tests skip those optional checks when their prerequisites are absent and never download weights.
+
+The app runs locally on your Mac. GitHub Actions provides optional remote verification:
+
+- Pushes to `main` run only the build and type checks, without installing media tools or running the test suite. Documentation-only pushes are skipped. New pushes cancel superseded automatic checks.
+- Full remote tests run only when you explicitly choose **Actions → Build checks and manual tests → Run workflow**, or run `gh workflow run ci.yml --ref main`. A push does not cancel a manually requested test run.
+- Run `npm test` on your Mac for local testing without using GitHub Actions minutes.
 
 The frontend uses React, TypeScript, and Vite. The Express API validates uploads, persists sources and jobs, and runs FFmpeg in a background queue. No browser extension or platform account connection is required.
 
