@@ -100,9 +100,7 @@ export const normalizedSettings = (input: unknown) =>
 export const autoOptionsSchema = z
   .object({
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
-    targetDuration: z
-      .union([z.literal(30), z.literal(45), z.literal(60)])
-      .default(45),
+    targetDuration: z.number().int().min(1).default(45),
     narration: z.boolean().default(false),
     captions: z.enum(["auto", "add", "keep"]).optional(),
     supportingVisuals: z

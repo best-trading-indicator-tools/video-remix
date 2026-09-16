@@ -17,7 +17,7 @@ Imports support MP4, MOV, M4V, WebM, MKV, AVI, and MPEG, up to 24 hours long. Br
 2. **Auto remix all.** Press the Auto remix button to process every uploaded video independently. The default is one vertical 9:16 version, up to 45 seconds, with the original voice.
 3. **Review and download.** Follow the editing stages in Exports, preview the finished clips, read what changed, and download individual MP4s or the batch ZIP. Captioned exports also provide downloadable SRT files.
 
-Optional output preferences let you choose **30, 45, or 60 seconds**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. These durations are upper limits; shorter sources stay short.
+Optional output preferences let you enter **any whole-number target length from 1 second**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. The target length is an upper limit; shorter sources stay short. Custom lengths are saved per video and survive reloading.
 
 Select a source video to change **only that video's Auto settings**, including format, duration, narration, supporting visuals, selected B-roll clips, and maximum versions. **Apply to all** copies the selected video's complete settings to the other sources and updates the defaults for future imports. One Auto remix click still processes the whole batch, with each video using its own saved settings. Manual settings remain separate.
 

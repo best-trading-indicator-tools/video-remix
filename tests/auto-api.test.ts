@@ -502,7 +502,7 @@ test(
             variants: 1,
             options: {
               aspect: "1:1",
-              targetDuration: 45,
+              targetDuration: 1,
               narration: true,
               supportingVisuals: "graphics",
               visualSources: ["hyperframes", "library"],
@@ -515,7 +515,7 @@ test(
             variants: 10,
             options: {
               aspect: "16:9",
-              targetDuration: 60,
+              targetDuration: 75,
               narration: false,
               supportingVisuals: "off",
               visualSources: ["library"],
@@ -542,7 +542,7 @@ test(
       );
       assert.deepEqual(mixed.jobs[0]!.auto, {
         aspect: "1:1",
-        targetDuration: 45,
+        targetDuration: 1,
         narration: true,
         supportingVisuals: "graphics",
         visualSources: ["hyperframes", "library"],
@@ -552,7 +552,7 @@ test(
       for (const job of mixed.jobs.slice(1))
         assert.deepEqual(job.auto, {
           aspect: "16:9",
-          targetDuration: 60,
+          targetDuration: 75,
           narration: false,
           supportingVisuals: "off",
           visualSources: ["library"],
@@ -588,12 +588,15 @@ test(
           "-select_streams",
           "v:0",
           "-show_entries",
-          "stream=width,height",
+          "stream=width,height:format=duration",
           "-of",
           "json",
           output,
         ]);
         const { width, height } = JSON.parse(stdout).streams[0];
+        const expectedDuration = job.sourceId === mixedSourceIds[0] ? 1 : 3;
+        assert.ok(Math.abs(Number(JSON.parse(stdout).format.duration) - expectedDuration) < 0.15,
+          "A 1-second target trims the source, while a 75-second target keeps the shorter original");
         assert.deepEqual(
           [width, height],
           job.sourceId === mixedSourceIds[0] ? [320, 320] : [320, 180],

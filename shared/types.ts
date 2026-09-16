@@ -19,12 +19,15 @@ export interface TimedCallout {
   end: number;
 }
 export const MAX_AUTO_VERSIONS = 10;
+export const isAutoTargetDuration = (value: unknown): value is number =>
+  typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
 export const DEFAULT_BROLL_COUNT = 4;
 export const MAX_BROLL_COUNT = 10;
 export type VisualSource = "pixabay" | "hyperframes" | "remotion" | "library";
 export interface AutoOptions {
   aspect: Aspect;
-  targetDuration: 30 | 45 | 60;
+  /** Maximum output length in whole seconds, starting at 1. */
+  targetDuration: number;
   narration: boolean;
   /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
   captions?: "auto" | "add" | "keep";

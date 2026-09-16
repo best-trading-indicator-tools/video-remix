@@ -19,7 +19,7 @@ import type {
   VideoSource,
   VisualSource,
 } from "../shared/types";
-import { DEFAULT_BROLL_COUNT, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types";
+import { DEFAULT_BROLL_COUNT, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDuration } from "../shared/types";
 import { getVisualSources, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import "./auto-panel.css";
@@ -85,6 +85,15 @@ export default function AutoPanel({
       ? { brollMatching: "ai" as const } : {}),
   });
   const brollCount = options.brollCount ?? DEFAULT_BROLL_COUNT;
+  const [durationInput, setDurationInput] = useState(String(options.targetDuration));
+  useEffect(() => setDurationInput(String(options.targetDuration)), [options.targetDuration, selectedId]);
+  const commitDuration = () => {
+    const parsed = Number(durationInput);
+    const duration = durationInput.trim() && Number.isFinite(parsed)
+      ? Math.max(1, Math.min(Number.MAX_SAFE_INTEGER, Math.floor(parsed))) : options.targetDuration;
+    setDurationInput(String(duration));
+    onChange({ ...options, targetDuration: duration });
+  };
   const [brollCountInput, setBrollCountInput] = useState(String(brollCount));
   useEffect(() => setBrollCountInput(String(brollCount)), [brollCount, selectedId]);
   const [versionInput, setVersionInput] = useState(String(variants));
@@ -199,23 +208,26 @@ export default function AutoPanel({
               </select>
             </label>
             <label className="auto-output-field">
-              Target length
-              <select
-                value={options.targetDuration}
-                onChange={(event) =>
-                  onChange({
-                    ...options,
-                    targetDuration: Number(
-                      event.target.value,
-                    ) as AutoOptions["targetDuration"],
-                  })
-                }
-              >
-                <option value={30}>Up to 30 seconds</option>
-                <option value={45}>Up to 45 seconds</option>
-                <option value={60}>Up to 60 seconds</option>
-              </select>
+              Target length (seconds)
+              <input
+                type="number"
+                inputMode="numeric"
+                min={1}
+                step={1}
+                value={durationInput}
+                aria-describedby="auto-duration-note"
+                onChange={(event) => {
+                  setDurationInput(event.target.value);
+                  const duration = event.target.valueAsNumber;
+                  if (isAutoTargetDuration(duration)) onChange({ ...options, targetDuration: duration });
+                }}
+                onBlur={commitDuration}
+                onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+              />
             </label>
+            <p id="auto-duration-note" className="auto-preferences-note">
+              Any whole number from 1 second. Auto may choose a shorter excerpt; it never extends the original footage.
+            </p>
             <label className="auto-output-field">
               Maximum versions
               <input

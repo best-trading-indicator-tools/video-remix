@@ -44,6 +44,7 @@ import {
   DEFAULT_BROLL_COUNT,
   DEFAULT_SETTINGS,
   MAX_AUTO_VERSIONS,
+  isAutoTargetDuration,
   MAX_BROLL_COUNT,
   randomizeSettings,
   type AutoCapabilities,
@@ -84,7 +85,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       )
         ? options!.aspect
         : DEFAULT_AUTO_OPTIONS.aspect,
-      targetDuration: [30, 45, 60].includes(options?.targetDuration || 0)
+      targetDuration: isAutoTargetDuration(options?.targetDuration)
         ? options!.targetDuration
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       narration: options?.narration === true,
