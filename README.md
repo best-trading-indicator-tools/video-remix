@@ -340,7 +340,7 @@ Time shift moves a selected trim window earlier or later within the source; it h
 
 ## Long video to short clips
 
-Choose **Short clips**, select an imported recording, and create a named short. Add one or more start/end intervals on the original video's clock. Intervals play in the order shown, so one short can join an opening, an example, and an ending from different parts of the same recording. Create more shorts from any imported source and render the current short, checked shorts, or the whole collection.
+Choose **Short clips**, select an imported recording, and create a named short. Add one or more start/end intervals on the original video's clock. Intervals play in the order shown, so one short can join an opening, an example, and an ending from different parts of the same recording. Create more shorts from any imported source, review and approve their outlines, then render all approved drafts or an approved current/selected scope.
 
 Timestamps accept seconds, `MM:SS.mmm`, or `HH:MM:SS.mmm`. Mark points from playback, adjust them by typing, and reorder or remove intervals before exporting. Invalid or out-of-bounds timestamps block rendering. Drafts are saved in this browser; rendered exports remain in the shared local workspace and History. Each short uses one source recording; different sources can be included in the same export batch.
 
@@ -698,6 +698,14 @@ it along with the prior draft. The current limit is ten supporting shots total.
 In **Short clips → Find my best clips**, enter an optional editorial brief, a maximum of 1–20 suggestions, and minimum/maximum whole-second lengths. Discovery transcribes locally and reviews the transcript section by section with the configured DeepSeek account. It works with existing shorts and long recordings. Successful sections are cached by transcript, model, brief and length range; cancelled or interrupted requests can reuse them on retry. Semantic review has a 15-minute budget and reports partial coverage explicitly.
 
 Preview suggestions, inspect their speech and neighboring context, dismiss them, or **Keep clip / Keep all visible** to create ordinary editable timestamp drafts. Nothing renders until you use the normal render controls. **Find other moments** excludes the current suggestion set; export history never blocks discovery. Counts are best effort, and clips keep original speech rather than generating quotations. This speech-based feature requires the local transcription model and configured DeepSeek; silent footage can still be cut manually.
+
+### Batch draft review
+
+Kept suggestions retain their summary in **Your short clips**. Each draft has editable summary and contribution notes, exact source timestamps with preview links, and previous-export/publication matches. Notes describe your intended edit; they do not generate narration or overlays. History matching compares overlapping intervals from the same source fingerprint, including reimports, and distinguishes recorded publications from exports. It cannot check posts outside the workspace. A missing source, missing fingerprint, or failed lookup is shown as unavailable rather than a clean history.
+
+Use **Approve draft** or select several drafts and **Approve selected** before rendering. **All approved drafts** is the default render scope. Other scopes require every included draft to be approved. Content or finishing changes invalidate approval; derived face tracking does not. Draft notes and approvals survive browser reload, and rendered shorts retain the notes and an editable plan for later revisions.
+
+**Exports → Review flagged moments** groups existing picture/sound findings across finished videos. Open a timestamp, then **Edit this moment**. When a finding maps unambiguously to a saved supporting visual or uploaded placement, **Remove shot** stages its removal and **Replace shot** opens its replacement controls. Render the revision to apply your choices; the original export remains available. Ambiguous or caption-only findings stay available for manual review. No post-render shot removal happens automatically.
 
 ### Free active-speaker framing and layouts
 

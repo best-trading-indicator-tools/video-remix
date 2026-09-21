@@ -82,6 +82,7 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     ...(job.outputPicture ? { outputPicture: job.outputPicture } : {}),
     sourceName: source.name,
     title: job.summary?.title || job.settings.hookText || source.name,
+    ...(job.draftReview ? { draftReview: structuredClone(job.draftReview) } : {}),
     cuts,
     sourceText,
     outputDuration,

@@ -5,10 +5,32 @@ import path from "node:path";
 import { discoveryRequestSchema, findBestClips } from "./clip-discovery.js";
 import { sourceTranscript } from "./auto.js";
 import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
-import { state } from "./store.js";
+import { state, historyRecords } from "./store.js";
+import { draftHistoryMatches, draftHistorySchema } from "./draft-history.js";
+import type { ExportHistoryEntry } from "../shared/types.js";
+import type { DraftHistoryResult } from "../shared/draft-history.js";
 import type { DiscoveryEvent } from "../shared/clip-discovery.js";
 
 export function installClipDiscoveryRoutes(app: Express, dependencies = { transcript: sourceTranscript, discover: findBestClips }) {
+  app.post("/api/shorts/review-history", (req, res) => {
+    const parsed = draftHistorySchema.safeParse(req.body);
+    if (!parsed.success) return res.status(400).json({ error: "Send up to 100 drafts with valid source timestamps." });
+    const cache = new Map<string, ExportHistoryEntry[]>();
+    const drafts: DraftHistoryResult[] = [];
+    for (const draft of parsed.data.drafts) {
+      const source = state.sources.find(item => item.id === draft.sourceId);
+      if (source && draft.cuts.some(cut => cut.end > source.duration + 0.001))
+        return res.status(400).json({ error: "Draft timestamps must stay within their source video." });
+      if (!source?.fingerprint) {
+        drafts.push({ id: draft.id, status: source ? "identity-unavailable" : "source-unavailable", matches: [], total: 0 }); continue;
+      }
+      let entries = cache.get(source.fingerprint);
+      if (!entries) { entries = historyRecords({ fingerprint: source.fingerprint }); cache.set(source.fingerprint, entries); }
+      drafts.push({ id: draft.id, status: "checked", ...draftHistoryMatches(draft.cuts, entries) });
+    }
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({ drafts });
+  });
   let busy = false;
   app.post("/api/shorts/discover", async (req, res) => {
     const parsed = discoveryRequestSchema.safeParse(req.body);

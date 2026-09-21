@@ -3,9 +3,10 @@ import { Film, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import type { OwnFootageAsset, OwnFootagePlacement } from "../shared/own-footage";
 import "./own-footage.css";
 
-export default function OwnFootagePanel({ value = [], onChange, onApplyAll, savedAssets = [], disabled = false }: {
+export default function OwnFootagePanel({ value = [], onChange, onApplyAll, savedAssets = [], disabled = false, highlightedId }: {
   value?: OwnFootagePlacement[]; onChange: (value: OwnFootagePlacement[]) => void;
   onApplyAll?: (value: OwnFootagePlacement[]) => void; savedAssets?: OwnFootageAsset[]; disabled?: boolean;
+  highlightedId?: string;
 }) {
   const [assets, setAssets] = useState<OwnFootageAsset[]>([]);
   const [selected, setSelected] = useState("");
@@ -46,8 +47,12 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, save
       <div className="own-footage-toolbar"><button className="secondary-button" type="button" onClick={() => input.current?.click()}><Upload size={14} />Upload my video</button><button className="icon-button" type="button" aria-label="Refresh uploaded footage" onClick={() => void load()}><RefreshCw size={15} /></button></div>
       <div className="own-footage-add"><label>Uploaded clip<select value={selected} onChange={event => setSelected(event.target.value)}><option value="">Choose a clip…</option>{available.map(asset => <option key={asset.id} value={asset.id}>{asset.name} · {asset.duration.toFixed(1)}s</option>)}</select></label>
         <button type="button" className="secondary-button" disabled={!selected || value.length >= 20} onClick={() => { const asset = available.find(asset => asset.id === selected); if (!asset) return; onChange([...value, { id: crypto.randomUUID(), assetId: asset.id, mode: "insert", at: 0, start: 0, end: Math.min(3, asset.duration), audio: "clip", fit: "contain" }]); }}><Plus size={14} />Place clip</button></div>
-      {value.map((item, index) => { const asset = available.find(asset => asset.id === item.assetId); return <article className="own-footage-placement" key={item.id}>
+      {value.map((item, index) => { const asset = available.find(asset => asset.id === item.assetId); return <article data-review-shot={item.id} className={`own-footage-placement ${highlightedId === item.id ? "review-highlight" : ""}`} key={item.id}>
         <header><strong>{index + 1}. {asset?.name || "Saved clip unavailable"}</strong><button className="icon-button" type="button" aria-label={`Remove footage placement ${index + 1}`} onClick={() => onChange(value.filter(clip => clip.id !== item.id))}><Trash2 size={15} /></button></header>
+        {highlightedId === item.id && <label>Replacement clip<select aria-label={`Footage placement ${index + 1} replacement`} value={item.assetId} onChange={event => {
+          const chosen = available.find(asset => asset.id === event.target.value);
+          if (chosen) update(item.id, { assetId: chosen.id, start: 0, end: item.appendToEnd ? chosen.duration : Math.min(chosen.duration, item.end - item.start) });
+        }}>{!asset && <option value={item.assetId}>Saved clip unavailable</option>}{available.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}
         {asset && <video key={`${item.id}-${!!item.appendToEnd}`} src={asset.url} controls preload="metadata" playsInline onLoadedMetadata={event => { event.currentTarget.currentTime = item.appendToEnd ? 0 : item.start; }} onTimeUpdate={event => { const video = event.currentTarget; if (!video.paused && video.currentTime >= (item.appendToEnd ? asset.duration : item.end)) { video.pause(); video.currentTime = item.appendToEnd ? 0 : item.start; } }} />}
         <label className="own-footage-append"><input type="checkbox" checked={!!item.appendToEnd} onChange={event => update(item.id, event.target.checked
           ? { appendToEnd: true, mode: "insert", at: 0, start: 0, end: asset?.duration ?? item.end }

@@ -14,6 +14,7 @@ export interface ShortFocusAnalysis {
   reason?: string;
 }
 export interface ShortDraft {
+  review?: { summary: string; contribution: string; approvedSignature?: string; approvedAt?: string };
   ownFootage?: OwnFootagePlacement[];
   id: string;
   sourceId: string;
@@ -37,6 +38,25 @@ export interface ShortDraft {
   updatedAt: string;
 }
 export interface ShortDraftStore { version: 1; drafts: ShortDraft[] }
+
+/** Approval belongs to the content and finishing choices the person reviewed. */
+export function shortReviewSignature(draft: ShortDraft): string {
+  return JSON.stringify({ id: draft.id, sourceId: draft.sourceId, sourceFingerprint: draft.sourceFingerprint,
+    title: draft.title, cuts: draft.cuts.map(({ start, end, focalPoint }) => ({ start: parseSourceClock(start) ?? start, end: parseSourceClock(end) ?? end, focalPoint })),
+    aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom: draft.zoom ?? 1, focalPoint: draft.focalPoint,
+    autoFocus: draft.autoFocus === true, focusMode: draft.focusMode || "face", normalizeAudio: draft.normalizeAudio,
+    qualityCleanup: draft.qualityCleanup, layout: draft.layout || "single", secondaryFocalPoint: draft.secondaryFocalPoint,
+    ownFootage: (draft.ownFootage || []).map(item => ({ id: item.id, assetId: item.assetId, mode: item.mode, appendToEnd: item.appendToEnd,
+      at: item.at, start: item.start, end: item.end, audio: item.audio, fit: item.fit })),
+    summary: draft.review?.summary || "", contribution: draft.review?.contribution || "" });
+}
+export const shortIsApproved = (draft: ShortDraft): boolean => !!draft.review?.approvedAt && draft.review.approvedSignature === shortReviewSignature(draft);
+export function approveShortDraft(draft: ShortDraft): ShortDraft {
+  const next = { ...draft, review: { summary: draft.review?.summary || "", contribution: draft.review?.contribution || "",
+    approvedAt: new Date().toISOString(), approvedSignature: "" } };
+  next.review.approvedSignature = shortReviewSignature(next);
+  return next;
+}
 
 /** Face centers are independent of output aspect/zoom, but belong to these exact source cuts and starting point. */
 export function shortFocusSignature(draft: ShortDraft): string {
@@ -203,6 +223,13 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       layout: value.layout === "split" || value.layout === "presentation" ? value.layout : "single",
       secondaryFocalPoint: focal(value.secondaryFocalPoint) ? value.secondaryFocalPoint : undefined,
       ...(validPacing ? { pacingReview: pacing.data } : {}),
+      ...(record(value.review) ? { review: {
+        summary: typeof value.review.summary === "string" ? value.review.summary.slice(0, 600) : "",
+        contribution: typeof value.review.contribution === "string" ? value.review.contribution.slice(0, 600) : "",
+        ...(typeof value.review.approvedSignature === "string" && value.review.approvedSignature.length <= 20000 &&
+          typeof value.review.approvedAt === "string" && Number.isFinite(Date.parse(value.review.approvedAt))
+          ? { approvedSignature: value.review.approvedSignature, approvedAt: value.review.approvedAt } : {}),
+      } } : {}),
       updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : new Date().toISOString(),
     }];
   });

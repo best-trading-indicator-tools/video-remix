@@ -286,6 +286,10 @@ async function run(job: StoredJob, controller: AbortController) {
       job.phase = mode === "off" ? "Rendering your saved edit" : "Rendering the reviewed edit";
       await saveStore();
     }
+    if (job.draftReview && job.summary && !job.editPlan && !automaticManual) {
+      // Approved short drafts need the same user-controlled revision workflow as Auto exports.
+      await captureEditPlan({ job, source, visuals: supportingVisuals, audioPath, subtitlePath, signal: controller.signal });
+    }
     const ownFootage = await retainFootage(job, controller.signal);
     if (ownFootage.length) {
       const baseDuration = job.editPlan?.outputDuration ?? (job.settings.segments?.reduce((sum, cut) => sum + cut.end - cut.start, 0) ?? (Math.min(job.settings.trimEnd ?? source.duration, source.duration) - job.settings.trimStart)) / job.settings.speed;

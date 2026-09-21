@@ -24,3 +24,11 @@
 .finished-review-actions > p { color: #f5aaa7; flex-basis: 100%; }
 .finished-review.empty { padding: 0 16px 14px; }
 @media (max-width: 480px) { .finished-checks > li { grid-template-columns: 1fr; gap: 6px; } .finished-check-state { justify-self: start; min-width: 88px; } }
+
+.export-review-queue { border: 1px solid var(--line); border-radius: 10px; padding: 18px; margin: 0 0 24px; }
+.export-review-queue summary { cursor: pointer; font-weight: 600; }
+.export-review-queue p, .job-draft-review p { font-size: 12px; color: var(--subtle); line-height: 1.6; }
+.export-review-queue ul { display: grid; gap: 14px; list-style: none; padding: 0; }
+.export-review-queue li { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: 13px; }
+.export-review-queue li > strong { flex-basis: 100%; }
+.export-review-queue .secondary-button { white-space: normal; text-align: left; }

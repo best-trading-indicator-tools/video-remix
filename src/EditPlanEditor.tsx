@@ -1,5 +1,7 @@
 import { GRAPHIC_KIND_LABELS } from "../shared/graphic-scene";
 import FinishedReviewSummary from "./FinishedReviewSummary";
+import { reviewShotTarget, type ReviewShotTarget } from "../shared/review-actions";
+import type { FinishedIssue } from "../shared/finished-review";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, LockKeyholeOpen, RotateCcw, X } from "lucide-react";
@@ -133,8 +135,10 @@ function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "cro
   </div>;
 }
 
-export default function EditPlanEditor({ job, onClose, onCreated }: {
+export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, sourceFps }: {
   job: RenderJob;
+  initialIssue?: FinishedIssue;
+  sourceFps?: number;
   onClose: () => void;
   onCreated: (job: RenderJob) => void;
 }) {
@@ -163,6 +167,10 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const dialog = useRef<HTMLElement>(null);
   const form = useRef<HTMLFormElement>(null);
   const savingRef = useRef(false);
+  const exportVideo = useRef<HTMLVideoElement>(null);
+  const [reviewTime, setReviewTime] = useState(initialIssue?.start ?? 0);
+  const [highlightedShot, setHighlightedShot] = useState<ReviewShotTarget>();
+  const [reviewNotice, setReviewNotice] = useState("");
   const correctionClock = useRef({ totalMs: 0, lastTick: 0, lastInteraction: 0, visible: false });
   const updateCorrectionClock = useRef<() => void>(() => {});
   const closeRef = useRef(onClose);
@@ -188,6 +196,22 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [job.id, reload]);
+
+  useEffect(() => {
+    if (!plan || loading || !initialIssue) return;
+    const target = reviewShotTarget(plan, initialIssue, sourceFps);
+    setHighlightedShot(target);
+    setReviewTime(initialIssue.start);
+  }, [plan, loading, initialIssue, sourceFps]);
+
+  useEffect(() => {
+    if (!highlightedShot || loading) return;
+    const element = dialog.current?.querySelector<HTMLElement>(`[data-review-shot="${CSS.escape(highlightedShot.id)}"]`);
+    const details = element?.closest("details");
+    if (details) details.open = true;
+    element?.scrollIntoView({ block: "nearest" });
+    element?.querySelector<HTMLSelectElement>("select")?.focus({ preventScroll: true });
+  }, [highlightedShot, loading]);
 
   useEffect(() => {
     if (!plan) return;
@@ -279,6 +303,36 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
   const updateVisual = (id: string, changes: Partial<EditPlanVisual>) => setDraft((value) => value && ({
     ...value, visuals: value.visuals.map((visual) => visual.id === id ? { ...visual, ...changes } : visual),
   }));
+  const seekReview = (time: number) => {
+    setReviewTime(time); setPreviewMode("export");
+    if (exportVideo.current) exportVideo.current.currentTime = time;
+  };
+  const reviewActions = (issue: FinishedIssue) => {
+    if (!plan || !draft) return null;
+    const target = reviewShotTarget(plan, issue, sourceFps);
+    if (!target) return <p className="edit-plan-note">No single supporting shot is identified here. Review the video and adjust the relevant controls.</p>;
+    const current = target.kind === "visual" ? draft.visuals.find(item => item.id === target.id) : draft.settings.ownFootage?.find(item => item.id === target.id);
+    const original = target.kind === "visual" ? plan.visuals.find(item => item.id === target.id) : plan.settings.ownFootage?.find(item => item.id === target.id);
+    const removed = !current || ("enabled" in current && !current.enabled);
+    if (removed) return <p className="edit-plan-note">Shot removed from this draft. Render the revision to apply your change.</p>;
+    // A saved finding must not remove a replacement the user has already chosen.
+    const edited = target.kind === "visual"
+      ? differs({ ...current, locked: undefined }, { ...original, locked: undefined }) : differs(current, original);
+    const disabled = saving || cutTimingsChanged || refreshBroll || edited;
+    return <div className="finished-shot-actions">
+      <button type="button" className="secondary-button" disabled={disabled} onClick={() => {
+        if (target.kind === "visual") updateVisual(target.id, { enabled: false });
+        else setDraft(value => value && ({ ...value, settings: { ...value.settings, ownFootage: value.settings.ownFootage?.filter(item => item.id !== target.id) } }));
+        setReviewNotice("Shot removed from the draft. Render the revision to see the result.");
+      }}>Remove shot</button>
+      <button type="button" className="secondary-button" disabled={disabled} onClick={() => {
+        if (target.kind === "visual") updateVisual(target.id, { locked: false });
+        setHighlightedShot({ ...target });
+        setReviewNotice("Choose a replacement in the highlighted shot, then render the revision.");
+      }}>Replace shot</button>
+      {edited && <p className="edit-plan-note">This shot has already changed. Render the revision to review it again.</p>}
+    </div>;
+  };
 
   const suggestEdit = async (prompt: string, signal: AbortSignal): Promise<PromptProposal> => {
     if (!plan || !draft || savingRef.current) throw new Error("Wait for the current edit to finish loading.");
@@ -344,7 +398,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                 <button type="button" aria-pressed={previewMode === "export"} onClick={() => setPreviewMode("export")}>Current export</button>
                 <button type="button" aria-pressed={previewMode === "framing"} onClick={() => setPreviewMode("framing")}>Draft framing</button>
               </div>
-              {previewMode === "export" ? <video src={`/api/jobs/${job.id}/video`} controls playsInline preload="metadata" aria-label="Current exported video" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.videoHeight > 0) setKnownOutputAspect(video.videoWidth / video.videoHeight); }} /> : activeCut && <>
+              {previewMode === "export" ? <video ref={exportVideo} src={`/api/jobs/${job.id}/video`} controls playsInline preload="metadata" aria-label="Current exported video" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.videoHeight > 0) setKnownOutputAspect(video.videoWidth / video.videoHeight); video.currentTime = reviewTime; }} /> : activeCut && <>
                 <label className="edit-plan-field edit-preview-cut">Preview source cut
                   <select value={previewCut} onChange={(event) => { setPreviewCut(Number(event.target.value)); setPreviewSourceTime(draft.cuts[Number(event.target.value)]?.start || 0); }}>
                     {draft.cuts.map((cut, index) => <option key={index} value={index}>Cut {index + 1} · {seconds(cut.start)}–{seconds(cut.end)}</option>)}
@@ -370,7 +424,8 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
               <h3>{previewMode === "export" ? "Current export" : "Draft framing"}</h3><p>{previewMode === "export" ? "Review this version as you make corrections. Render to see your updated video." : "Adjust the crop and captions against the source footage. Render your revision to review the final result."}</p>
               <p>{seconds(previewMode === "framing" ? draft.outputDuration : plan.outputDuration)} finished cut{plan.narration ? " · Narration saved" : ""}</p>
               <QualityReportSummary report={job.qualityReport} />
-              <FinishedReviewSummary report={job.finishedReviewReport} compact videoUrl={`/api/jobs/${job.id}/video`} />
+              <FinishedReviewSummary report={job.finishedReviewReport} compact={!initialIssue} onSeek={seekReview} issueActions={reviewActions} />
+              {reviewNotice && <p className="edit-plan-note" role="status">{reviewNotice}</p>}
               {changed ? <p className="editorial-coverage">Your draft changes have not received an editorial check. The saved export's findings are available in Exports and History. Render the revision to review its final result.</p>
                 : <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} />}
             </aside>
@@ -453,7 +508,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                   </div>)}
                 </fieldset>
               </details>
-              <OwnFootagePanel value={draft.settings.ownFootage} savedAssets={job.footageAssets} disabled={saving} onChange={ownFootage => setDraft({ ...draft, settings: { ...draft.settings, ownFootage } })} />
+              <OwnFootagePanel value={draft.settings.ownFootage} savedAssets={job.footageAssets} disabled={saving} highlightedId={highlightedShot?.kind === "footage" ? highlightedShot.id : undefined} onChange={ownFootage => setDraft({ ...draft, settings: { ...draft.settings, ownFootage } })} />
               <details open className="edit-plan-section">
                 <summary>B-roll & supporting visuals <span>{draft.visuals.length}</span></summary>
                 <p className="edit-plan-note">Shots stay fixed while you correct text. Unlock a shot to replace it or adjust its timing.</p>
@@ -493,7 +548,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
                     const previewEnd = previewStart + length;
                     const [aspectWidth, aspectHeight] = plan.settings.aspect === "original" ? [knownOutputAspect || media?.selection?.targetAspect || 16 / 9, 1] : plan.settings.aspect.split(":").map(Number);
                     const previewAspect = aspectWidth! / aspectHeight!;
-                    return <article className={`edit-plan-visual ${visual.enabled ? "" : "is-removed"}`} key={visual.id}>
+                    return <article data-review-shot={visual.id} className={`edit-plan-visual ${visual.enabled ? "" : "is-removed"} ${highlightedShot?.id === visual.id ? "review-highlight" : ""}`} key={visual.id}>
                       <div className="edit-plan-visual-heading"><h3><Film size={15} /> Shot {index + 1}</h3>
                         <label className="edit-plan-check"><input type="checkbox" checked={visual.enabled} onChange={(event) => updateVisual(visual.id, { enabled: event.target.checked })} />Include shot</label>
                       </div>
@@ -530,7 +585,7 @@ export default function EditPlanEditor({ job, onClose, onCreated }: {
           </div>
           <footer className="edit-plan-footer">
             <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will request {brollCount} total supporting shots. {promptAnchor?.changes.preserveBroll ? "All existing shots will be kept." : "Saved animations and uploaded B-roll will be kept."}</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
-            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount && brollMaxCoverage === savedCoverage)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setBrollMaxCoverage(savedCoverage); setCoverageInput(String(savedCoverage)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setError(""); }}><RotateCcw size={14} />Reset changes</button>
+            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount && brollMaxCoverage === savedCoverage)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setBrollMaxCoverage(savedCoverage); setCoverageInput(String(savedCoverage)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setReviewNotice(""); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
         </form> : <div className="edit-plan-loading"><p className="edit-plan-error" role="alert">{error || "This edit is unavailable."}</p><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}

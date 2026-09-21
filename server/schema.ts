@@ -105,14 +105,16 @@ export const batchSchema = z
     items: z
       .array(
         z.object({ sourceId: z.string().uuid(), settings: settingsSchema,
-          title: z.string().trim().min(1).max(100).refine(value => !/[\u0000-\u001f\u007f]/u.test(value), "Use a title without control characters").optional() }),
+          title: z.string().trim().min(1).max(100).refine(value => !/[\u0000-\u001f\u007f]/u.test(value), "Use a title without control characters").optional(),
+          draftReview: z.object({ summary: z.string().max(600), contribution: z.string().max(600), approvedAt: z.iso.datetime() }).strict().optional(),
+        }).refine(item => !item.draftReview || !!item.title, "Reviewed drafts need a title"),
       )
       .min(1)
       .max(100),
     variants: z.number().int().min(1).max(5).default(1),
     randomize: z.boolean().default(false),
   })
-  .strict();
+  .strict().refine(batch => !batch.items.some(item => item.draftReview) || (!batch.randomize && batch.variants === 1), "Render reviewed drafts with their approved settings");
 export const normalizedSettings = (input: unknown) =>
   settingsSchema.parse({
     ...DEFAULT_SETTINGS,

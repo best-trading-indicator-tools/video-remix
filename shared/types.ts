@@ -362,6 +362,7 @@ export interface ExportMeasurements {
 }
 export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
 export interface ExportHistoryEntry {
+  draftReview?: DraftReview;
   finishedReviewReport?: FinishedReviewReport;
   sourcePicture?: VisualIdentity;
   outputPicture?: VisualIdentity;
@@ -398,7 +399,9 @@ export interface Attachment {
 }
 export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
+export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  draftReview?: DraftReview;
   /** Provider work has no measurable completion percentage. */
   editorialProgress?: EditorialReviewProgress & { startedAt: string; budgetMs: number };
   /** Live work counters; visual preparation has no reliable percentage or ETA. */

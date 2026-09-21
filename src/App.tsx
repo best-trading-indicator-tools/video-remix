@@ -60,6 +60,7 @@ import {
   type VideoSource,
 } from "../shared/types";
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
+import type { FinishedIssue } from "../shared/finished-review";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
@@ -353,6 +354,7 @@ export default function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
   const [editingJob, setEditingJob] = useState<RenderJob | null>(null);
+  const [editingIssue, setEditingIssue] = useState<FinishedIssue>();
   const [original, setOriginal] = useState(false);
   const [renderedPreview, setRenderedPreview] = useState<{ id: string; url: string; duration: number; signature: string } | null>(null);
   const [showRendered, setShowRendered] = useState(false);
@@ -2336,6 +2338,14 @@ export default function App() {
                 Back to workspace
               </button>
             </div>
+            {completed.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>
+              <summary>Review flagged moments · {completed.reduce((sum, job) => sum + (job.finishedReviewReport?.issues.length || 0), 0)} findings</summary>
+              <p>Open a timestamp to review its picture and sound. Use Edit this moment to make a correction.</p>
+              <ul>{completed.filter(job => job.finishedReviewReport?.issues.length).map(job => <li key={job.id}>
+                <strong>{job.summary?.title || job.sourceName}</strong>
+                {job.finishedReviewReport!.issues.map((issue, index) => <button type="button" className="secondary-button" key={index} onClick={() => { pendingExportSeek.current = issue.start; setPreviewJob(job); }}>{duration(issue.start)} · {issue.message}</button>)}
+              </li>)}</ul>
+            </details>}
             {!jobs.length ? (
               <div className="exports-empty">
                 <span className="large-icon-box">
@@ -2502,9 +2512,14 @@ export default function App() {
                                     ) && <span>New narration</span>}
                                 </div>
                               )}
+                              {job.draftReview && <div className="job-draft-review">
+                                {job.draftReview.summary && <p><strong>Draft summary:</strong> {job.draftReview.summary}</p>}
+                                {job.draftReview.contribution && <p><strong>Planned contribution:</strong> {job.draftReview.contribution}</p>}
+                              </div>}
                               <QualityReportSummary report={job.qualityReport} compact />
                               <FinishedReviewSummary report={job.finishedReviewReport} compact
                                 onSeek={time => { pendingExportSeek.current = time; setPreviewJob(job); }}
+                                onEditMoment={job.editable && job.status === "completed" ? issue => { setEditingIssue(issue); setEditingJob(job); } : undefined}
                                 onRetry={job.status === "completed" ? () => void retryFinishedReview(job) : undefined}
                                 retrying={finishedRetries[job.id]?.pending} retryError={finishedRetries[job.id]?.error} />
                               <EditorialReportSummary report={job.editorialReport} repair={job.editorialRepair} compact
@@ -2577,7 +2592,7 @@ export default function App() {
                             <div className="job-actions">
                               {job.status === "completed" && job.downloadUrl ? (
                                 <>
-                                  {job.auto && job.editable && <button className="secondary-button job-edit-button" onClick={() => setEditingJob(job)}>
+                                  {job.editable && <button className="secondary-button job-edit-button" onClick={() => { setEditingIssue(undefined); setEditingJob(job); }}>
                                     <Scissors size={13} />Edit this result
                                   </button>}
                                   {job.captionUrl && (
@@ -2675,7 +2690,7 @@ export default function App() {
           </div>
         ))}
       </div>
-      {editingJob && <EditPlanEditor job={editingJob} onClose={() => setEditingJob(null)} onCreated={(created) => {
+      {editingJob && <EditPlanEditor key={editingJob.id} job={editingJob} initialIssue={editingIssue} sourceFps={sources.find(source => source.id === editingJob.sourceId)?.fps} onClose={() => setEditingJob(null)} onCreated={(created) => {
         setJobs((current) => [created, ...current.filter((job) => job.id !== created.id)]);
         setEditingJob(null);
         setView("exports");
@@ -2718,6 +2733,7 @@ export default function App() {
             <QualityReportSummary report={previewJob.qualityReport} />
             <FinishedReviewSummary report={previewJob.finishedReviewReport}
               onSeek={time => { if (exportVideoRef.current) exportVideoRef.current.currentTime = time; }}
+              onEditMoment={previewJob.editable && previewJob.status === "completed" ? issue => { const job = previewJob; setPreviewJob(null); window.setTimeout(() => { setEditingIssue(issue); setEditingJob(job); }, 0); } : undefined}
               onRetry={previewJob.status === "completed" ? () => void retryFinishedReview(previewJob) : undefined}
               retrying={finishedRetries[previewJob.id]?.pending} retryError={finishedRetries[previewJob.id]?.error} />
             <EditorialReportSummary report={previewJob.editorialReport} repair={previewJob.editorialRepair}
@@ -2743,12 +2759,12 @@ export default function App() {
             )}
             <div className="export-preview-footer">
               <span>Final render, with all edits applied.</span>
-              {previewJob.auto && previewJob.editable && <button className="secondary-button" onClick={() => {
+              {previewJob.editable && <button className="secondary-button" onClick={() => {
                 const job = previewJob;
                 setPreviewJob(null);
                 // Let the preview restore focus and page scrolling before the
                 // editor establishes its own dialog focus and scroll boundary.
-                window.setTimeout(() => setEditingJob(job), 0);
+                window.setTimeout(() => { setEditingIssue(undefined); setEditingJob(job); }, 0);
               }}><Scissors size={14} />Edit this result</button>}
               {previewJob.captionUrl && (
                 <a

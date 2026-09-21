@@ -144,3 +144,6 @@
 .edit-broll-refresh strong { color: var(--text, #f4f6fa); font-size: 14px; }
 .edit-broll-refresh p { margin: 6px 0 0; color: var(--subtle, #bac2cf); font-size: 13px; line-height: 1.55; }
 .edit-broll-refresh .secondary-button { white-space: normal; text-align: center; }
+.review-highlight { outline: 2px solid var(--accent); outline-offset: 3px; }
+.finished-shot-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.finished-shot-actions p { flex-basis: 100%; }

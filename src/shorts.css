@@ -190,3 +190,32 @@
 .shorts-suggestion summary { cursor: pointer; }
 .shorts-suggestion-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
 @media (max-width: 680px) { .shorts-discovery-body { padding: 16px; } .shorts-discovery-controls { grid-template-columns: repeat(3, minmax(0, 1fr)); } .shorts-discovery-controls button { grid-column: 1 / -1; } .shorts-suggestion { grid-template-columns: minmax(0, 1fr); gap: 12px; } .shorts-suggestion-poster, .shorts-suggestion video { width: 100%; max-height: 240px; } }
+.shorts-batch-lock { border: 0; padding: 0; margin: 0; min-width: 0; }
+.draft-review-toolbar, .draft-review-heading, .draft-review-footer { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.draft-review-toolbar { margin: 18px 0; }
+.draft-review-toolbar label { margin-left: auto; font-size: 12px; display: grid; gap: 6px; }
+.draft-review-queue .shorts-draft-list { max-height: min(900px, 80vh); scrollbar-gutter: stable; scrollbar-width: thin; padding: 2px; }
+.draft-review-card { border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; background: var(--field); }
+.draft-review-card.active { border-color: var(--accent); }
+.draft-review-heading .shorts-draft-main { min-width: 100px; }
+.draft-review-badge { font-size: 11px; color: var(--subtle); border: 1px solid var(--line); border-radius: 12px; padding: 5px 9px; }
+.draft-review-badge.approved { color: #94e2b1; border-color: #397754; }
+.draft-review-notes { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.draft-review-notes label { display: grid; gap: 8px; font-size: 12px; color: var(--text); min-width: 0; }
+.draft-review-notes textarea { width: 100%; box-sizing: border-box; resize: vertical; border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel); color: var(--text); font: inherit; line-height: 1.6; }
+.draft-review-notes textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.draft-review-note, .draft-review-history small { color: var(--subtle); font-size: 11px; line-height: 1.6; }
+.draft-review-context { margin: 16px 0; color: var(--text); font-size: 12px; }
+.draft-review-context summary { cursor: pointer; }
+.draft-review-context li { padding: 6px 0; overflow-wrap: anywhere; }
+.draft-review-context a { color: var(--accent); margin-left: 12px; }
+.draft-review-history { border-top: 1px solid var(--line); padding-top: 14px; font-size: 12px; color: var(--text); }
+.draft-review-history p, .draft-review-history span { color: var(--subtle); line-height: 1.6; }
+.draft-review-history ul { margin: 10px 0; padding-left: 18px; display: grid; gap: 10px; }
+.draft-review-history li span { display: block; }
+.draft-review-footer { justify-content: space-between; margin-top: 16px; }
+@media (max-width: 680px) {
+  .draft-review-notes { grid-template-columns: 1fr; }
+  .draft-review-card { padding: 12px; }
+  .draft-review-queue .shorts-draft-list { max-height: none; overflow: visible; scrollbar-gutter: auto; }
+}

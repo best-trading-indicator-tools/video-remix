@@ -624,6 +624,7 @@ export function createApp() {
       status: "queued", progress: 0, createdAt: new Date().toISOString(),
       outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
       sourceTranscript: parent.sourceTranscript,
+      draftReview: parent.draftReview,
       ...(parsed.data.refreshBroll ? { refreshBroll: true, preserveBroll: parsed.data.preserveBroll === true } : {}),
       notes: [parsed.data.refreshBroll
         ? "A new stock search was requested for this video. Its saved cuts, captions and narration are used."
@@ -726,6 +727,7 @@ export function createApp() {
           sourceName: source.name,
           variant: index + 1,
           settings,
+          ...(item.draftReview ? { draftReview: item.draftReview } : {}),
           ...(item.title ? { summary: {
             title: item.title, changes: ["Timestamp selections", ...(settings.qualityCleanup ? ["Local noise cleanup and sharpening"] : [])],
             sourceDuration: source.duration,
