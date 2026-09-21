@@ -10,7 +10,7 @@ const load = () => {
 };
 const descriptions = {
   auto: "Saves format, pacing, caption handling, and supporting-visual preferences. Length, versions, narration, and selected library clips stay with each video.",
-  manual: "Saves framing, color, audio level, and caption styling. Cuts, playback speed, text, and uploaded media stay with this video.",
+  manual: "Saves framing, color, audio level, captions, and supporting-visual preferences. Cuts, playback speed, text, and uploaded media stay with this video.",
   shorts: "Saves format, layout, tracking method, and cleanup. Each short keeps its own timestamps and subject positions.",
 };
 export default function FinishingPresets<M extends PresetMode>({ mode, settings, disabled, onApply, onApplySelected }: {

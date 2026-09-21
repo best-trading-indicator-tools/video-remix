@@ -33,17 +33,7 @@ export const DEFAULT_BROLL_COUNT = 4;
 export const MAX_BROLL_COUNT = 10;
 export const DEFAULT_BROLL_MAX_COVERAGE = 60;
 export type VisualSource = "pixabay" | "pexels" | "hyperframes" | "remotion" | "library";
-export interface AutoOptions {
-  blackBands?: BlackBands;
-  ownFootage?: OwnFootagePlacement[];
-  aspect: Aspect;
-  /** Maximum output length in whole seconds, starting at 1. */
-  targetDuration: number;
-  narration: boolean;
-  pacing?: PacingOptions;
-  /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
-  captions?: "auto" | "add" | "keep";
-  captionStyle?: CaptionStyle;
+export interface SupportingVisualOptions {
   supportingVisuals?: "off" | "stock" | "library" | "graphics" | "both";
   /** Independent sources to mix. An empty list keeps the original footage. */
   visualSources?: VisualSource[];
@@ -54,6 +44,18 @@ export interface AutoOptions {
   brollCount?: number;
   /** Maximum percent of the output covered by stock, library shots and animation cards. */
   brollMaxCoverage?: number;
+}
+export interface AutoOptions extends SupportingVisualOptions {
+  blackBands?: BlackBands;
+  ownFootage?: OwnFootagePlacement[];
+  aspect: Aspect;
+  /** Maximum output length in whole seconds, starting at 1. */
+  targetDuration: number;
+  narration: boolean;
+  pacing?: PacingOptions;
+  /** Auto checks for burned-in captions; keep adds none; add explicitly generates captions. */
+  captions?: "auto" | "add" | "keep";
+  captionStyle?: CaptionStyle;
   /**
    * Sound treatment for the selected speech. Auto measures the edit and applies
    * the closest-fitting sound look; a look id pins that choice instead. Off (None)
@@ -114,7 +116,7 @@ export interface AutoCapabilities {
   stockProviders?: ("pixabay" | "pexels")[];
   message?: string;
 }
-export interface RemixSettings {
+export interface RemixSettings extends SupportingVisualOptions {
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
   speed: number;

@@ -5,7 +5,7 @@ import { blackBandFinishSchema } from "./black-bands.js";
 import { AUDIO_RANGES, AUTO_AUDIO_MODES, MAX_AUDIO_FADE, NEUTRAL_AUDIO, type AudioLookKey } from "./audio.js";
 import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "./types.js";
 import { getVisualSources } from "./visual-sources.js";
-import type { AutoOptions } from "./types.js";
+import type { SupportingVisualOptions } from "./types.js";
 export const FINISHING_PRESET_STORAGE = "remix-finishing-presets-v1";
 export const FINISHING_PRESET_EVENT = "remix-finishing-presets-changed";
 const aspect = z.enum(["original", "9:16", "1:1", "4:5", "16:9"]);
@@ -22,17 +22,21 @@ const framing = {
   zoom: z.number().min(1).max(2), layout: z.enum(["single", "split", "presentation"]).default("single"),
   normalizeAudio: z.boolean().default(false), qualityCleanup: z.boolean().default(false),
 };
-const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
-  blackBands: blackBandFinishSchema.optional(),
-  captionStyle: captionStyleSchema.optional(),
+const visuals = {
   visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"])).max(5).transform(values => [...new Set(values)]),
   brollCount: z.number().int().min(1).max(10).default(DEFAULT_BROLL_COUNT),
   brollMaxCoverage: z.number().int().min(0).max(100).default(DEFAULT_BROLL_MAX_COVERAGE),
   brollMatching: z.enum(["tags", "ai"]).default("tags"), stockVideoType: z.enum(["all", "animation"]).default("all"),
+};
+const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
+  blackBands: blackBandFinishSchema.optional(),
+  captionStyle: captionStyleSchema.optional(),
+  ...visuals,
   audio: z.enum(AUTO_AUDIO_MODES).default("auto"),
 });
 const shortSchema = z.object({ ...framing, autoFocus: z.boolean().default(false), focusMode: z.enum(["face", "speaker"]).default("face") });
-const manualSchema = z.object({ ...framing, fps: z.enum(["source", "24", "30", "60"]),
+const manualSchema = z.object({ ...framing,
+  ...visuals, visualSources: visuals.visualSources.default([]), fps: z.enum(["source", "24", "30", "60"]),
   blackBands: blackBandFinishSchema.optional(),
   saturation: z.number().min(0).max(3), brightness: z.number().min(-1).max(1), contrast: z.number().min(0).max(2),
   hue: z.number().min(-180).max(180), gamma: z.number().min(0.1).max(3), temperature: z.number().min(-1).max(1),
@@ -56,8 +60,8 @@ export type PresetValues = { auto: z.infer<typeof autoSchema>; manual: z.infer<t
 export function captureFinishingPreset(mode: PresetMode, name: string, settings: unknown, id: string): FinishingPreset {
   const input = settings && typeof settings === "object" ? settings : {};
   return schema.parse({ id, name, mode, settings: mode === "auto"
-    ? { ...input, visualSources: getVisualSources(input as AutoOptions) }
-    : { ...DEFAULT_SETTINGS, ...input } });
+    ? { ...input, visualSources: getVisualSources(input as SupportingVisualOptions) }
+    : { ...DEFAULT_SETTINGS, ...input, ...(mode === "manual" ? { visualSources: getVisualSources(input as SupportingVisualOptions) } : {}) } });
 }
 export function restoreFinishingPresets(value: unknown): FinishingPreset[] {
   if (!value || typeof value !== "object" || !("version" in value) || value.version !== 1 || !("presets" in value) || !Array.isArray(value.presets)) return [];

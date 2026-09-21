@@ -1,5 +1,5 @@
 /* Auto uses the same surfaces and control hierarchy as the editing workspace. */
-.auto-panel.panel .auto-panel-body {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-panel-body {
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -7,7 +7,7 @@
   padding: 22px;
 }
 
-.auto-panel.panel .auto-badge {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-badge {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -19,25 +19,25 @@
   white-space: nowrap;
 }
 
-.auto-panel.panel .auto-scope {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-scope {
   margin: 0;
   padding: 0 0 20px;
   border-bottom: 1px solid var(--line);
 }
 
-.auto-panel.panel .auto-layout {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-layout {
   min-width: 0;
   padding: 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
   background: var(--field);
 }
-.auto-panel.panel .auto-layout h3 { margin: 0 0 16px; font-size: 14px; color: var(--text); }
-.auto-panel.panel .auto-layout .black-bands-editor { padding-bottom: 0; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-layout h3 { margin: 0 0 16px; font-size: 14px; color: var(--text); }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-layout .black-bands-editor { padding-bottom: 0; }
 
-.auto-panel.panel .auto-scope > label,
-.auto-panel.panel .broll-matching > label,
-.auto-panel.panel .supporting-visuals > label {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-scope > label,
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-matching > label,
+:is(.auto-panel.panel, .manual-supporting-visuals) .supporting-visuals > label {
   display: block;
   margin-bottom: 9px;
   color: var(--text);
@@ -46,9 +46,9 @@
   line-height: 1.5;
 }
 
-.auto-panel.panel select,
-.auto-panel.panel .auto-output-field input[type="number"],
-.auto-panel.panel .broll-tag-editor input {
+:is(.auto-panel.panel, .manual-supporting-visuals) select,
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-field input[type="number"],
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-tag-editor input {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -63,12 +63,12 @@
   text-overflow: ellipsis;
 }
 
-.auto-panel.panel .auto-scope > p,
-.auto-panel.panel .auto-scope > small,
-.auto-panel.panel .auto-preferences-note,
-.auto-panel.panel .broll-description,
-.auto-panel.panel .broll-footnote,
-.auto-panel.panel .broll-empty {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-scope > p,
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-scope > small,
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences-note,
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-description,
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-footnote,
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-empty {
   margin: 8px 0 0;
   color: var(--subtle);
   font-size: 12px;
@@ -76,7 +76,7 @@
   overflow-wrap: anywhere;
 }
 
-.auto-panel.panel button {
+:is(.auto-panel.panel, .manual-supporting-visuals) button {
   min-height: 36px;
   padding: 8px 11px;
   border: 1px solid var(--line);
@@ -90,23 +90,23 @@
   transition: background-color 150ms, border-color 150ms;
 }
 
-.auto-panel.panel button:hover:not(:disabled) {
+:is(.auto-panel.panel, .manual-supporting-visuals) button:hover:not(:disabled) {
   background: var(--surface-hover);
   border-color: #566274;
   color: var(--text);
 }
 
-.auto-panel.panel .auto-scope > button {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-scope > button {
   min-height: 40px;
   margin-top: 14px;
 }
 
-.auto-panel.panel a {
+:is(.auto-panel.panel, .manual-supporting-visuals) a {
   color: var(--accent);
   text-underline-offset: 3px;
 }
 
-.auto-panel.panel .auto-output-summary {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-summary {
   display: flex;
   gap: 10px;
   margin: 0;
@@ -117,7 +117,7 @@
   grid-column: auto;
 }
 
-.auto-panel.panel .auto-output-summary > div {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-summary > div {
   flex-wrap: wrap;
   gap: 8px;
   color: var(--subtle);
@@ -125,12 +125,12 @@
   line-height: 1.5;
 }
 
-.auto-panel.panel .auto-output-summary > div > svg {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-summary > div > svg {
   color: var(--muted);
   flex-shrink: 0;
 }
 
-.auto-panel.panel .auto-output-summary strong {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-summary strong {
   padding: 3px 6px;
   border-color: var(--line);
   border-radius: 5px;
@@ -141,20 +141,20 @@
   line-height: 1.3;
 }
 
-.auto-panel.panel .auto-original-voice {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-original-voice {
   display: inline;
   color: var(--subtle);
   font-size: 12px;
 }
 
-.auto-panel.panel .auto-preferences {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences {
   margin: 0;
   padding: 0;
   border: 0;
   grid-column: auto;
 }
 
-.auto-panel.panel .auto-preferences summary {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences summary {
   min-height: 32px;
   gap: 12px;
   color: var(--text);
@@ -163,28 +163,28 @@
   line-height: 1.5;
 }
 
-.auto-panel.panel .auto-preferences summary > span {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences summary > span {
   color: var(--subtle);
   font-size: 12px;
 }
 
-.auto-panel.panel .auto-preferences summary:focus-visible {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 5px;
   border-radius: 3px;
 }
 
-.auto-panel.panel .auto-preferences summary svg {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences summary svg {
   width: 16px;
   height: 16px;
 }
 
-.auto-panel.panel .auto-preferences-content {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences-content {
   gap: 16px;
   padding-top: 14px;
 }
 
-.auto-panel.panel .auto-output-field {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-field {
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -194,11 +194,11 @@
   font-weight: 500;
 }
 
-.auto-panel.panel .auto-preferences-content > .auto-preferences-note {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-preferences-content > .auto-preferences-note {
   margin: -7px 0 0;
 }
 
-.auto-panel.panel .auto-narration-toggle {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-narration-toggle {
   display: flex;
   align-items: center;
   gap: 16px;
@@ -208,54 +208,54 @@
   opacity: 1;
 }
 
-.auto-panel.panel .auto-narration-toggle > span {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-narration-toggle > span {
   gap: 5px;
 }
 
-.auto-panel.panel .auto-narration-toggle strong {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-narration-toggle strong {
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
 }
 
-.auto-panel.panel .auto-narration-toggle small {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-narration-toggle small {
   color: var(--subtle);
   font-size: 12px;
   line-height: 1.65;
 }
 
-.auto-panel.panel input[type="checkbox"] {
+:is(.auto-panel.panel, .manual-supporting-visuals) input[type="checkbox"] {
   width: 18px;
   height: 18px;
   accent-color: var(--accent);
 }
 
-.auto-panel.panel .supporting-visuals {
+:is(.auto-panel.panel, .manual-supporting-visuals) .supporting-visuals {
   padding-top: 20px;
   border-color: var(--line);
 }
 
-.auto-panel.panel .auto-visual-sources {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-sources {
   min-width: 0;
   margin: 0;
   padding: 0;
   border: 0;
 }
 
-.auto-panel.panel .auto-visual-sources legend {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-sources legend {
   padding: 0;
   color: var(--text);
   font-size: 14px;
   font-weight: 650;
 }
 
-.auto-panel.panel .auto-visual-options {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-options {
   display: grid;
   gap: 9px;
   margin-top: 14px;
 }
 
-.auto-panel.panel .auto-visual-choice {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-choice {
   display: flex;
   align-items: center;
   gap: 11px;
@@ -269,39 +269,39 @@
   transition: border-color 150ms, background-color 150ms;
 }
 
-.auto-panel.panel .auto-visual-choice:hover:not(:has(input:disabled)) {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-choice:hover:not(:has(input:disabled)) {
   border-color: #697688;
   background: var(--surface-raised);
 }
 
-.auto-panel.panel .auto-visual-choice.is-selected {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-choice.is-selected {
   border-color: #b28a6f;
   background: #26231f;
 }
 
-.auto-panel.panel .auto-visual-choice:focus-within {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-choice:focus-within {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
-.auto-panel.panel .auto-visual-choice:has(input:disabled) { cursor: not-allowed; }
-.auto-panel.panel .auto-visual-choice input { flex: 0 0 18px; margin: 0; }
-.auto-panel.panel .auto-visual-icon { display: flex; flex: 0 0 30px; align-items: center; justify-content: center; height: 34px; color: var(--subtle); }
-.auto-panel.panel .is-selected .auto-visual-icon { color: var(--accent); }
-.auto-panel.panel .auto-visual-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
-.auto-panel.panel .auto-visual-copy strong { color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.4; }
-.auto-panel.panel .auto-visual-copy > span, .auto-panel.panel .auto-visual-copy small { color: var(--subtle); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
-.auto-panel.panel .auto-visual-copy small { margin-top: 3px; }
-.auto-panel.panel .auto-visual-clear { margin-top: 12px; }
-.auto-panel.panel .auto-visual-empty { margin: 12px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.65; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-choice:has(input:disabled) { cursor: not-allowed; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-choice input { flex: 0 0 18px; margin: 0; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-icon { display: flex; flex: 0 0 30px; align-items: center; justify-content: center; height: 34px; color: var(--subtle); }
+:is(.auto-panel.panel, .manual-supporting-visuals) .is-selected .auto-visual-icon { color: var(--accent); }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-copy strong { color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.4; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-copy > span, :is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-copy small { color: var(--subtle); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-copy small { margin-top: 3px; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-clear { margin-top: 12px; }
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-visual-empty { margin: 12px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.65; }
 .source-info > .source-visual-sources { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--subtle); font-size: 11px; line-height: 1.5; }
 
-.auto-panel.panel .broll-matching,
-.auto-panel.panel .broll-count {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-matching,
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-count {
   margin-top: 18px;
 }
 
-.auto-panel.panel .auto-workflow-note {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-workflow-note {
   display: flex;
   align-items: flex-start;
   gap: 10px;
@@ -310,19 +310,19 @@
   color: var(--subtle);
 }
 
-.auto-panel.panel .auto-workflow-note > svg {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-workflow-note > svg {
   flex-shrink: 0;
   margin-top: 3px;
   color: var(--accent);
 }
 
-.auto-panel.panel .auto-workflow-note p {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-workflow-note p {
   margin: 0;
   font-size: 12px;
   line-height: 1.65;
 }
 
-.auto-panel.panel .auto-capability-note {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-capability-note {
   gap: 8px;
   margin: 0;
   color: var(--subtle);
@@ -330,32 +330,32 @@
   line-height: 1.65;
 }
 
-.auto-panel.panel .auto-capability-note svg {
+:is(.auto-panel.panel, .manual-supporting-visuals) .auto-capability-note svg {
   color: var(--green);
   width: 15px;
   height: 15px;
   margin-top: 2px;
 }
 
-.auto-panel.panel .broll-library {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-library {
   margin-top: 20px;
   padding-top: 18px;
   border-color: var(--line);
 }
 
-.auto-panel.panel .broll-heading h3 {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-heading h3 {
   color: var(--text);
   font-size: 13px;
   font-weight: 600;
 }
 
-.auto-panel.panel .broll-heading > button {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-heading > button {
   width: 36px;
   padding: 8px;
   flex-shrink: 0;
 }
 
-.auto-panel.panel .broll-upload {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-upload {
   margin-top: 14px;
   padding: 16px 13px;
   gap: 5px 10px;
@@ -363,138 +363,138 @@
   background: var(--field);
 }
 
-.auto-panel.panel .broll-upload.dragging {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-upload.dragging {
   border-color: var(--accent);
   background: var(--accent-dark);
 }
 
-.auto-panel.panel .broll-upload > span {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-upload > span {
   font-size: 13px;
   font-weight: 600;
 }
 
-.auto-panel.panel .broll-upload > small {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-upload > small {
   color: var(--subtle);
   font-size: 12px;
 }
 
-.auto-panel.panel .broll-progress {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-progress {
   height: 4px;
   background: var(--surface-hover);
 }
 
-.auto-panel.panel .broll-cancel {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-cancel {
   margin-top: 9px;
 }
 
-.auto-panel.panel .broll-selection-heading {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-selection-heading {
   gap: 10px;
   color: var(--subtle);
   font-size: 12px;
 }
 
-.auto-panel.panel .broll-assets {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-assets {
   gap: 10px;
   margin-top: 12px;
 }
 
-.auto-panel.panel .broll-asset {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-asset {
   padding: 12px;
   border-color: var(--line);
   border-radius: 10px;
   background: var(--field);
 }
 
-.auto-panel.panel .broll-asset.selected {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-asset.selected {
   border-color: #aa8268;
   background: var(--surface-raised);
 }
 
-.auto-panel.panel .broll-asset-row > label {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-asset-row > label {
   gap: 10px;
 }
 
-.auto-panel.panel .broll-asset-row img {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-asset-row img {
   width: 42px;
   height: 54px;
   border-radius: 6px;
   background: var(--canvas);
 }
 
-.auto-panel.panel .broll-asset-row strong {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-asset-row strong {
   color: var(--text);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.45;
 }
 
-.auto-panel.panel .broll-asset-row small {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-asset-row small {
   color: var(--subtle);
   font-size: 12px;
   line-height: 1.4;
 }
 
-.auto-panel.panel .broll-remove {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-remove {
   min-width: 34px;
   padding: 8px;
 }
 
-.auto-panel.panel .broll-remove:hover:not(:disabled) {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-remove:hover:not(:disabled) {
   border-color: #8c514f;
   background: #3c2529;
   color: #ffb9b3;
 }
 
-.auto-panel.panel .broll-tag-row {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-tag-row {
   margin-top: 12px;
   color: var(--subtle);
   font-size: 12px;
 }
 
-.auto-panel.panel .broll-tag-editor {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-tag-editor {
   margin-top: 12px;
   padding-top: 12px;
   border-color: var(--line);
 }
 
-.auto-panel.panel .broll-tag-editor > label {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-tag-editor > label {
   gap: 9px;
   color: var(--subtle);
   font-size: 12px;
 }
 
-.auto-panel.panel .broll-tag-editor > button {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-tag-editor > button {
   align-self: stretch;
 }
 
-.auto-panel.panel .broll-error,
-.auto-panel.panel .broll-notice {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-error,
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-notice {
   margin-top: 12px;
   font-size: 12px;
   line-height: 1.65;
 }
 
-.auto-panel.panel .broll-error {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-error {
   color: #ffb9b3;
 }
 
-.auto-panel.panel .broll-notice {
+:is(.auto-panel.panel, .manual-supporting-visuals) .broll-notice {
   color: var(--green);
 }
 
 @media (max-width: 680px) {
-  .auto-panel.panel .auto-panel-body {
+  :is(.auto-panel.panel, .manual-supporting-visuals) .auto-panel-body {
     padding: 18px;
   }
 
-  .auto-panel.panel select,
-  .auto-panel.panel .auto-output-field input[type="number"],
-  .auto-panel.panel .broll-tag-editor input {
+  :is(.auto-panel.panel, .manual-supporting-visuals) select,
+  :is(.auto-panel.panel, .manual-supporting-visuals) .auto-output-field input[type="number"],
+  :is(.auto-panel.panel, .manual-supporting-visuals) .broll-tag-editor input {
     min-height: 46px;
     font-size: 16px;
   }
 
-  .auto-panel.panel button {
+  :is(.auto-panel.panel, .manual-supporting-visuals) button {
     min-height: 42px;
   }
 }

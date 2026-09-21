@@ -17,8 +17,19 @@ export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => c
 export { captionStyleSchema } from "../shared/caption-style.js";
 import { captionStyleSchema } from "../shared/caption-style.js";
 import { blackBandsSchema } from "../shared/black-bands.js";
+const supportingVisualShape = {
+  supportingVisuals: z.enum(["off", "stock", "library", "graphics", "both"]).optional(),
+  visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"]))
+    .max(5).refine(sources => new Set(sources).size === sources.length, "Choose each visual source once").optional(),
+  brollIds: z.array(z.string().uuid()).max(100).optional(),
+  brollMatching: z.enum(["tags", "ai"]).optional(),
+  brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
+  brollMaxCoverage: z.number().int().min(0).max(100).optional(),
+  stockVideoType: z.enum(["all", "animation"]).optional(),
+};
 export const settingsSchema = z
   .object({
+    ...supportingVisualShape,
     blackBands: blackBandsSchema.optional(),
     ownFootage: ownFootageSchema.optional(),
     speed: n(0.5, 2),
@@ -131,20 +142,11 @@ export const autoOptionsSchema = z
     pacing: pacingOptionsSchema.optional(),
     captions: z.enum(["auto", "add", "keep"]).optional(),
     captionStyle: captionStyleSchema.optional(),
-    supportingVisuals: z
-      .enum(["off", "stock", "library", "graphics", "both"])
-      .optional(),
-    visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"]))
-      .max(5).refine(sources => new Set(sources).size === sources.length, "Choose each visual source once").optional(),
-    brollIds: z.array(z.string().uuid()).max(100).optional(),
-    brollMatching: z.enum(["tags", "ai"]).optional(),
+    ...supportingVisualShape,
     ownFootage: ownFootageSchema.optional(),
-    brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
-  brollMaxCoverage: z.number().int().min(0).max(100).optional(),
     audio: z.enum(AUTO_AUDIO_MODES).optional(),
     finishedReview: z.boolean().optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
-    stockVideoType: z.enum(["all", "animation"]).optional(),
   })
   .strict()
   .default({ aspect: "9:16", targetDuration: 45, narration: false })

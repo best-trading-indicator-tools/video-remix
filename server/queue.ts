@@ -8,6 +8,7 @@ import { config, paths } from "./config.js";
 import { geometry, renderVideo, probeMedia } from "./engine.js";
 import { AutoSkipError, prepareAutoRemix, protectFinalAutoCaptions } from "./auto.js";
 import { prepareSupportingVisuals } from "./supporting-plan.js";
+import { prepareManualVisuals } from "./manual-visuals.js";
 import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
 import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan, preservedVisualsOnStockRefresh } from "./plan-storage.js";
@@ -247,6 +248,12 @@ async function run(job: StoredJob, controller: AbortController) {
         sourceTranscript: prepared.sourceTranscript, signal: controller.signal });
       job.phase = "Rendering your edit";
       await saveStore();
+    } else {
+      supportingVisuals = await prepareManualVisuals({ source, job, assets: state.broll, audioPath,
+        workDir, signal: controller.signal, onPhase: (phase, progress) => {
+          job.phase = phase; job.progress = Math.max(job.progress, progress);
+        } });
+      job.phase = "Rendering your manual edit";
     }
     if (job.editPlan && job.auto) {
       const mode = job.auto.editorialMode ?? "repair";

@@ -2,7 +2,7 @@ import { planGraphicScenes } from "./graphic-planner.js";
 import type { GraphicScene } from "../shared/graphic-scene.js";
 import { GRAPHIC_KIND_LABELS } from "../shared/graphic-scene.js";
 import path from "node:path";
-import type { BrollAsset, RenderJob, Transcript, VisualSource } from "../shared/types.js";
+import type { BrollAsset, RenderJob, Transcript, VisualSource, SupportingVisualOptions } from "../shared/types.js";
 import { DEFAULT_BROLL_COUNT, MAX_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "../shared/types.js";
 import { getVisualSources, getBrollMatching, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
 import { geometry } from "./engine.js";
@@ -265,7 +265,7 @@ async function prepareSupportingVisualsPass({
   available = graphicAvailable, render = renderCard, planGraphics = planGraphicScenes, effortRound = 0, excludedStockIds = [],
 }: {
   source: StoredSource;
-  options?: StoredJob["auto"];
+  options?: SupportingVisualOptions;
   job: StoredJob;
   transcript?: Transcript;
   assets: StoredBroll[];

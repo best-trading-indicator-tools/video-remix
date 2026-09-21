@@ -1,3 +1,4 @@
+import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OnboardingTour from "./OnboardingTour";
 import { shouldShowOnboarding, type TourDestination } from "./onboarding-steps";
 import OwnFootagePanel from "./OwnFootagePanel";
@@ -48,6 +49,7 @@ import {
 import {
   DEFAULT_AUTO_OPTIONS,
   DEFAULT_BROLL_COUNT,
+  DEFAULT_BROLL_MAX_COVERAGE,
   DEFAULT_SETTINGS,
   MAX_AUTO_VERSIONS,
   isAutoTargetDuration,
@@ -674,7 +676,7 @@ export default function App() {
     if (selected)
       setSettingsById((current) => ({
         ...current,
-        [selected.id]: { ...settings, ...patch },
+        [selected.id]: { ...(current[selected.id] || defaultSettings), ...patch },
       }));
     else setDefaultSettings((current) => ({ ...current, ...patch }));
   };
@@ -747,6 +749,9 @@ export default function App() {
       ),
     );
     setDefaultAuto(remove);
+    const removeManual = (settings: RemixSettings): RemixSettings => ({ ...settings, brollIds: settings.brollIds?.filter(id => id !== assetId) });
+    setSettingsById(current => Object.fromEntries(Object.entries(current).map(([id, settings]) => [id, removeManual(settings)])));
+    setDefaultSettings(removeManual);
   };
 
   const importedSources = (added: VideoSource[]) => {
@@ -967,7 +972,9 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
-  const manualDefaults = { ...DEFAULT_SETTINGS, blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+  const manualDefaults = { ...DEFAULT_SETTINGS,
+    visualSources: [], supportingVisuals: "off", brollIds: [], brollCount: DEFAULT_BROLL_COUNT,
+    brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE, brollMatching: "tags", stockVideoType: "all", blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length;
@@ -989,16 +996,10 @@ export default function App() {
       : (renderScope === "selected" && selected ? 1 : sources.length) *
         variants;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
-  const missingBrollSources =
-    mode === "auto"
-      ? autoTargets.filter((source) => {
-          const options = (autoById[source.id] || defaultAuto).options;
-          return (
-            hasLibraryVisuals(options) && getVisualSources(options).length === 1 &&
-            !options.brollIds?.length
-          );
-        })
-      : [];
+  const missingBrollSources = (mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources).filter(source => {
+    const options = mode === "auto" ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings;
+    return hasLibraryVisuals(options) && getVisualSources(options).length === 1 && !options.brollIds?.length && (mode === "auto" || options.brollMaxCoverage !== 0);
+  });
   const noBrollSelected = missingBrollSources.length > 0;
 
   return (
@@ -1054,6 +1055,7 @@ export default function App() {
           </span>
           <button
             className="help-button"
+            disabled={brollBusy}
             aria-label="Quick guide"
             onClick={openTour}
           >
@@ -1144,7 +1146,7 @@ export default function App() {
                 <button
                   aria-pressed={mode === "auto"}
                   className={mode === "auto" ? "active" : ""}
-                  onClick={() => setMode("auto")}
+                  disabled={brollBusy} onClick={() => setMode("auto")}
                 >
                   <Sparkles size={13} />
                   Auto remix
@@ -1152,12 +1154,12 @@ export default function App() {
                 <button
                   aria-pressed={mode === "manual"}
                   className={mode === "manual" ? "active" : ""}
-                  onClick={() => setMode("manual")}
+                  disabled={brollBusy} onClick={() => setMode("manual")}
                 >
                   <SlidersHorizontal size={13} />
                   Manual
                 </button>
-                <button aria-pressed={mode === "shorts"} className={mode === "shorts" ? "active" : ""} onClick={() => setMode("shorts")}><Scissors size={13} />Short clips</button>
+                <button aria-pressed={mode === "shorts"} className={mode === "shorts" ? "active" : ""} disabled={brollBusy} onClick={() => setMode("shorts")}><Scissors size={13} />Short clips</button>
               </div>
               {mode === "manual" && (
                 <div className="toolbar-actions">
@@ -1166,13 +1168,14 @@ export default function App() {
                       replaceSettings({ ...DEFAULT_SETTINGS });
                       notify("Selected settings reset.", "info");
                     }}
-                    disabled={!edited}
+                    disabled={!edited || brollBusy}
                   >
                     <RotateCcw size={13} />
                     Reset settings
                   </button>
                   <span className="toolbar-divider" />
                   <button
+                    disabled={brollBusy}
                     onClick={() => {
                       replaceSettings(randomizeSettings(settings));
                       notify(
@@ -2165,16 +2168,23 @@ export default function App() {
                       </>
                     )}
                   </div>
+                  <section className="manual-supporting-visuals" aria-label="Manual supporting visuals">
+                    <SupportingVisualsEditor options={settings} onChange={updateSettings} capabilities={autoCapabilities}
+                      selectedId={selected?.id} libraryBusy={brollBusy} onLibraryBusyChange={setBrollBusy}
+                      onBrollSelectionChange={brollIds => updateSettings({ brollIds })} onBrollRemoved={removeBrollSelection}
+                      maxFiles={health?.maxFiles} maxFileSize={health?.maxFileSize} />
+                    <p className="auto-preferences-note">Supporting shots are added during export over your manual edit. Your cuts, speed and sound settings stay in control. Live and five-second previews show your footage without these shots.</p>
+                  </section>
                   <div className="manual-workflow-tools">
                     <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
-                    <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={patch => updateSettings({ ...patch, blackBands: applyBandFinish(settings.blackBands, patch.blackBands) })} />
+                    <FinishingPresets mode="manual" settings={settings} disabled={starting || brollBusy || attachmentBusy !== null} onApply={patch => updateSettings({ ...patch, blackBands: applyBandFinish(settings.blackBands, patch.blackBands) })} />
                     {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
-                      disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}
+                      disabled={starting || brollBusy || attachmentBusy !== null} onApply={replaceSettings} />}
                   </div>
                   <div className="settings-footer">
                     <button
                       className="apply-all-button"
-                      disabled={sources.length < 2}
+                      disabled={sources.length < 2 || brollBusy}
                       onClick={applyAll}
                     >
                       <Copy size={14} />
@@ -2689,7 +2699,7 @@ export default function App() {
           <span>
             Made for your own & licensed footage
             <span className="footer-dot">·</span>
-            <button onClick={openTour}>
+            <button disabled={brollBusy} onClick={openTour}>
               How it works
               <ArrowRight size={12} />
             </button>

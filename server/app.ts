@@ -287,7 +287,7 @@ export function createApp() {
     if (!asset) throw new HttpError(404, "B-roll clip not found.");
     if (
       state.jobs.some(
-        (job) => isActive(job) && (job.auto?.brollIds?.includes(asset.id) || [...(job.settings.ownFootage ?? []), ...(job.auto?.ownFootage ?? [])].some(item => item.assetId === asset.id)),
+        (job) => isActive(job) && (job.auto?.brollIds?.includes(asset.id) || job.settings.brollIds?.includes(asset.id) || [...(job.settings.ownFootage ?? []), ...(job.auto?.ownFootage ?? [])].some(item => item.assetId === asset.id)),
       )
     )
       throw new HttpError(
@@ -683,6 +683,13 @@ export function createApp() {
           404,
           "A source video has expired or been removed. Upload it again.",
         );
+      if (hasLibraryVisuals(item.settings) && item.settings.brollMaxCoverage !== 0) {
+        const ids = item.settings.brollIds ?? [];
+        if (!ids.length && getVisualSources(item.settings).length === 1)
+          throw new HttpError(400, `${source.name}: choose uploaded B-roll or deselect My B-roll.`);
+        if (ids.some(id => !state.broll.some(asset => asset.id === id)))
+          throw new HttpError(400, `${source.name}: a selected B-roll clip is no longer available. Choose it again.`);
+      }
       const end = item.settings.trimEnd ?? source.duration;
       if (
         item.settings.segments?.some(
@@ -772,7 +779,7 @@ export function createApp() {
         "The source video is no longer available. Upload it again.",
       );
     if (
-      !job.editPlan && job.auto?.brollIds?.some(
+      !job.editPlan && (job.auto ?? job.settings).brollIds?.some(
         (id) => !state.broll.some((asset) => asset.id === id),
       )
     )

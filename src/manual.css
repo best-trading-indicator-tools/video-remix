@@ -80,3 +80,7 @@
 .look-button.active .sound-swatch { background: linear-gradient(180deg, #3a2a20, #241a14); }
 .look-button.active .sound-swatch span { background: linear-gradient(180deg, #ffdcc5, var(--accent)); }
 .sound-looks .manual-subsection .slider-field + .slider-field { margin-top: 14px; }
+
+.manual-supporting-visuals { padding: 20px; border-top: 1px solid var(--line); min-width: 0; }
+.manual-supporting-visuals > .auto-preferences-note { margin-top: 16px; }
+@media (max-width: 680px) { .manual-supporting-visuals { padding: 18px; } }
