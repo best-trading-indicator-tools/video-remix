@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from "react"
 import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, Upload, X } from "lucide-react";
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
+import { parseSocialVideoLinks } from "../shared/social-imports";
 import { importRequest, transferImport, uploadIdentity } from "./import-client";
 import "./imports.css";
 
@@ -25,6 +26,10 @@ export default function ImportPanel(props: Props) {
   const [localBusy, setLocalBusy] = useState(false);
   const [videoLinks, setVideoLinks] = useState("");
   const [linksBusy, setLinksBusy] = useState(false);
+  const [linksNotice, setLinksNotice] = useState("");
+  const linkBatch = parseSocialVideoLinks(videoLinks);
+  const maxLinks = props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE;
+  const tooManyLinks = linkBatch.links.length > maxLinks;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectionErrors, setSelectionErrors] = useState<string[]>([]);
   const sessionsRef = useRef(sessions);
@@ -199,9 +204,9 @@ export default function ImportPanel(props: Props) {
   };
 
   async function importLinks() {
-    const links = videoLinks.split(/\r?\n/u).map(value => value.trim()).filter(Boolean);
-    if (!links.length || linksBusy) return;
-    setLinksBusy(true); setSelectionErrors([]);
+    const { links, invalid, duplicates } = linkBatch;
+    if (!links.length || linksBusy || tooManyLinks) return;
+    setLinksBusy(true); setSelectionErrors([]); setLinksNotice("");
     try {
       const result = await importRequest<{ imports: ImportSession[]; errors?: { name: string; error: string }[] }>("/api/imports/links", {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links }),
@@ -210,7 +215,8 @@ export default function ImportPanel(props: Props) {
       update(result.imports);
       const rejected = result.errors || [];
       setSelectionErrors(rejected.map(item => `${item.name}: ${item.error}`));
-      setVideoLinks(links.filter(link => rejected.some(item => item.name === link.slice(0, 180))).join("\n"));
+      setVideoLinks([...invalid.map(item => item.input), ...links.filter(link => rejected.some(item => item.name === link.slice(0, 180)))].join("\n"));
+      setLinksNotice(`${result.imports.length} video${result.imports.length === 1 ? "" : "s"} added to the import queue.${duplicates ? ` ${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped.` : ""}`);
     } catch (error) {
       if (mounted.current) setSelectionErrors([error instanceof Error ? error.message : "Could not import these video links."]);
     } finally { if (mounted.current) setLinksBusy(false); }
@@ -230,15 +236,26 @@ export default function ImportPanel(props: Props) {
       <small>Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos per batch<br />{size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
     </button>
     <div className="import-local import-social">
-      <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video link</label>
-      <p id="social-video-link-hint">TikTok · Instagram · YouTube<br />Paste a video, Reel or Shorts link. One per line.</p>
-      <textarea id="social-video-links" rows={2} inputMode="url" autoCapitalize="none" spellCheck={false}
-        aria-describedby="social-video-link-hint" placeholder="https://www.youtube.com/watch?v=…" value={videoLinks}
-        disabled={linksBusy} onChange={event => setVideoLinks(event.target.value)} />
-      <button className="secondary-button" disabled={!videoLinks.trim() || linksBusy || !props.connected} onClick={() => void importLinks()}>
-        {linksBusy ? <LoaderCircle size={14} className="spin" /> : <Link2 size={14} />} {linksBusy ? "Adding links…" : "Import links"}
+      <label htmlFor="social-video-links"><Link2 size={15} /> Import video links</label>
+      <p id="social-video-link-hint">TikTok · Instagram · YouTube<br />Paste multiple video links, one per line or separated by spaces or commas. Mix platforms in the same batch.</p>
+      <textarea id="social-video-links" rows={5} autoCapitalize="none" spellCheck={false}
+        aria-describedby="social-video-link-hint social-video-link-count" placeholder={"https://www.tiktok.com/@creator/video/…\nhttps://www.instagram.com/reel/…\nhttps://www.youtube.com/watch?v=…"} value={videoLinks}
+        disabled={linksBusy} onChange={event => { setVideoLinks(event.target.value); setLinksNotice(""); }} />
+      <p id="social-video-link-count" className={tooManyLinks ? "import-error" : "import-link-count"} role="status">
+        {tooManyLinks ? `${linkBatch.links.length} videos selected. Import up to ${maxLinks} at once.`
+          : `${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"} ready to import · Up to ${maxLinks} per batch`}
+        {linkBatch.duplicates > 0 && ` · ${linkBatch.duplicates} duplicate${linkBatch.duplicates === 1 ? "" : "s"} will be skipped`}
+      </p>
+      {!!linkBatch.invalid.length && <div className="import-link-errors">
+        <p>{linkBatch.invalid.length} {linkBatch.invalid.length === 1 ? "entry needs" : "entries need"} correction. Valid links can still be imported.</p>
+        <ul>{linkBatch.invalid.slice(0, 5).map((item, index) => <li key={index}><strong>{item.input}</strong><span>{item.error}</span></li>)}</ul>
+        {linkBatch.invalid.length > 5 && <p>And {linkBatch.invalid.length - 5} more. Correct the list above.</p>}
+      </div>}
+      <button className="secondary-button" disabled={!linkBatch.links.length || tooManyLinks || linksBusy || !props.connected} onClick={() => void importLinks()}>
+        {linksBusy ? <LoaderCircle size={14} className="spin" /> : <Link2 size={14} />} {linksBusy ? "Adding links…" : linkBatch.links.length ? `Import ${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"}` : "Import videos"}
       </button>
-      <p>Public videos download into your workspace for Auto or Manual editing.</p>
+      {linksNotice && <p role="status">{linksNotice}</p>}
+      <p>Each public video downloads into your workspace with its own progress below, ready for Auto or Manual editing.</p>
     </div>
     <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><FolderOpen size={15} /> Link files on this computer</button>
     {localOpen && <div className="import-local">

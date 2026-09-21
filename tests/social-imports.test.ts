@@ -7,11 +7,27 @@ import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 import type { ImportSession } from "../shared/imports.js";
-import { socialVideoLink } from "../shared/social-imports.js";
+import { parseSocialVideoLinks, socialVideoLink } from "../shared/social-imports.js";
 import { downloadSocialVideo } from "../server/social-imports.js";
 
 const exec = promisify(execFile);
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+test("pasted batches accept mixed platforms and separators, deduplicate video identities, and retain invalid entries", () => {
+  const originals = ["https://www.tiktok.com/@creator/video/123456789", "https://www.instagram.com/reel/ABC123/", "https://www.youtube.com/watch?v=BaW_jenozKc"];
+  for (const separator of ["\n", "\r\n", " ", "\t", ",", ", ", " ; "])
+    assert.deepEqual(parseSocialVideoLinks(originals.join(separator)), { links: originals, invalid: [], duplicates: 0 });
+  const parsed = parseSocialVideoLinks([...originals, "https://youtu.be/BaW_jenozKc?si=tracking", "https://instagram.com/reels/ABC123/?igsh=test",
+    "https://www.tiktok.com/@creator/video/123456789/?tracking=1", "https://example.com/video", "not-a-link"].join("\n"));
+  assert.deepEqual(parsed.links, originals);
+  assert.equal(parsed.duplicates, 3);
+  assert.deepEqual(parsed.invalid.map(item => item.input), ["https://example.com/video", "not-a-link"]);
+  assert.ok(parsed.invalid.every(item => item.error.includes("direct TikTok")));
+  assert.deepEqual(parseSocialVideoLinks("\n , ; \t"), { links: [], invalid: [], duplicates: 0 });
+  assert.deepEqual(parseSocialVideoLinks(originals[2] + "&tracking=one,two;three").links, [originals[2]]);
+  const fullBatch = Array.from({ length: 100 }, (_, index) => `https://www.instagram.com/reel/Batch${index}/`);
+  assert.deepEqual(parseSocialVideoLinks(fullBatch.join("\n")).links, fullBatch);
+});
+
 test("social links allow individual videos, strip tracking, and reject unrelated URLs", () => {
   for (const url of ["https://youtu.be/BaW_jenozKc?si=tracking", "https://m.youtube.com/shorts/BaW_jenozKc", "https://youtube.com/watch?v=BaW_jenozKc&list=PL123"])
     assert.deepEqual(socialVideoLink(url), { platform: "YouTube", url: "https://www.youtube.com/watch?v=BaW_jenozKc" });
@@ -122,6 +138,21 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
       assert.equal(failed.source, undefined);
       assert.equal(failed.error!.includes(directory), false);
       await assert.rejects(access(path.join(data, "imports", item.id, "download")), { code: "ENOENT" });
+    });
+    await t.test("one batch imports TikTok, Instagram and YouTube independently while another download fails", async () => {
+      const links = ["https://youtu.be/PRIVATE0001", "https://www.tiktok.com/@creator/video/123456789",
+        "https://www.instagram.com/reel/Batch123/", "https://youtu.be/BaW_jenozKc"];
+      const response = await post("/api/imports/links", { links });
+      assert.equal(response.status, 202, await response.clone().text());
+      const batch = await response.json() as { imports: ImportSession[]; errors: unknown[] };
+      assert.equal(batch.imports.length, 4); assert.deepEqual(batch.errors, []);
+      const results = await Promise.all(batch.imports.map(item => wait(item.id, value => ["completed", "failed"].includes(value.status))));
+      assert.deepEqual(results.map(item => item.status), ["failed", "completed", "completed", "completed"]);
+      assert.equal(new Set(results.slice(1).map(item => item.source?.id)).size, 3);
+      for (const item of results.slice(1)) {
+        assert.equal(item.progress, 100); assert.equal(item.kind, "remote");
+        assert.equal((await fetch(`${base}${item.source!.url}`)).status, 200);
+      }
     });
     await t.test("download progress survives polling and pending downloads restart after shutdown", async () => {
       const item = await add("https://youtube.com/watch?v=SLOW0000001");

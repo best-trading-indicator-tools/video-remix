@@ -1,5 +1,29 @@
 export class SocialImportError extends Error {}
 
+/** Accept pasted lists and keep invalid entries available for correction. */
+export function parseSocialVideoLinks(input: string) {
+  const links: string[] = [];
+  const invalid: { input: string; error: string }[] = [];
+  const seen = new Set<string>();
+  let duplicates = 0;
+  // Split separators between URLs without breaking commas/semicolons inside
+  // a platform's tracking parameters. Whitespace also supports copied columns.
+  const candidates = input.replace(/[,;](?=\s*https?:\/\/)/giu, "\n")
+    .split(/\s+/u).map(value => value.replace(/^[,;]+|[,;]+$/gu, "")).filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const { url } = socialVideoLink(candidate);
+      const key = url.replace(/\/$/u, "");
+      if (seen.has(key)) { duplicates++; continue; }
+      seen.add(key);
+      links.push(url);
+    } catch (error) {
+      invalid.push({ input: candidate, error: error instanceof Error ? error.message : "Check this video link." });
+    }
+  }
+  return { links, invalid, duplicates };
+}
+
 /** Accept video links only, never search queries, profiles, playlists or arbitrary URLs. */
 export function socialVideoLink(input: string): { url: string; platform: string } {
   const invalid = () => new SocialImportError("Paste a direct TikTok video, Instagram Reel/post, or YouTube video/Shorts link.");
