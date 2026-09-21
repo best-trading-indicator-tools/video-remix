@@ -16,6 +16,7 @@ import {
   audioLookById,
   audioTargets,
   chooseAudioLook,
+  isAutoAudioNone,
   type AudioAnalysis,
 } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters } from "../server/audio-filters.js";
@@ -86,6 +87,11 @@ test("missing and invalid modifiers read as neutral", () => {
   assert.equal(audioAdjustments({ bass: -9 }).bass, -1);
   assert.equal(audioAdjustments({ treble: Number.NaN }).treble, 0);
   assert.equal(activeAudioLook(DEFAULT_SETTINGS), "original");
+});
+
+test("None recognizes saved off and original choices without disabling automatic sound selection", () => {
+  for (const mode of ["off", "original"] as const) assert.equal(isAutoAudioNone(mode), true);
+  for (const mode of [undefined, "auto", "clear", "phone"] as const) assert.equal(isAutoAudioNone(mode), false);
 });
 
 /**

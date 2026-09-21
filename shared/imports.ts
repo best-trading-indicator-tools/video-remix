@@ -9,7 +9,7 @@ export interface ImportSession {
   size: number;
   offset: number;
   chunkSize: number;
-  kind: "upload" | "local";
+  kind: "upload" | "local" | "remote";
   status: "uploading" | "processing" | "completed" | "failed";
   phase: string;
   progress: number;

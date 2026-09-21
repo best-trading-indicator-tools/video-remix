@@ -8,6 +8,8 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import type { ImportSession } from "../shared/imports.js";
+import { SocialImportError, socialVideoLink } from "../shared/social-imports.js";
+import { downloadSocialVideo } from "./social-imports.js";
 import { config, paths } from "./config.js";
 import { createThumbnail, probeMedia } from "./engine.js";
 import { fingerprintFile } from "./history.js";
@@ -23,13 +25,14 @@ const uploadSchema = z.object({
 }).strict();
 const signatureSchema = z.object({ dev: z.number(), ino: z.number(), size: z.number(), mtimeMs: z.number() }).strict();
 const storedSchema = z.object({
-  id: z.string().uuid(), name: z.string().min(1).max(180), size: z.number().int().positive().max(config.maxLargeFileSize),
-  offset: z.number().int().nonnegative().max(config.maxLargeFileSize), kind: z.enum(["upload", "local"]),
+  id: z.string().uuid(), name: z.string().min(1).max(180), size: z.number().int().nonnegative().max(config.maxLargeFileSize),
+  offset: z.number().int().nonnegative().max(config.maxLargeFileSize), kind: z.enum(["upload", "local", "remote"]),
   status: z.enum(["uploading", "processing", "completed", "failed"]), phase: z.string(),
   progress: z.number().min(0).max(100), createdAt: z.number(), updatedAt: z.number(),
   identity: z.string().regex(/^[\da-f]{64}$/iu).optional(), lastModified: z.number().optional(),
   error: z.string().optional(), signature: signatureSchema.optional(),
-}).strict();
+  remoteUrl: z.string().max(2048).optional(),
+}).strict().refine(item => item.kind === "remote" ? !!item.remoteUrl : item.size > 0);
 type StoredImport = z.infer<typeof storedSchema>;
 
 export class ImportError extends Error {
@@ -98,7 +101,7 @@ async function openUpload(item: StoredImport) {
   } catch (error) { await handle.close(); throw error; }
 }
 function safeError(error: unknown) {
-  if (error instanceof ImportError) return error.message;
+  if (error instanceof ImportError || error instanceof SocialImportError) return error.message;
   const code = (error as NodeJS.ErrnoException)?.code;
   if (code === "ENOSPC" || code === "EDQUOT") return "There is not enough free disk space. Free some space, then resume the import.";
   if (code === "ENOENT") return "The selected video is no longer available. Choose the file again.";
@@ -137,10 +140,29 @@ async function cleanup() {
 async function processImport(item: StoredImport, signal: AbortSignal) {
   let published = false;
   try {
-    item.phase = "Reading video details"; item.progress = 2;
+    if (item.kind === "remote" && !item.size) {
+      item.phase = "Connecting to video link"; item.progress = 0;
+      await persist(item);
+      const directory = path.join(folder(item.id), "download");
+      await rm(directory, { recursive: true, force: true });
+      await mkdir(directory, { recursive: true });
+      try {
+        const downloaded = await downloadSocialVideo(item.remoteUrl!, directory, {
+          signal, maxBytes: config.maxLargeFileSize, checkSpace: () => requireSpace(),
+          onProgress: (phase, progress) => { item.phase = phase; item.progress = Math.max(item.progress, progress); },
+        });
+        signal.throwIfAborted();
+        // The managed filename uses the session id, never a platform title.
+        await rename(downloaded.file, mediaPath(item));
+        item.name = downloaded.name; item.size = downloaded.size; item.offset = downloaded.size;
+        await persist(item);
+      } finally { await rm(directory, { recursive: true, force: true }); }
+    }
+    const preparationProgress = (percent: number) => item.kind === "remote" ? 70 + percent * 0.3 : percent;
+    item.phase = "Reading video details"; item.progress = preparationProgress(2);
     await persist(item);
     if (item.signature) await assertLinkedSourceUnchanged({ filePath: mediaPath(item), fileSignature: item.signature });
-    if (item.kind === "upload") {
+    if (item.kind !== "local") {
       const handle = await openUpload(item);
       try {
         if ((await handle.stat()).size !== item.size) throw new ImportError(409, "The saved upload is incomplete. Cancel it and choose the video again.");
@@ -148,13 +170,13 @@ async function processImport(item: StoredImport, signal: AbortSignal) {
     }
     const media = await probeMedia(mediaPath(item), signal);
     if (media.duration > 86400) throw new ImportError(400, "Choose a video shorter than 24 hours.");
-    item.phase = "Creating preview image"; item.progress = 8;
+    item.phase = "Creating preview image"; item.progress = preparationProgress(8);
     await createThumbnail(mediaPath(item), thumbnailPath(item.id), signal);
     signal.throwIfAborted();
-    item.phase = "Identifying the original for export history"; item.progress = 12;
+    item.phase = "Identifying the original for export history"; item.progress = preparationProgress(12);
     await persist(item);
     const fingerprint = await fingerprintFile(mediaPath(item), signal, bytes => {
-      item.progress = Math.min(98, Math.round(12 + bytes / item.size * 86));
+      item.progress = preparationProgress(Math.min(98, Math.round(12 + bytes / item.size * 86)));
     });
     item.phase = "Checking picture similarity with earlier exports";
     await persist(item);
@@ -184,7 +206,7 @@ async function processImport(item: StoredImport, signal: AbortSignal) {
   } catch (error) {
     if (signal.aborted) {
       if (!cancelled.has(item.id)) {
-        item.status = "processing"; item.phase = "Waiting to resume video analysis";
+        item.status = "processing"; item.phase = item.kind === "remote" && !item.size ? "Waiting to restart download" : "Waiting to resume video analysis";
         await persist(item);
       }
       return;
@@ -218,12 +240,13 @@ export async function initMediaImports() {
     try {
       const item = storedSchema.parse(JSON.parse(await readFile(path.join(folder(entry.name), "session.json"), "utf8")));
       if (item.id !== entry.name || cleanName(item.name) !== item.name || item.offset > item.size) continue;
+      if (item.kind === "remote") socialVideoLink(item.remoteUrl!);
       sessions.set(item.id, item);
       if (state.sources.some(source => source.id === item.id)) {
         item.status = "completed"; item.phase = "Ready to edit"; item.progress = 100;
-      } else if (item.status !== "completed") {
+      } else if (item.status !== "completed" && !(item.kind === "remote" && !item.size)) {
         const info = await lstat(mediaPath(item));
-        if (item.kind === "upload") {
+        if (item.kind !== "local") {
           if (!info.isFile()) throw new Error("Upload is not an ordinary file");
           const handle = await openUpload(item);
           try {
@@ -330,6 +353,30 @@ export function installMediaImportRoutes(app: Express) {
         });
         imports.push(publicImport(item));
       } catch (error) { errors.push({ name: path.basename(candidate).slice(0, 180), error: safeError(error) }); }
+    }
+    res.status(imports.length ? 202 : 400).json({ imports, errors, ...(!imports.length ? { error: errors[0]?.error } : {}) });
+    pump();
+  }));
+  app.post("/api/imports/links", route(async (req, res) => {
+    const parsed = z.object({ links: z.array(z.string().min(1).max(2048)).min(1).max(config.maxFiles) }).strict().safeParse(req.body);
+    if (!parsed.success) throw new ImportError(400, `Enter 1–${config.maxFiles} TikTok, Instagram or YouTube video links, one per line.`);
+    const imports: ImportSession[] = [];
+    const errors: { name: string; error: string }[] = [];
+    for (const candidate of parsed.data.links) {
+      try {
+        const link = socialVideoLink(candidate);
+        const item = await exclusive(async () => {
+          ensureCapacity();
+          await requireSpace();
+          const now = Date.now();
+          const value: StoredImport = { id: randomUUID(), name: `${link.platform} video.mp4`, size: 0, offset: 0, kind: "remote",
+            remoteUrl: link.url, status: "processing", phase: `Waiting to download from ${link.platform}`, progress: 0, createdAt: now, updatedAt: now };
+          await persist(value);
+          sessions.set(value.id, value);
+          return value;
+        });
+        imports.push(publicImport(item));
+      } catch (error) { errors.push({ name: candidate.slice(0, 180), error: safeError(error) }); }
     }
     res.status(imports.length ? 202 : 400).json({ imports, errors, ...(!imports.length ? { error: errors[0]?.error } : {}) });
     pump();

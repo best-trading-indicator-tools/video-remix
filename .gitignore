@@ -11,4 +11,5 @@ output/
 .DS_Store
 *.log
 .venv/
+.venv-imports/
 __pycache__/

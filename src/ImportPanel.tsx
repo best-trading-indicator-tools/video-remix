@@ -23,6 +23,8 @@ export default function ImportPanel(props: Props) {
   const [localOpen, setLocalOpen] = useState(false);
   const [localPaths, setLocalPaths] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
+  const [videoLinks, setVideoLinks] = useState("");
+  const [linksBusy, setLinksBusy] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [selectionErrors, setSelectionErrors] = useState<string[]>([]);
   const sessionsRef = useRef(sessions);
@@ -196,6 +198,24 @@ export default function ImportPanel(props: Props) {
     finally { setLocalBusy(false); }
   };
 
+  async function importLinks() {
+    const links = videoLinks.split(/\r?\n/u).map(value => value.trim()).filter(Boolean);
+    if (!links.length || linksBusy) return;
+    setLinksBusy(true); setSelectionErrors([]);
+    try {
+      const result = await importRequest<{ imports: ImportSession[]; errors?: { name: string; error: string }[] }>("/api/imports/links", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links }),
+      });
+      if (!mounted.current) return;
+      update(result.imports);
+      const rejected = result.errors || [];
+      setSelectionErrors(rejected.map(item => `${item.name}: ${item.error}`));
+      setVideoLinks(links.filter(link => rejected.some(item => item.name === link.slice(0, 180))).join("\n"));
+    } catch (error) {
+      if (mounted.current) setSelectionErrors([error instanceof Error ? error.message : "Could not import these video links."]);
+    } finally { if (mounted.current) setLinksBusy(false); }
+  }
+
   return <div className="import-panel">
     <input ref={props.inputRef} className="visually-hidden" type="file" multiple accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.mpeg,.mpg" aria-label="Upload videos"
       onChange={event => { void selectFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
@@ -209,7 +229,18 @@ export default function ImportPanel(props: Props) {
       <span>or <em>browse files</em></span>
       <small>Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos per batch<br />{size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
     </button>
-    <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><Link2 size={15} /> Link files on this computer</button>
+    <div className="import-local import-social">
+      <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video link</label>
+      <p id="social-video-link-hint">TikTok · Instagram · YouTube<br />Paste a video, Reel or Shorts link. One per line.</p>
+      <textarea id="social-video-links" rows={2} inputMode="url" autoCapitalize="none" spellCheck={false}
+        aria-describedby="social-video-link-hint" placeholder="https://www.youtube.com/watch?v=…" value={videoLinks}
+        disabled={linksBusy} onChange={event => setVideoLinks(event.target.value)} />
+      <button className="secondary-button" disabled={!videoLinks.trim() || linksBusy || !props.connected} onClick={() => void importLinks()}>
+        {linksBusy ? <LoaderCircle size={14} className="spin" /> : <Link2 size={14} />} {linksBusy ? "Adding links…" : "Import links"}
+      </button>
+      <p>Public videos download into your workspace for Auto or Manual editing.</p>
+    </div>
+    <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><FolderOpen size={15} /> Link files on this computer</button>
     {localOpen && <div className="import-local">
       <label htmlFor="local-video-paths">Original video paths</label>
       <textarea id="local-video-paths" rows={3} placeholder="/Users/you/Movies/interview.mp4" value={localPaths} onChange={event => setLocalPaths(event.target.value)} />
@@ -222,7 +253,7 @@ export default function ImportPanel(props: Props) {
     {!!selectionErrors.length && <details className="import-selection-errors" open>
       <summary>{selectionErrors.length} video{selectionErrors.length === 1 ? "" : "s"} {selectionErrors.length === 1 ? "needs" : "need"} attention</summary>
       <ul>{selectionErrors.map((message, index) => <li key={index}>{message}</li>)}</ul>
-      <p>Other videos continue importing. Correct these files, then choose them again.</p>
+      <p>Other videos continue importing. Correct these files or links, then try again.</p>
     </details>}
     {!!sessions.length && <div className="import-list" aria-label="Video imports">
       {sessions.map(session => {
@@ -238,7 +269,7 @@ export default function ImportPanel(props: Props) {
           </div>
           {!complete && <>
             <progress max={100} value={percent} aria-label={`${session.name} import progress`} />
-            <small>{uploading ? `${size(session.offset)} of ${size(session.size)}` : size(session.size)}{session.kind === "local" ? " · linked original" : ""}</small>
+            <small>{uploading ? `${size(session.offset)} of ${size(session.size)}` : session.size ? size(session.size) : "Size available after download"}{session.kind === "local" ? " · linked original" : ""}</small>
             {(errors[session.id] || session.error) && <p className="import-error" role="alert">{errors[session.id] || session.error}</p>}
             {uploading && <button className="import-resume" onClick={() => {
               if (active === session.id) transfer.current?.controller.abort();

@@ -14,6 +14,7 @@
     "test": "tsx --test --test-concurrency=2 tests/*.test.ts",
     "benchmark": "node --import tsx scripts/benchmark.mjs",
     "setup:auto": "node scripts/setup-auto.mjs",
+    "setup:imports": "node scripts/setup-imports.mjs",
     "setup:visuals": "puppeteer browsers install chrome",
     "build:remotion": "node scripts/build-remotion.mjs",
     "setup:focus": "node scripts/setup-focus.mjs",

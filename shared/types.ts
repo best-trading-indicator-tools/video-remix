@@ -56,7 +56,8 @@ export interface AutoOptions {
   brollMaxCoverage?: number;
   /**
    * Sound treatment for the selected speech. Auto measures the edit and applies
-   * the closest-fitting sound look; a look id pins that choice instead.
+   * the closest-fitting sound look; a look id pins that choice instead. Off (None)
+   * and the legacy original choice also disable normalization, fades and narration.
    */
   audio?: AutoAudioMode;
   /** Independent review of the final selected speech; unavailable checks remain visible. */

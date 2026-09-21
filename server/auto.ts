@@ -34,7 +34,7 @@ import {
 } from "./auto-plan.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
 import { analyzeAudio } from "./audio-analysis.js";
-import { audioLookById, chooseAudioLook } from "../shared/audio.js";
+import { audioLookById, chooseAudioLook, isAutoAudioNone, DEFAULT_AUDIO_SETTINGS } from "../shared/audio.js";
 import { completedAutoSiblings, footageContainment, type EditorialPlan } from "./diversity.js";
 import { graphicsAvailable } from "./visuals.js";
 import { remotionAvailable } from "./remotion-visuals.js";
@@ -209,6 +209,8 @@ export async function prepareAutoRemix({
   historyPlans?: EditorialPlan[];
 }): Promise<PreparedAuto> {
   const options = job.auto!;
+  const keepOriginalAudio = isAutoAudioNone(options.audio);
+  const useNarration = options.narration && !keepOriginalAudio;
   const notes: string[] = [];
   const changes: string[] = [];
   let keepSourceCaptions = options.captions === "keep";
@@ -313,7 +315,7 @@ export async function prepareAutoRemix({
       candidates,
       job.variant,
       transcript.language,
-      options.narration,
+      useNarration,
       signal,
     );
     const candidate = candidates[creative?.windowIndex ?? 0]!;
@@ -347,9 +349,9 @@ export async function prepareAutoRemix({
     }
     if (!hookRewritten && !keepSourceCaptions)
       notes.push("The hook was taken from the selected speech because AI rewriting did not finish for this version.");
-    if (options.narration && keepSourceCaptions)
+    if (useNarration && keepSourceCaptions)
       notes.push("Original speech was kept so it stays consistent with captions in the source.");
-    if (options.narration && !keepSourceCaptions) {
+    if (useNarration && !keepSourceCaptions) {
       if (creative?.narration.trim() && (await narrationAvailable())) {
         try {
           onPhase("Recording new narration", 46);
@@ -424,7 +426,7 @@ export async function prepareAutoRemix({
     notes.push(
       "No usable spoken excerpt was found. This version has no generated speech captions or hook.",
     );
-    if (options.narration)
+    if (useNarration)
       notes.push(
         "Narration was skipped because there was no reliable spoken source to rewrite.",
       );
@@ -443,6 +445,7 @@ export async function prepareAutoRemix({
   const blur = Math.abs(source.width / source.height - targetRatio) > 0.12;
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS,
+    ...(keepOriginalAudio ? DEFAULT_AUDIO_SETTINGS : {}),
     ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
     ...(options.captionStyle ? { captionStyle: options.captionStyle } : {}),
     aspect: options.aspect,
@@ -452,8 +455,8 @@ export async function prepareAutoRemix({
     segments: cuts,
     hookText: keepSourceCaptions ? "" : hook,
     hookDuration: Math.min(3.5, duration),
-    normalizeAudio: true,
-    smoothCuts: !!options.pacing && cuts.length > 1,
+    normalizeAudio: !keepOriginalAudio,
+    smoothCuts: !keepOriginalAudio && !!options.pacing && cuts.length > 1,
     autoMotion: false,
     device: "none",
     callouts: captionTranscript && !keepSourceCaptions
@@ -473,9 +476,9 @@ export async function prepareAutoRemix({
   // measurement is limited to sources where speech was recognized: a music bed
   // or room tone has no pauses, and its steady level would read as noise.
   const audioMode = options.audio ?? "auto";
-  const pinned = audioMode === "auto" || audioMode === "off" ? undefined : audioLookById(audioMode);
-  if (!source.hasAudio || audioMode === "off") {
-    if (source.hasAudio && audioMode === "off") notes.push("Sound treatment was turned off; the original tone was kept.");
+  const pinned = audioMode === "auto" || keepOriginalAudio ? undefined : audioLookById(audioMode);
+  if (!source.hasAudio || keepOriginalAudio) {
+    if (keepOriginalAudio) notes.push("Sound: None. No sound effects, loudness normalization, cut fades or replacement narration. Original audio follows the video cuts.");
   } else if (pinned) {
     Object.assign(settings, pinned.adjustments);
     if (pinned.id !== "original") changes.push(`${pinned.name} sound`);
@@ -522,7 +525,7 @@ export async function prepareAutoRemix({
         ? "Original framing"
         : "Reframed",
   );
-  if (source.hasAudio || audioPath) changes.push("Balanced audio");
+  if (source.hasAudio || audioPath) changes.push(keepOriginalAudio ? "Original audio · no treatment" : "Balanced audio");
   onPhase("Preparing the selected edit", 61);
   return {
     settings,

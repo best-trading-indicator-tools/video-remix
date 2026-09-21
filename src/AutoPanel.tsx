@@ -22,7 +22,7 @@ import type {
   VisualSource,
 } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDuration } from "../shared/types";
-import { AUDIO_LOOKS, audioLookById } from "../shared/audio";
+import { AUDIO_LOOKS, audioLookById, isAutoAudioNone } from "../shared/audio";
 import { getVisualSources, getBrollMatching, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import FinishingPresets from "./FinishingPresets";
@@ -78,7 +78,8 @@ export default function AutoPanel({
   const outputAspect = options.aspect === "original" ? (selectedSource ? selectedSource.width / selectedSource.height : 9 / 16)
     : Number(options.aspect.split(":")[0]) / Number(options.aspect.split(":")[1]);
   const keepOriginalCaptions = options.captions === "keep";
-  const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions;
+  const keepOriginalAudio = isAutoAudioNone(options.audio);
+  const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions && !keepOriginalAudio;
   const visualSources = getVisualSources(options);
   const stockSelected = hasStockVisuals(options);
   const aiMatching = getBrollMatching(options) === "ai";
@@ -138,9 +139,6 @@ export default function AutoPanel({
         <span className="auto-badge">Guided edit</span>
       </div>
       <div className="auto-panel-body">
-        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={libraryBusy} />
-      <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
-        <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
         <div className="auto-scope">
           <label htmlFor="auto-source">
             {sources.length
@@ -182,6 +180,32 @@ export default function AutoPanel({
             </small>
           )}
         </div>
+        <section className="auto-layout" aria-labelledby="auto-layout-title">
+          <h3 id="auto-layout-title">Black bands &amp; text</h3>
+          <label className="auto-output-field">
+            Format
+            <select
+              value={options.aspect}
+              onChange={(event) =>
+                onChange({
+                  ...options,
+                  aspect: event.target.value as AutoOptions["aspect"],
+                })
+              }
+            >
+              {Object.entries(AUTO_FORMAT_NAMES).map(([aspect, name]) => (
+                <option key={aspect} value={aspect}>
+                  {aspect === "original" ? name : `${aspect} · ${name}`}
+                </option>
+              ))}
+            </select>
+          </label>
+          <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })}
+            source={selectedSource} aspect={outputAspect} />
+        </section>
+        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={libraryBusy} />
+        <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
+        <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
         <div className="auto-output-summary">
           <div>
             <Expand size={14} />
@@ -208,26 +232,6 @@ export default function AutoPanel({
             </span>
           </summary>
           <div className="auto-preferences-content">
-            <label className="auto-output-field">
-              Format
-              <select
-                value={options.aspect}
-                onChange={(event) =>
-                  onChange({
-                    ...options,
-                    aspect: event.target.value as AutoOptions["aspect"],
-                  })
-                }
-              >
-                {Object.entries(AUTO_FORMAT_NAMES).map(([aspect, name]) => (
-                  <option key={aspect} value={aspect}>
-                    {aspect === "original" ? name : `${aspect} · ${name}`}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })}
-              source={selectedSource} aspect={outputAspect} />
             <label className="auto-output-field">
               Target length (seconds)
               <input
@@ -291,18 +295,19 @@ export default function AutoPanel({
             {options.captions !== "keep" && <CaptionAppearance value={options.captionStyle} onChange={captionStyle => onChange({ ...options, captionStyle })} />}
             <label className="auto-output-field">
               Sound
-              <select value={options.audio ?? "auto"} aria-describedby="auto-audio-note"
-                onChange={(event) => onChange({ ...options, audio: event.target.value as AutoOptions["audio"] })}>
+              <select value={keepOriginalAudio ? "off" : options.audio ?? "auto"} aria-describedby="auto-audio-note"
+                onChange={(event) => onChange({ ...options, audio: event.target.value as AutoOptions["audio"],
+                  ...(event.target.value === "off" ? { narration: false } : {}) })}>
                 <option value="auto">Auto · measure and choose</option>
-                <option value="off">Leave the sound untouched</option>
+                <option value="off">None · keep original audio</option>
                 {AUDIO_LOOKS.filter(look => look.id !== "original").map(look => (
                   <option key={look.id} value={look.id}>{look.name}</option>
                 ))}
               </select>
             </label>
             <p id="auto-audio-note" className="auto-preferences-note">
-              {options.audio === "off" || options.audio === "original"
-                ? "Keeps the original tone, noise and dynamics. Loudness is still evened out across the cuts."
+              {keepOriginalAudio
+                ? "No sound effects, loudness normalization, cut fades or replacement narration. Keeps the original voice and volume. Audio follows your video cuts."
                 : options.audio && options.audio !== "auto"
                   ? `${audioLookById(options.audio)?.description} Applied to every version in this batch.`
                   : "Measures the selected speech on this computer — its noise floor, level spread and tone balance — and applies the closest-fitting sound look. Sources with no recognized speech are left untouched."}
@@ -325,7 +330,9 @@ export default function AutoPanel({
               <span>
                 <strong>New narration</strong>
                 <small>
-                  {keepOriginalCaptions
+                  {keepOriginalAudio
+                    ? "Sound is set to None, so the original voice is kept."
+                    : keepOriginalCaptions
                     ? "Keep original preserves the source voice to match its captions."
                     : !capabilities?.narration
                       ? "Unavailable on this engine. Original audio is kept."

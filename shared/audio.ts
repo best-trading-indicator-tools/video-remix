@@ -22,6 +22,8 @@ export type AudioLookId = (typeof AUDIO_LOOK_IDS)[number];
 /** Auto either measures and chooses ("auto"), leaves the sound alone, or is pinned to one look. */
 export const AUTO_AUDIO_MODES = ["auto", "off", ...AUDIO_LOOK_IDS] as const;
 export type AutoAudioMode = (typeof AUTO_AUDIO_MODES)[number];
+/** Both saved neutral choices mean None in Auto; Manual sound looks stay separate. */
+export const isAutoAudioNone = (mode?: AutoAudioMode): boolean => mode === "off" || mode === "original";
 
 export const NEUTRAL_AUDIO: AudioAdjustments = {
   denoise: 0, lowCut: 0, bass: 0, presence: 0, treble: 0, compression: 0, deEss: 0,

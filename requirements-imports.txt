@@ -1,0 +1,2 @@
+# Includes the JavaScript challenge helper used with Node for YouTube.
+yt-dlp[default]>=2026.8.19

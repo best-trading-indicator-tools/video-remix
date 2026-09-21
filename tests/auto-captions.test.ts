@@ -8,6 +8,7 @@ import { test } from "node:test";
 import { promisify } from "node:util";
 import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, type AutoOptions, type Transcript } from "../shared/types.js";
 import { DEFAULT_BLACK_BANDS } from "../shared/black-bands.js";
+import { audioFadeFilters, audioModifierFilters } from "../server/audio-filters.js";
 import type { StoredJob, StoredSource } from "../server/store.js";
 
 const exec = promisify(execFile);
@@ -46,29 +47,77 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
       { start: 0.1, end: 3.8, text: "A good morning text.", words: [] },
       { start: 4.1, end: 7.8, text: "It can make your day.", words: [] },
     ] };
-    const sourceFor = async (filePath: string, language = "en"): Promise<StoredSource> => {
+    const sourceFor = async (filePath: string, language = "en", inputTranscript = transcript): Promise<StoredSource> => {
       const source = { id: randomUUID(), name: path.basename(filePath), size: (await stat(filePath)).size,
         ...await probeMedia(filePath), createdAt: new Date().toISOString(), url: "", thumbnailUrl: "", filePath,
         thumbnailPath: path.join(directory, "unused.jpg") };
       await writeFile(path.join(paths.analysis, `${source.id}.json`), JSON.stringify({
-        key: `v1:caption-fixture:${source.size}:${source.duration}`, transcript: { ...transcript, language },
+        key: `v1:caption-fixture:${source.size}:${source.duration}`, transcript: { ...inputTranscript, language },
       }));
       return source;
     };
     const captioned = await sourceFor(sourcePath), clean = await sourceFor(cleanPath);
-    const prepare = async (source: StoredSource, captions: AutoOptions["captions"], narration = false, blackBands?: AutoOptions["blackBands"]) => {
+    const prepare = async (source: StoredSource, captions: AutoOptions["captions"], narration = false, blackBands?: AutoOptions["blackBands"], overrides: Partial<AutoOptions> = {}) => {
       const workDir = path.join(directory, randomUUID()); await mkdir(workDir);
       const job: StoredJob = { id: randomUUID(), batchId: randomUUID(), sourceId: source.id, sourceName: source.name,
         variant: 1, status: "processing", progress: 0, createdAt: new Date().toISOString(),
         outputPath: path.join(directory, `${randomUUID()}.mp4`), settings: { ...DEFAULT_SETTINGS },
-        auto: { ...DEFAULT_AUTO_OPTIONS, captions, narration, blackBands, editorialMode: "off",
+        auto: { ...DEFAULT_AUTO_OPTIONS, captions, narration, blackBands, ...overrides, editorialMode: "off",
           captionStyle: { fontSize: 22, bottomPercent: 18, fontFamily: "poppins", color: "#ffe66d", bold: true } } };
-      const result = await prepareAutoRemix({ source, job, workDir, signal: new AbortController().signal, onPhase: () => undefined });
+      const phases: string[] = [];
+      const result = await prepareAutoRemix({ source, job, workDir, signal: new AbortController().signal, onPhase: phase => { phases.push(phase); } });
       job.settings = result.settings; job.summary = result.summary; job.notes = result.notes;
       await captureEditPlan({ source, job, visuals: [], subtitlePath: result.subtitlePath, audioPath: result.audioPath,
         sourceTranscript: result.sourceTranscript, signal: new AbortController().signal });
-      return { job, result, workDir };
+      return { job, result, workDir, phases };
     };
+
+    await t.test("Sound None preserves source level, skips all treatment and survives saved revisions", async () => {
+      const spaced = await sourceFor(cleanPath, "en", { ...transcript,
+        segments: [{ ...transcript.segments[0]!, end: 2.8, words: [
+          { start: 0.1, end: 0.3, word: "A" }, { start: 0.4, end: 0.6, word: "good" },
+          { start: 1.9, end: 2.1, word: "morning" }, { start: 2.4, end: 2.8, word: "text." },
+        ] }, { ...transcript.segments[1]!, words: [
+          { start: 4.1, end: 4.4, word: "It" }, { start: 4.5, end: 4.7, word: "can" },
+          { start: 6, end: 6.4, word: "make" }, { start: 6.5, end: 7, word: "your" }, { start: 7.1, end: 7.8, word: "day." },
+        ] }] });
+      for (const audio of ["off", "original"] as const) {
+        const { job, result, workDir, phases } = await prepare(spaced, "add", true, undefined, { audio });
+        assert.equal(result.settings.normalizeAudio, false);
+        assert.equal(result.settings.smoothCuts, false);
+        assert.ok(result.settings.segments!.length > 1, "Pacing creates real joins to check");
+        assert.equal(result.settings.volume, 1);
+        assert.equal(result.settings.muted, false);
+        assert.deepEqual(audioModifierFilters(result.settings), []);
+        assert.deepEqual(audioFadeFilters(result.settings, result.summary.outputDuration), []);
+        assert.equal(result.audioPath, undefined);
+        assert.equal(result.summary.narration, false);
+        assert.ok(!phases.includes("Measuring the soundtrack"));
+        assert.ok(!result.summary.changes.includes("Balanced audio"));
+        assert.ok(result.notes.some(note => note.startsWith("Sound: None.")));
+        job.editPlan = JSON.parse(JSON.stringify(job.editPlan));
+        job.editPlan = applyEditPlanChanges(job.editPlan!, { revision: job.editPlan!.revision, hookText: "A new heading" }, transcript);
+        const inputs = await renderInputsFromPlan(job, workDir);
+        assert.equal(job.settings.normalizeAudio, false);
+        assert.equal(job.settings.smoothCuts, false);
+        if (audio !== "off") continue;
+        await renderVideo({ input: spaced.filePath, output: job.outputPath, source: spaced,
+          settings: job.settings, workDir, ...inputs, signal: new AbortController().signal, onProgress: () => {} });
+        const level = async (file: string, start: number) => {
+          const { stdout } = await exec("ffmpeg", ["-v", "error", "-ss", String(start), "-i", file,
+            "-t", "0.5", "-map", "0:a:0", "-ac", "1", "-ar", "48000", "-f", "f32le", "pipe:1"], { encoding: "buffer" });
+          let squares = 0;
+          for (let i = 0; i < stdout.length; i += 4) squares += stdout.readFloatLE(i) ** 2;
+          return 10 * Math.log10(squares / (stdout.length / 4));
+        };
+        const original = await level(spaced.filePath, job.settings.segments![0]!.start + 0.2);
+        const exported = await level(job.outputPath, 0.2);
+        assert.ok(Math.abs(original - exported) < 0.5, `None must retain the source level: ${original} → ${exported} dBFS`);
+      }
+      const treated = await prepare(clean, "add", false, undefined, { audio: "clear" });
+      assert.equal(treated.result.settings.normalizeAudio, true);
+      assert.ok(audioModifierFilters(treated.result.settings).length > 0, "Other sound options still apply their treatment");
+    });
 
     await t.test("user-written band text survives keep-original caption mode and saved Auto plans", async () => {
       const bands = { ...DEFAULT_BLACK_BANDS, enabled: true, topText: "My own heading" };

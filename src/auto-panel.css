@@ -25,6 +25,16 @@
   border-bottom: 1px solid var(--line);
 }
 
+.auto-panel.panel .auto-layout {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--field);
+}
+.auto-panel.panel .auto-layout h3 { margin: 0 0 16px; font-size: 14px; color: var(--text); }
+.auto-panel.panel .auto-layout .black-bands-editor { padding-bottom: 0; }
+
 .auto-panel.panel .auto-scope > label,
 .auto-panel.panel .broll-matching > label,
 .auto-panel.panel .supporting-visuals > label {

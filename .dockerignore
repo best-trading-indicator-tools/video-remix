@@ -8,6 +8,7 @@ data
 output
 .playwright-cli
 .venv
+.venv-imports
 **/__pycache__
 *.pyc
 .pytest_cache
