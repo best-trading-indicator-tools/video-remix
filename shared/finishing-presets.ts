@@ -1,12 +1,21 @@
 import { NATURAL_PACING, pacingOptionsSchema } from "./pacing.js";
 import { z } from "zod";
 import { captionStyleSchema } from "./caption-style.js";
+import { AUDIO_RANGES, AUTO_AUDIO_MODES, MAX_AUDIO_FADE, NEUTRAL_AUDIO, type AudioLookKey } from "./audio.js";
 import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "./types.js";
 import { getVisualSources } from "./visual-sources.js";
 import type { AutoOptions } from "./types.js";
 export const FINISHING_PRESET_STORAGE = "remix-finishing-presets-v1";
 export const FINISHING_PRESET_EVENT = "remix-finishing-presets-changed";
 const aspect = z.enum(["original", "9:16", "1:1", "4:5", "16:9"]);
+const audioModifier = (key: AudioLookKey) =>
+  z.number().min(AUDIO_RANGES[key][0]).max(AUDIO_RANGES[key][1]).default(NEUTRAL_AUDIO[key]);
+const soundLook = {
+  denoise: audioModifier("denoise"), lowCut: audioModifier("lowCut"), bass: audioModifier("bass"),
+  presence: audioModifier("presence"), treble: audioModifier("treble"),
+  compression: audioModifier("compression"), deEss: audioModifier("deEss"),
+  fadeIn: z.number().min(0).max(MAX_AUDIO_FADE).default(0), fadeOut: z.number().min(0).max(MAX_AUDIO_FADE).default(0),
+};
 const framing = {
   aspect, fit: z.enum(["crop", "contain", "blur"]), resolution: z.enum(["source", "720", "1080"]),
   zoom: z.number().min(1).max(2), layout: z.enum(["single", "split", "presentation"]).default("single"),
@@ -18,6 +27,7 @@ const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURA
   brollCount: z.number().int().min(1).max(10).default(DEFAULT_BROLL_COUNT),
   brollMaxCoverage: z.number().int().min(0).max(100).default(DEFAULT_BROLL_MAX_COVERAGE),
   brollMatching: z.enum(["tags", "ai"]).default("tags"), stockVideoType: z.enum(["all", "animation"]).default("all"),
+  audio: z.enum(AUTO_AUDIO_MODES).default("auto"),
 });
 const shortSchema = z.object({ ...framing, autoFocus: z.boolean().default(false), focusMode: z.enum(["face", "speaker"]).default("face") });
 const manualSchema = z.object({ ...framing, fps: z.enum(["source", "24", "30", "60"]),
@@ -25,6 +35,7 @@ const manualSchema = z.object({ ...framing, fps: z.enum(["source", "24", "30", "
   hue: z.number().min(-180).max(180), gamma: z.number().min(0.1).max(3), temperature: z.number().min(-1).max(1),
   noise: z.number().min(0).max(1), sharpness: z.number().min(0).max(2), blend: z.number().min(0).max(1), frameBlend: z.number().min(0).max(0.5),
   volume: z.number().min(0).max(2), muted: z.boolean(), mirror: z.boolean(), autoMotion: z.boolean().default(false),
+  ...soundLook,
   captionStyle: captionStyleSchema.default({fontSize:20,bottomPercent:100/12}),
   automaticCaptions: z.enum(["off", "auto", "add"]).optional(),
 });

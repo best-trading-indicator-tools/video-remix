@@ -33,6 +33,8 @@ import {
   alignCallouts,
 } from "./auto-plan.js";
 import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
+import { analyzeAudio } from "./audio-analysis.js";
+import { audioLookById, chooseAudioLook } from "../shared/audio.js";
 import { completedAutoSiblings, footageContainment, type EditorialPlan } from "./diversity.js";
 import { graphicsAvailable } from "./visuals.js";
 import { remotionAvailable } from "./remotion-visuals.js";
@@ -464,6 +466,40 @@ export async function prepareAutoRemix({
     settings.resolution = "source";
   if (settings.hookText) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
   if (settings.callouts?.length) changes.push("Key-point overlays");
+  // The sound look is measured on the footage that was actually selected, since
+  // the tone and noise of the kept speech is what the export carries. Automatic
+  // measurement is limited to sources where speech was recognized: a music bed
+  // or room tone has no pauses, and its steady level would read as noise.
+  const audioMode = options.audio ?? "auto";
+  const pinned = audioMode === "auto" || audioMode === "off" ? undefined : audioLookById(audioMode);
+  if (!source.hasAudio || audioMode === "off") {
+    if (source.hasAudio && audioMode === "off") notes.push("Sound treatment was turned off; the original tone was kept.");
+  } else if (pinned) {
+    Object.assign(settings, pinned.adjustments);
+    if (pinned.id !== "original") changes.push(`${pinned.name} sound`);
+    notes.push(`Sound: ${pinned.name}, chosen in the Auto settings rather than measured.`);
+  } else if (audioMode === "auto" && transcript?.segments.length) {
+    onPhase("Measuring the soundtrack", 60);
+    const from = Math.min(...cuts.map(cut => cut.start));
+    const until = Math.max(...cuts.map(cut => cut.end));
+    const analysis = await analyzeAudio(source.filePath, {
+      start: from,
+      // Widen very short selections so the percentiles have enough windows.
+      duration: Math.max(until - from, Math.min(source.duration - from, 20)),
+      signal,
+    });
+    signal.throwIfAborted();
+    const choice = analysis && chooseAudioLook(analysis);
+    if (!choice)
+      notes.push("The soundtrack could not be measured, so its tone was left untouched.");
+    else if (choice.id === "original")
+      notes.push("The soundtrack was measured and left untouched: it measured clean and even already.");
+    else {
+      Object.assign(settings, audioLookById(choice.id)!.adjustments);
+      changes.push(`${choice.name} sound`);
+      notes.push(`Sound: ${choice.name}, chosen because the selected audio showed ${choice.reason}.`);
+    }
+  }
   let subtitlePath: string | undefined;
   if (captionTranscript && !keepSourceCaptions) {
     onPhase("Adding timed captions", 61);

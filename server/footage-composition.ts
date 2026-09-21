@@ -5,9 +5,10 @@ export interface ResolvedFootage { placement: OwnFootagePlacement; path: string;
 const number = (value: number) => Number(value.toFixed(8)).toString();
 
 /** Append timed insertions to already edited picture and sound, in the same encode. */
-export async function composeFootage({ graph, footage, duration, fps, width, height, audio, volume, normalizeAudio, firstInput, addInput }: {
+export async function composeFootage({ graph, footage, duration, fps, width, height, audio, volume, normalizeAudio, modifiers = [], firstInput, addInput }: {
   graph: string[]; footage: ResolvedFootage[]; duration: number; fps: number; width: number; height: number;
-  audio: boolean; volume: number; normalizeAudio: boolean; firstInput: number;
+  /** The export's sound look, so inserted clips match the edited soundtrack. */
+  audio: boolean; volume: number; normalizeAudio: boolean; modifiers?: string[]; firstInput: number;
   addInput: (clip: ResolvedFootage, length: number) => Promise<void>;
 }) {
   const timeline = footageTimeline(footage.map(item => item.placement), duration, fps);
@@ -36,7 +37,7 @@ export async function composeFootage({ graph, footage, duration, fps, width, hei
       : `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`;
     graph.push(`[${inputIndex}:V:0]trim=duration=${number(length)},setpts=PTS-STARTPTS,${fit},setsar=1,fps=${number(fps)},format=yuv420p[pv${index}]`);
     if (audio) graph.push(clip.hasAudio && piece.item.audio === "clip"
-      ? `[${inputIndex}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,${normalizeAudio ? "loudnorm=I=-16:TP=-1.5:LRA=11," : ""}volume=${number(volume)},apad,atrim=duration=${number(length)}[pa${index}]`
+      ? `[${inputIndex}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,${modifiers.map(filter => `${filter},`).join("")}${normalizeAudio ? "loudnorm=I=-16:TP=-1.5:LRA=11," : ""}volume=${number(volume)},apad,atrim=duration=${number(length)}[pa${index}]`
       : `anullsrc=r=48000:cl=stereo,atrim=duration=${number(length)}[pa${index}]`);
     inputIndex++;
   }

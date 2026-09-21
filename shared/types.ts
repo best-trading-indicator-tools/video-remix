@@ -6,6 +6,7 @@ import type { OwnFootagePlacement, OwnFootageAsset } from "./own-footage.js";
 import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog, EditorialReviewProgress } from "./editorial-repair.js";
 import type { CaptionStyle } from "./caption-style.js";
+import type { AutoAudioMode } from "./audio.js";
 export type { CaptionStyle } from "./caption-style.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
 export interface FocalPoint { x: number; y: number }
@@ -51,6 +52,11 @@ export interface AutoOptions {
   brollCount?: number;
   /** Maximum percent of the output covered by stock, library shots and animation cards. */
   brollMaxCoverage?: number;
+  /**
+   * Sound treatment for the selected speech. Auto measures the edit and applies
+   * the closest-fitting sound look; a look id pins that choice instead.
+   */
+  audio?: AutoAudioMode;
   /** Independent review of the final selected speech; unavailable checks remain visible. */
   editorialMode?: "off" | "check" | "repair";
   finishedReview?: boolean;
@@ -61,6 +67,7 @@ export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE,
   narration: false,
   captions: "auto",
+  audio: "auto",
   editorialMode: "repair",
   pacing: { mode: "natural", minimumPause: 0.9, keepPause: 0.35, removeFillers: false },
 };
@@ -139,6 +146,20 @@ export interface RemixSettings {
   segments?: EditSegment[];
   callouts?: TimedCallout[];
   normalizeAudio?: boolean;
+  /**
+   * Sound-look modifiers, all neutral when absent. Ranges live in shared/audio.ts:
+   * denoise/lowCut/compression/deEss 0–1, bass/presence/treble -1–1.
+   */
+  denoise?: number;
+  lowCut?: number;
+  bass?: number;
+  presence?: number;
+  treble?: number;
+  compression?: number;
+  deEss?: number;
+  /** Seconds of silence-to-full and full-to-silence on the finished soundtrack. */
+  fadeIn?: number;
+  fadeOut?: number;
   smoothCuts?: boolean;
   /** Mild local denoising and sharpening, without a cloud service. */
   qualityCleanup?: boolean;

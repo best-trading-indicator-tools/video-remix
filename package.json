@@ -17,7 +17,8 @@
     "setup:visuals": "puppeteer browsers install chrome",
     "build:remotion": "node scripts/build-remotion.mjs",
     "setup:focus": "node scripts/setup-focus.mjs",
-    "setup:speaker": "node scripts/setup-speaker.mjs"
+    "setup:speaker": "node scripts/setup-speaker.mjs",
+    "measure:audio": "node --import tsx scripts/measure-audio.mjs"
   },
   "dependencies": {
     "@hyperframes/producer": "0.8.40",

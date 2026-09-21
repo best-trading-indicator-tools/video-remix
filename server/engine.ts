@@ -14,6 +14,8 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
+import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
+import { audioFadeFilters, audioModifierFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
@@ -366,6 +368,21 @@ function validateSettings(settings: RemixSettings): void {
       ))
   )
     throw new Error("Callouts need valid text and start/end times");
+  // Audio modifiers are absent on edits saved before sound looks, and neutral
+  // when absent; a present value still has to sit inside its slider range.
+  for (const key of AUDIO_LOOK_KEYS) {
+    const value = settings[key];
+    if (value === undefined) continue;
+    const [low, high] = AUDIO_RANGES[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || value < low || value > high)
+      throw new Error(`Invalid ${key} setting`);
+  }
+  for (const key of ["fadeIn", "fadeOut"] as const) {
+    const value = settings[key];
+    if (value === undefined) continue;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > MAX_AUDIO_FADE)
+      throw new Error(`Invalid ${key} setting`);
+  }
   for (const key of ["normalizeAudio", "autoMotion", "qualityCleanup", "smoothCuts"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean")
       throw new Error(`Invalid ${key} setting`);
@@ -881,12 +898,18 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         audioFilters.push("aformat=channel_layouts=stereo",
           `aeval=exprs='val(0)*(${gain})|val(1)*(${gain})':channel_layout=stereo`);
       }
+      // Shape tone, noise and dynamics before measuring loudness, so the
+      // normalizer works on the sound that is actually exported.
+      audioFilters.push(...audioModifierFilters(s));
       if (s.normalizeAudio) audioFilters.push("loudnorm=I=-16:TP=-1.5:LRA=11");
       audioFilters.push(
         `volume=${s.volume}`,
         "apad",
         `atrim=duration=${decimal(duration)}`,
       );
+      // Without inserted footage the export ends on this trim, so the fades can
+      // be measured against it here. Inserts extend the timeline and fade below.
+      if (!hasInserts) audioFilters.push(...audioFadeFilters(s, duration));
       if (hasInserts) graph.push(replacementAudio || source.hasAudio
         ? `[${replacementAudio ? "1:a:0" : "0:a:0"}]${audioFilters.join(",")},aresample=48000,aformat=channel_layouts=stereo[baseaudio]`
         : `anullsrc=r=48000:cl=stereo,atrim=duration=${decimal(duration)}[baseaudio]`);
@@ -905,11 +928,14 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     if (hasInserts) {
       const ownInputs: string[] = [];
       exportDuration = await composeFootage({ graph, footage, duration, fps, width, height, audio: hasAudio,
-        volume: s.volume, normalizeAudio: !!s.normalizeAudio, firstInput: (replacementAudio ? 2 : 1) + supportingVisuals.length,
+        volume: s.volume, normalizeAudio: !!s.normalizeAudio, modifiers: audioModifierFilters(s),
+        firstInput: (replacementAudio ? 2 : 1) + supportingVisuals.length,
         addInput: async (clip, length) => { ownInputs.push("-threads", "2", ...SAFE_INPUT, "-ss", decimal(clip.placement.start), "-t", decimal(length), "-i", await localFile(clip.path)); } });
       args.splice(inputInsertionIndex, 0, ...ownInputs);
+      const fades = hasAudio ? audioFadeFilters(s, exportDuration) : [];
+      if (fades.length) graph.push(`[footageaudio]${fades.join(",")}[fadedaudio]`);
       args.push("-filter_complex", graph.join(";"), "-map", "[footagevideo]");
-      if (hasAudio) args.push("-map", "[footageaudio]");
+      if (hasAudio) args.push("-map", fades.length ? "[fadedaudio]" : "[footageaudio]");
     }
     if (options.maximumOutputDuration !== undefined) {
       if (!Number.isFinite(options.maximumOutputDuration) || options.maximumOutputDuration <= 0) throw new Error("Invalid preview duration");

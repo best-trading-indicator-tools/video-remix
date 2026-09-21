@@ -75,6 +75,8 @@ import { useDialogViewport } from "./useDialogViewport";
 import { compactBrollNotes } from "../shared/broll-notes";
 import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
+import { DEFAULT_AUDIO_SETTINGS } from "../shared/audio";
+import SoundModifiers from "./SoundModifiers";
 
 type AutoPreset = { options: AutoOptions; variants: number };
 const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
@@ -943,7 +945,7 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
-  const manualDefaults = { ...DEFAULT_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+  const manualDefaults = { ...DEFAULT_SETTINGS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length;
@@ -1731,6 +1733,8 @@ export default function App() {
                             onChange={(muted) => updateSettings({ muted })}
                           />
                           <Toggle label="Normalize loudness" value={settings.normalizeAudio ?? false} onChange={(normalizeAudio) => updateSettings({ normalizeAudio })} detail="Keep speech at a more consistent listening level." />
+                          <SoundModifiers settings={settings} onReplace={replaceSettings} onChange={updateSettings} disabled={settings.muted} />
+                          {settings.muted && <p className="field-hint">Mute is on, so sound looks and modifiers are not applied.</p>}
                           <input
                             className="visually-hidden"
                             ref={audioInput}

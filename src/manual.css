@@ -74,3 +74,9 @@
   .manual-all-controls .manual-workflow-tools > * + * { margin-top: 20px; }
 }
 @media (max-width: 680px) { .manual-workflow-tools { padding: 18px; } }
+.sound-looks { margin-top: 4px; }
+.sound-swatch { display: flex; align-items: flex-end; gap: 3px; height: 34px; padding: 4px 5px; border-radius: 4px; background: linear-gradient(180deg, #2b3445, #1e2632); }
+.sound-swatch span { flex: 1; min-height: 2px; border-radius: 2px; background: linear-gradient(180deg, #d59a6f, #8a5b3c); }
+.look-button.active .sound-swatch { background: linear-gradient(180deg, #3a2a20, #241a14); }
+.look-button.active .sound-swatch span { background: linear-gradient(180deg, #ffdcc5, var(--accent)); }
+.sound-looks .manual-subsection .slider-field + .slider-field { margin-top: 14px; }

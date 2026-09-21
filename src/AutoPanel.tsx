@@ -22,6 +22,7 @@ import type {
   VisualSource,
 } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT, isAutoTargetDuration } from "../shared/types";
+import { AUDIO_LOOKS, audioLookById } from "../shared/audio";
 import { getVisualSources, getBrollMatching, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import FinishingPresets from "./FinishingPresets";
@@ -281,6 +282,24 @@ export default function AutoPanel({
                   : "Auto checks for captions baked into the selected footage. If found or uncertain, it keeps the original voice and adds no captions, hook or callouts."}
             </p>
             {options.captions !== "keep" && <CaptionAppearance value={options.captionStyle} onChange={captionStyle => onChange({ ...options, captionStyle })} />}
+            <label className="auto-output-field">
+              Sound
+              <select value={options.audio ?? "auto"} aria-describedby="auto-audio-note"
+                onChange={(event) => onChange({ ...options, audio: event.target.value as AutoOptions["audio"] })}>
+                <option value="auto">Auto · measure and choose</option>
+                <option value="off">Leave the sound untouched</option>
+                {AUDIO_LOOKS.filter(look => look.id !== "original").map(look => (
+                  <option key={look.id} value={look.id}>{look.name}</option>
+                ))}
+              </select>
+            </label>
+            <p id="auto-audio-note" className="auto-preferences-note">
+              {options.audio === "off" || options.audio === "original"
+                ? "Keeps the original tone, noise and dynamics. Loudness is still evened out across the cuts."
+                : options.audio && options.audio !== "auto"
+                  ? `${audioLookById(options.audio)?.description} Applied to every version in this batch.`
+                  : "Measures the selected speech on this computer — its noise floor, level spread and tone balance — and applies the closest-fitting sound look. Sources with no recognized speech are left untouched."}
+            </p>
             <label className="auto-output-field">
               Editorial review
               <select value={options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>

@@ -36,6 +36,7 @@ trimStart 0–86400 seconds, trimEnd 0.01–86400 seconds or null for source end
 segments [{"start":10,"end":20,"focalPoint":{"x":0.5,"y":0.5}}] (1–60 cuts in requested order; focalPoint optional), or null to remove an existing sequence;
 hookText literal plain heading up to 200 characters, hookDuration 0.5–30 seconds;
 normalizeAudio boolean, qualityCleanup boolean (free local denoising and mild sharpening), autoMotion boolean (gentle crop movement);
+sound modifiers, all neutral at 0 and applied locally with ordinary filters: denoise 0–1 (steady hiss, hum and room noise), lowCut 0–1 (rumble below the voice), bass -1–1, presence -1–1 (speech around 3 kHz), treble -1–1, compression 0–1 (even out loud and quiet delivery), deEss 0–1 (sharp s sounds), fadeIn and fadeOut 0–5 seconds on the finished soundtrack. Named looks are combinations you may propose as several of these fields at once: clear voice, podcast, warm, bright, noisy room, smooth, phone call. These change tone only; use volume for loudness and muted to silence;
 automaticCaptions "off"|"auto"|"add": off keeps original/imported captions; auto transcribes the finished soundtrack locally at export and avoids duplicating existing captions; add explicitly adds new automatic captions even if text already exists. Enabling auto/add replaces any imported SRT attachment. Use auto for ordinary automatic-caption requests.
 focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, right/bottom 1; either field may be omitted); captionStyle fields are optional: fontSize 12–40; bottomPercent 5–80 (larger means HIGHER); fontFamily classic/poppins/anton/serif; color, outlineColor and backgroundColor as six-digit #RRGGBB; bold, italic and uppercase booleans; outlineWidth and shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100. A background box replaces the outline. Only added imported or automatic captions can be styled, never text already baked into source pixels.
 For a simple trim, provide trimStart/trimEnd only. The compiler removes existing segments and resets an inherited timeShift to 0 to honor those source timestamps. For explicit source sequences, provide segments only, not trimStart/trimEnd; sequence selection resets inherited timeShift to 0. timeShift moves the complete trim window while preserving its duration and clamps at the source edges; it does not work with segments. Never combine nonzero timeShift with segments. Global focalPoint replaces existing per-cut crop overrides. Do not restate unchanged fields or reset other filters.
@@ -91,13 +92,20 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
   const numericLabels = {
     speed: "Playback speed", volume: "Volume", zoom: "Zoom", saturation: "Saturation", brightness: "Brightness", contrast: "Contrast",
     hue: "Hue", gamma: "Gamma", temperature: "Temperature", noise: "Grain", sharpness: "Sharpness", blend: "Previous-frame blend",
-    frameBlend: "Frame smoothing", timeShift: "Time shift",
+    frameBlend: "Frame smoothing", timeShift: "Time shift", denoise: "Noise reduction", lowCut: "Low cut",
+    bass: "Bass", presence: "Presence", treble: "Treble", compression: "Level evening", deEss: "De-ess",
+    fadeIn: "Fade in", fadeOut: "Fade out",
   } as const;
   for (const [key, label] of Object.entries(numericLabels)) {
     const field = key as keyof typeof numericLabels;
-    if (next[field] !== settings[field]) {
-      const suffix = ["speed", "zoom"].includes(field) ? "×" : field === "hue" ? "°" : ["frameBlend", "timeShift"].includes(field) ? "s" : "";
-      summary.push(`${label}: ${display(next[field])}${suffix}.`);
+    // Absent audio modifiers mean neutral, so report a change against 0 rather
+    // than against undefined, which would read as a change on every edit.
+    const proposed = next[field] ?? 0;
+    const current = settings[field] ?? 0;
+    if (proposed !== current) {
+      const suffix = ["speed", "zoom"].includes(field) ? "×" : field === "hue" ? "°"
+        : ["frameBlend", "timeShift", "fadeIn", "fadeOut"].includes(field) ? "s" : "";
+      summary.push(`${label}: ${display(proposed)}${suffix}.`);
     }
   }
   const booleanLabels = { muted: "Mute audio", mirror: "Mirror picture", normalizeAudio: "Audio normalization", qualityCleanup: "Local video cleanup", autoMotion: "Gentle camera motion" } as const;

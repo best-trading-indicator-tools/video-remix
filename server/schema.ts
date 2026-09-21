@@ -4,7 +4,10 @@ import { ownFootageSchema } from "../shared/own-footage.js";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
 import { MAX_FOCUS_POINTS_PER_CUT, MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
+import { AUDIO_RANGES, AUTO_AUDIO_MODES, MAX_AUDIO_FADE, type AudioLookKey } from "../shared/audio.js";
 const n = (min: number, max: number) => z.number().finite().min(min).max(max);
+/** One source of truth for the modifier bounds, shared with the editor and renderer. */
+const audio = (key: AudioLookKey) => n(AUDIO_RANGES[key][0], AUDIO_RANGES[key][1]).optional();
 export const focalPointSchema = z.object({ x: n(0, 1), y: n(0, 1) }).strict();
 export const focusTrackSchema = z.array(z.object({ time: n(0, 86400), x: n(0, 1), y: n(0, 1) }).strict())
   .min(1).max(MAX_FOCUS_POINTS_PER_CUT)
@@ -79,6 +82,15 @@ export const settingsSchema = z
       .max(5)
       .optional(),
     normalizeAudio: z.boolean().optional(),
+    denoise: audio("denoise"),
+    lowCut: audio("lowCut"),
+    bass: audio("bass"),
+    presence: audio("presence"),
+    treble: audio("treble"),
+    compression: audio("compression"),
+    deEss: audio("deEss"),
+    fadeIn: n(0, MAX_AUDIO_FADE).optional(),
+    fadeOut: n(0, MAX_AUDIO_FADE).optional(),
     smoothCuts: z.boolean().optional(),
     qualityCleanup: z.boolean().optional(),
     layout: z.enum(["single", "split", "presentation"]).optional(),
@@ -124,6 +136,7 @@ export const autoOptionsSchema = z
     ownFootage: ownFootageSchema.optional(),
     brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   brollMaxCoverage: z.number().int().min(0).max(100).optional(),
+    audio: z.enum(AUTO_AUDIO_MODES).optional(),
     finishedReview: z.boolean().optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
     stockVideoType: z.enum(["all", "animation"]).optional(),
