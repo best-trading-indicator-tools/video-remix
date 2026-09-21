@@ -75,6 +75,22 @@ would require reconstructing the image behind it and is not part of this feature
 
 Use your own footage or footage you have permission to repurpose. Review the resulting cut and captions before posting. Editing or changing file metadata does **not** guarantee that TikTok, Instagram, or another platform will classify a video as original, recommend it, or permit monetization.
 
+### Black bands and text
+
+**Black bands** is available in **Auto → Output preferences**, **Manual → Frame it right**,
+and **Edit this result → Framing & caption placement**. Choose your output format,
+then reserve adjustable black space above and below the picture. **Keep the whole
+picture** preserves landscape footage as a mini widescreen; a portrait original is
+scaled down without cropping, leaving black space at its sides too. **Fill the window**
+crops the original to a wider window; use the subject position controls to frame it.
+
+Write persistent white text in either band, usually a headline above. Text wraps and
+shrinks to fit. The bands and their text stay visible during B-roll and inserted clips.
+Speech captions keep their separate controls, so leave the bottom band text blank if
+captions occupy that area. Hooks and callouts appear over the video window. Your written
+band text is included even when Auto is set to keep original speech captions. Finishing
+presets save band sizes and styling while retaining each video's own words.
+
 ### Caption appearance
 
 Choose a look in **Auto → Caption appearance**, **Manual → Captions → Caption appearance**,

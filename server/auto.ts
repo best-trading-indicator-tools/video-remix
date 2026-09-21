@@ -443,6 +443,7 @@ export async function prepareAutoRemix({
   const blur = Math.abs(source.width / source.height - targetRatio) > 0.12;
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS,
+    ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
     ...(options.captionStyle ? { captionStyle: options.captionStyle } : {}),
     aspect: options.aspect,
     fit: blur ? "blur" : "crop",
@@ -465,6 +466,7 @@ export async function prepareAutoRemix({
   if (Math.min(source.width, source.height) < 1080 && Math.min(native.width, native.height) < 1080)
     settings.resolution = "source";
   if (settings.hookText) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
+  if (settings.blackBands?.enabled) changes.push("Black bands with custom text");
   if (settings.callouts?.length) changes.push("Key-point overlays");
   // The sound look is measured on the footage that was actually selected, since
   // the tone and noise of the kept speech is what the export carries. Automatic

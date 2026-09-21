@@ -8,6 +8,7 @@ import { DEFAULT_SETTINGS, type EditPlan } from "../shared/types.js";
 import { fingerprintFile, historyEntry, previousEditorialPlans, publicationChangesSchema, upsertHistory } from "../server/history.js";
 import { isRepeatedPlan } from "../server/diversity.js";
 import type { StoredJob, StoredSource } from "../server/store.js";
+import { DEFAULT_BLACK_BANDS } from "../shared/black-bands.js";
 
 const fingerprint = createHash("sha256").update("same original source").digest("hex");
 const source = (): StoredSource => ({
@@ -56,6 +57,17 @@ test("YouTube publications accept only platform URLs and preserve separate accou
   const first = historyEntry(source(), job())!;
   first.publications = ["@one", "@two"].map(account => ({ platform: "youtube", publishedAt, account }));
   assert.equal(upsertHistory([first], first)[0]!.publications.length, 2);
+});
+
+test("band layout is part of an export profile while its written words remain video-specific", () => {
+  const completed = job();
+  completed.settings.blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, topText: "First title" };
+  const first = historyEntry(source(), completed)!;
+  completed.settings.blackBands.topText = "Different title";
+  assert.equal(historyEntry(source(), completed)!.configuration?.profileId, first.configuration?.profileId);
+  assert.equal(first.configuration?.settings.blackBands?.topText, "First title");
+  completed.settings.blackBands.topPercent = 30;
+  assert.notEqual(historyEntry(source(), completed)!.configuration?.profileId, first.configuration?.profileId);
 });
 
 test("content fingerprints survive rename, timestamp changes and reimport while changed bytes differ", async () => {

@@ -1,48 +1,39 @@
 import type { EditPlan, QualityIssue } from "./types.js";
 import { resolveCaptionStyle } from "./caption-style.js";
 
-export function wrapEditorialText(text: string, columns: number): string {
-  return text
-    .replace(/\r\n?/g, "\n")
-    .split("\n")
-    .map((line) => {
-      const output: string[] = [];
-      let current = "";
-      for (const word of line.split(/\s+/u)) {
-        if (!word) continue;
-        if (current && Array.from(`${current} ${word}`).length > columns) {
-          output.push(current);
-          current = "";
-        }
-        const letters = Array.from(word);
-        while (letters.length > columns)
-          output.push(letters.splice(0, columns).join(""));
-        if (letters.length)
-          current += `${current ? " " : ""}${letters.join("")}`;
-      }
-      if (current) output.push(current);
-      return output.join("\n");
-    })
-    .join("\n");
-}
+import { wrapEditorialText } from "./text-wrap.js";
+export { wrapEditorialText } from "./text-wrap.js";
+import { bandTextLayout } from "./black-bands.js";
 
 // Estimates for editor guidance; font shaping and platform overlays vary by device.
 export function textLayoutIssues(plan: Pick<EditPlan, "settings" | "captions">, outputAspect?: number): QualityIssue[] {
   const { settings, captions } = plan;
   const aspect = outputAspect && Number.isFinite(outputAspect) && outputAspect > 0 ? outputAspect :
     settings.aspect === "original" ? 9 / 16 : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]);
-  const shortSide = Math.min(1, aspect);
+  const bands = settings.blackBands?.enabled ? settings.blackBands : undefined;
+  const contentTop = (bands?.topPercent ?? 0) / 100;
+  const contentHeight = 1 - contentTop - (bands?.bottomPercent ?? 0) / 100;
+  const shortSide = Math.min(contentHeight, aspect);
   const boxes: { kind: string; top: number; bottom: number; start: number; end: number }[] = [];
   const wrappedLines = (text: string, columns: number) => text.split("\n").reduce((sum, line) => sum + Math.max(1, Math.ceil([...line].length / columns)), 0);
   if (settings.hookText.trim()) {
     const size = shortSide * 0.054;
     const columns = Math.max(8, Math.floor(aspect * 0.86 / (size * 0.64)));
-    boxes.push({ kind: "hook", top: 0.08 - size * 0.45, bottom: 0.08 + size * (wrapEditorialText(settings.hookText, columns).split("\n").length * 1.25 + 0.45), start: 0, end: settings.hookDuration });
+    boxes.push({ kind: "hook", top: contentTop + contentHeight * 0.08 - size * 0.45, bottom: contentTop + contentHeight * 0.08 + size * (wrapEditorialText(settings.hookText, columns).split("\n").length * 1.25 + 0.45), start: 0, end: settings.hookDuration });
   }
   for (const callout of settings.callouts || []) {
     const size = shortSide * 0.047;
     const columns = Math.max(8, Math.floor(aspect * 0.84 / (size * 0.64)));
-    boxes.push({ kind: "callout", top: 0.24 - size * 0.45, bottom: 0.24 + size * (wrapEditorialText(callout.text, columns).split("\n").length * 1.25 + 0.45), start: callout.start, end: callout.end });
+    boxes.push({ kind: "callout", top: contentTop + contentHeight * 0.24 - size * 0.45, bottom: contentTop + contentHeight * 0.24 + size * (wrapEditorialText(callout.text, columns).split("\n").length * 1.25 + 0.45), start: callout.start, end: callout.end });
+  }
+  if (bands) for (const [text, bandHeight, bandTop, kind] of [
+    [bands.topText, contentTop, 0, "top band text"],
+    [bands.bottomText, bands.bottomPercent / 100, 1 - bands.bottomPercent / 100, "bottom band text"],
+  ] as const) {
+    if (!text.trim()) continue;
+    const layout = bandTextLayout(text, aspect * 1000, 1000, bandHeight * 1000, bands.fontPercent);
+    const textHeight = layout.text.split("\n").length * layout.fontSize * 1.25 / 1000;
+    boxes.push({ kind, top: bandTop + (bandHeight - textHeight) / 2, bottom: bandTop + (bandHeight + textHeight) / 2, start: 0, end: Infinity });
   }
   const style = resolveCaptionStyle(settings.captionStyle);
   const captionSize = style.fontSize / 288;

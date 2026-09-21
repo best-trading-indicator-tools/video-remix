@@ -78,6 +78,8 @@ import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals,
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 import { DEFAULT_AUDIO_SETTINGS } from "../shared/audio";
 import SoundModifiers from "./SoundModifiers";
+import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle } from "./BlackBandsEditor";
+import { blackBandsSchema, DEFAULT_BLACK_BANDS, applyBandFinish } from "../shared/black-bands";
 
 type AutoPreset = { options: AutoOptions; variants: number };
 const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
@@ -102,6 +104,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
+      blackBands: blackBandsSchema.safeParse(options?.blackBands).success ? options?.blackBands : undefined,
       finishedReview: options?.finishedReview !== false,
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
       visualSources: getVisualSources(options),
@@ -947,7 +950,7 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
-  const manualDefaults = { ...DEFAULT_SETTINGS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+  const manualDefaults = { ...DEFAULT_SETTINGS, blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length;
@@ -955,6 +958,8 @@ export default function App() {
   const previewFilter = sourcePreview
     ? "none"
     : `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`;
+  const liveBands = !sourcePreview && !usingRendered && settings.blackBands?.enabled ? settings.blackBands : undefined;
+  const previewAspect = settings.aspect === "original" ? (selected ? selected.width / selected.height : 9 / 16) : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]);
   const targetAspect =
     settings.aspect === "original"
       ? selected
@@ -1348,8 +1353,11 @@ export default function App() {
                         {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
                       </div>
                       <div
-                        className="video-frame"
+                        className={`video-frame ${liveBands ? "has-black-bands" : ""}`}
                         style={{
+                          background: liveBands ? "black" : undefined,
+                          width: liveBands ? `min(100%, calc(var(--band-preview-height, 465px) * ${previewAspect}))` : undefined,
+                          height: liveBands ? "auto" : undefined,
                           aspectRatio: sourcePreview
                             ? `${selected.width} / ${selected.height}`
                             : targetAspect,
@@ -1402,18 +1410,20 @@ export default function App() {
                               : settings.fit === "crop"
                                 ? "cover"
                                 : "contain",
-                            objectPosition: sourcePreview || usingRendered || settings.fit !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, settings.aspect === "original" ? selected.width / selected.height : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]), sequencePreview?.cuts[0]?.focalPoint ?? settings.focalPoint ?? { x: 0.5, y: 0.5 }),
+                            objectPosition: sourcePreview || usingRendered || (liveBands?.fit ?? settings.fit) !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, previewAspect / (liveBands ? 1 - (liveBands.topPercent + liveBands.bottomPercent) / 100 : 1), sequencePreview?.cuts[0]?.focalPoint ?? settings.focalPoint ?? { x: 0.5, y: 0.5 }),
                             filter: usingRendered ? "none" : previewFilter,
                             transform: sourcePreview || usingRendered
                               ? "none"
                               : `scale(${settings.mirror ? -settings.zoom : settings.zoom}, ${settings.zoom})`,
+                            ...bandVideoStyle(liveBands),
                           }}
                         />
                         {!sourcePreview && !usingRendered && settings.hookText && liveOutputTime < settings.hookDuration && (
-                          <div className="hook-preview">
+                          <div className="hook-preview" style={liveBands ? { top: `${liveBands.topPercent + (100 - liveBands.topPercent - liveBands.bottomPercent) * 0.08}%` } : undefined}>
                             {settings.hookText}
                           </div>
                         )}
+                        <BlackBandsOverlay value={liveBands} aspect={previewAspect} />
                       </div>
                       <span className="preview-ratio">
                         {sourcePreview
@@ -1655,16 +1665,16 @@ export default function App() {
                           <div className="fields-row">
                             <SelectField
                               label="Framing"
-                              value={settings.fit}
+                              value={settings.blackBands?.enabled ? settings.blackBands.fit : settings.fit}
                               onChange={(value) =>
-                                updateSettings({
-                                  fit: value as RemixSettings["fit"],
-                                })
+                                updateSettings(settings.blackBands?.enabled
+                                  ? { blackBands: { ...settings.blackBands, fit: value as "crop" | "contain" } }
+                                  : { fit: value as RemixSettings["fit"] })
                               }
                             >
                               <option value="crop">Fill & crop</option>
                               <option value="contain">Fit entire video</option>
-                              <option value="blur">Blur background</option>
+                              {!settings.blackBands?.enabled && <option value="blur">Blur background</option>}
                             </SelectField>
                             <SelectField
                               label="Resolution"
@@ -1681,6 +1691,7 @@ export default function App() {
                               <option value="720">720p</option>
                             </SelectField>
                           </div>
+                          <BlackBandsEditor value={settings.blackBands} onChange={blackBands => updateSettings({ blackBands })} aspect={previewAspect} source={selected ?? undefined} />
                           <Slider
                             label="Zoom"
                             value={settings.zoom}
@@ -1700,7 +1711,7 @@ export default function App() {
                           <details className="manual-subsection">
                             <summary>Subject position</summary>
                             <p className="field-hint">Choose what stays in frame when cropping or zooming into the original picture.</p>
-                            <fieldset disabled={settings.fit !== "crop" && settings.zoom === 1}>
+                            <fieldset disabled={(settings.blackBands?.enabled ? settings.blackBands.fit : settings.fit) !== "crop" && settings.zoom === 1}>
                               <legend className="visually-hidden">Crop position</legend>
                               <Slider label="Horizontal position" value={(settings.focalPoint?.x ?? 0.5) * 100} defaultValue={50} min={0} max={100} step={1} unit="%" onChange={(x) => updateSettings({ focalPoint: { x: x / 100, y: settings.focalPoint?.y ?? 0.5 } })} />
                               <Slider label="Vertical position" value={(settings.focalPoint?.y ?? 0.5) * 100} defaultValue={50} min={0} max={100} step={1} unit="%" onChange={(y) => updateSettings({ focalPoint: { x: settings.focalPoint?.x ?? 0.5, y: y / 100 } })} />
@@ -2139,7 +2150,7 @@ export default function App() {
                   </div>
                   <div className="manual-workflow-tools">
                     <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
-                    <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={updateSettings} />
+                    <FinishingPresets mode="manual" settings={settings} disabled={starting || attachmentBusy !== null} onApply={patch => updateSettings({ ...patch, blackBands: applyBandFinish(settings.blackBands, patch.blackBands) })} />
                     {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
                       disabled={starting || attachmentBusy !== null} onApply={replaceSettings} />}
                   </div>

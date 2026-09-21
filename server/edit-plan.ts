@@ -5,6 +5,7 @@ import { MAX_BROLL_COUNT } from "../shared/types.js";
 import { withTrackBounds } from "../shared/focus.js";
 import { captionsSrt, cutsDuration, retimeTranscript } from "./auto-plan.js";
 import { focalPointSchema, captionStyleSchema, focusTrackSchema, focusPointsWithinCut, focusPointsWithinBudget } from "./schema.js";
+import { blackBandsSchema } from "../shared/black-bands.js";
 
 const epsilon = 0.001;
 const identity = z.string().min(1).max(120).regex(/^[a-zA-Z0-9][a-zA-Z0-9:_-]*$/u);
@@ -41,7 +42,7 @@ export const editPlanChangesSchema = z.object({
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: cutsSchema.optional(),
   visuals: z.array(visualSchema).max(60).optional(),
-  framing: z.object({ fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional() }).strict().optional(),
+  framing: z.object({ fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional(), blackBands: blackBandsSchema.optional() }).strict().optional(),
   correctionSeconds: z.number().finite().min(0).max(86400).optional(),
 }).strict();
 

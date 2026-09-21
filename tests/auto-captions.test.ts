@@ -7,6 +7,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, type AutoOptions, type Transcript } from "../shared/types.js";
+import { DEFAULT_BLACK_BANDS } from "../shared/black-bands.js";
 import type { StoredJob, StoredSource } from "../server/store.js";
 
 const exec = promisify(execFile);
@@ -55,12 +56,12 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
       return source;
     };
     const captioned = await sourceFor(sourcePath), clean = await sourceFor(cleanPath);
-    const prepare = async (source: StoredSource, captions: AutoOptions["captions"], narration = false) => {
+    const prepare = async (source: StoredSource, captions: AutoOptions["captions"], narration = false, blackBands?: AutoOptions["blackBands"]) => {
       const workDir = path.join(directory, randomUUID()); await mkdir(workDir);
       const job: StoredJob = { id: randomUUID(), batchId: randomUUID(), sourceId: source.id, sourceName: source.name,
         variant: 1, status: "processing", progress: 0, createdAt: new Date().toISOString(),
         outputPath: path.join(directory, `${randomUUID()}.mp4`), settings: { ...DEFAULT_SETTINGS },
-        auto: { ...DEFAULT_AUTO_OPTIONS, captions, narration, editorialMode: "off",
+        auto: { ...DEFAULT_AUTO_OPTIONS, captions, narration, blackBands, editorialMode: "off",
           captionStyle: { fontSize: 22, bottomPercent: 18, fontFamily: "poppins", color: "#ffe66d", bold: true } } };
       const result = await prepareAutoRemix({ source, job, workDir, signal: new AbortController().signal, onPhase: () => undefined });
       job.settings = result.settings; job.summary = result.summary; job.notes = result.notes;
@@ -68,6 +69,16 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
         sourceTranscript: result.sourceTranscript, signal: new AbortController().signal });
       return { job, result, workDir };
     };
+
+    await t.test("user-written band text survives keep-original caption mode and saved Auto plans", async () => {
+      const bands = { ...DEFAULT_BLACK_BANDS, enabled: true, topText: "My own heading" };
+      const { job, result, workDir } = await prepare(clean, "keep", false, bands);
+      assert.deepEqual(result.settings.blackBands, bands);
+      assert.deepEqual(job.editPlan?.settings.blackBands, bands);
+      assert.equal(result.settings.hookText, "");
+      await renderInputsFromPlan(job, workDir);
+      assert.deepEqual(job.settings.blackBands, bands);
+    });
 
     await t.test("default Auto detects the original captions and saves a plan with no added text or replacement narration", async () => {
       const { job, result, workDir } = await prepare(captioned, undefined, true);

@@ -8,6 +8,8 @@ import { promisify } from "node:util";
 import { DEFAULT_SETTINGS, type RemixSettings } from "../shared/types.js";
 import { probeMedia, renderVideo } from "../server/engine.js";
 import type { SupportingVisual } from "../server/visuals.js";
+import { DEFAULT_BLACK_BANDS, blackBandGeometry } from "../shared/black-bands.js";
+import { randomUUID } from "node:crypto";
 
 const exec = promisify(execFile);
 const ffmpeg = (args: string[]) => exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "1", ...args], { encoding: "buffer", maxBuffer: 8 * 1024 * 1024 });
@@ -80,6 +82,59 @@ test("blur fit keeps the whole foreground instead of applying an aspect crop to 
   green(await pixel(output, 0.5, dimensions.width - 22, Math.floor(dimensions.height / 2)));
 });
 
+test("black bands preserve the whole landscape and portrait picture in either output format", async () => {
+  const blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true };
+  for (const input of [landscape, portrait]) for (const aspect of ["9:16", "16:9"] as const) {
+    const output = await render(input, { aspect, trimEnd: 1, blackBands });
+    const metadata = await probeMedia(output), original = await probeMedia(input);
+    const box = blackBandGeometry(metadata.width, metadata.height, blackBands);
+    const scale = Math.min(box.width / original.width, box.height / original.height);
+    const pictureWidth = original.width * scale, pictureHeight = original.height * scale;
+    const left = (box.width - pictureWidth) / 2, top = box.top + (box.height - pictureHeight) / 2;
+    for (const y of [box.top / 2, metadata.height - box.bottom / 2])
+      assert.ok((await pixel(output, 0.5, 2, Math.floor(y))).every(value => value < 8), "Bands must remain black");
+    red(await pixel(output, 0.5, Math.floor(left + pictureWidth * 0.15), Math.floor(top + pictureHeight * 0.15)));
+    green(await pixel(output, 0.5, Math.floor(left + pictureWidth * 0.85), Math.floor(top + pictureHeight * 0.85)));
+    blue(await pixel(output, 0.5, Math.floor(box.width / 2), Math.floor(top + pictureHeight / 2)));
+  }
+});
+
+test("band crop follows the selected subject and color effects never brighten the bands", async () => {
+  const blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, fit: "crop" as const };
+  const output = await render(portrait, { aspect: "9:16", trimEnd: 1, blackBands, focalPoint: { x: 0.5, y: 1 }, zoom: 2 });
+  const { width, height } = await probeMedia(output);
+  green(await pixel(output, 0.5, Math.floor(width / 2), Math.floor(height * 0.55)));
+  const bright = await render(portrait, { trimEnd: 1, blackBands, brightness: 0.3, noise: 0.2, autoMotion: true });
+  assert.ok((await pixel(bright, 0.5, 10, 10)).every(value => value < 8));
+  const fit = await render(portrait, { trimEnd: 1, blackBands: { ...blackBands, fit: "contain" }, brightness: 0.3, noise: 0.2, autoMotion: true });
+  assert.ok((await pixel(fit, 0.5, 2, 180)).every(value => value < 8), "Side margins stay black after color and motion effects");
+});
+
+test("band text survives cutaways and inserted footage and is confined to its bands", async () => {
+  const blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, topText: "100% YOUR 'HEADLINE'", bottomText: "More here: [watch]" };
+  const item = { id: randomUUID(), assetId: randomUUID(), at: 1, start: 0, end: 1, mode: "insert" as const, audio: "mute" as const, fit: "contain" as const };
+  const output = path.join(directory, "bands-insert.mp4");
+  await renderVideo({ input: landscape, output, source: await probeMedia(landscape),
+    settings: { ...DEFAULT_SETTINGS, aspect: "9:16", trimEnd: 2, blackBands, ownFootage: [item] },
+    ownFootage: [{ placement: item, path: portrait, name: "portrait", duration: 2, hasAudio: false }],
+    supportingVisuals: [{ path: portrait, kind: "broll", label: "Cutaway", start: 0.25, end: 0.75 }],
+    workDir: path.join(directory, "bands-work"), signal: new AbortController().signal, onProgress: () => {} });
+  const metadata = await probeMedia(output), box = blackBandGeometry(metadata.width, metadata.height, blackBands);
+  assert.ok(Math.abs(metadata.duration - 3) < 0.1, "Inserts keep their duration");
+  for (const time of [0.1, 0.5, 1.5, 2.5]) {
+    const { stdout } = await ffmpeg(["-ss", String(time), "-i", output, "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"]);
+    let topWhite = 0, bottomWhite = 0, strayWhite = 0;
+    for (let y = 0; y < metadata.height; y++) for (let x = 0; x < metadata.width; x++) {
+      const offset = (y * metadata.width + x) * 3;
+      if (stdout[offset]! > 180 && stdout[offset + 1]! > 180 && stdout[offset + 2]! > 180) {
+        if (y < box.top) topWhite++; else if (y >= metadata.height - box.bottom) bottomWhite++; else strayWhite++;
+      }
+    }
+    assert.ok(topWhite > 50 && bottomWhite > 50, `Both texts appear at ${time}s, including inserted and supporting footage`);
+    assert.equal(strayWhite, 0, "Band text must not extend onto the picture");
+  }
+});
+
 test("supporting footage uses its own focal point and returns to the main framing", async () => {
   const output = await render(landscape, { aspect: "9:16", trimEnd: 2, focalPoint: { x: 0.5, y: 0.5 } }, [
     { path: landscape, kind: "broll", label: "Right subject", start: 0.5, end: 1.5, sourceStart: 2, focalPoint: { x: 0.85, y: 0.5 } },
@@ -102,6 +157,19 @@ async function whiteBounds(input: string) {
   assert.ok(count > 50, "The rendered frame must contain actual white caption glyphs");
   return { top, bottom, height: bottom - top + 1, frameHeight: metadata.height };
 }
+
+test("long band text fits the upper strip and speech captions use the full output canvas", async () => {
+  for (const aspect of ["9:16", "16:9"] as const) {
+    const blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, topPercent: 10, topText: "W".repeat(200), fontPercent: 10 };
+    const output = await render(black, { aspect, resolution: "720", trimEnd: 1, blackBands });
+    const bounds = await whiteBounds(output);
+    assert.ok(bounds.top >= 0 && bounds.bottom < bounds.frameHeight * 0.1, "Long words stay in the top strip");
+  }
+  const output = await render(black, { trimEnd: 1, blackBands: { ...DEFAULT_BLACK_BANDS, enabled: true }, captionStyle: { fontSize: 14, bottomPercent: 5 } }, undefined, captions);
+  const bounds = await whiteBounds(output);
+  assert.ok(bounds.top >= bounds.frameHeight * 0.85 && bounds.bottom < bounds.frameHeight,
+    "Speech captions remain in the bottom band, not the shrunken video window");
+});
 
 test("caption percentage and font size move and scale actual rendered glyphs on the ASS canvas", async () => {
   const low = await render(black, { trimEnd: 1, captionStyle: { fontSize: 20, bottomPercent: 10 } }, undefined, captions);

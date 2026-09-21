@@ -26,6 +26,8 @@ import { AUDIO_LOOKS, audioLookById } from "../shared/audio";
 import { getVisualSources, getBrollMatching, hasGraphicVisuals, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import BrollPanel from "./BrollPanel";
 import FinishingPresets from "./FinishingPresets";
+import BlackBandsEditor from "./BlackBandsEditor";
+import { applyBandFinish } from "../shared/black-bands";
 import PacingOptions from "./PacingOptions";
 import "./pacing.css";
 import "./auto-panel.css";
@@ -72,6 +74,9 @@ export default function AutoPanel({
   maxFileSize?: number;
 }) {
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
+  const selectedSource = sources.find(source => source.id === selectedId);
+  const outputAspect = options.aspect === "original" ? (selectedSource ? selectedSource.width / selectedSource.height : 9 / 16)
+    : Number(options.aspect.split(":")[0]) / Number(options.aspect.split(":")[1]);
   const keepOriginalCaptions = options.captions === "keep";
   const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions;
   const visualSources = getVisualSources(options);
@@ -134,7 +139,7 @@ export default function AutoPanel({
       </div>
       <div className="auto-panel-body">
         <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={libraryBusy} />
-      <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch })} />
+      <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
         <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
         <div className="auto-scope">
           <label htmlFor="auto-source">
@@ -221,6 +226,8 @@ export default function AutoPanel({
                 ))}
               </select>
             </label>
+            <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })}
+              source={selectedSource} aspect={outputAspect} />
             <label className="auto-output-field">
               Target length (seconds)
               <input

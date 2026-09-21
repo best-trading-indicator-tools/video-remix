@@ -14,6 +14,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
+import { blackBandsSchema, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings } from "../shared/types.js";
@@ -395,6 +396,8 @@ function validateSettings(settings: RemixSettings): void {
     (settings.segments?.reduce((sum, segment) => sum + (segment.focusTrack?.length ?? 0), 0) ?? 0) > MAX_FOCUS_POINTS_TOTAL)
     throw new Error("Focus tracks need bounded, ordered source timestamps and coordinates between 0 and 1");
   const style = settings.captionStyle;
+  if (settings.blackBands !== undefined && !blackBandsSchema.safeParse(settings.blackBands).success)
+    throw new Error("Black bands need valid sizes, fit and printable text of at most 200 characters per band");
   if (style !== undefined && !captionStyleSchema.safeParse(style).success)
     throw new Error("Caption style needs supported fonts, hex colors and values within their allowed ranges");
 }
@@ -456,7 +459,7 @@ export function geometry(
     return target >= 1 ? { width: even(edge * target), height: edge }
       : { width: edge, height: even(edge / target) };
   }
-  if (settings.fit === "contain" || settings.fit === "blur") {
+  if (settings.blackBands?.enabled || settings.fit === "contain" || settings.fit === "blur") {
     if (width / height > target) height = width / target;
     else width = height * target;
   } else {
@@ -580,7 +583,12 @@ export interface RenderOptions {
 
 /** SRT timings and replacement audio refer to the final output timeline. */
 export async function renderVideo(options: RenderOptions): Promise<void> {
-  const { settings: s, source, signal } = options;
+  const { source, signal } = options;
+  // Frame the content independently, then add clean black bands after effects,
+  // cutaways and inserted footage. The original finish remains saved when disabled.
+  const s = options.settings.blackBands?.enabled
+    ? { ...options.settings, fit: options.settings.blackBands.fit, layout: "single" as const }
+    : options.settings;
   validateSettings(s);
   if (options.motionDuration !== undefined && (!Number.isFinite(options.motionDuration) || options.motionDuration <= 0))
     throw new Error("Camera motion duration must be a positive finite number");
@@ -620,8 +628,9 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
   const placements = footage.map(clip => clip.placement);
   const footageTimes = footageTimeline(placements, duration, fps);
   let exportDuration = footageTimes.duration;
-  const { width, height } = geometry(source, s);
-  if (width > 16384 || height > 16384)
+  const canvas = geometry(source, s);
+  const { width, height, top, bottom } = blackBandGeometry(canvas.width, canvas.height, s.blackBands);
+  if (canvas.width > 16384 || canvas.height > 16384)
     throw new Error("This aspect ratio exceeds the output size limit. Choose Source resolution or a standard video format.");
   const covers: SupportingVisual[] = footageTimes.covers.map(item => {
     const clip = footage.find(clip => clip.placement.id === item.id)!;
@@ -689,6 +698,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     // Points describe subjects in the original source. Mirroring after the
     // crop keeps that same subject instead of selecting its opposite edge.
     if (s.mirror && (!s.layout || s.layout === "single")) filters.push("hflip");
+    const sourceEffectsIndex = filters.length;
     const motion = `zoompan=z='1+0.04*min(on/${decimal(Math.max(1, (options.motionDuration ?? duration) * fps - 1))},1)':x='iw/2-iw/zoom/2':y='ih/2-ih/zoom/2':d=1:s=${width}x${height}:fps=${decimal(fps)}`;
     if (s.layout === "split" || s.layout === "presentation") {
       const topHeight = Math.max(2, Math.floor(height * (s.layout === "presentation" ? 0.6 : 0.5) / 2) * 2);
@@ -719,6 +729,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     if (s.mirror && s.layout && s.layout !== "single") filters.push("hflip");
     filters.push("setsar=1", `fps=${decimal(fps)}`, "format=yuv420p");
     if (s.autoMotion && s.fit !== "blur") filters.push(motion);
+    const colorEffectsIndex = filters.length;
     if (
       s.brightness !== 0 ||
       s.contrast !== 1 ||
@@ -736,6 +747,9 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     if (s.noise > 0)
       filters.push(`noise=alls=${decimal(s.noise * 30)}:allf=t+u`);
     if (s.sharpness > 0) filters.push(`unsharp=5:5:${s.sharpness}:5:5:0`);
+    // Treat source pixels before adding any contain padding, including the side
+    // margins of a portrait original. Temporal effects still use the output FPS.
+    if (s.blackBands?.enabled) filters.splice(sourceEffectsIndex, 0, ...filters.splice(colorEffectsIndex));
     // At 1, blend equally with the previous frame; smoothing averages a longer window.
     if (s.blend > 0)
       filters.push(
@@ -779,9 +793,27 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         `drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.70:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.24:fix_bounds=1:enable='gte(t,${decimal(callout.start)})*lt(t,${decimal(Math.min(callout.end, duration))})'`,
       );
     }
-    if (options.subtitlePath) {
-      filters.push(await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary));
+    const decorations: string[] = [];
+    if (s.blackBands?.enabled) {
+      decorations.push(`pad=${canvas.width}:${canvas.height}:0:${top}:color=black`);
+      for (const [text, bandHeight, bandTop] of [
+        [s.blackBands.topText, top, 0],
+        [s.blackBands.bottomText, bottom, top + height],
+      ] as const) {
+        if (!text.trim()) continue;
+        const layout = bandTextLayout(text, width, canvas.height, bandHeight, s.blackBands.fontPercent);
+        const filename = `band-${randomUUID()}.txt`;
+        const filePath = path.join(workDir, filename);
+        temporary.push(filePath);
+        await writeFile(filePath, layout.text, "utf8");
+        decorations.push(`drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${decimal(layout.fontSize)}:fontcolor=white:line_spacing=${decimal(layout.fontSize * 0.25)}:x=(w-text_w)/2:y=${bandTop}+(${bandHeight}-text_h)/2:fix_bounds=1`);
+      }
     }
+    if (options.subtitlePath) {
+      const subtitle = await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary);
+      (s.blackBands?.enabled ? decorations : filters).push(subtitle);
+    }
+    if (!footageTimes.inserts.length) filters.push(...decorations);
     const args = [
       "-hide_banner",
       "-loglevel",
@@ -934,7 +966,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       args.splice(inputInsertionIndex, 0, ...ownInputs);
       const fades = hasAudio ? audioFadeFilters(s, exportDuration) : [];
       if (fades.length) graph.push(`[footageaudio]${fades.join(",")}[fadedaudio]`);
-      args.push("-filter_complex", graph.join(";"), "-map", "[footagevideo]");
+      if (decorations.length) graph.push(`[footagevideo]${decorations.join(",")}[decoratedvideo]`);
+      args.push("-filter_complex", graph.join(";"), "-map", decorations.length ? "[decoratedvideo]" : "[footagevideo]");
       if (hasAudio) args.push("-map", fades.length ? "[fadedaudio]" : "[footageaudio]");
     }
     if (options.maximumOutputDuration !== undefined) {

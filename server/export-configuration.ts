@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ExportConfiguration } from "../shared/types.js";
 import type { StoredJob } from "./store.js";
+import { blackBandFinishSchema } from "../shared/black-bands.js";
 
 function canonical(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
@@ -25,9 +26,11 @@ export function exportConfiguration(job: StoredJob, duration: number): ExportCon
     visualSources: [...new Set((job.supportingVisuals || []).map(shot => shot.visualSource || shot.stock?.providerId?.split(":")[0] || (shot.kind === "graphic" ? "graphics" : "library")))].sort(),
   };
   // Compare editing choices independently of the selected words, times, IDs and subject positions.
-  const { ownFootage, segments, hookText, trimStart, trimEnd, callouts, audioId, subtitleId, focalPoint, secondaryFocalPoint, ...profile } = settings;
-  const { brollIds, ownFootage: _autoFootage, ...autoProfile } = auto || {};
+  const { ownFootage, segments, hookText, trimStart, trimEnd, callouts, audioId, subtitleId, focalPoint, secondaryFocalPoint, blackBands, ...profile } = settings;
+  const { brollIds, ownFootage: _autoFootage, blackBands: autoBands, ...autoProfile } = auto || {};
   const profileId = createHash("sha256").update(canonical({ version: 1, profile, auto: auto ? autoProfile : null,
+    ...(blackBands ? { blackBands: blackBandFinishSchema.parse(blackBands) } : {}),
+    ...(autoBands ? { autoBlackBands: blackBandFinishSchema.parse(autoBands) } : {}),
     ownFootage: ownFootage?.map(({ mode, audio, fit, appendToEnd }) => ({ mode, audio, fit, ...(appendToEnd ? { appendToEnd: true } : {}) })),
     hook: Boolean(hookText), soundtrack: Boolean(audioId), subtitles: Boolean(subtitleId) })).digest("hex").slice(0, 12);
   return { version: 1, profileId, settings, ...(auto ? { auto } : {}), actual };

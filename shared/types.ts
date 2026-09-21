@@ -7,6 +7,7 @@ import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog, EditorialReviewProgress } from "./editorial-repair.js";
 import type { CaptionStyle } from "./caption-style.js";
 import type { AutoAudioMode } from "./audio.js";
+import type { BlackBands } from "./black-bands.js";
 export type { CaptionStyle } from "./caption-style.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
 export interface FocalPoint { x: number; y: number }
@@ -33,6 +34,7 @@ export const MAX_BROLL_COUNT = 10;
 export const DEFAULT_BROLL_MAX_COVERAGE = 60;
 export type VisualSource = "pixabay" | "pexels" | "hyperframes" | "remotion" | "library";
 export interface AutoOptions {
+  blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
   aspect: Aspect;
   /** Maximum output length in whole seconds, starting at 1. */
@@ -112,6 +114,7 @@ export interface AutoCapabilities {
   message?: string;
 }
 export interface RemixSettings {
+  blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
   speed: number;
   volume: number;
@@ -295,7 +298,7 @@ export interface EditPlanChanges {
   captions?: CaptionCue[];
   cuts?: EditSegment[];
   visuals?: EditPlanVisual[];
-  framing?: { fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle };
+  framing?: { fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
   correctionSeconds?: number;
 }
 export interface PromptEditRequest {

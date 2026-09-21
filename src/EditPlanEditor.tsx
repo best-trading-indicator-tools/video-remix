@@ -8,6 +8,8 @@ import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, Lock
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
+import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle, bandEditorialStyle } from "./BlackBandsEditor";
+import type { BlackBands } from "../shared/black-bands";
 import { focusPointAt, withTrackBounds } from "../shared/focus";
 import { VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
@@ -49,6 +51,7 @@ function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: bool
   if (plan.settings.fit !== draft.settings.fit) framing.fit = draft.settings.fit;
   if (differs(plan.settings.focalPoint, draft.settings.focalPoint)) framing.focalPoint = draft.settings.focalPoint;
   if (differs(plan.settings.captionStyle, draft.settings.captionStyle)) framing.captionStyle = draft.settings.captionStyle;
+  if (differs(plan.settings.blackBands, draft.settings.blackBands)) framing.blackBands = draft.settings.blackBands;
   if (Object.keys(framing).length) changes.framing = framing;
   return changes;
 }
@@ -103,16 +106,18 @@ function cropPosition(width: number, height: number, aspect: number, point: Foca
   return `${percent(width, cropWidth, point.x)}% ${percent(height, cropHeight, point.y)}%`;
 }
 
-function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "crop", height = 350, onTime, onAspect, overlay }: {
+function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "crop", height = 350, onTime, onAspect, overlay, blackBands }: {
   url: string; label: string; start: number; end: number; aspect?: number; focalPoint: FocalPoint;
-  fit?: RemixSettings["fit"]; height?: number; onTime?: (time: number) => void; onAspect?: (aspect: number) => void; overlay?: (height: number) => ReactNode;
+  fit?: RemixSettings["fit"]; height?: number; onTime?: (time: number) => void; onAspect?: (aspect: number) => void; overlay?: (height: number) => ReactNode; blackBands?: BlackBands;
 }) {
   const frame = useRef<HTMLDivElement>(null);
   const background = useRef<HTMLVideoElement>(null);
   const [size, setSize] = useState({ width: 16, height: 9 });
   const [frameHeight, setFrameHeight] = useState(height);
   const ratio = aspect || size.width / size.height;
-  const position = cropPosition(size.width, size.height, ratio, focalPoint);
+  const bands = blackBands?.enabled ? blackBands : undefined;
+  fit = bands?.fit ?? fit;
+  const position = cropPosition(size.width, size.height, ratio / (bands ? 1 - (bands.topPercent + bands.bottomPercent) / 100 : 1), focalPoint);
   useEffect(() => {
     const observer = new ResizeObserver((entries) => { if (entries[0]) setFrameHeight(entries[0].contentRect.height); });
     if (frame.current) observer.observe(frame.current);
@@ -122,15 +127,16 @@ function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "cro
     const video = background.current;
     if (video && video.readyState > 0 && Math.abs(video.currentTime - time) > 0.1) video.currentTime = time;
   };
-  return <div ref={frame} className="edit-framing-picture" style={{ aspectRatio: ratio, width: `min(100%, ${height * ratio}px)` }}>
+  return <div ref={frame} className="edit-framing-picture" style={{ aspectRatio: ratio, width: `min(100%, ${height * ratio}px)`, background: bands ? "black" : undefined }}>
     {fit === "blur" && <video ref={background} className="edit-framing-blur" src={`${url}#t=${start},${end}`} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} style={{ objectPosition: position }} onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }} />}
     <video className="edit-framing-video" src={`${url}#t=${start},${end}`} controls muted playsInline preload="metadata" aria-label={label}
-      style={{ objectFit: fit === "crop" ? "cover" : "contain", objectPosition: fit === "crop" ? position : "center" }}
+      style={{ objectFit: fit === "crop" ? "cover" : "contain", objectPosition: fit === "crop" ? position : "center", ...bandVideoStyle(bands) }}
       onLoadedMetadata={(event) => { const video = event.currentTarget; setSize({ width: video.videoWidth, height: video.videoHeight }); if (video.videoHeight > 0) onAspect?.(aspect || video.videoWidth / video.videoHeight); video.currentTime = start; }}
       onSeeked={(event) => { const video = event.currentTarget; if (video.currentTime < start) video.currentTime = start; else if (video.currentTime > end) video.currentTime = end; syncBackground(video.currentTime); }}
       onPlay={(event) => { const video = event.currentTarget; if (video.currentTime < start || video.currentTime >= end - 0.02) video.currentTime = start; void background.current?.play().catch(() => {}); }}
       onPause={() => background.current?.pause()}
       onTimeUpdate={(event) => { const video = event.currentTarget; if (video.currentTime >= end) { video.pause(); if (video.currentTime > end + 0.1) video.currentTime = end; } syncBackground(video.currentTime); onTime?.(video.currentTime); }} />
+    <BlackBandsOverlay value={bands} aspect={ratio} />
     {overlay?.(frameHeight)}
   </div>;
 }
@@ -406,9 +412,9 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                 </label>
                 <FootagePreview key={`${plan.sourceId}-${previewCut}-${activeCut.start}-${activeCut.end}`} url={`/api/sources/${plan.sourceId}/video`} label={`Framing preview for cut ${previewCut + 1}`} start={Number.isFinite(activeCut.start) ? activeCut.start : 0} end={Number.isFinite(activeCut.end) ? activeCut.end : plan.sourceDuration}
                   aspect={draft.settings.aspect === "original" ? undefined : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])}
-                  focalPoint={focusPointAt(activeCut.focusTrack, previewSourceTime, activeCut.focalPoint || focalPoint)} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
-                    {draft.settings.hookText && previewOutputTime < draft.settings.hookDuration && <div className="edit-framing-hook" style={{ fontSize: `${height * Math.min(1, draft.settings.aspect === "original" ? 1 : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])) * 0.054}px` }}>{draft.settings.hookText}</div>}
-                    {(draft.settings.callouts || []).filter((callout) => callout.start <= previewOutputTime && callout.end > previewOutputTime).map((callout, index) => <div className="edit-framing-callout" key={index} style={{ fontSize: `${height * 0.026}px` }}>{callout.text}</div>)}
+                  blackBands={draft.settings.blackBands} focalPoint={focusPointAt(activeCut.focusTrack, previewSourceTime, activeCut.focalPoint || focalPoint)} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
+                    {draft.settings.hookText && previewOutputTime < draft.settings.hookDuration && <div className="edit-framing-hook" style={bandEditorialStyle(draft.settings.blackBands, height, knownOutputAspect || 9 / 16, 0.08, 0.054)}>{draft.settings.hookText}</div>}
+                    {(draft.settings.callouts || []).filter((callout) => callout.start <= previewOutputTime && callout.end > previewOutputTime).map((callout, index) => <div className="edit-framing-callout" key={index} style={bandEditorialStyle(draft.settings.blackBands, height, knownOutputAspect || 9 / 16, 0.24, 0.047)}>{callout.text}</div>)}
                     {activeCaption && <CaptionOverlay style={captionStyle} height={height} text={activeCaption.text} />}
                     {platformGuide !== "off" && <div className={`edit-platform-guide ${platformGuide}`} aria-hidden="true"><span className="guide-top">App header</span><span className="guide-right" style={{ width: `${guideRight}%`, bottom: `${guideBottom}%` }}>Actions</span><span className="guide-bottom" style={{ height: `${guideBottom}%` }}>Post text &amp; navigation</span></div>}
                   </>} />
@@ -441,13 +447,15 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                 <summary>Framing &amp; caption placement</summary>
                 <fieldset disabled={saving}>
                   <legend className="visually-hidden">Framing and caption style</legend>
-                  <label className="edit-plan-field">Fit source footage
+                  <BlackBandsEditor value={draft.settings.blackBands} onChange={blackBands => updateFraming({ blackBands })}
+                    aspect={draft.settings.aspect === "original" ? knownOutputAspect || 9 / 16 : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])} />
+                  {!draft.settings.blackBands?.enabled && <label className="edit-plan-field">Fit source footage
                     <select value={draft.settings.fit} onChange={(event) => updateFraming({ fit: event.target.value as RemixSettings["fit"] })}>
                       <option value="crop">Fill frame with a crop</option><option value="contain">Keep the whole video</option><option value="blur">Keep whole video with blurred background</option>
                     </select>
-                  </label>
+                  </label>}
                   <p className="edit-plan-note">Choose the subject's position within the original picture. Crop positions move the visible area when the frame is filled; each cut can have its own position.</p>
-                  <FocalControls label="Default crop position" value={focalPoint} onChange={(point) => updateFraming({ focalPoint: point })} disabled={draft.settings.fit === "contain"} />
+                  <FocalControls label="Default crop position" value={focalPoint} onChange={(point) => updateFraming({ focalPoint: point })} disabled={(draft.settings.blackBands?.enabled ? draft.settings.blackBands.fit : draft.settings.fit) === "contain"} />
                   {!!layoutIssues.length && <div className="edit-layout-issues" role="status"><strong><AlertTriangle size={14} />Text placement to review</strong><ul>{layoutIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul></div>}
                 </fieldset>
               </details>
