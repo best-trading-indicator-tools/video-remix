@@ -59,3 +59,12 @@ Validated in Chromium and iPhone WebKit emulation. Chromium checks used real
 wheel events; mobile WebKit's automation lacks wheel support, so its scroll
 checks used scroll offsets and action reachability. Native phone keyboards and
 touch gestures still warrant a physical-device smoke check after browser updates.
+
+The interactive onboarding tour was checked separately in Chromium across all
+eight sizes above, through all 25 topics with an empty workspace, and on desktop
+with an imported source. Every topic kept its spotlight, card and exit controls
+visible without horizontal overflow. Checks also cover first-session display,
+reload persistence, replay, Back and topic jumps, all four dismissal methods,
+keyboard focus, restoring the original view, and unchanged editing settings
+without server writes. The tour uses a portal outside the inert app root; keep
+its close controls reachable when adjusting the card's viewport placement.

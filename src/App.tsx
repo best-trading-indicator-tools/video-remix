@@ -1,3 +1,5 @@
+import OnboardingTour from "./OnboardingTour";
+import { shouldShowOnboarding, type TourDestination } from "./onboarding-steps";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { CaptionAppearance } from "./CaptionStyleEditor";
 import { captionStyleSchema } from "../shared/caption-style";
@@ -280,7 +282,7 @@ function Section({
   trailing?: ReactNode;
 }) {
   return (
-    <section className="control-section">
+    <section className="control-section" data-tour={`manual-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-$/g, "")}`}>
       <div className="section-heading">
         <h3>
           {icon}
@@ -354,7 +356,23 @@ export default function App() {
   const [variation, setVariation] = useState(false);
   const [starting, setStarting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [showHelp, setShowHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(() => shouldShowOnboarding());
+  const tourReturn = useRef({ view, mode, tab, scrollX: 0, scrollY: 0 });
+  const openTour = () => {
+    tourReturn.current = { view, mode, tab, scrollX: window.scrollX, scrollY: window.scrollY };
+    setShowHelp(true);
+  };
+  const navigateTour = useCallback((destination: TourDestination) => {
+    setView(destination.view);
+    if (destination.mode) setMode(destination.mode);
+    if (destination.tab) setTab(destination.tab);
+  }, []);
+  const closeTour = useCallback(() => {
+    const previous = tourReturn.current;
+    setShowHelp(false);
+    setView(previous.view); setMode(previous.mode); setTab(previous.tab);
+    requestAnimationFrame(() => window.scrollTo({ left: previous.scrollX, top: previous.scrollY, behavior: "instant" }));
+  }, []);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
   const [editingJob, setEditingJob] = useState<RenderJob | null>(null);
   const [editingIssue, setEditingIssue] = useState<FinishedIssue>();
@@ -614,7 +632,7 @@ export default function App() {
 
 
   useEffect(() => {
-    if (!showHelp && !previewJob) return;
+    if (!previewJob) return;
     const previousFocus = document.activeElement as HTMLElement | null;
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -628,7 +646,6 @@ export default function App() {
     (getFocusable()[0] || dialog)?.focus({ preventScroll: true });
     const close = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        setShowHelp(false);
         setPreviewJob(null);
       }
       if (event.key === "Tab") {
@@ -650,7 +667,7 @@ export default function App() {
       document.body.style.overflow = overflow;
       previousFocus?.focus({ preventScroll: true });
     };
-  }, [showHelp, previewJob]);
+  }, [previewJob]);
 
   const updateSettings = (patch: Partial<RemixSettings>) => {
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
@@ -1038,7 +1055,7 @@ export default function App() {
           <button
             className="help-button"
             aria-label="Quick guide"
-            onClick={() => setShowHelp(true)}
+            onClick={openTour}
           >
             <CircleHelp size={17} />
             <span>Quick guide</span>
@@ -1314,7 +1331,7 @@ export default function App() {
                 </div>
               </aside>
 
-              <LongFormPanel active={view === "studio" && mode === "shorts"} sources={sources} selectedSource={selected} engineReady={engineReady} onSelectSource={setSelectedId} onNotice={notify} onQueued={(added) => {
+              <LongFormPanel active={view === "studio" && mode === "shorts"} sources={sources} selectedSource={selected} engineReady={engineReady && !showHelp} onSelectSource={setSelectedId} onNotice={notify} onQueued={(added) => {
                 setJobs(current => [...added, ...current.filter(job => !added.some(item => item.id === job.id))]);
                 setView("exports");
               }} />
@@ -2672,7 +2689,7 @@ export default function App() {
           <span>
             Made for your own & licensed footage
             <span className="footer-dot">·</span>
-            <button onClick={() => setShowHelp(true)}>
+            <button onClick={openTour}>
               How it works
               <ArrowRight size={12} />
             </button>
@@ -2799,104 +2816,7 @@ export default function App() {
           </section>
         </div>
       )}
-      {showHelp && (
-        <div className="modal-backdrop" onClick={() => setShowHelp(false)}>
-          <section
-            className="help-modal"
-            role="dialog"
-            tabIndex={-1}
-            aria-modal="true"
-            aria-label="Quick guide"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <div className="modal-heading">
-              <span className="eyebrow">A QUICK TOUR</span>
-              <IconButton
-                title="Close guide"
-                onClick={() => setShowHelp(false)}
-              >
-                <X size={20} />
-              </IconButton>
-            </div>
-            <h2>Meet your remix studio.</h2>
-            <p>
-              Turn the footage you have into the next version worth sharing.
-            </p>
-            <ol className="guide-steps">
-              <li>
-                <span>01</span>
-                <div>
-                  <h3>Bring your footage</h3>
-                  <p>
-                    Drop several videos into the workspace at once. Auto remix
-                    is selected for you, with a vertical format for TikTok and
-                    Reels.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span>02</span>
-                <div>
-                  <h3>Press Auto remix</h3>
-                  <p>
-                    The studio analyzes each video, picks an excerpt, tightens
-                    the pacing and prepares a new edit. When speech is
-                    available, it adds a written hook and captions. Original
-                    audio is kept unless you choose new narration in the
-                    optional preferences.
-                  </p>
-                </div>
-              </li>
-              <li>
-                <span>03</span>
-                <div>
-                  <h3>Review and download</h3>
-                  <p>
-                    Follow the actual editing steps in Exports. Preview the
-                    finished videos, read what changed, and download individual
-                    MP4s or the whole collection as a ZIP.
-                  </p>
-                </div>
-              </li>
-            </ol>
-            <div className="guide-note">
-              <h3>A couple of good things to know</h3>
-              <p>
-                B-roll is optional and off by default. Choose Stock B-roll to
-                find existing videos on Pixabay or Pexels, or upload your own library. A
-                few short cutaways match the spoken content while your main
-                audio continues. Animated text cards are a separate option.
-              </p>
-              <p>
-                Want full control? Switch to Manual for your own trim, framing,
-                color, audio, captions and saved presets. Manual settings are
-                separate from automatic edits.
-              </p>
-              <p>
-                The preview approximates framing and basic color. Captions,
-                replacement audio, timed text and advanced filters are rendered
-                into the export. Metadata controls only change file tags; they
-                do not guarantee originality or reach on social platforms.
-              </p>
-              <p>
-                Download your exports within {health?.retentionHours || 24}{" "}
-                hours; older files are automatically cleaned up.
-              </p>
-              <p>
-                Processing runs on the computer hosting this app. Use your own
-                footage or material you have permission to repurpose.
-              </p>
-            </div>
-            <button
-              className="primary-button full-width"
-              onClick={() => setShowHelp(false)}
-            >
-              Let's make a great cut
-              <ArrowRight size={16} />
-            </button>
-          </section>
-        </div>
-      )}
+      {showHelp && <OnboardingTour onNavigate={navigateTour} onClose={closeTour} />}
     </div>
   );
 }

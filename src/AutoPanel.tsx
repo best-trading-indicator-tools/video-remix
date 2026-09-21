@@ -232,7 +232,7 @@ export default function AutoPanel({
             </span>
           </summary>
           <div className="auto-preferences-content">
-            <label className="auto-output-field">
+            <label className="auto-output-field" data-tour="auto-length">
               Target length (seconds)
               <input
                 type="number"
@@ -276,7 +276,7 @@ export default function AutoPanel({
             <p id="auto-version-note" className="auto-preferences-note">
               1–{MAX_AUTO_VERSIONS} per video. Similar cuts are skipped, so you may get fewer versions.
             </p>
-            <label className="auto-output-field">
+            <label className="auto-output-field" data-tour="auto-captions">
               Captions
               <select value={options.captions ?? "auto"} aria-describedby="auto-captions-note"
                 onChange={(event) => onChange({ ...options, captions: event.target.value as AutoOptions["captions"] })}>
@@ -293,7 +293,7 @@ export default function AutoPanel({
                   : "Auto checks for captions baked into the selected footage. If found or uncertain, it keeps the original voice and adds no captions, hook or callouts."}
             </p>
             {options.captions !== "keep" && <CaptionAppearance value={options.captionStyle} onChange={captionStyle => onChange({ ...options, captionStyle })} />}
-            <label className="auto-output-field">
+            <label className="auto-output-field" data-tour="auto-sound">
               Sound
               <select value={keepOriginalAudio ? "off" : options.audio ?? "auto"} aria-describedby="auto-audio-note"
                 onChange={(event) => onChange({ ...options, audio: event.target.value as AutoOptions["audio"],
@@ -312,7 +312,7 @@ export default function AutoPanel({
                   ? `${audioLookById(options.audio)?.description} Applied to every version in this batch.`
                   : "Measures the selected speech on this computer — its noise floor, level spread and tone balance — and applies the closest-fitting sound look. Sources with no recognized speech are left untouched."}
             </p>
-            <label className="auto-output-field">
+            <label className="auto-output-field" data-tour="auto-review">
               Editorial review
               <select value={options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
                 <option value="repair">Check and repair · up to 2 attempts</option>
