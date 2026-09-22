@@ -114,6 +114,11 @@ export default function OnboardingTour({ onNavigate, onClose }: {
         frame = requestAnimationFrame(() => locate(attempt + 1));
         return;
       }
+      // Draft/export controls do not exist in an empty workspace. Still show
+      // where they will appear without creating sample media or changing edits.
+      if ((!element || !element.checkVisibility()) && step.fallbackTarget) {
+        element = document.querySelector<HTMLElement>(step.fallbackTarget);
+      }
       if (element?.checkVisibility()) {
         element.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
         window.scrollBy({ top: -24, behavior: "instant" });

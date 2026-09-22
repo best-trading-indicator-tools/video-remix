@@ -183,7 +183,7 @@ interface MeasurementGroup {
 }
 function MeasurementComparison({ groups, entries, onOpen }: { groups: MeasurementGroup[] | null; entries: ExportHistoryEntry[]; onOpen: () => void }) {
   const latest = entries.flatMap(entry => latestPostObservations(entry).map(snapshot => ({ entry, snapshot })));
-  return <details className="measurement-comparison" onToggle={event => { if (event.currentTarget.open) onOpen(); }}>
+  return <details className="measurement-comparison" data-tour="history-comparison" onToggle={event => { if (event.currentTarget.open) onOpen(); }}>
     <summary>Compare recorded results</summary>
     <p className="measurement-note">All recorded reviews, grouped by editorial approach and benchmark case. Acceptance rates use only explicit human verdicts, including rejections. Undecided exports stay outside that denominator. Automatic repairs are counted separately. Each export is counted separately, including revisions; download measurements to compare editing modes and model versions.</p>
     <div className="measurement-downloads"><a className="secondary-button" href="/api/measurements/export?format=csv" download><Download size={13} />Download all measurements · CSV</a><a className="secondary-button" href="/api/measurements/export?format=json" download><Download size={13} />JSON</a></div>

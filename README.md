@@ -6,6 +6,8 @@ A private video repurposing workspace with **Auto remix** selected by default. I
 
 An interactive tour opens on the first visit in each browser-tab session. It highlights the actual controls for imports, Auto, Manual, Short clips, Exports and History, with Back, Next and a topic selector. Dismiss it at any point with **Skip tour**, **×**, **Escape**, or a click outside; it stays closed across reloads in that session. **Quick guide** and **How it works** replay it at any time. The tour restores the original view when closed and does not change edit settings or start renders. It works before importing a video, supports keyboard navigation, and adapts to smaller screens.
 
+Topics cover Auto preferences, black bands, captions, sound, reviews and supporting visuals; Manual framing, color, sound modifiers, captions, footage placements, presets, prompt edits and batch exports; the complete long-form-to-short workflow from discovery through sequences, tracking, pacing, approval and rendering; and History's settings, publications, review notes and measured outcomes. Controls that need a source, draft or export are explained beside their containing panel until that item exists. Presets are saved separately for each editing mode.
+
 ## Mobile and tablet layouts
 
 Workspaces and history scroll with the page. On phones and short windows, the
