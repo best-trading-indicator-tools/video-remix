@@ -79,7 +79,7 @@ function publicImport(item: StoredImport): ImportSession {
   return {
     id: item.id, name: item.name, size: item.size, offset: item.offset,
     kind: item.kind, status: item.status, phase: item.phase, progress: item.progress,
-    chunkSize: config.importChunkSize, identity: item.identity, lastModified: item.lastModified,
+    chunkSize: config.importChunkSize, identity: item.identity, lastModified: item.lastModified, updatedAt: item.updatedAt,
     ...(source ? { source: publicSource(source) } : {}), ...(item.error ? { error: item.error } : {}),
   };
 }
@@ -379,6 +379,28 @@ export function installMediaImportRoutes(app: Express) {
       } catch (error) { errors.push({ name: candidate.slice(0, 180), error: safeError(error) }); }
     }
     res.status(imports.length ? 202 : 400).json({ imports, errors, ...(!imports.length ? { error: errors[0]?.error } : {}) });
+    pump();
+  }));
+  app.post("/api/imports/:id/retry", route(async (req, res) => {
+    const item = await exclusive(async () => {
+      const previous = getSession(req.params.id);
+      if (previous.kind !== "remote" || previous.status !== "failed" || active.has(previous.id) || cancelled.has(previous.id) || state.sources.some(source => source.id === previous.id))
+        throw new ImportError(409, "Only failed video link imports can be retried. Refresh the import status and try again.");
+      if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
+      const link = socialVideoLink(previous.remoteUrl!);
+      await requireSpace();
+      // A failed preparation can leave downloaded media behind. Restart from
+      // the saved URL under the same session id, with no duplicate source.
+      await rm(mediaPath(previous), { force: true });
+      await rm(thumbnailPath(previous.id), { force: true });
+      const next: StoredImport = { ...previous, size: 0, offset: 0, status: "processing", progress: 0,
+        phase: `Waiting to retry download from ${link.platform}`, updatedAt: Math.max(Date.now(), previous.updatedAt + 1) };
+      delete next.error;
+      await persist(next);
+      sessions.set(next.id, next);
+      return next;
+    });
+    res.status(202).json(publicImport(item));
     pump();
   }));
   app.put("/api/imports/:id", route(async (req, res) => {

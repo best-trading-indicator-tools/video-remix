@@ -29,6 +29,8 @@ Imports support MP4, MOV, M4V, WebM, MKV, AVI, and MPEG, up to 24 hours long. Br
 
 Link imports use [yt-dlp](https://github.com/yt-dlp/yt-dlp), FFmpeg, and this app's Node runtime. Run **`npm run setup:imports`** once to install the downloader in `.venv-imports` (Python 3.10+ required); run it again to update platform support. An existing `.venv` or PATH installation is also supported, or set `YT_DLP_BIN`. Docker includes the downloader. Downloads run on the server, can continue after closing the tab, and restart automatically after a backend restart. They share the import queue's two processing slots and file-size limit, with disk-space checks and a 45-minute timeout. Finished downloads are kept for analysis; interrupted download bytes are discarded before retrying. No browser cookies or accounts are accessed.
 
+Failed link imports have a **Retry import** button that requests a fresh download from the saved URL in the same queue entry. A temporary server refusal, interrupted connection, or rate limit is reported separately from an explicit sign-in requirement. Retry is available without pasting the URL again; an already completed import cannot be retried into a duplicate source.
+
 ## Auto workflow
 
 1. **Import your videos.** Drop multiple files into the workspace together.

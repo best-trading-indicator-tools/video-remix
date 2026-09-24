@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, Upload, X } from "lucide-react";
+import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload, X } from "lucide-react";
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
@@ -27,6 +27,8 @@ export default function ImportPanel(props: Props) {
   const [videoLinks, setVideoLinks] = useState("");
   const [linksBusy, setLinksBusy] = useState(false);
   const [linksNotice, setLinksNotice] = useState("");
+  const [retrying, setRetrying] = useState<string[]>([]);
+  const retryRequests = useRef(new Set<string>());
   const linkBatch = parseSocialVideoLinks(videoLinks);
   const maxLinks = props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE;
   const tooManyLinks = linkBatch.links.length > maxLinks;
@@ -51,7 +53,9 @@ export default function ImportPanel(props: Props) {
     for (const session of incoming) {
       if (removed.current.has(session.id)) continue;
       const previous = current.get(session.id);
-      if (previous && ["completed", "failed"].includes(previous.status) && session.status !== previous.status) continue;
+      if (previous && (previous.updatedAt ?? 0) > (session.updatedAt ?? 0)) continue;
+      if (previous?.status === "completed" && session.status !== "completed") continue;
+      if (previous?.status === "failed" && session.status !== "failed" && (session.updatedAt ?? 0) <= (previous.updatedAt ?? 0)) continue;
       if (previous?.status === "processing" && session.status === "uploading") continue;
       if (previous && previous.offset > session.offset && previous.status === "uploading" && session.status === "uploading") continue;
       current.set(session.id, session);
@@ -203,6 +207,22 @@ export default function ImportPanel(props: Props) {
     finally { setLocalBusy(false); }
   };
 
+  const retryImport = async (session: ImportSession) => {
+    if (retryRequests.current.has(session.id)) return;
+    retryRequests.current.add(session.id);
+    setRetrying(current => [...current, session.id]);
+    setErrors(current => { const next = { ...current }; delete next[session.id]; return next; });
+    try {
+      const item = await importRequest<ImportSession>(`/api/imports/${session.id}/retry`, { method: "POST" });
+      update([item]);
+    } catch (error) {
+      if (mounted.current) setErrors(current => ({ ...current, [session.id]: error instanceof Error ? error.message : "Could not retry this import." }));
+    } finally {
+      retryRequests.current.delete(session.id);
+      if (mounted.current) setRetrying(current => current.filter(id => id !== session.id));
+    }
+  };
+
   async function importLinks() {
     const { links, invalid, duplicates } = linkBatch;
     if (!links.length || linksBusy || tooManyLinks) return;
@@ -289,6 +309,9 @@ export default function ImportPanel(props: Props) {
             <progress max={100} value={percent} aria-label={`${session.name} import progress`} />
             <small>{uploading ? `${size(session.offset)} of ${size(session.size)}` : session.size ? size(session.size) : "Size available after download"}{session.kind === "local" ? " · linked original" : ""}</small>
             {(errors[session.id] || session.error) && <p className="import-error" role="alert">{errors[session.id] || session.error}</p>}
+            {session.kind === "remote" && session.status === "failed" && <button className="import-resume" disabled={!props.connected || retrying.includes(session.id)} onClick={() => void retryImport(session)}>
+              {retrying.includes(session.id) ? <LoaderCircle size={13} className="spin" /> : <RotateCcw size={13} />}{retrying.includes(session.id) ? "Retrying…" : "Retry import"}
+            </button>}
             {uploading && <button className="import-resume" onClick={() => {
               if (active === session.id) transfer.current?.controller.abort();
               else { resumeId.current = session.id; resumeInput.current?.click(); }

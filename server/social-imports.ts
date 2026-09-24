@@ -15,9 +15,15 @@ async function downloader() {
 function downloadError(stderr: string) {
   if (/max.filesize|larger than|File is larger|does not pass filter/iu.test(stderr))
     return new SocialImportError("This video exceeds the import limit, is still live, or is longer than 24 hours. Choose a shorter, completed video.");
-  if (/private|login|log in|sign in|cookies|age.restrict|not available|unavailable|403|429|blocked|bot/iu.test(stderr))
-    return new SocialImportError("The platform blocked this download or requires a login. Try a public video link, or download the video yourself and use Browse files.");
-  return new SocialImportError("The platform could not provide this video. Check that the link opens a public video; you can also download it yourself and use Browse files. If public links keep failing, update the importer with npm run setup:imports.");
+  if (/private video|login required|log in|sign in|age.restrict|confirm.{0,30}not a bot/iu.test(stderr))
+    return new SocialImportError("The platform requires a login or age verification for this download. Use a public video, or import a local copy with Browse files.");
+  if (/HTTP Error 429|too many requests|rate.limit/iu.test(stderr))
+    return new SocialImportError("The platform is limiting downloads right now. Wait a few minutes, then use Retry import.");
+  if (/HTTP Error 403|403 Forbidden|HTTP Error 5\d\d|timed out|timeout|connection reset|temporar(?:y|ily)/iu.test(stderr))
+    return new SocialImportError("The video server refused or interrupted the download. This can be temporary; use Retry import to request a fresh download. If it keeps failing, use Browse files to import a local copy.");
+  if (/video (?:is )?(?:unavailable|not available)|removed|not available in your country/iu.test(stderr))
+    return new SocialImportError("This video is unavailable or restricted in this region. Check that the link still plays in your browser, or import a local copy with Browse files.");
+  return new SocialImportError("The platform could not provide this video. Use Retry import to try again, or import a local copy with Browse files. If public links keep failing, update the importer with npm run setup:imports.");
 }
 
 export async function downloadSocialVideo(input: string, directory: string, options: {

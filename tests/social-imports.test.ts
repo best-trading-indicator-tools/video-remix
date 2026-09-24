@@ -49,13 +49,23 @@ test("link imports download into normal sources, recover after restart, and canc
   const fixture = path.join(directory, "fixture.mp4");
   const binary = path.join(directory, "yt-dlp-fixture.mjs");
   const argumentsFile = path.join(directory, "arguments.json");
+  const retryMarker = path.join(directory, "retried-download");
   await writeFile(binary, `#!${process.execPath}
-import { copyFile, writeFile } from "node:fs/promises";
+import { access, copyFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 const args = process.argv.slice(2);
 await writeFile(${JSON.stringify(argumentsFile)}, JSON.stringify(args));
 const url = args.at(-1);
 if (url.includes("PRIVATE0001")) { console.error("ERROR: Private video; sign in"); process.exit(1); }
+if (url.includes("LIMIT000001")) { console.error("ERROR: HTTP Error 429: Too Many Requests"); process.exit(1); }
+if (url.includes("RETRY000001")) {
+  try { await access(${JSON.stringify(retryMarker)}); }
+  catch {
+    await writeFile(${JSON.stringify(retryMarker)}, "first attempt failed");
+    console.error("ERROR: unable to download video data: HTTP Error 403: Forbidden"); process.exit(1);
+  }
+  await new Promise(resolve => setTimeout(resolve, 400));
+}
 if (url.includes("SLOW0000001")) {
   await writeFile("video.mp4.part", "partial download");
   console.error('remix-progress:{"downloaded":20,"total":100}');
@@ -138,6 +148,36 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
       assert.equal(failed.source, undefined);
       assert.equal(failed.error!.includes(directory), false);
       await assert.rejects(access(path.join(data, "imports", item.id, "download")), { code: "ENOENT" });
+    });
+    await t.test("a failed link retries in place, clears the error, and creates only one source", async () => {
+      const item = await add("https://youtube.com/shorts/RETRY000001");
+      const failed = await wait(item.id, value => value.status === "failed");
+      assert.match(failed.error!, /temporary.*Retry import/);
+      assert.doesNotMatch(failed.error!, /login/);
+      const before = (await (await fetch(`${base}/api/imports`)).json()).imports.length;
+      const requests = await Promise.all([post(`/api/imports/${item.id}/retry`, {}), post(`/api/imports/${item.id}/retry`, {})]);
+      assert.deepEqual(requests.map(response => response.status).sort(), [202, 409]);
+      const queued = await requests.find(response => response.status === 202)!.json() as ImportSession;
+      assert.equal(queued.id, item.id); assert.equal(queued.status, "processing");
+      assert.equal(queued.error, undefined); assert.equal(queued.size, 0); assert.equal(queued.offset, 0);
+      assert.ok(queued.updatedAt! > failed.updatedAt!);
+      assert.equal("remoteUrl" in queued, false);
+      const ready = await wait(item.id, value => ["completed", "failed"].includes(value.status));
+      assert.equal(ready.status, "completed", ready.error);
+      assert.equal(ready.error, undefined); assert.equal(ready.source?.id, item.id);
+      const listed = await (await fetch(`${base}/api/sources`)).json();
+      assert.equal(listed.sources.filter((source: { id: string }) => source.id === item.id).length, 1);
+      assert.equal((await (await fetch(`${base}/api/imports`)).json()).imports.length, before);
+      assert.equal((await post(`/api/imports/${item.id}/retry`, {})).status, 409);
+      const saved = JSON.parse(await readFile(path.join(data, "imports", item.id, "session.json"), "utf8"));
+      assert.equal(saved.status, "completed"); assert.equal(saved.error, undefined);
+      assert.equal(saved.remoteUrl, "https://www.youtube.com/watch?v=RETRY000001");
+    });
+    await t.test("rate limits explain waiting instead of incorrectly claiming a login is required", async () => {
+      const item = await add("https://youtu.be/LIMIT000001");
+      const failed = await wait(item.id, value => value.status === "failed");
+      assert.match(failed.error!, /Wait a few minutes.*Retry import/);
+      assert.doesNotMatch(failed.error!, /login/);
     });
     await t.test("one batch imports TikTok, Instagram and YouTube independently while another download fails", async () => {
       const links = ["https://youtu.be/PRIVATE0001", "https://www.tiktok.com/@creator/video/123456789",

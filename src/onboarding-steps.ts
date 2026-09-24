@@ -47,7 +47,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     description: "Use Import from a video URL instead of uploading a file. Paste a YouTube video, Shorts or youtu.be share link; TikTok and Instagram links work too. Import one URL or a batch separated by new lines, spaces or commas.",
     options: [["Check your batch", "The button shows how many videos will import. Duplicates are skipped; invalid entries stay in the field for correction while valid links can continue."],
       ["Download in the background", "Each video has its own progress with your other imports. Downloads continue while the app server is running."],
-      ["If a link cannot download", "A private, unavailable or blocked video may need a local copy. Use Browse files to import it."]],
+      ["If a link cannot download", "Use Retry import on the failed card to request a fresh download without pasting the URL again. Rate limits may need a short wait; private or restricted videos may need a local copy through Browse files."]],
   },
   { id: "local-files", chapter: "Your footage", title: "Use large originals without copying", target: ".import-link-button", destination: auto,
     description: "Link files on this computer lets you paste full paths to videos stored on the machine running the app.",

@@ -13,6 +13,8 @@ export interface ImportSession {
   status: "uploading" | "processing" | "completed" | "failed";
   phase: string;
   progress: number;
+  /** Orders status transitions, including restarting a failed link import. */
+  updatedAt?: number;
   identity?: string;
   lastModified?: number;
   source?: VideoSource;
