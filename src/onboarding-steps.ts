@@ -44,7 +44,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
       ["Import status", "Follow upload and preparation progress. Cancel unfinished imports or dismiss completed cards."]],
   },
   { id: "links", chapter: "Your footage", title: "Import several video links at once", target: ".import-social", destination: auto,
-    description: "Paste TikTok, Instagram and YouTube links together in Import video links. Separate them with new lines, spaces or commas, then import the batch.",
+    description: "Use Import from a video URL instead of uploading a file. Paste a YouTube video, Shorts or youtu.be share link; TikTok and Instagram links work too. Import one URL or a batch separated by new lines, spaces or commas.",
     options: [["Check your batch", "The button shows how many videos will import. Duplicates are skipped; invalid entries stay in the field for correction while valid links can continue."],
       ["Download in the background", "Each video has its own progress with your other imports. Downloads continue while the app server is running."],
       ["If a link cannot download", "A private, unavailable or blocked video may need a local copy. Use Browse files to import it."]],

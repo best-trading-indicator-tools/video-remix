@@ -236,11 +236,12 @@ export default function ImportPanel(props: Props) {
       <small>Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos per batch<br />{size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
     </button>
     <div className="import-local import-social">
-      <label htmlFor="social-video-links"><Link2 size={15} /> Import video links</label>
-      <p id="social-video-link-hint">TikTok · Instagram · YouTube<br />Paste multiple video links, one per line or separated by spaces or commas. Mix platforms in the same batch.</p>
+      <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video URL</label>
+      <p id="social-video-link-hint">Paste a YouTube video or Shorts URL instead of uploading a file. TikTok and Instagram links work too.</p>
       <textarea id="social-video-links" rows={5} autoCapitalize="none" spellCheck={false}
-        aria-describedby="social-video-link-hint social-video-link-count" placeholder={"https://www.tiktok.com/@creator/video/…\nhttps://www.instagram.com/reel/…\nhttps://www.youtube.com/watch?v=…"} value={videoLinks}
+        aria-describedby="social-video-link-hint social-video-link-format social-video-link-count" placeholder={"https://www.youtube.com/watch?v=…\nhttps://www.youtube.com/shorts/…\nhttps://youtu.be/…"} value={videoLinks}
         disabled={linksBusy} onChange={event => { setVideoLinks(event.target.value); setLinksNotice(""); }} />
+      <p id="social-video-link-format">One link or a batch: separate URLs with new lines, spaces or commas.</p>
       <p id="social-video-link-count" className={tooManyLinks ? "import-error" : "import-link-count"} role="status">
         {tooManyLinks ? `${linkBatch.links.length} videos selected. Import up to ${maxLinks} at once.`
           : `${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"} ready to import · Up to ${maxLinks} per batch`}
@@ -255,7 +256,7 @@ export default function ImportPanel(props: Props) {
         {linksBusy ? <LoaderCircle size={14} className="spin" /> : <Link2 size={14} />} {linksBusy ? "Adding links…" : linkBatch.links.length ? `Import ${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"}` : "Import videos"}
       </button>
       {linksNotice && <p role="status">{linksNotice}</p>}
-      <p>Each public video downloads into your workspace with its own progress below, ready for Auto or Manual editing.</p>
+      <p>Public videos download into your workspace with progress below, ready for Auto, Manual or Short clips.</p>
     </div>
     <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><FolderOpen size={15} /> Link files on this computer</button>
     {localOpen && <div className="import-local">
