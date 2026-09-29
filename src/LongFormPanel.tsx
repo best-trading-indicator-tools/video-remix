@@ -3,6 +3,7 @@ import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowDown, ArrowRight, ArrowUp, Check, ChevronRight, Clapperboard, Copy, Link2, LoaderCircle, Play, Plus, Scissors, Trash2, X } from "lucide-react";
 import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RenderJob, type RemixSettings, type VideoSource } from "../shared/types";
+import type { PacingOptions } from "../shared/pacing";
 import { approveShortDraft, shortIsApproved, createShortDraft, formatSourceClock, matchingShortSource, MAX_SHORT_CUTS, MAX_SHORTS, parseSourceClock, reconnectShortDraft, restoreShortDrafts, shortCropGuide, shortFocusSignature, SHORT_DRAFT_STORAGE, validateShortDraft, type ShortCut, type ShortDraft, type ShortFocusAnalysis } from "../shared/shorts";
 import { focusPointAt, validFocusTrack } from "../shared/focus";
 import Slider from "./Slider";
@@ -14,6 +15,8 @@ import TranscriptEditor from "./TranscriptEditor";
 import "./shorts.css";
 
 type Props = {
+  /** Your style's pacing, used when a short has no pacing review yet. */
+  defaultPacing?: PacingOptions;
   active: boolean;
   sources: VideoSource[];
   selectedSource?: VideoSource;
@@ -40,7 +43,7 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
   return data as T;
 }
 
-export default function LongFormPanel({ active, sources, selectedSource: source, engineReady, onSelectSource, onQueued, onNotice }: Props) {
+export default function LongFormPanel({ defaultPacing, active, sources, selectedSource: source, engineReady, onSelectSource, onQueued, onNotice }: Props) {
   const [drafts, setDrafts] = useState<ShortDraft[]>(initialDrafts);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [cutId, setCutId] = useState<string | null>(null);
@@ -398,7 +401,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
           <label className="shorts-check-option"><input type="checkbox" checked={draft.qualityCleanup} onChange={event => updateDraft({ qualityCleanup: event.target.checked })} /><span><strong>Gentle cleanup <em>Free</em></strong><small>Reduce noise and sharpen lightly on your computer.</small></span></label>
           <p className="shorts-helper">1080p portrait exports are 1080 × 1920. Enlarging or cleaning up footage cannot restore missing detail.</p>
         </details>
-        {draftSource && <ShortPacing key={`pacing-${draft.id}`} draft={draft} active={active} disabled={rendering || !engineReady || !validateShortDraft({ ...draft, autoFocus: false }, draftSource).settings} onChange={updateDraft}
+        {draftSource && <ShortPacing key={`pacing-${draft.id}`} draft={draft} defaultOptions={defaultPacing} active={active} disabled={rendering || !engineReady || !validateShortDraft({ ...draft, autoFocus: false }, draftSource).settings} onChange={updateDraft}
           onPreview={playRange} />}
         <div className="shorts-total"><span>Short duration</span><strong>{durationLabel(validation?.duration || 0)}</strong></div>
         {!!validation?.errors.length && <div className="shorts-error" role="alert">{validation.errors[0]}</div>}

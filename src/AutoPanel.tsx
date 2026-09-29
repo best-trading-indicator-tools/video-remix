@@ -9,6 +9,7 @@ import {
   Copy,
   Expand,
   LoaderCircle,
+  Palette,
   Scissors,
   Sparkles,
 } from "lucide-react";
@@ -26,6 +27,7 @@ import { applyBandFinish } from "../shared/black-bands";
 import PacingOptions from "./PacingOptions";
 import "./pacing.css";
 import "./auto-panel.css";
+import { AutoViewSwitch, type AutoView } from "./QuickAutoPanel";
 
 export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
   "9:16": "TikTok & Reels",
@@ -36,6 +38,8 @@ export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
 };
 
 export default function AutoPanel({
+  onView,
+  onSaveStyle,
   options,
   onChange,
   capabilities,
@@ -52,6 +56,8 @@ export default function AutoPanel({
   maxFiles,
   maxFileSize,
 }: {
+  onView?: (view: AutoView) => void;
+  onSaveStyle?: () => void;
   options: AutoOptions;
   onChange: (value: AutoOptions) => void;
   capabilities: AutoCapabilities | null;
@@ -102,7 +108,7 @@ export default function AutoPanel({
           <Sparkles size={16} />
           Auto editor
         </h2>
-        <span className="auto-badge">Guided edit</span>
+        {onView ? <AutoViewSwitch view="all" onView={onView} /> : <span className="auto-badge">Guided edit</span>}
       </div>
       <div className="auto-panel-body">
         <div className="auto-scope">
@@ -138,6 +144,16 @@ export default function AutoPanel({
           {sources.length > 1 && (
             <small>
               Includes visual sources and version count. Also applies to new imports.
+            </small>
+          )}
+          {onSaveStyle && (
+            <button type="button" disabled={libraryBusy} onClick={onSaveStyle}>
+              <Palette size={14} /> Save this look as my style
+            </button>
+          )}
+          {onSaveStyle && (
+            <small>
+              Caption look, black bands, pacing and sound, for every video in Auto and Manual.
             </small>
           )}
           {libraryBusy && (

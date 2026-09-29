@@ -37,6 +37,25 @@ Failed link imports have a **Retry import** button that requests a fresh downloa
 2. **Auto remix all.** Press the Auto remix button to process every uploaded video independently. The default is one vertical 9:16 version, up to 45 seconds, with the original voice.
 3. **Review and download.** Follow the editing stages in Exports, preview the finished clips, read what changed, and download individual MP4s or the batch ZIP. Captioned exports also provide downloadable SRT files.
 
+### Quick setup and your style
+
+Auto opens on **Quick setup**, four choices that apply to every video and to new
+imports: **where you will post** (TikTok, Reels & Shorts 9:16, Instagram feed 4:5,
+square, or YouTube 16:9), **how long each clip can be** (15–90 seconds), **how many
+clips per video**, and **what changes between versions**. **All settings** in the
+panel header switches to every Auto control for the selected video; your choice of
+view is remembered.
+
+**Your style** keeps your caption look, black-band layout, pacing and sound in one
+place. Adjust them in All settings, then choose **Save this look as my style** (or
+**Save the current look as my style** in Quick setup). The style is applied at once
+to every video in Auto and Manual and saved for new imports. Each video keeps its
+own cuts, length, versions, band text and supporting visuals. In Manual, a pinned
+sound look or None carries over; Auto's measured sound has no Manual equivalent, so
+Manual keeps its own sound in that case. Short clips starts new pacing reviews from
+your style's pacing. **Apply to all videos** re-applies the saved style after
+individual changes. The style is stored in this browser.
+
 Optional output preferences let you enter **any whole-number target length from 1 second**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. The target length is an upper limit; shorter sources stay short. Custom lengths are saved per video and survive reloading.
 
 Select a source video to change **only that video's Auto settings**, including format, duration, narration, supporting visuals, selected B-roll clips, and maximum versions. **Apply to all** copies the selected video's complete settings to the other sources and updates the defaults for future imports. One Auto remix click still processes the whole batch, with each video using its own saved settings. Manual settings remain separate.

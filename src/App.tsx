@@ -83,6 +83,8 @@ import SoundModifiers from "./SoundModifiers";
 import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle } from "./BlackBandsEditor";
 import { blackBandsSchema, DEFAULT_BLACK_BANDS, applyBandFinish } from "../shared/black-bands";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
+import { captureMyStyle, MY_STYLE_STORAGE, restoreMyStyle, styleAuto, styleManual, type MyStyle } from "../shared/my-style";
+import QuickAutoPanel, { type AutoView, type QuickPatch } from "./QuickAutoPanel";
 
 type AutoPreset = { options: AutoOptions; variants: number };
 const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
@@ -315,6 +317,11 @@ export default function App() {
   const [defaultAuto, setDefaultAuto] = useState<AutoPreset>(() =>
     autoPreset(storedObject("remix-auto-default-settings", {})),
   );
+  // Quick setup is the everyday entry point; All settings keeps every Auto control.
+  const [autoView, setAutoView] = useState<AutoView>(() => {
+    try { return localStorage.getItem("remix-auto-view") === "all" ? "all" : "quick"; } catch { return "quick"; }
+  });
+  const [myStyle, setMyStyle] = useState<MyStyle | null>(() => restoreMyStyle(storedObject(MY_STYLE_STORAGE, {})));
   const [autoCapabilities, setAutoCapabilities] =
     useState<AutoCapabilities | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
@@ -359,20 +366,21 @@ export default function App() {
   const [starting, setStarting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showHelp, setShowHelp] = useState(() => shouldShowOnboarding());
-  const tourReturn = useRef({ view, mode, tab, scrollX: 0, scrollY: 0 });
+  const tourReturn = useRef({ view, mode, tab, autoView, scrollX: 0, scrollY: 0 });
   const openTour = () => {
-    tourReturn.current = { view, mode, tab, scrollX: window.scrollX, scrollY: window.scrollY };
+    tourReturn.current = { view, mode, tab, autoView, scrollX: window.scrollX, scrollY: window.scrollY };
     setShowHelp(true);
   };
   const navigateTour = useCallback((destination: TourDestination) => {
     setView(destination.view);
     if (destination.mode) setMode(destination.mode);
     if (destination.tab) setTab(destination.tab);
+    if (destination.autoView) setAutoView(destination.autoView);
   }, []);
   const closeTour = useCallback(() => {
     const previous = tourReturn.current;
     setShowHelp(false);
-    setView(previous.view); setMode(previous.mode); setTab(previous.tab);
+    setView(previous.view); setMode(previous.mode); setTab(previous.tab); setAutoView(previous.autoView);
     requestAnimationFrame(() => window.scrollTo({ left: previous.scrollX, top: previous.scrollY, behavior: "instant" }));
   }, []);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
@@ -598,6 +606,10 @@ export default function App() {
   }, [settingsById, defaultSettings, attachments]);
 
   useEffect(() => {
+    try { localStorage.setItem("remix-auto-view", autoView); } catch { /* The view still switches for this tab. */ }
+  }, [autoView]);
+
+  useEffect(() => {
     try {
       localStorage.setItem(
         "remix-auto-video-settings",
@@ -734,6 +746,37 @@ export default function App() {
       `Auto settings applied to all ${sources.length} videos and saved for new imports.`,
       "success",
     );
+  };
+  /** Quick setup choices apply to every video and to new imports. */
+  const updateAutoEverywhere = (patch: QuickPatch) => {
+    const merge = (preset: AutoPreset) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }),
+      options: { ...preset.options, ...patch.options } });
+    setAutoById((current) => ({ ...current, ...Object.fromEntries(sources.map((source) => [source.id, merge(current[source.id] || defaultAuto)])) }));
+    setDefaultAuto((current) => merge(current));
+  };
+  /** One look for Auto and Manual. Each video keeps its own cuts, words and band text. */
+  const applyStyleEverywhere = (style: MyStyle) => {
+    setAutoById((current) => ({ ...current, ...Object.fromEntries(sources.map((source) => {
+      const preset = current[source.id] || defaultAuto;
+      return [source.id, autoPreset({ ...preset, options: styleAuto(preset.options, style) })];
+    })) }));
+    setDefaultAuto((current) => autoPreset({ ...current, options: styleAuto(current.options, style) }));
+    setSettingsById((current) => ({ ...current, ...Object.fromEntries(sources.map((source) => [source.id, styleManual(current[source.id] || defaultSettings, style)])) }));
+    setDefaultSettings((current) => styleManual(current, style));
+  };
+  const styleScope = `${sources.length} video${sources.length === 1 ? "" : "s"} in Auto and Manual`;
+  const saveMyStyle = () => {
+    const style = captureMyStyle(selectedAuto.options);
+    let saved = true;
+    try { localStorage.setItem(MY_STYLE_STORAGE, JSON.stringify(style)); } catch { saved = false; }
+    setMyStyle(style); applyStyleEverywhere(style);
+    notify(saved ? `Saved as your style and applied to ${styleScope}. New imports use it too.`
+      : "Your style is applied, but browser storage is unavailable, so it lasts only until this tab closes.", saved ? "success" : "error");
+  };
+  const applyMyStyle = () => {
+    if (!myStyle) return;
+    applyStyleEverywhere(myStyle);
+    notify(`Your style is applied to ${styleScope}.`, "success");
   };
   const removeBrollSelection = (assetId: string) => {
     const remove = (preset: AutoPreset) => ({
@@ -1317,7 +1360,7 @@ export default function App() {
                 </div>
               </aside>
 
-              <LongFormPanel active={view === "studio" && mode === "shorts"} sources={sources} selectedSource={selected} engineReady={engineReady && !showHelp} onSelectSource={setSelectedId} onNotice={notify} onQueued={(added) => {
+              <LongFormPanel defaultPacing={myStyle?.pacing} active={view === "studio" && mode === "shorts"} sources={sources} selectedSource={selected} engineReady={engineReady && !showHelp} onSelectSource={setSelectedId} onNotice={notify} onQueued={(added) => {
                 setJobs(current => [...added, ...current.filter(job => !added.some(item => item.id === job.id))]);
                 setView("exports");
               }} />
@@ -1540,7 +1583,22 @@ export default function App() {
               </section>
 
               {mode === "auto" ? (
+                autoView === "quick" ? (
+                <QuickAutoPanel
+                  options={autoOptions}
+                  variants={selectedAuto.variants}
+                  videoCount={sources.length}
+                  mixed={!uniformAuto}
+                  style={myStyle}
+                  onChange={updateAutoEverywhere}
+                  onSaveStyle={saveMyStyle}
+                  onApplyStyle={applyMyStyle}
+                  onView={setAutoView}
+                />
+                ) : (
                 <AutoPanel
+                  onView={setAutoView}
+                  onSaveStyle={saveMyStyle}
                   options={autoOptions}
                   onChange={(options) => updateAuto({ options })}
                   sources={sources}
@@ -1559,6 +1617,7 @@ export default function App() {
                   maxFileSize={health?.maxFileSize}
                   maxFiles={health?.maxFiles}
                 />
+                )
               ) : (
                 <aside className="settings-panel panel">
                   <div className="panel-heading">

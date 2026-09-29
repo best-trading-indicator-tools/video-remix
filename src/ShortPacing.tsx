@@ -7,25 +7,28 @@ import {
   NATURAL_PACING,
   pacingCutSignature,
   pacingOptionsSchema,
+  type PacingOptions as PacingChoices,
   type PacingSuggestion,
 } from "../shared/pacing";
 import PacingOptions from "./PacingOptions";
 import "./pacing.css";
 export default function ShortPacing({
   draft,
+  defaultOptions,
   active,
   disabled,
   onChange,
   onPreview,
 }: {
   draft: ShortDraft;
+  defaultOptions?: PacingChoices;
   active: boolean;
   disabled?: boolean;
   onChange: (patch: Partial<ShortDraft>) => void;
   onPreview: (start: number, end: number) => void;
 }) {
   const [options, setOptions] = useState(
-    draft.pacingReview?.options || NATURAL_PACING,
+    draft.pacingReview?.options || defaultOptions || NATURAL_PACING,
   );
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
