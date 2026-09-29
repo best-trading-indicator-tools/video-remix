@@ -67,7 +67,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     description: "Quick setup is the everyday Auto panel. Its choices apply to every video and to new imports; All settings keeps every control.",
     options: [["Where and how long", "Pick where you will post and the longest a clip may be. Auto still keeps a complete idea shorter when it fits."],
       ["Clips per video", "Choose how many clips each video gets, and whether each clip is a different moment or a new angle on one moment."],
-      ["Your style", "Save your caption look, black bands, pacing and sound once. Auto and Manual then apply them to every video."]],
+      ["All settings", "Open All settings to adjust captions, black bands, pacing and sound, and save your look as a style."]],
   },
   { id: "auto-scope", chapter: "Auto", title: "Choose which video you are changing", target: ".auto-scope", destination: autoAll,
     description: "Select a source card or use Editing preferences for to change that video's Auto settings.",

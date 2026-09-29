@@ -24,12 +24,3 @@
 .quick-auto-stepper { display: inline-flex; align-items: center; justify-self: start; border: 1px solid var(--line); border-radius: 9px; background: var(--field); }
 .auto-panel.panel .quick-auto-stepper button { min-width: 38px; min-height: 38px; border: 0; background: transparent; font-size: 16px; }
 .quick-auto-stepper output { min-width: 34px; color: var(--text); font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
-.quick-auto-style { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--field); }
-.quick-auto-style h3 { display: flex; align-items: center; gap: 7px; margin: 0; color: var(--text); font-size: 13px; }
-.quick-auto-style h3 svg { color: var(--accent); }
-.quick-auto-style p { margin: 0; color: var(--subtle); font-size: 12px; line-height: 1.65; }
-.quick-auto-style ul { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-.quick-auto-style li { padding: 4px 9px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--subtle); font-size: 11px; }
-.quick-auto-style-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.auto-panel.panel .quick-auto-link { display: inline; min-height: 0; padding: 0; border: 0; background: none; color: var(--accent); font: inherit; text-decoration: underline; text-underline-offset: 3px; }
-.auto-panel.panel .quick-auto-link:hover:not(:disabled) { background: none; color: var(--accent-bright); }

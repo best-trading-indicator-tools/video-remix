@@ -773,11 +773,6 @@ export default function App() {
     notify(saved ? `Saved as your style and applied to ${styleScope}. New imports use it too.`
       : "Your style is applied, but browser storage is unavailable, so it lasts only until this tab closes.", saved ? "success" : "error");
   };
-  const applyMyStyle = () => {
-    if (!myStyle) return;
-    applyStyleEverywhere(myStyle);
-    notify(`Your style is applied to ${styleScope}.`, "success");
-  };
   const removeBrollSelection = (assetId: string) => {
     const remove = (preset: AutoPreset) => ({
       ...preset,
@@ -1589,10 +1584,7 @@ export default function App() {
                   variants={selectedAuto.variants}
                   videoCount={sources.length}
                   mixed={!uniformAuto}
-                  style={myStyle}
                   onChange={updateAutoEverywhere}
-                  onSaveStyle={saveMyStyle}
-                  onApplyStyle={applyMyStyle}
                   onView={setAutoView}
                 />
                 ) : (

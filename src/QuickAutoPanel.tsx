@@ -1,8 +1,7 @@
-import { Palette, SlidersHorizontal, Zap } from "lucide-react";
+import { SlidersHorizontal, Zap } from "lucide-react";
 import type { AutoOptions } from "../shared/types";
 import { MAX_AUTO_VERSIONS } from "../shared/types";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
-import { describeMyStyle, type MyStyle } from "../shared/my-style";
 import "./quick-auto.css";
 
 export type AutoView = "quick" | "all";
@@ -28,9 +27,9 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, videoCount, mixed, style, onChange, onSaveStyle, onApplyStyle, onView }: {
-  options: AutoOptions; variants: number; videoCount: number; mixed: boolean; style: MyStyle | null;
-  onChange: (patch: QuickPatch) => void; onSaveStyle: () => void; onApplyStyle: () => void; onView: (view: AutoView) => void;
+export default function QuickAutoPanel({ options, variants, videoCount, mixed, onChange, onView }: {
+  options: AutoOptions; variants: number; videoCount: number; mixed: boolean;
+  onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
 }) {
   const angles = options.versionMode === "angles";
   const maxClips = angles ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS;
@@ -78,20 +77,6 @@ export default function QuickAutoPanel({ options, variants, videoCount, mixed, s
         </div>
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
-      <section className="quick-auto-style" aria-labelledby="quick-auto-style-title">
-        <h3 id="quick-auto-style-title"><Palette size={14} />Your style</h3>
-        {style ? <>
-          <ul>{describeMyStyle(style).map(item => <li key={item}>{item}</li>)}</ul>
-          <div className="quick-auto-style-actions">
-            <button type="button" onClick={onApplyStyle} disabled={!videoCount}>Apply to all videos</button>
-            <button type="button" onClick={onSaveStyle}>Replace with the current look</button>
-          </div>
-        </> : <>
-          <p>Save your caption look, black bands, pacing and sound once. Auto and Manual then use them for every video and new import.</p>
-          <div className="quick-auto-style-actions"><button type="button" onClick={onSaveStyle}>Save the current look as my style</button></div>
-        </>}
-        <p className="auto-preferences-note">Adjust the look in <button type="button" className="quick-auto-link" onClick={() => onView("all")}>All settings</button>, then save it here.</p>
-      </section>
     </div>
   </aside>;
 }

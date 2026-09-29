@@ -47,14 +47,13 @@ panel header switches to every Auto control for the selected video; your choice 
 view is remembered.
 
 **Your style** keeps your caption look, black-band layout, pacing and sound in one
-place. Adjust them in All settings, then choose **Save this look as my style** (or
-**Save the current look as my style** in Quick setup). The style is applied at once
+place. Adjust them in All settings, then choose **Save this look as my style**.
+The style is applied at once
 to every video in Auto and Manual and saved for new imports. Each video keeps its
 own cuts, length, versions, band text and supporting visuals. In Manual, a pinned
 sound look or None carries over; Auto's measured sound has no Manual equivalent, so
 Manual keeps its own sound in that case. Short clips starts new pacing reviews from
-your style's pacing. **Apply to all videos** re-applies the saved style after
-individual changes. The style is stored in this browser.
+your style's pacing. The style is stored in this browser.
 
 Optional output preferences let you enter **any whole-number target length from 1 second**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. The target length is an upper limit; shorter sources stay short. Custom lengths are saved per video and survive reloading.
 
