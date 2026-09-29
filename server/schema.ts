@@ -126,7 +126,7 @@ export const batchSchema = z
       .max(100),
     variants: z.number().int().min(1).max(5).default(1),
     // Accepted from older clients. Randomized speed, zoom and color copies were replaced by Auto angle versions.
-    randomize: z.literal(false, { error: "Subtle variations were removed. For different versions, use Auto → Versions → New angles on the same moment." }).optional(),
+    randomize: z.literal(false, { error: "Subtle variations were removed. For different versions, choose Auto → What changes between versions → New angles on the same moment." }).optional(),
   })
   .strict().refine(batch => !batch.items.some(item => item.draftReview) || batch.variants === 1, "Render reviewed drafts with their approved settings");
 export const normalizedSettings = (input: unknown) =>

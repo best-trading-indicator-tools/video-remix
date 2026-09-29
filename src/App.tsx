@@ -2257,7 +2257,7 @@ export default function App() {
               </div>
               {mode === "manual" && (
                 <p className="render-options manual-versions-hint">
-                  One export per video. For versions built differently, use Auto → Versions → New angles on the same moment.
+                  One export per video. For versions built differently, choose Auto → What changes between versions → New angles on the same moment.
                 </p>
               )}
               {mode === "auto" && (
