@@ -383,6 +383,36 @@ Drag the orange crop directly on the video with a mouse or touch. The lower play
 
 This is face positioning, not audio-based active-speaker recognition. With several people visible, position the crop over the desired person before switching it on. Tracking follows the nearest face using spatial continuity; occlusion or a scene change can break that continuity. No-face or unavailable analysis keeps manual framing and shows the reason. Turning it off restores your manual position; dragging or changing a position control takes manual control. Changing source timestamps triggers a fresh bounded analysis. Review the framing before exporting.
 
+### Edit with the transcript
+
+**Short clips → Edit with the transcript**, under the source preview, shows the
+recording's speech as text. Choose **Transcribe this video** once; the local
+Whisper model runs on your computer without an API key, and the word-timed
+transcript is saved with the source for Pacing and Find my best clips too. Later
+visits load the saved transcript immediately. A transcription keeps running if
+you select another video; **Cancel** stops it.
+
+- Click a word to move the source playhead there. Drag across words, Shift-click,
+  or use Shift+arrow keys to select. **Find words** searches the transcript,
+  ignoring case and accents.
+- **Add as sequence N** appends the selected speech to the current short.
+  **Remove from short** takes those words out of every sequence that plays them,
+  splitting a sequence when words remain on both sides. **New short from selection**
+  starts a draft named after its first words. **Undo transcript edit** steps back
+  through these changes.
+- Words in the current short are bright, others are dimmed, and a number marks
+  where each sequence starts. Words with a dotted underline had low recognition
+  confidence.
+- Selections keep a little of the surrounding silence without reaching the
+  neighboring words; removals cut halfway into the pauses on either side.
+  **Play selection** plays exactly that range and stops at its end.
+
+The timestamp list stays the source of truth: every transcript action edits the
+same sequences you can still adjust by hand. Changing sequences restarts automatic
+speaker centering and invalidates earlier pacing suggestions, as a manual timestamp
+edit does. Recognition can mishear words or place boundaries slightly early or
+late, so listen with Play selection before rendering.
+
 ### Free cleanup and optional paid restoration
 
 **Clean up video** applies mild local noise reduction and sharpening before resizing. It uses FFmpeg on your computer and has no API charge. It can improve noisy footage; it cannot reconstruct detail that was never captured. Compare a rendered sample before enabling it on every clip.

@@ -94,7 +94,9 @@ textarea { resize: vertical; }
   .shorts-workspace .shorts-timestamp-pair input,
   .shorts-workspace .shorts-settings-grid select,
   .own-footage select, .own-footage input[type=number],
-  .import-local textarea, .auto-panel textarea { font-size: 16px; }
+  .import-local textarea, .auto-panel textarea, .shorts-workspace .transcript-find input[type="search"] { font-size: 16px; }
+  /* A labeled, focusable transcript region; leave page area beside it to scroll past. */
+  .transcript-words { max-height: min(52vh, 360px); }
   .own-footage > summary, .finishing-presets > summary { flex-wrap: wrap; }
   .shorts-draft-list, .pacing-removals { max-height: none; overflow: visible; }
   .shorts-workspace .shorts-preview-button { flex-wrap: wrap; }

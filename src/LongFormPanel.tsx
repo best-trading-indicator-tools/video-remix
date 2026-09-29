@@ -10,6 +10,7 @@ import CropDragOverlay from "./CropDragOverlay";
 import ClipDiscovery from "./ClipDiscovery";
 import FinishingPresets from "./FinishingPresets";
 import ShortPacing from "./ShortPacing";
+import TranscriptEditor from "./TranscriptEditor";
 import "./shorts.css";
 
 type Props = {
@@ -59,7 +60,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   const [focusRetry, setFocusRetry] = useState(0);
   const [frozenFocus, setFrozenFocus] = useState<{ context: string; point: FocalPoint } | null>(null);
   const video = useRef<HTMLVideoElement>(null);
-  const pacingPreviewEnd = useRef<number | null>(null);
+  const playUntil = useRef<number | null>(null);
   const sampleVideo = useRef<HTMLVideoElement>(null);
   const clockOwner = useRef<"source" | "sample" | null>(null);
   const previewRequest = useRef<AbortController | null>(null);
@@ -161,11 +162,32 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
   };
   const seek = (seconds: number) => {
     if (!source) return;
-    pacingPreviewEnd.current = null;
+    playUntil.current = null;
     const next = Math.min(Math.max(0, seconds), source.duration);
     clockOwner.current = codecError ? null : "source"; video.current?.pause(); sampleVideo.current?.pause();
     if (video.current && !codecError) { try { video.current.currentTime = next; } catch { /* The clock also works before metadata is available. */ } }
     setPlayhead(next); setClock(formatSourceClock(next));
+  };
+  /** Play one source range and stop at its end, for pacing trims and transcript selections. */
+  const playRange = (start: number, end: number) => {
+    seek(start); playUntil.current = end; clockOwner.current = "source";
+    // timeupdate fires only about four times a second, so wake at the expected end: the next word stays unheard.
+    const stopAtEnd = () => {
+      const element = video.current;
+      if (!element || element.paused || playUntil.current !== end) return;
+      const remaining = (end - element.currentTime) / (element.playbackRate || 1);
+      if (remaining <= 0.01) { element.pause(); playUntil.current = null; return; }
+      window.setTimeout(stopAtEnd, Math.min(250, Math.max(4, remaining * 1000 - 5)));
+    };
+    void video.current?.play().then(stopAtEnd)
+      .catch(() => setPreviewError("Use Render sample at this time to inspect this source format."));
+  };
+  const createFromTranscript = (start: number, end: number, title: string) => {
+    if (!source || drafts.length >= MAX_SHORTS) return;
+    const cutId = crypto.randomUUID();
+    const added = { ...createShortDraft(source, crypto.randomUUID(), cutId, start, drafts.length + 1), title,
+      cuts: [{ id: cutId, start: formatSourceClock(start), end: formatSourceClock(end) }] };
+    setDrafts(current => [...current, added]); setActiveId(added.id); setCutId(cutId); setError("");
   };
   const mark = (edge: "start" | "end") => {
     if (!currentCut || !source || draftSource?.id !== source.id) return;
@@ -285,7 +307,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
             <video key={source.id} ref={video} src={source.url} poster={source.thumbnailUrl} controls preload="metadata" playsInline
               onError={() => setCodecError(true)} onPlay={() => { clockOwner.current = "source"; sampleVideo.current?.pause(); }} onSeeking={() => { clockOwner.current = "source"; }}
               onLoadedMetadata={() => { if (video.current && playhead > 0) video.current.currentTime = playhead; }}
-              onTimeUpdate={() => { if (!video.current || clockEditing || codecError || clockOwner.current !== "source") return; const time = Math.min(source.duration, video.current.currentTime); if (pacingPreviewEnd.current !== null && time >= pacingPreviewEnd.current) { video.current.pause(); pacingPreviewEnd.current = null; } setPlayhead(time); setClock(formatSourceClock(time)); }} />
+              onTimeUpdate={() => { if (!video.current || clockEditing || codecError || clockOwner.current !== "source") return; const time = Math.min(source.duration, video.current.currentTime); if (playUntil.current !== null && time >= playUntil.current) { video.current.pause(); playUntil.current = null; } setPlayhead(time); setClock(formatSourceClock(time)); }} />
             {draftSource?.id === source.id && draft?.fit === "crop" && (!draft.layout || draft.layout === "single") && !codecError && <CropDragOverlay
               key={`${source.id}:${draft.id}:${currentCut?.id}:${currentCut?.start}:${currentCut?.end}:${draft.aspect}:${draft.zoom}:${draft.resolution}`}
               videoRef={video} source={source} crop={crop} label={draft.aspect === "original" ? "Source frame" : `${draft.aspect} crop`}
@@ -305,6 +327,9 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
       {(previewBusy || preview || previewError) && <div className="shorts-rendered-sample">
         {previewBusy ? <div className="shorts-sample-status"><LoaderCircle size={18} className="spin" /><span>Rendering your five-second sample…</span><button className="icon-button" aria-label="Cancel short preview" onClick={() => { previewRequest.current?.abort(); previewRequest.current = null; setPreviewBusy(false); }}><X size={16} /></button></div> : preview ? <><div className="shorts-sample-status"><strong>{preview.label}</strong><button className="icon-button" aria-label="Close short preview" onClick={() => setPreview(null)}><X size={16} /></button></div><video ref={sampleVideo} key={preview.url} src={preview.url} controls playsInline preload="metadata" onPlay={() => { clockOwner.current = "sample"; video.current?.pause(); }} onSeeking={() => { clockOwner.current = "sample"; }} onTimeUpdate={() => { if (preview.kind !== "source" || clockEditing || !sampleVideo.current || clockOwner.current !== "sample") return; const time = Math.min(source?.duration ?? Infinity, preview.sourceStart + sampleVideo.current.currentTime); setPlayhead(time); setClock(formatSourceClock(time)); }} /><p>Rendered framing, sound and cleanup. Export keeps your chosen resolution.</p></> : <p className="shorts-error" role="alert">{previewError}</p>}
       </div>}
+      <TranscriptEditor key={source?.id ?? "none"} source={source} draft={draft} active={active} disabled={rendering} engineReady={engineReady} playhead={playhead}
+        canCreate={drafts.length < MAX_SHORTS} onSeek={seek} onPlayRange={playRange} onCreate={createFromTranscript}
+        onCutsChange={cuts => updateDraft({ cuts, focusAnalysis: undefined })} />
     </section>
 
     <section className="shorts-editor panel">
@@ -374,7 +399,7 @@ export default function LongFormPanel({ active, sources, selectedSource: source,
           <p className="shorts-helper">1080p portrait exports are 1080 × 1920. Enlarging or cleaning up footage cannot restore missing detail.</p>
         </details>
         {draftSource && <ShortPacing key={`pacing-${draft.id}`} draft={draft} active={active} disabled={rendering || !engineReady || !validateShortDraft({ ...draft, autoFocus: false }, draftSource).settings} onChange={updateDraft}
-          onPreview={(start, end) => { seek(start); pacingPreviewEnd.current = end; clockOwner.current = "source"; void video.current?.play().catch(() => setPreviewError("Use Render sample at this time to inspect this source format.")); }} />}
+          onPreview={playRange} />}
         <div className="shorts-total"><span>Short duration</span><strong>{durationLabel(validation?.duration || 0)}</strong></div>
         {!!validation?.errors.length && <div className="shorts-error" role="alert">{validation.errors[0]}</div>}
         {(validation?.duration || 0) > 180 && <p className="shorts-message">This cut runs over three minutes. Check the length you want before posting.</p>}

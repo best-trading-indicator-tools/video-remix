@@ -82,6 +82,26 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
   };
 }
 
+const transcriptCacheKey = (source: StoredSource) =>
+  `v1:${process.env.WHISPER_MODEL || "small"}:${source.size}:${source.duration}`;
+
+/** A saved transcript for this exact source and speech model, without starting transcription. */
+export async function cachedSourceTranscript(
+  source: StoredSource,
+): Promise<Transcript | null> {
+  try {
+    const cached = JSON.parse(
+      await readFile(path.join(paths.analysis, `${source.id}.json`), "utf8"),
+    ) as { key?: string; transcript?: unknown };
+    const parsed = transcriptSchema.safeParse(cached.transcript);
+    return cached.key === transcriptCacheKey(source) && parsed.success
+      ? parsed.data
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function sourceTranscript(
   source: StoredSource,
   workDir: string,
@@ -89,20 +109,12 @@ export async function sourceTranscript(
   onProgress: (value: number) => void,
 ): Promise<Transcript> {
   const cachePath = path.join(paths.analysis, `${source.id}.json`);
-  const key = `v1:${process.env.WHISPER_MODEL || "small"}:${source.size}:${source.duration}`;
-  try {
-    const cached = JSON.parse(await readFile(cachePath, "utf8")) as {
-      key?: string;
-      transcript?: unknown;
-    };
-    const parsed = transcriptSchema.safeParse(cached.transcript);
-    if (cached.key === key && parsed.success) {
-      signal.throwIfAborted();
-      onProgress(100);
-      return parsed.data;
-    }
-  } catch {
-    signal.throwIfAborted();
+  const key = transcriptCacheKey(source);
+  const cached = await cachedSourceTranscript(source);
+  signal.throwIfAborted();
+  if (cached) {
+    onProgress(100);
+    return cached;
   }
   const transcript = await transcribeLocal({
     input: source.filePath,
