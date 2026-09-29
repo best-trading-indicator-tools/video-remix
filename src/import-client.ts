@@ -3,8 +3,30 @@ import type { ImportSession } from "../shared/imports";
 export async function importRequest<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, init);
   const data = await response.json().catch(() => null);
+  // Aborting while reading the response body must not become a successful null result.
+  init?.signal?.throwIfAborted();
   if (!response.ok) throw new Error(data?.error || `Import failed (${response.status}). Please try again.`);
   return data as T;
+}
+
+export async function importVideoLinks(links: string[]): Promise<{
+  imports: ImportSession[]; errors?: { name: string; error: string }[];
+}> {
+  const controller = new AbortController();
+  // This deadline covers queue submission, including the response body, not the download.
+  const timer = setTimeout(() => controller.abort(new Error(
+    "Adding video links timed out after 30 seconds. Check that the app server is running and reachable. " +
+    "The links may already be queued; refresh and check the import queue before submitting them again.",
+  )), 30_000);
+  try {
+    return await importRequest("/api/imports/links", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links }),
+      signal: controller.signal,
+    });
+  } catch (error) {
+    controller.signal.throwIfAborted();
+    throw error;
+  } finally { clearTimeout(timer); }
 }
 
 // Read only two small samples. A 40 GB File is never materialized in browser memory.

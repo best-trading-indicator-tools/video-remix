@@ -1,8 +1,79 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
-import { uploadIdentity, transferImport } from "../src/import-client.js";
+import { importVideoLinks, uploadIdentity, transferImport } from "../src/import-client.js";
 import type { ImportSession } from "../shared/imports.js";
+
+const videoLinks = ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"];
+const linkTimeout = /timed out after 30 seconds.*server.*may already be queued.*check the import queue/u;
+
+test("link submission aborts an unresponsive server after 30 seconds without retrying", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let signal: AbortSignal;
+  const fetch = t.mock.method(globalThis, "fetch", (_input, init: RequestInit) => {
+    signal = init.signal!;
+    return new Promise<Response>((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(new DOMException("Aborted", "AbortError")), { once: true });
+    });
+  });
+  const request = importVideoLinks(videoLinks);
+  const rejected = assert.rejects(request, linkTimeout);
+  t.mock.timers.tick(29_999);
+  assert.equal(signal!.aborted, false);
+  t.mock.timers.tick(1);
+  await rejected;
+  assert.equal(signal!.aborted, true);
+  assert.equal(fetch.mock.callCount(), 1);
+});
+
+test("link submission also times out when headers arrive but the response body stalls", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  t.mock.method(globalThis, "fetch", async (_input, init: RequestInit) => new Response(new ReadableStream({
+    start(stream) {
+      stream.enqueue(new TextEncoder().encode('{"imports":'));
+      init.signal!.addEventListener("abort", () => stream.error(new DOMException("Aborted", "AbortError")), { once: true });
+    },
+  }), { status: 202 }));
+  const request = importVideoLinks(videoLinks);
+  const rejected = assert.rejects(request, linkTimeout);
+  await Promise.resolve();
+  t.mock.timers.tick(30_000);
+  await rejected;
+});
+
+test("accepted links return their queue result and clear the submission deadline", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const queued = { imports: [{ id: "queued", status: "processing" }], errors: [] };
+  let signal: AbortSignal;
+  t.mock.method(globalThis, "fetch", async (url, init: RequestInit) => {
+    assert.equal(url, "/api/imports/links");
+    assert.equal(init.method, "POST");
+    assert.deepEqual(JSON.parse(init.body as string), { links: videoLinks });
+    signal = init.signal!;
+    return Response.json(queued, { status: 202 });
+  });
+  assert.deepEqual(await importVideoLinks(videoLinks), queued);
+  t.mock.timers.tick(30_000);
+  assert.equal(signal!.aborted, false);
+});
+
+test("link submission preserves server and network errors and clears their deadlines", async t => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let signal: AbortSignal;
+  let offline = false;
+  t.mock.method(globalThis, "fetch", async (_input, init: RequestInit) => {
+    signal = init.signal!;
+    if (offline) throw new TypeError("Failed to fetch");
+    return Response.json({ error: "There is not enough free disk space." }, { status: 507 });
+  });
+  await assert.rejects(importVideoLinks(videoLinks), /not enough free disk space/u);
+  t.mock.timers.tick(30_000);
+  assert.equal(signal!.aborted, false);
+  offline = true;
+  await assert.rejects(importVideoLinks(videoLinks), /Failed to fetch/u);
+  t.mock.timers.tick(30_000);
+  assert.equal(signal!.aborted, false);
+});
 
 test("resume identity reads bounded edge samples, including a video larger than 4 GiB", async () => {
   const calls: [number, number | undefined][] = [];

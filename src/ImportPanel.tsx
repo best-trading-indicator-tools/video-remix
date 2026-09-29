@@ -3,7 +3,7 @@ import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload,
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
-import { importRequest, transferImport, uploadIdentity } from "./import-client";
+import { importRequest, importVideoLinks, transferImport, uploadIdentity } from "./import-client";
 import "./imports.css";
 
 const size = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -228,9 +228,7 @@ export default function ImportPanel(props: Props) {
     if (!links.length || linksBusy || tooManyLinks) return;
     setLinksBusy(true); setSelectionErrors([]); setLinksNotice("");
     try {
-      const result = await importRequest<{ imports: ImportSession[]; errors?: { name: string; error: string }[] }>("/api/imports/links", {
-        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links }),
-      });
+      const result = await importVideoLinks(links);
       if (!mounted.current) return;
       update(result.imports);
       const rejected = result.errors || [];
