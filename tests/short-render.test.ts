@@ -174,10 +174,13 @@ test("timestamp shorts preserve distant sequence order, names, portrait resoluti
       assert.ok(Math.abs(await toneAt(file, 0.25) - 550) < 15);
     });
 
-    await t.test("named randomized shorts report the duration of their final render settings", async () => {
-      const response = await post("/api/jobs", { items: [{ sourceId: source.id, title: "Paced excerpt",
-        settings: { ...DEFAULT_SETTINGS, speed: 1.7, fps: "30", segments: [{ start: 3, end: 5 }] } }],
-      variants: 1, randomize: true });
+    await t.test("named shorts report the duration of their final render settings", async () => {
+      const item = { sourceId: source.id, title: "Paced excerpt",
+        settings: { ...DEFAULT_SETTINGS, speed: 1.7, fps: "30", segments: [{ start: 3, end: 5 }] } };
+      const randomized = await post("/api/jobs", { items: [item], variants: 1, randomize: true });
+      assert.equal(randomized.status, 400, "Randomized copies were replaced by Auto angle versions");
+      assert.match(await randomized.text(), /New angles/u);
+      const response = await post("/api/jobs", { items: [item], variants: 1 });
       assert.equal(response.status, 201, await response.clone().text());
       const { jobs: queued } = await response.json() as { jobs: RenderJob[] };
       const job = (await finished(queued.map(item => item.id)))[0]!;

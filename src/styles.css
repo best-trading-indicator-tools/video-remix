@@ -1622,67 +1622,12 @@ h1 > span {
   gap: 27px;
   margin-left: auto;
 }
-.version-control {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-}
-.version-control > label {
-  font-size: 12px;
-  color: var(--subtle);
-}
-.version-control > div {
-  display: flex;
-  border: 1px solid #423440;
-  background: var(--surface-raised);
-  border-radius: 5px;
-  width: 100px;
-  height: 29px;
-}
-.version-control button {
-  width: 31px;
-  background: none;
-  color: var(--subtle);
-  font-size: 14px;
-  flex-shrink: 0;
-}
-.version-control button:hover {
-  background: var(--surface-hover);
-}
-.version-control input {
-  width: 35px;
-  appearance: textfield;
-  -moz-appearance: textfield;
-  border: 0;
-  background: none;
-  color: var(--text);
-  text-align: center;
-  font-size: 12px;
-  min-width: 0;
-}
-.version-control input::-webkit-inner-spin-button,
-.version-control input::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-}
-.variation-control {
-  border-left: 1px solid #3c2f3b;
-  padding-left: 27px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 154px;
-}
-.variation-control .toggle-field {
-  margin-top: 0;
-  font-size: 12px;
-  gap: 10px;
-}
-.variation-control .toggle-title {
-  color: var(--text);
-}
-.variation-control > span {
-  font-size: 12px;
+.manual-versions-hint {
+  max-width: 330px;
+  margin: 0 0 0 auto;
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
 }
 .render-cta {
   display: flex;
@@ -2284,18 +2229,12 @@ h1 > span {
   .render-options {
     gap: 45px;
   }
-  .variation-control {
-    padding-left: 35px;
-  }
   .primary-button {
     font-size: 12px;
     min-width: 214px;
   }
   .render-cta {
     min-width: 214px;
-  }
-  .version-control > label {
-    font-size: 12px;
   }
   .render-fineprint {
     font-size: 12px;
@@ -2395,16 +2334,6 @@ h1 > span {
   }
   .render-options {
     gap: 15px;
-  }
-  .variation-control {
-    padding-left: 15px;
-    min-width: 131px;
-  }
-  .variation-control .toggle-field {
-    font-size: 12px;
-  }
-  .version-control > label {
-    font-size: 12px;
   }
   .render-cta,
   .primary-button {
@@ -2549,9 +2478,6 @@ h1 > span {
   }
   .render-options {
     gap: 12px;
-  }
-  .variation-control {
-    padding-left: 12px;
   }
   .render-cta,
   .primary-button {
@@ -2981,26 +2907,6 @@ h1 > span {
     margin: 0;
     justify-content: space-between;
     gap: 15px;
-  }
-  .version-control > label {
-    font-size: 12px;
-  }
-  .version-control > div {
-    height: 32px;
-    width: 106px;
-  }
-  .version-control input {
-    flex: 1;
-  }
-  .variation-control {
-    min-width: 159px;
-    padding-left: 21px;
-  }
-  .variation-control .toggle-title {
-    font-size: 12px;
-  }
-  .variation-control > span {
-    font-size: 12px;
   }
   .render-cta {
     width: 100%;
@@ -4761,43 +4667,6 @@ body {
     flex-wrap: wrap;
     align-items: flex-start;
   }
-  .version-control {
-    flex: 1;
-  }
-  .version-control > label {
-    font-size: 12px;
-    line-height: 1.6;
-  }
-  .version-control > div {
-    height: 44px;
-    width: 125px;
-  }
-  .version-control button {
-    width: 40px;
-    min-height: 42px;
-    font-size: 18px;
-  }
-  .version-control input {
-    font-size: 16px;
-  }
-  .variation-control {
-    min-width: 0;
-    flex: 1;
-    padding-left: 14px;
-  }
-  .variation-control .toggle-field {
-    min-height: 28px;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-  .variation-control .toggle-title {
-    font-size: 12px;
-    line-height: 1.7;
-  }
-  .variation-control > span {
-    font-size: 12px;
-    line-height: 1.7;
-  }
   .render-cta > .primary-button {
     min-height: 50px;
     font-size: 13px;
@@ -5135,15 +5004,6 @@ body {
   }
   .render-bar {
     padding: 18px 15px;
-  }
-  .version-control > div {
-    width: 113px;
-  }
-  .version-control button {
-    width: 35px;
-  }
-  .variation-control {
-    padding-left: 10px;
   }
   .render-options {
     gap: 9px;

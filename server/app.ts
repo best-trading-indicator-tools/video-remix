@@ -28,7 +28,7 @@ import {
   type StoredBroll,
 } from "./store.js";
 import { cancelJob, isActive, isRunning, pumpQueue } from "./queue.js";
-import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, randomizeSettings } from "../shared/types.js";
+import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS } from "../shared/types.js";
 import { getVisualSources, hasLibraryVisuals, hasStockVisuals } from "../shared/visual-sources.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
 import { clonePlanFiles, planMediaPath, publicEditPlan, preservedVisualsOnStockRefresh } from "./plan-storage.js";
@@ -658,7 +658,7 @@ export function createApp() {
           .slice(0, 4)
           .join("; ")}`,
       );
-    const { items, variants, randomize } = parsed.data;
+    const { items, variants } = parsed.data;
     for (const item of items) if (wantsManualCaptions(item.settings) && item.settings.subtitleId)
       throw new HttpError(400, "Choose automatic captions or an imported SRT file, not both.");
     if (items.some(item => wantsManualCaptions(item.settings)) && !await transcriptionAvailable())
@@ -728,7 +728,7 @@ export function createApp() {
       Array.from({ length: variants }, (_, index) => {
         const id = randomUUID();
         const source = state.sources.find(source => source.id === item.sourceId)!;
-        const settings = randomize ? randomizeSettings(item.settings) : { ...item.settings };
+        const settings = { ...item.settings };
         return {
           id,
           batchId,

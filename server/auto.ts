@@ -43,6 +43,9 @@ import { brollAIConfigured } from "./broll-ai.js";
 import { configuredStockProviders, stockBrollConfigured } from "./stock-broll.js";
 import { geometry } from "./engine.js";
 import { discoverSourceIdeas, novelIdeaCandidates } from "./source-ideas.js";
+import { angleLead, planAngleVersion, type AnglePlan } from "./version-angles.js";
+import { ANGLE_CAPTION_PRESET, numberedCallouts, versionAngle } from "../shared/version-angles.js";
+import { CAPTION_PRESETS } from "../shared/caption-style.js";
 import { editorialModel } from "./editorial-provider.js";
 import { inspectSourceCaptions, type SourceCaptionInspection } from "./source-captions.js";
 
@@ -222,21 +225,27 @@ export async function prepareAutoRemix({
 }): Promise<PreparedAuto> {
   const options = job.auto!;
   const keepOriginalAudio = isAutoAudioNone(options.audio);
-  const useNarration = options.narration && !keepOriginalAudio;
+  const angle = versionAngle(options, job.variant);
+  // Angle versions share version 1's footage and speech, so every version keeps the original voice.
+  const useNarration = options.narration && !keepOriginalAudio && options.versionMode !== "angles";
   const notes: string[] = [];
   const changes: string[] = [];
   let keepSourceCaptions = options.captions === "keep";
   if (keepSourceCaptions) notes.push("Original captions were kept. No new captions were added.");
+  if (options.narration && !keepOriginalAudio && options.versionMode === "angles")
+    notes.push("New angles on one moment keep the original voice, so no narration was added.");
   const variant = job.variant - 1;
   const siblings = [...completedAutoSiblings(job, previous), ...reserved.filter(other =>
     other.id !== job.id && other.batchId === job.batchId && other.sourceId === job.sourceId &&
     other.status === "processing" && !!other.auto)];
+  const newAngle = angle === "classic" ? undefined : angle;
+  const lead = newAngle ? angleLead(job, previous, reserved) : undefined;
   const avoidSiblings = job.allowRepeatedFootage ? [] : siblings;
+  const repeatsShortSource = () => source.duration <= options.targetDuration && avoidSiblings.length > 0;
+  const shortSourceSkip = "This batch already has a version of this short source. Choose Generate anyway to make another version using the same footage.";
   signal.throwIfAborted();
-  if (source.duration <= options.targetDuration && avoidSiblings.length)
-    throw new AutoSkipError(
-      "This batch already has a version of this short source. Choose Generate anyway to make another version using the same footage.",
-    );
+  // A new angle reuses version 1's footage on purpose; other versions look for unused footage.
+  if (!lead && repeatsShortSource()) throw new AutoSkipError(shortSourceSkip);
   let transcript: Transcript | undefined;
   onPhase("Checking your footage", 2);
   if (source.hasAudio) {
@@ -258,7 +267,23 @@ export async function prepareAutoRemix({
       );
   }
   signal.throwIfAborted();
-  const batchPlans: EditorialPlan[] = avoidSiblings.map((sibling) => {
+  let anglePlan: AnglePlan | null = null;
+  if (newAngle) {
+    let reason = "Version 1 did not choose a moment.";
+    if (lead && !transcript?.segments.length) reason = "A new angle needs recognized speech.";
+    else if (lead) {
+      onPhase("Writing a new angle on version 1's moment", 36);
+      const planned = await planAngleVersion({ angle: newAngle, lead, transcript: transcript!, targetDuration: options.targetDuration, variant: job.variant, signal });
+      if ("reason" in planned) reason = planned.reason; else anglePlan = planned;
+    }
+    if (!anglePlan) {
+      // Another moment keeps the version useful; a short source has no other moment, so say why instead of repeating it.
+      if (repeatsShortSource()) throw new AutoSkipError(`${reason} No duplicate version was made.`);
+      notes.push(`${reason} This version uses another moment instead.`);
+    }
+  }
+  if (angle === "classic") notes.push("Angle: classic. Versions 2–4 reuse this moment with new angles.");
+  const batchPlans: EditorialPlan[] = (anglePlan ? [] : avoidSiblings).map((sibling) => {
     const cuts = sibling.settings.segments || [
       {
         start: sibling.settings.trimStart,
@@ -281,10 +306,10 @@ export async function prepareAutoRemix({
     const unused = select(previousPlans);
     return unused.length || !historyPlans.length ? unused : select(batchPlans);
   };
-  let candidates = transcript
+  let candidates = transcript && !anglePlan
     ? preferUnused(previous => buildCandidates(transcript!, source.duration, options.targetDuration, variant, previous))
     : [];
-  if (transcript?.segments.length) {
+  if (transcript?.segments.length && !anglePlan) {
     onPhase("Finding complete spoken ideas", 36);
     const ideas = await discoverSourceIdeas({ transcript, sourceDuration: source.duration,
       targetDuration: options.targetDuration, signal });
@@ -301,6 +326,7 @@ export async function prepareAutoRemix({
   }
   if (
     transcript &&
+    !anglePlan &&
     batchPlans.length &&
     !candidates.length &&
     buildCandidates(
@@ -321,7 +347,31 @@ export async function prepareAutoRemix({
   let hookRewritten = false;
   let narrated = false;
   let audioPath: string | undefined;
-  if (transcript && candidates.length) {
+  const checkSourceCaptions = async (selected: NonNullable<RemixSettings["segments"]>, speech: Transcript) => {
+    if (!options.captions || options.captions === "auto") {
+      onPhase("Checking for captions already in the footage", 43);
+      const inspection = await inspectSourceCaptions({ source, cuts: selected, transcript: speech, signal });
+      keepSourceCaptions = inspection.status !== "not-detected";
+      if (inspection.status === "detected") {
+        changes.push("Existing captions kept");
+      }
+      if (keepSourceCaptions) notes.push(captionProtectionNote(inspection.status));
+    }
+    if (!hookRewritten && !keepSourceCaptions)
+      notes.push("The hook was taken from the selected speech because AI rewriting did not finish for this version.");
+  };
+  if (anglePlan && transcript) {
+    cuts = anglePlan.cuts;
+    captionTranscript = retimeTranscript(transcript, cuts);
+    hook = anglePlan.hook;
+    callouts = anglePlan.callouts;
+    usedAI = hookRewritten = anglePlan.usedAI;
+    changes.push(...anglePlan.changes);
+    notes.push(...anglePlan.notes);
+    await checkSourceCaptions(cuts, transcript);
+    if (keepSourceCaptions && (angle === "question" || angle === "points"))
+      throw new AutoSkipError("This video keeps captions that are already in the picture, so a question or key-point angle would add no on-screen text. Choose Different moments for more versions.");
+  } else if (transcript && candidates.length) {
     onPhase("Choosing a cut and writing its hook", 38);
     const creative = await writeCreativePlan(
       candidates,
@@ -350,17 +400,7 @@ export async function prepareAutoRemix({
     const removedPauses = candidate.end - candidate.start - cutsDuration(cuts);
     if (removedPauses > 0.3)
       changes.push(`Trimmed ${removedPauses.toFixed(1)}s of pauses`);
-    if (!options.captions || options.captions === "auto") {
-      onPhase("Checking for captions already in the footage", 43);
-      const inspection = await inspectSourceCaptions({ source, cuts, transcript, signal });
-      keepSourceCaptions = inspection.status !== "not-detected";
-      if (inspection.status === "detected") {
-        changes.push("Existing captions kept");
-      }
-      if (keepSourceCaptions) notes.push(captionProtectionNote(inspection.status));
-    }
-    if (!hookRewritten && !keepSourceCaptions)
-      notes.push("The hook was taken from the selected speech because AI rewriting did not finish for this version.");
+    await checkSourceCaptions(cuts, transcript);
     if (useNarration && keepSourceCaptions)
       notes.push("Original speech was kept so it stays consistent with captions in the source.");
     if (useNarration && !keepSourceCaptions) {
@@ -446,7 +486,8 @@ export async function prepareAutoRemix({
   signal.throwIfAborted();
   if (!cuts?.length)
     throw new Error("This video did not contain a usable section to edit.");
-  if (historyPlans.some(plan => footageContainment(cuts, plan.cuts) >= 0.8))
+  // An angle's own note already explains that it reuses version 1's moment.
+  if (!anglePlan && historyPlans.some(plan => footageContainment(cuts, plan.cuts) >= 0.8))
     notes.push("This edit reuses footage from an earlier export. Open History to compare.");
   const duration = cutsDuration(cuts);
   const targetRatio =
@@ -455,11 +496,17 @@ export async function prepareAutoRemix({
       : Number(options.aspect.split(":")[0]) /
         Number(options.aspect.split(":")[1]);
   const blur = Math.abs(source.width / source.height - targetRatio) > 0.12;
+  const aligned = captionTranscript && !keepSourceCaptions
+    ? alignCallouts(callouts, captionTranscript, duration)
+    : [];
+  // A chosen caption style applies to every version; otherwise each angle gets its own look.
+  const anglePreset = anglePlan && angle ? CAPTION_PRESETS.find(preset => preset.id === ANGLE_CAPTION_PRESET[angle]) : undefined;
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS,
     ...(keepOriginalAudio ? DEFAULT_AUDIO_SETTINGS : {}),
     ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
-    ...(options.captionStyle ? { captionStyle: options.captionStyle } : {}),
+    ...(options.captionStyle ? { captionStyle: options.captionStyle }
+      : anglePreset ? { captionStyle: structuredClone(anglePreset.style) } : {}),
     aspect: options.aspect,
     fit: blur ? "blur" : "crop",
     resolution: "1080",
@@ -471,9 +518,7 @@ export async function prepareAutoRemix({
     smoothCuts: !keepOriginalAudio && !!options.pacing && cuts.length > 1,
     autoMotion: false,
     device: "none",
-    callouts: captionTranscript && !keepSourceCaptions
-      ? alignCallouts(callouts, captionTranscript, duration)
-      : [],
+    callouts: anglePlan && angle === "points" ? numberedCallouts(aligned) : aligned,
   };
   // Keep native detail for small Auto sources. Explicit export presets in the
   // timestamp/manual editor produce their requested pixel dimensions.

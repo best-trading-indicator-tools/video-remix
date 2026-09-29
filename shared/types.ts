@@ -65,6 +65,11 @@ export interface AutoOptions extends SupportingVisualOptions {
   /** Independent review of the final selected speech; unavailable checks remain visible. */
   editorialMode?: "off" | "check" | "repair";
   finishedReview?: boolean;
+  /**
+   * What differs between versions of one video: another moment (the default), or new angles on the
+   * first version's moment. Angle versions keep the original voice.
+   */
+  versionMode?: "moments" | "angles";
 }
 export const DEFAULT_AUTO_OPTIONS: AutoOptions = {
   aspect: "9:16",
@@ -485,19 +490,4 @@ export interface Health {
   maxFiles: number;
   concurrency: number;
   retentionHours: number;
-}
-export function randomizeSettings(base: RemixSettings): RemixSettings {
-  const between = (a: number, b: number) =>
-    Math.round((a + Math.random() * (b - a)) * 100) / 100;
-  const clamp = (value: number, low: number, high: number) =>
-    Math.round(Math.max(low, Math.min(high, value)) * 100) / 100;
-  return {
-    ...base,
-    speed: clamp(base.speed * between(0.96, 1.04), 0.5, 2),
-    zoom: clamp(base.zoom * between(0.98, 1.06), 1, 2),
-    saturation: clamp(base.saturation * between(0.95, 1.08), 0, 3),
-    brightness: clamp(base.brightness + between(-0.02, 0.02), -1, 1),
-    contrast: clamp(base.contrast * between(0.97, 1.05), 0, 2),
-    temperature: clamp(base.temperature + between(-0.05, 0.05), -1, 1),
-  };
 }

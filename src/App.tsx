@@ -36,7 +36,6 @@ import {
   RotateCcw,
   Scissors,
   Settings2,
-  Shuffle,
   SlidersHorizontal,
   Sparkles,
   Subtitles,
@@ -54,7 +53,6 @@ import {
   MAX_AUTO_VERSIONS,
   isAutoTargetDuration,
   MAX_BROLL_COUNT,
-  randomizeSettings,
   type AutoCapabilities,
   type AutoOptions,
   type Attachment,
@@ -84,15 +82,18 @@ import { DEFAULT_AUDIO_SETTINGS } from "../shared/audio";
 import SoundModifiers from "./SoundModifiers";
 import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle } from "./BlackBandsEditor";
 import { blackBandsSchema, DEFAULT_BLACK_BANDS, applyBandFinish } from "../shared/black-bands";
+import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
 
 type AutoPreset = { options: AutoOptions; variants: number };
 const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
 function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
   const options = value?.options;
+  const versionMode = options?.versionMode === "angles" ? "angles" : "moments";
   return {
+    // Each angle is a distinct treatment of one moment, so angle batches stop at the number of angles.
     variants: Math.max(
       1,
-      Math.min(MAX_AUTO_VERSIONS, Math.floor(Number(value?.variants)) || 1),
+      Math.min(versionMode === "angles" ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS, Math.floor(Number(value?.variants)) || 1),
     ),
     options: {
       ...DEFAULT_AUTO_OPTIONS,
@@ -111,6 +112,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       blackBands: blackBandsSchema.safeParse(options?.blackBands).success ? options?.blackBands : undefined,
       finishedReview: options?.finishedReview !== false,
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
+      versionMode,
       visualSources: getVisualSources(options),
       supportingVisuals: [
         "off",
@@ -354,8 +356,6 @@ export default function App() {
   const finishedRequests = useRef(new Set<string>());
   const exportVideoRef = useRef<HTMLVideoElement>(null);
   const pendingExportSeek = useRef<number | null>(null);
-  const [variants, setVariants] = useState(1);
-  const [variation, setVariation] = useState(false);
   const [starting, setStarting] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showHelp, setShowHelp] = useState(() => shouldShowOnboarding());
@@ -887,8 +887,6 @@ export default function App() {
               sourceId: source.id,
               settings: settingsById[source.id] || defaultSettings,
             })),
-            variants,
-            randomize: variation,
           }),
         },
       );
@@ -993,8 +991,7 @@ export default function App() {
   const exportCount =
     mode === "auto"
       ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
-      : (renderScope === "selected" && selected ? 1 : sources.length) *
-        variants;
+      : renderScope === "selected" && selected ? 1 : sources.length;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
   const missingBrollSources = (mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources).filter(source => {
     const options = mode === "auto" ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings;
@@ -1172,20 +1169,6 @@ export default function App() {
                   >
                     <RotateCcw size={13} />
                     Reset settings
-                  </button>
-                  <span className="toolbar-divider" />
-                  <button
-                    disabled={brollBusy}
-                    onClick={() => {
-                      replaceSettings(randomizeSettings(settings));
-                      notify(
-                        "A subtle new variation is ready to preview.",
-                        "success",
-                      );
-                    }}
-                  >
-                    <Shuffle size={13} />
-                    Surprise me
                   </button>
                 </div>
               )}
@@ -2214,62 +2197,9 @@ export default function App() {
                 </div>
               </div>
               {mode === "manual" && (
-                <div className="render-options">
-                  <div className="version-control">
-                    <label htmlFor="versions">Versions per video</label>
-                    <div>
-                      <button
-                        aria-label="Fewer versions"
-                        disabled={variants <= 1}
-                        onClick={() => setVariants((value) => value - 1)}
-                      >
-                        −
-                      </button>
-                      <input
-                        id="versions"
-                        type="number"
-                        min={1}
-                        max={5}
-                        value={variants}
-                        onChange={(event) =>
-                          setVariants(
-                            Math.min(
-                              5,
-                              Math.max(
-                                1,
-                                Math.floor(Number(event.target.value)) || 1,
-                              ),
-                            ),
-                          )
-                        }
-                      />
-                      <button
-                        aria-label="More versions"
-                        disabled={variants >= 5}
-                        onClick={() => {
-                          setVariants((value) => value + 1);
-                          if (variants === 1) setVariation(true);
-                        }}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                  <div className="variation-control">
-                    <Toggle
-                      label="Subtle variations"
-                      value={variation}
-                      onChange={setVariation}
-                    />
-                    <span>
-                      {variation
-                        ? "Mix up pace, crop & color"
-                        : variants > 1
-                          ? "Off: versions use identical settings"
-                          : "Mix up pace, crop & color"}
-                    </span>
-                  </div>
-                </div>
+                <p className="render-options manual-versions-hint">
+                  One export per video. For versions built differently, use Auto → Versions → New angles on the same moment.
+                </p>
               )}
               {mode === "auto" && (
                 <div className="auto-render-summary">

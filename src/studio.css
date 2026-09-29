@@ -126,12 +126,9 @@ h1, .page-heading h1 { font-size: clamp(28px, 2.65vw, 44px); line-height: 1.2; l
 .text-button { color: var(--accent); font-size: 12px; min-height: 28px; }
 .render-bar { padding: 20px 24px; gap: 24px; border: 1px solid #4b586b; background: #1c232d; border-radius: 12px; }
 .render-info h2 { font-size: 15px; }
-.render-info p, .version-control > label { font-size: 12px; color: var(--subtle); }
+.render-info p { font-size: 12px; color: var(--subtle); }
 .render-icon { background: var(--surface-hover); border-color: #526078; }
-.version-control > div { height: 36px; border: 1px solid #526078; background: var(--field); }
-.version-control input { color: var(--text); font-size: 13px; }
-.version-control button { color: var(--text); }
-.render-fineprint, .variation-control > span { color: var(--muted); font-size: 11px; }
+.render-fineprint { color: var(--muted); font-size: 11px; }
 .render-options { gap: 20px; }
 .site-footer, .site-footer button { color: var(--muted); font-size: 12px; }
 .exports-panel { padding: 28px; }

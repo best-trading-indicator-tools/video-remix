@@ -125,9 +125,10 @@ export const batchSchema = z
       .min(1)
       .max(100),
     variants: z.number().int().min(1).max(5).default(1),
-    randomize: z.boolean().default(false),
+    // Accepted from older clients. Randomized speed, zoom and color copies were replaced by Auto angle versions.
+    randomize: z.literal(false, { error: "Subtle variations were removed. For different versions, use Auto → Versions → New angles on the same moment." }).optional(),
   })
-  .strict().refine(batch => !batch.items.some(item => item.draftReview) || (!batch.randomize && batch.variants === 1), "Render reviewed drafts with their approved settings");
+  .strict().refine(batch => !batch.items.some(item => item.draftReview) || batch.variants === 1, "Render reviewed drafts with their approved settings");
 export const normalizedSettings = (input: unknown) =>
   settingsSchema.parse({
     ...DEFAULT_SETTINGS,
@@ -147,6 +148,7 @@ export const autoOptionsSchema = z
     audio: z.enum(AUTO_AUDIO_MODES).optional(),
     finishedReview: z.boolean().optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
+    versionMode: z.enum(["moments", "angles"]).optional(),
   })
   .strict()
   .default({ aspect: "9:16", targetDuration: 45, narration: false })

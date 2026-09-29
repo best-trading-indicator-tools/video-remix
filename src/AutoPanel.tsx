@@ -18,6 +18,7 @@ import type {
   VideoSource,
 } from "../shared/types";
 import { MAX_AUTO_VERSIONS, isAutoTargetDuration } from "../shared/types";
+import { ANGLE_NAMES, MAX_ANGLE_VERSIONS, VERSION_ANGLES } from "../shared/version-angles";
 import { AUDIO_LOOKS, audioLookById, isAutoAudioNone } from "../shared/audio";
 import FinishingPresets from "./FinishingPresets";
 import BlackBandsEditor from "./BlackBandsEditor";
@@ -73,7 +74,9 @@ export default function AutoPanel({
     : Number(options.aspect.split(":")[0]) / Number(options.aspect.split(":")[1]);
   const keepOriginalCaptions = options.captions === "keep";
   const keepOriginalAudio = isAutoAudioNone(options.audio);
-  const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions && !keepOriginalAudio;
+  const angles = options.versionMode === "angles";
+  const maxVersions = angles ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS;
+  const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions && !keepOriginalAudio && !angles;
   const [durationInput, setDurationInput] = useState(String(options.targetDuration));
   useEffect(() => setDurationInput(String(options.targetDuration)), [options.targetDuration, selectedId]);
   const commitDuration = () => {
@@ -88,7 +91,7 @@ export default function AutoPanel({
   const commitVersions = () => {
     const parsed = Number(versionInput);
     const count = versionInput.trim() && Number.isFinite(parsed)
-      ? Math.max(1, Math.min(MAX_AUTO_VERSIONS, Math.floor(parsed))) : variants;
+      ? Math.max(1, Math.min(maxVersions, Math.floor(parsed))) : variants;
     setVersionInput(String(count));
     onVariantsChange(count);
   };
@@ -222,14 +225,14 @@ export default function AutoPanel({
                 type="number"
                 inputMode="numeric"
                 min={1}
-                max={MAX_AUTO_VERSIONS}
+                max={maxVersions}
                 step={1}
                 value={versionInput}
                 aria-describedby="auto-version-note"
                 onChange={(event) => {
                   setVersionInput(event.target.value);
                   const count = event.target.valueAsNumber;
-                  if (Number.isInteger(count) && count >= 1 && count <= MAX_AUTO_VERSIONS)
+                  if (Number.isInteger(count) && count >= 1 && count <= maxVersions)
                     onVariantsChange(count);
                 }}
                 onBlur={commitVersions}
@@ -237,7 +240,26 @@ export default function AutoPanel({
               />
             </label>
             <p id="auto-version-note" className="auto-preferences-note">
-              1–{MAX_AUTO_VERSIONS} per video. Similar cuts are skipped, so you may get fewer versions.
+              {angles
+                ? `1–${MAX_ANGLE_VERSIONS} per video, one for each angle.`
+                : `1–${MAX_AUTO_VERSIONS} per video. Similar cuts are skipped, so you may get fewer versions.`}
+            </p>
+            <label className="auto-output-field" data-tour="auto-version-mode">
+              What changes between versions
+              <select value={angles ? "angles" : "moments"} aria-describedby="auto-version-mode-note"
+                onChange={(event) => {
+                  const versionMode = event.target.value === "angles" ? "angles" : "moments";
+                  onChange({ ...options, versionMode });
+                  if (versionMode === "angles" && variants > MAX_ANGLE_VERSIONS) onVariantsChange(MAX_ANGLE_VERSIONS);
+                }}>
+                <option value="moments">A different moment</option>
+                <option value="angles">New angles on the same moment</option>
+              </select>
+            </label>
+            <p id="auto-version-mode-note" className="auto-preferences-note">
+              {angles
+                ? `Version 1 is the ${ANGLE_NAMES.classic.toLowerCase()} edit. Later versions reuse its moment: ${VERSION_ANGLES.slice(1).map(angle => ANGLE_NAMES[angle].toLowerCase()).join(", ")}. They keep the original voice and write their on-screen text with DeepSeek.`
+                : "Each version looks for a different moment in this video."}
             </p>
             <label className="auto-output-field" data-tour="auto-captions">
               Captions
@@ -295,6 +317,8 @@ export default function AutoPanel({
                 <small>
                   {keepOriginalAudio
                     ? "Sound is set to None, so the original voice is kept."
+                    : angles
+                    ? "New angles on one moment keep the original voice."
                     : keepOriginalCaptions
                     ? "Keep original preserves the source voice to match its captions."
                     : !capabilities?.narration
