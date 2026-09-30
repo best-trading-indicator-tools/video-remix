@@ -11,7 +11,7 @@
 .problem-details pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; font-size: 11px; }
 .problem-details p, .diagnostic-copy-fallback p { padding-top: 8px; color: var(--muted, #a8b4c5); }
 .diagnostic-copy-fallback textarea { box-sizing: border-box; width: 100%; margin-top: 8px; background: var(--field, #171c23); color: var(--text, #f4f5f8); }
-.diagnostics-launcher { position: fixed; bottom: 14px; left: 14px; z-index: 80; box-shadow: 0 3px 15px #0005; font-size: 12px; }
+.diagnostics-launcher { position: fixed; bottom: 14px; left: 14px; z-index: 101; box-shadow: 0 3px 15px #0005; font-size: 12px; }
 .diagnostics-launcher span { border-radius: 12px; padding: 0 6px; background: var(--accent-dark, #513423); }
 .diagnostics-dialog { box-sizing: border-box; width: min(700px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); padding: 22px; border: 1px solid var(--line, #384351); border-radius: 14px; background: var(--surface, #171c23); color: var(--text, #f4f5f8); overflow: auto; }
 .diagnostics-dialog::backdrop { background: #060a12bd; }
@@ -23,6 +23,8 @@
 .diagnostics-time { margin: 0; }
 .diagnostics-empty { padding: 24px 0; }
 .app-error-fallback { max-width: 700px; margin: 60px auto; padding: 20px; }
-.toast:has(.problem-notice) { align-items: flex-start; padding: 8px; max-height: 60dvh; overflow: auto; }
+.toast-region:has(.problem-notice) { max-height: calc(100dvh - 100px); overflow-y: auto; }
+.toast:has(.problem-notice) { align-items: flex-start; flex-shrink: 0; padding: 8px; max-height: 60dvh; overflow: auto; }
 .toast .problem-notice { margin: 0; flex: 1; border: 0; }
 @media (max-width: 600px) { .diagnostics-dialog { padding: 16px; } .diagnostics-launcher { bottom: 10px; left: 10px; } }
+@media (max-width: 767px) { .toast-region:has(.problem-notice) { bottom: 60px; } }
