@@ -30,8 +30,11 @@ test("linked-source checks tolerate Windows stat API differences without accepti
 
   const changed = { status: 409, message: /linked original was moved or changed/u };
   for (const key of ["dev", "ino", "size", "mtimeMs"] as const) {
+    // Windows file IDs can exceed Number.MAX_SAFE_INTEGER, where adding 1
+    // may round back to the original value. Always supply a distinct fixture.
+    const different = source.fileSignature[key] === 0 ? 1 : 0;
     await assert.rejects(assertLinkedSourceUnchanged({ ...source,
-      fileSignature: { ...source.fileSignature, [key]: source.fileSignature[key] + 1 },
+      fileSignature: { ...source.fileSignature, [key]: different },
     }), changed, `A real ${key} mismatch must still be rejected`);
   }
   await fs.utimes(original, new Date(), new Date(mtimeMs + 5000));
