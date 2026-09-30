@@ -1,4 +1,5 @@
 import type { VideoSource } from "./types.js";
+import type { Diagnostic } from "./diagnostics.js";
 
 export const DEFAULT_IMPORT_BATCH_SIZE = 100;
 
@@ -19,4 +20,5 @@ export interface ImportSession {
   lastModified?: number;
   source?: VideoSource;
   error?: string;
+  diagnostic?: Diagnostic;
 }

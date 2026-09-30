@@ -1,3 +1,4 @@
+import { serverDiagnostic } from "./diagnostics.js";
 import type { Express } from "express";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import path from "node:path";
@@ -60,8 +61,12 @@ export function installTranscriptRoutes(app: Express, dependencies = { cached: c
         : await dependencies.available()
           ? "The transcript could not be prepared. Retry, or keep setting timestamps by hand."
           : "Transcripts need the local speech model. Run npm run setup:auto, then retry.";
-      if (!res.headersSent) res.status(error instanceof ImportError ? error.status : 422).json({ error: message });
-      else { res.write(`${JSON.stringify({ type: "error", message } satisfies TranscriptEvent)}\n`); res.end(); }
+      const diagnostic = serverDiagnostic(error, { operation: "Transcribe video", entityId: source.id,
+        id: res.locals.requestId, requestId: res.locals.requestId, message,
+        endpoint: req.path, method: req.method, httpStatus: res.headersSent ? 200 : error instanceof ImportError ? error.status : 422 });
+      console.error(`Transcribe video failed [${diagnostic.id}]:`, error);
+      if (!res.headersSent) res.status(error instanceof ImportError ? error.status : 422).json({ error: message, diagnostic });
+      else { res.write(`${JSON.stringify({ type: "error", message, diagnostic } satisfies TranscriptEvent)}\n`); res.end(); }
     } finally {
       clearTimeout(timeout); res.removeListener("close", disconnected); busy.delete(source.id);
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => {});

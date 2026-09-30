@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import { AlertTriangle, Check, CircleHelp, LoaderCircle, RefreshCw } from "lucide-react";
 import type { EditorialReport } from "../shared/editorial";
 import type { EditorialRepairLog } from "../shared/editorial-repair";
@@ -68,6 +69,7 @@ export default function EditorialReportSummary({ report: savedReport, repair, co
       </details>)}
     </details>}
     </details>
+    {failureMessage && <ProblemNotice severity="warning" operation="Editorial check" message={failureMessage} />}
     {canRetry && <div className="editorial-retry">
       <button type="button" className="secondary-button" onClick={onRetry} disabled={retrying} aria-label={retrying ? "Checking edit…" : undefined}>
         {retrying ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}
@@ -76,6 +78,6 @@ export default function EditorialReportSummary({ report: savedReport, repair, co
       <p>{retrying ? "Checking the saved edit. Temporary DeepSeek errors are retried automatically."
         : "Checks this saved edit without changing or rendering the video."}</p>
     </div>}
-    {retryError && <p className="editorial-retry-error" role="alert">{retryError}</p>}
+    {retryError && <ProblemNotice message={retryError} operation="Review edit" />}
   </section>;
 }

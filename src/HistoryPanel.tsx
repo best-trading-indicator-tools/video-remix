@@ -1,3 +1,5 @@
+import { apiRequest as request } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useState, type FormEvent } from "react";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditorialReportSummary from "./EditorialReportSummary";
@@ -15,12 +17,7 @@ const localDateTime = () => {
   const now = new Date();
   return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
 };
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const result = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(result?.error || "History could not be updated. Please try again.");
-  return result as T;
-}
+
 
 type ReviewDraft = { [Key in keyof Omit<Required<ExportReview>, "issueReasons">]: string } & { issueReasons: NonNullable<ExportReview["issueReasons"]> };
 type PostDraft = { [Key in keyof Required<PostMetrics>]: string };
@@ -167,7 +164,7 @@ function MeasurementEditor({ entry, onSaved }: { entry: ExportHistoryEntry; onSa
         </div><div className="history-form-actions"><button type="button" className="secondary-button" onClick={() => setAddingPost(false)}>Cancel</button><button type="submit" className="secondary-button">{saving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}Save platform results</button></div>
       </fieldset></form>}
     </div>
-    {error && <p className="history-error" role="alert">{error}</p>}{saved && <p className="measurement-saved" role="status">{saved}</p>}
+    {error && <ProblemNotice message={error} operation="Update history" />}{saved && <p className="measurement-saved" role="status">{saved}</p>}
   </details>;
 }
 
@@ -317,7 +314,7 @@ function HistoryCard({ entry, stockUses, onSaved }: {
         <div className="history-form-actions"><button type="button" className="secondary-button" onClick={() => { setAdding(false); setEditingId(null); setEditingIndex(null); setError(""); }}>Cancel</button><button className="secondary-button" type="submit">{saving ? <LoaderCircle size={14} className="spin" /> : <Check size={14} />}Save publication record</button></div>
       </fieldset>
     </form>}
-    {error && <p className="history-error" role="alert">{error}</p>}
+    {error && <ProblemNotice message={error} operation="Update history" />}
     <div className="history-card-actions">
       <span className={`history-availability ${entry.available ? "available" : ""}`}>{entry.available ? "Export file available" : "Export file expired or removed · History kept"}</span>
       <div>{!adding && <button type="button" className="secondary-button" disabled={saving} onClick={() => { setAdding(true); setEditingId(null); setEditingIndex(null); setUrl(""); setAccount(""); setPublishedAt(localDateTime()); setError(""); }}><Plus size={13} />Record publication</button>}
@@ -390,7 +387,7 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
       <button className="secondary-button" disabled={loading || offset === 0} onClick={() => setPage({ key: filterKey, offset: Math.max(0, offset - pageSize) })}>Previous</button>
       <button className="secondary-button" disabled={loading || offset + pageSize >= total} onClick={() => setPage({ key: filterKey, offset: offset + pageSize })}>Next</button>
     </nav>
-    {error && <p className="history-error" role="alert">{error}</p>}
+    {error && <ProblemNotice message={error} operation="Update history" />}
     {loading && !entries.length ? <div className="history-empty" role="status"><LoaderCircle className="spin" size={24} /><p>Loading export history…</p></div> :
       !visible.length ? <div className="history-empty"><Clock3 size={30} /><h3>{query ? "No matching exports" : "Your export history starts here"}</h3><p>{query ? "Try another title or source name." : "Finished Auto edits will appear here, including future revisions."}</p></div> :
         <div className="history-list" aria-busy={loading}>{visible.map((entry) => <HistoryCard key={entry.id} entry={entry} stockUses={stockUses} onSaved={(updated) => {

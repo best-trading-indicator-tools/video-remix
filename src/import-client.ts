@@ -1,13 +1,8 @@
 import type { ImportSession } from "../shared/imports";
 
-export async function importRequest<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const data = await response.json().catch(() => null);
-  // Aborting while reading the response body must not become a successful null result.
-  init?.signal?.throwIfAborted();
-  if (!response.ok) throw new Error(data?.error || `Import failed (${response.status}). Please try again.`);
-  return data as T;
-}
+export { apiRequest as importRequest } from "./api-client";
+import { apiRequest as importRequest } from "./api-client";
+import { reportProblem } from "./diagnostics-store";
 
 export async function importVideoLinks(links: string[]): Promise<{
   imports: ImportSession[]; errors?: { name: string; error: string }[];
@@ -24,6 +19,7 @@ export async function importVideoLinks(links: string[]): Promise<{
       signal: controller.signal,
     });
   } catch (error) {
+    if (controller.signal.aborted) reportProblem(controller.signal.reason, { operation: "Import video links", endpoint: "/api/imports/links", method: "POST" });
     controller.signal.throwIfAborted();
     throw error;
   } finally { clearTimeout(timer); }

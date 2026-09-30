@@ -15,6 +15,8 @@ import { createThumbnail, probeMedia } from "./engine.js";
 import { fingerprintFile } from "./history.js";
 import { publicSource, saveStore, state, type StoredSource } from "./store.js";
 import { openRegularUpload, UnsafeUploadError } from "./upload-file.js";
+import { diagnosticSchema } from "../shared/diagnostics.js";
+import { serverDiagnostic } from "./diagnostics.js";
 
 const TTL = 48 * 60 * 60 * 1000;
 const DISK_RESERVE = 128 * 1024 * 1024;
@@ -32,6 +34,7 @@ const storedSchema = z.object({
   progress: z.number().min(0).max(100), createdAt: z.number(), updatedAt: z.number(),
   identity: z.string().regex(/^[\da-f]{64}$/iu).optional(), lastModified: z.number().optional(),
   error: z.string().optional(), signature: signatureSchema.optional(),
+  diagnostic: diagnosticSchema.optional(),
   remoteUrl: z.string().max(2048).optional(),
 }).strict().refine(item => item.kind === "remote" ? !!item.remoteUrl : item.size > 0);
 type StoredImport = z.infer<typeof storedSchema>;
@@ -84,6 +87,8 @@ function publicImport(item: StoredImport): ImportSession {
     kind: item.kind, status: item.status, phase: item.phase, progress: item.progress,
     chunkSize: config.importChunkSize, identity: item.identity, lastModified: item.lastModified, updatedAt: item.updatedAt,
     ...(source ? { source: publicSource(source) } : {}), ...(item.error ? { error: item.error } : {}),
+    ...(item.error ? { diagnostic: item.diagnostic || serverDiagnostic(item.error, { id: `import-${item.id}-${item.updatedAt}`, entityId: item.id,
+      occurredAt: new Date(item.updatedAt).toISOString(), operation: "Import video" }) } : {}),
   };
 }
 async function persist(item: StoredImport) {
@@ -219,6 +224,8 @@ async function processImport(item: StoredImport, signal: AbortSignal) {
       item.status = "completed"; item.phase = "Ready to edit"; item.progress = 100;
     } else {
       item.status = "failed"; item.phase = "Import needs attention"; item.error = safeError(error);
+      item.diagnostic = serverDiagnostic(error, { entityId: item.id, operation: "Import video" });
+      console.error(`Import failed [${item.diagnostic.id}] [${item.id}]:`, error);
     }
     item.updatedAt = Date.now();
     await persist(item).catch(() => undefined);
@@ -403,6 +410,7 @@ export function installMediaImportRoutes(app: Express) {
       const next: StoredImport = { ...previous, size: 0, offset: 0, status: "processing", progress: 0,
         phase: `Waiting to retry download from ${link.platform}`, updatedAt: Math.max(Date.now(), previous.updatedAt + 1) };
       delete next.error;
+      delete next.diagnostic;
       await persist(next);
       sessions.set(next.id, next);
       return next;

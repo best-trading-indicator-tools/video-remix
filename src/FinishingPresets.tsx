@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useId, useState } from "react";
 import { Bookmark, Check, Trash2 } from "lucide-react";
 import { captureFinishingPreset, FINISHING_PRESET_EVENT, FINISHING_PRESET_STORAGE, migrateManualPresets, restoreFinishingPresets, type FinishingPreset, type PresetMode, type PresetValues } from "../shared/finishing-presets";
@@ -56,7 +57,7 @@ export default function FinishingPresets<M extends PresetMode>({ mode, settings,
       {!!items.length && <><label htmlFor={`${id}-choose`}>Saved preset</label><div className="finishing-preset-select"><select id={`${id}-choose`} value={selected} onChange={event => setSelected(event.target.value)}><option value="">Choose a preset</option>{items.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button type="button" className="icon-button" aria-label="Delete selected finishing preset" disabled={!current || disabled} onClick={() => { if (persist(load().filter(item => item.id !== selected))) { setSelected(""); setMessage("Preset deleted."); } }}><Trash2 size={15} /></button></div>
         {current && <div className="finishing-preset-actions"><button type="button" className="secondary-button" disabled={disabled} onClick={() => apply()}>Apply to this {mode === "shorts" ? "short" : "video"}</button>{onApplySelected && <button type="button" className="secondary-button" disabled={disabled} onClick={() => apply(true)}>Apply to selected shorts</button>}</div>}</>}
       <label htmlFor={`${id}-name`}>Save current finish as</label><div className="finishing-preset-select"><input id={`${id}-name`} value={name} maxLength={60} placeholder="e.g. Clean podcast portrait" onChange={event => setName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); if (name.trim() && !disabled) save(); } }} /><button type="button" className="secondary-button" disabled={disabled || !name.trim()} onClick={save}><Check size={14} />Save</button></div>
-      {message && <p className="finishing-preset-message" role="status">{message}</p>}{error && <p className="finishing-preset-error" role="alert">{error}</p>}
+      {message && <p className="finishing-preset-message" role="status">{message}</p>}{error && <ProblemNotice message={error} operation="Save finishing preset" />}
     </div>
   </details>;
 }

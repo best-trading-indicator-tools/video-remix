@@ -1,0 +1,28 @@
+.problem-notice { display: grid; gap: 9px; min-width: 0; margin: 10px 0; padding: 13px; border: 1px solid #80594e; border-radius: 9px; background: var(--field, #171c23); color: var(--text, #f4f5f8); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.problem-notice.warning { border-color: #8b713d; }
+.problem-heading { display: flex; align-items: flex-start; gap: 8px; }
+.problem-heading svg { flex-shrink: 0; margin-top: 2px; color: var(--accent, #ffb380); }
+.problem-notice p { margin: 0; }
+.problem-message { white-space: pre-wrap; max-height: 160px; overflow: auto; }
+.problem-next-step { color: var(--subtle, #c1c8d2); }
+.problem-notice .diagnostic-copy-button, .diagnostics-dialog button, .diagnostics-launcher { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 7px 10px; border: 1px solid var(--line, #384351); border-radius: 7px; background: var(--surface-hover, #252c37); color: var(--text, #f4f5f8); font: inherit; cursor: pointer; }
+.diagnostic-copy-button { white-space: normal; text-align: left; }
+.problem-details summary { color: var(--muted, #a8b4c5); cursor: pointer; }
+.problem-details pre { max-height: 220px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 8px 0 0; font-size: 11px; }
+.problem-details p, .diagnostic-copy-fallback p { padding-top: 8px; color: var(--muted, #a8b4c5); }
+.diagnostic-copy-fallback textarea { box-sizing: border-box; width: 100%; margin-top: 8px; background: var(--field, #171c23); color: var(--text, #f4f5f8); }
+.diagnostics-launcher { position: fixed; bottom: 14px; left: 14px; z-index: 80; box-shadow: 0 3px 15px #0005; font-size: 12px; }
+.diagnostics-launcher span { border-radius: 12px; padding: 0 6px; background: var(--accent-dark, #513423); }
+.diagnostics-dialog { box-sizing: border-box; width: min(700px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); padding: 22px; border: 1px solid var(--line, #384351); border-radius: 14px; background: var(--surface, #171c23); color: var(--text, #f4f5f8); overflow: auto; }
+.diagnostics-dialog::backdrop { background: #060a12bd; }
+.diagnostics-header, .diagnostics-actions { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.diagnostics-header h2 { margin: 0; font-size: 20px; }
+.diagnostics-dialog > p { font-size: 13px; line-height: 1.6; }
+.diagnostics-retention, .diagnostics-time { color: var(--muted, #a8b4c5); font-size: 11px; }
+.diagnostics-list { display: grid; gap: 16px; margin-top: 24px; }
+.diagnostics-time { margin: 0; }
+.diagnostics-empty { padding: 24px 0; }
+.app-error-fallback { max-width: 700px; margin: 60px auto; padding: 20px; }
+.toast:has(.problem-notice) { align-items: flex-start; padding: 8px; max-height: 60dvh; overflow: auto; }
+.toast .problem-notice { margin: 0; flex: 1; border: 0; }
+@media (max-width: 600px) { .diagnostics-dialog { padding: 16px; } .diagnostics-launcher { bottom: 10px; left: 10px; } }

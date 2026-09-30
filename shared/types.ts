@@ -412,6 +412,7 @@ export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  diagnostic?: import("./diagnostics.js").Diagnostic;
   draftReview?: DraftReview;
   /** Provider work has no measurable completion percentage. */
   editorialProgress?: EditorialReviewProgress & { startedAt: string; budgetMs: number };
@@ -481,6 +482,7 @@ export interface RenderJob {
   }[];
 }
 export interface Health {
+  runtime?: import("./diagnostics.js").RuntimeInfo;
   ok: boolean;
   ffmpeg: boolean;
   ffprobe: boolean;

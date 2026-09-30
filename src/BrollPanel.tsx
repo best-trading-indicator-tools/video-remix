@@ -1,3 +1,5 @@
+import { apiRequest as request, recordResponseProblems } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -11,15 +13,7 @@ import {
 import type { BrollAsset } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE } from "../shared/imports";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
-  const body = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      body?.error || `Request failed (${response.status}). Please try again.`,
-    );
-  return body as T;
-}
+
 const sizeLabel = (bytes: number) => `${Math.round(bytes / 1024 / 1024)} MB`;
 
 export default function BrollPanel({
@@ -144,6 +138,7 @@ export default function BrollPanel({
           errors?: { name: string; error: string }[];
           error?: string;
         };
+        recordResponseProblems(data, xhr.status, "/api/broll", "POST", xhr.getResponseHeader("X-Request-ID"));
         if (xhr.status < 200 || xhr.status >= 300) {
           setError(data.error || "Upload failed. Please try again.");
           return;
@@ -298,9 +293,7 @@ export default function BrollPanel({
         </button>
       )}
       {error && (
-        <p className="broll-error" role="alert">
-          {error}
-        </p>
+        <ProblemNotice message={error} operation="Manage B-roll" />
       )}
       {notice && (
         <p className="broll-notice" role="status">

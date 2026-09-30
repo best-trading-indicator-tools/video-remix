@@ -252,6 +252,8 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
         await sleep(50);
       }
       assert.equal(job?.status, "failed"); assert.match(job?.error || "", /linked original.*changed/iu);
+      assert.equal(job?.diagnostic?.code, "LINKED_SOURCE_UNAVAILABLE");
+      assert.equal(job?.diagnostic?.entityId, id);
       assert.equal((await fetch(`${base}/api/sources/${ready.id}`, { method: "DELETE" })).status, 200);
       await access(original);
       await assert.rejects(access(managed), { code: "ENOENT" });
@@ -345,6 +347,9 @@ test("large imports resume durably, protect originals, and handle 40GiB without 
       assert.equal((await json(`/api/imports/${item.id}/finish`, {})).status, 202);
       const failed = await waitImport(item.id, "failed");
       assert.equal(failed.error?.includes(directory), false);
+      assert.ok(failed.diagnostic?.id);
+      assert.equal(failed.diagnostic?.entityId, item.id);
+      assert.equal(JSON.stringify(failed.diagnostic).includes(directory), false);
       await stop();
       const sessionPath = path.join(data, "imports", item.id, "session.json");
       const saved = JSON.parse(await readFile(sessionPath, "utf8"));

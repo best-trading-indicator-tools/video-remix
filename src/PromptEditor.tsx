@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useId, useRef, useState } from "react";
 import { ArrowUp, Check, LoaderCircle, MessageSquareText, RotateCcw, X } from "lucide-react";
 import type { EditPlan, PromptEditResponse } from "../shared/types";
@@ -152,7 +153,7 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
     </div>
     <p id={`${id}-scope`} className="prompt-editor-scope">{scope}</p>
     {loading && <p className="prompt-editor-status" role="status"><LoaderCircle className="spin" size={15} />Working out your changes…</p>}
-    {error && <p className="prompt-editor-error" role="alert">{error}</p>}
+    {error && <ProblemNotice message={error} operation="Suggest edits" />}
     {notice && <p className="prompt-editor-status" role="status">{notice}</p>}
     {currentProposal && <div className={`prompt-editor-proposal ${currentProposal.clarification ? "needs-detail" : ""}`} aria-live="polite">
       <div className="prompt-editor-proposal-heading"><strong>{currentProposal.clarification ? "A little more detail" : "Proposed changes"}</strong>

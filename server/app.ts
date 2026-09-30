@@ -6,6 +6,7 @@ import multer from "multer";
 import { ZipArchive } from "archiver";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
+import { diagnosticMiddleware, runtimeInfo } from "./diagnostics.js";
 import { readFile, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { config, paths } from "./config.js";
@@ -130,6 +131,7 @@ let inflightUploads = 0;
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
+  app.use(diagnosticMiddleware);
   app.use((req, res, next) => {
     const hosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
     if (!["0.0.0.0", "::"].includes(config.host)) hosts.add(config.host);
@@ -170,6 +172,7 @@ export function createApp() {
     res.json({
       ok: tools.ffmpeg && tools.ffprobe,
       ...tools,
+      runtime: runtimeInfo,
       maxFileSize: config.maxFileSize,
       maxLargeFileSize: config.maxLargeFileSize,
       importChunkSize: config.importChunkSize,
@@ -915,6 +918,7 @@ export function createApp() {
   );
   const handleError: ErrorRequestHandler = (error, _req, res, next) => {
     if (res.headersSent) return next(error);
+    res.locals.failure = error;
     if (error instanceof multer.MulterError) {
       res.status(400).json({
         error:
@@ -932,7 +936,7 @@ export function createApp() {
           : error.code === "ENOENT"
             ? 404
             : 500;
-    if (status === 500) console.error("Request failed:", error);
+    if (status === 500) console.error(`Request failed [${res.locals.requestId}]:`, error);
     res.status(status).json({
       error:
         status === 500

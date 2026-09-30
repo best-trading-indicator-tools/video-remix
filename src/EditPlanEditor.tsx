@@ -1,3 +1,5 @@
+import { apiRequest as request } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import { GRAPHIC_KIND_LABELS } from "../shared/graphic-scene";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import { reviewShotTarget, type ReviewShotTarget } from "../shared/review-actions";
@@ -18,12 +20,7 @@ import CaptionStyleEditor, { CaptionOverlay } from "./CaptionStyleEditor";
 import { DEFAULT_CAPTION_STYLE } from "../shared/caption-style";
 import "./edit-plan.css";
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const body = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(body?.error || "The edit could not be saved. Please try again.");
-  return body as T;
-}
+
 const differs = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second);
 const seconds = (value: number) => `${value.toFixed(2)}s`;
 const CENTER: FocalPoint = { x: 0.5, y: 0.5 };
@@ -592,11 +589,11 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
             </div>
           </div>
           <footer className="edit-plan-footer">
-            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will request {brollCount} total supporting shots. {promptAnchor?.changes.preserveBroll ? "All existing shots will be kept." : "Saved animations and uploaded B-roll will be kept."}</p>}{error && <p className="edit-plan-error" role="alert">{error}</p>}</div>
+            <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will request {brollCount} total supporting shots. {promptAnchor?.changes.preserveBroll ? "All existing shots will be kept." : "Saved animations and uploaded B-roll will be kept."}</p>}{error && <ProblemNotice message={error} operation="Edit export" />}</div>
             <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount && brollMaxCoverage === savedCoverage)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setBrollMaxCoverage(savedCoverage); setCoverageInput(String(savedCoverage)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setReviewNotice(""); setError(""); }}><RotateCcw size={14} />Reset changes</button>
               <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
-        </form> : <div className="edit-plan-loading"><p className="edit-plan-error" role="alert">{error || "This edit is unavailable."}</p><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}
+        </form> : <div className="edit-plan-loading"><ProblemNotice message={error || "This edit is unavailable."} operation="Load edit" /><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}
     </section>
   </div>;
 }

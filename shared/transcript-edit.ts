@@ -1,8 +1,9 @@
+import type { Diagnostic } from "./diagnostics.js";
 import { formatSourceClock, MAX_SHORT_CUTS, parseSourceClock, type ShortCut } from "./shorts.js";
 import type { Transcript } from "./types.js";
 
 export type TranscriptEvent = { type: "progress"; message: string; progress: number }
-  | { type: "result"; transcript: Transcript } | { type: "error"; message: string };
+  | { type: "result"; transcript: Transcript } | { type: "error"; message: string; diagnostic?: Diagnostic };
 export interface TranscriptWordRef { index: number; segment: number; start: number; end: number; text: string; probability?: number }
 
 /** Recognized word timings are approximate; keep a little air around a selection without reaching a neighboring word. */

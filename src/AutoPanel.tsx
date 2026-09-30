@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { CaptionAppearance } from "./CaptionStyleEditor";
@@ -374,7 +375,7 @@ export default function AutoPanel({
           </div>
         ) : capabilities.message ? (
           <div className="auto-capability-note">
-            <span>{capabilities.message}</span>
+            <ProblemNotice message={capabilities.message} operation="Check automatic editing tools" severity="warning" />
           </div>
         ) : (
           <div className="auto-capability-note">

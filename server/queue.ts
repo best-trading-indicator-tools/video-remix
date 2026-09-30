@@ -32,6 +32,7 @@ import { captionsAfterInserts, footageTimeline } from "../shared/own-footage.js"
 import { captionCuesSrt } from "./edit-plan.js";
 import { writeFile } from "node:fs/promises";
 import { addManualCaptions, wantsManualCaptions } from "./manual-captions.js";
+import { serverDiagnostic } from "./diagnostics.js";
 const running = new Map<string, AbortController>();
 // Only initial analysis and clip selection need exclusive access to a source.
 // Once cuts are chosen, expensive stock searches, reviews and exports can overlap.
@@ -398,6 +399,10 @@ async function run(job: StoredJob, controller: AbortController) {
       error instanceof Error
         ? error.message
         : "Rendering failed. Try a different export preset.";
+    if (!controller.signal.aborted && status !== "skipped") {
+      job.diagnostic = serverDiagnostic(error, { entityId: job.id, operation: "Export video" });
+      console.error(`Export failed [${job.diagnostic.id}] [${job.id}]:`, error);
+    }
   } finally {
     // Keep the job processing until its old files are gone. A retry must never
     // share this work directory or output path with cleanup from the prior run.

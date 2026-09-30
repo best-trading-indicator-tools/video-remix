@@ -1,3 +1,4 @@
+import { serverDiagnostic } from "./diagnostics.js";
 import type { Express } from "express";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { paths } from "./config.js";
@@ -64,8 +65,12 @@ export function installClipDiscoveryRoutes(app: Express, dependencies = { transc
       const message = error instanceof ImportError ? error.message : controller.signal.aborted
         ? "Discovery timed out. Retry to reuse completed analysis."
         : "Clip discovery could not finish. Check that the local speech model and DeepSeek are configured, then retry. Completed sections are cached.";
-      if (!res.headersSent) res.status(error instanceof ImportError ? error.status : 422).json({ error: message });
-      else { res.write(`${JSON.stringify({ type: "error", message })}\n`); res.end(); }
+      const diagnostic = serverDiagnostic(error, { operation: "Find clips", entityId: source.id,
+        id: res.locals.requestId, requestId: res.locals.requestId, message,
+        endpoint: req.path, method: req.method, httpStatus: res.headersSent ? 200 : error instanceof ImportError ? error.status : 422 });
+      console.error(`Find clips failed [${diagnostic.id}]:`, error);
+      if (!res.headersSent) res.status(error instanceof ImportError ? error.status : 422).json({ error: message, diagnostic });
+      else { res.write(`${JSON.stringify({ type: "error", message, diagnostic })}\n`); res.end(); }
     } finally {
       clearTimeout(timeout); res.removeListener("close", disconnected); busy = false;
       if (directory) await rm(directory, { recursive: true, force: true }).catch(() => {});

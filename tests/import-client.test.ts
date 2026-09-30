@@ -70,7 +70,7 @@ test("link submission preserves server and network errors and clears their deadl
   t.mock.timers.tick(30_000);
   assert.equal(signal!.aborted, false);
   offline = true;
-  await assert.rejects(importVideoLinks(videoLinks), /Failed to fetch/u);
+  await assert.rejects(importVideoLinks(videoLinks), /Could not connect to the video engine/u);
   t.mock.timers.tick(30_000);
   assert.equal(signal!.aborted, false);
 });

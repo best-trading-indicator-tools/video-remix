@@ -1,3 +1,4 @@
+import type { Diagnostic } from "./diagnostics.js";
 export interface ClipSuggestion {
   id: string;
   start: number;
@@ -16,4 +17,4 @@ export interface ClipDiscoveryResult {
   notes: string[];
 }
 export type DiscoveryEvent = { type: "progress"; message: string; progress: number }
-  | { type: "result"; result: ClipDiscoveryResult } | { type: "error"; message: string };
+  | { type: "result"; result: ClipDiscoveryResult } | { type: "error"; message: string; diagnostic?: Diagnostic };

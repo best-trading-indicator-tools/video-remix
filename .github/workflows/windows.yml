@@ -36,3 +36,4 @@ jobs:
           tests/upload-file.test.ts tests/linked-sources.test.ts
           tests/history-thumbnails.test.ts tests/import-client.test.ts
           tests/imports.test.ts tests/engine.test.ts
+          tests/diagnostics.test.ts tests/diagnostics-client.test.ts tests/transcript-edit.test.ts

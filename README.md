@@ -932,3 +932,24 @@ DeepSeek; audio transcription stays local. `DEEPSEEK_VISION_MODEL` defaults to
 [vision API documentation](https://api-docs.deepseek.com/guides/vision/).
 `AUTO_AI=false` disables this review. The review has a bounded processing budget
 and does not automatically alter the rendered video or predict platform eligibility.
+
+### Share an error report
+
+Errors across imports, previews, editing tools and exports now show a recovery
+step and **Copy error details**. Ask someone experiencing a problem to copy that
+report and send it to you. If clipboard permission is blocked, the app provides
+selectable text to copy manually. Error notifications remain until dismissed.
+
+**Help & errors** keeps the latest 30 errors and warnings for the current browser
+tab, including after a refresh. Users can review reports, copy recent details, or
+clear the history. Nothing is sent automatically. Intentional cancellation does
+not create an error report.
+
+Reports include a reference, time, action, error code, relevant HTTP status,
+frontend/server revisions, browser and operating system, and available server
+code locations. API responses carry `X-Request-ID`; unexpected server exceptions,
+streaming failures, and import/export failures log their reference in the app
+terminal. Failed import/export diagnostics are saved with their existing records.
+Local paths, remote URLs, email addresses and common credential formats are
+redacted. Reports do not attach files, request bodies or environment variables;
+users should still review the error text before sharing it.

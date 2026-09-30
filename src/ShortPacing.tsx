@@ -1,3 +1,5 @@
+import { apiRequest } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useRef, useState } from "react";
 import { LoaderCircle, Play, Undo2 } from "lucide-react";
 import type { ShortDraft } from "../shared/shorts";
@@ -64,7 +66,7 @@ export default function ShortPacing({
     setError("");
     const base = current ? review!.baseCuts : draft.cuts;
     try {
-      const response = await fetch("/api/shorts/pacing", {
+      const result = await apiRequest<PacingSuggestion>("/api/shorts/pacing", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
@@ -77,9 +79,6 @@ export default function ShortPacing({
           })),
         }),
       });
-      const result = await response.json();
-      if (!response.ok)
-        throw new Error(result.error || "Pacing analysis failed.");
       if (!controller.signal.aborted)
         onChange({
           pacingReview: {
@@ -175,9 +174,7 @@ export default function ShortPacing({
           </button>
         )}
         {error && (
-          <p className="shorts-error" role="alert">
-            {error}
-          </p>
+          <ProblemNotice message={error} operation="Adjust pacing" />
         )}
         {review && (
           <>

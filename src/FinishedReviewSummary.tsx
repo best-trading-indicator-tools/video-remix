@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import { AlertTriangle, Check, CircleHelp, Eye, LoaderCircle, Play, RefreshCw } from "lucide-react";
 import { FINISHED_CHECK_NAMES, type FinishedIssue, type FinishedReviewReport } from "../shared/finished-review";
 import type { ReactNode } from "react";
@@ -13,7 +14,7 @@ export default function FinishedReviewSummary({ report, compact = false, onSeek,
   if (!report && !onRetry) return null;
   const retry = onRetry && <div className="finished-review-actions"><button className="secondary-button" type="button" onClick={onRetry} disabled={retrying}>
     {retrying ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}{retrying ? "Reviewing picture & sound…" : report ? "Recheck picture & sound" : "Review finished picture & sound"}
-  </button><span>Uses this export. No new render.</span>{retryError && <p role="alert">{retryError}</p>}</div>;
+  </button><span>Uses this export. No new render.</span>{retryError && <ProblemNotice message={retryError} operation="Review export" />}</div>;
   if (!report) return <div className="finished-review empty">{retry}</div>;
   const reviewedSeconds = report.audio.windows.reduce((sum, item) => sum + item.end - item.start, 0);
   return <details className={`finished-review ${report.status}`} open={!compact && report.status !== "pass"}>
@@ -28,8 +29,8 @@ export default function FinishedReviewSummary({ report, compact = false, onSeek,
         {onEditMoment && <button type="button" className="secondary-button" onClick={() => onEditMoment(issue)}>Edit this moment</button>}
         {issueActions?.(issue)}
       </li>)}</ol>}
-      {report.picture.reason && <p className="finished-review-reason">{report.picture.reason}</p>}
-      {report.audio.reason && <p className="finished-review-reason">{report.audio.reason}</p>}
+      {report.picture.reason && <ProblemNotice severity="warning" operation="Review finished picture" message={report.picture.reason} />}
+      {report.audio.reason && <ProblemNotice severity="warning" operation="Review finished audio" message={report.audio.reason} />}
       {retry}
     </div>
   </details>;

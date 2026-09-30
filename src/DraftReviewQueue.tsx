@@ -1,3 +1,5 @@
+import { apiRequest } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useState } from "react";
 import { Check, RefreshCw, Trash2 } from "lucide-react";
 import type { VideoSource } from "../shared/types";
@@ -30,8 +32,7 @@ export default function DraftReviewQueue({ active, drafts, sources, activeId, se
     const controller = new AbortController();
     setHistory(undefined); setFailure(undefined);
     const timer = window.setTimeout(() => {
-      void fetch("/api/shorts/review-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: request, signal: controller.signal })
-        .then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error || "History could not be checked."); return body as { drafts: DraftHistoryResult[] }; })
+      void apiRequest<{ drafts: DraftHistoryResult[] }>("/api/shorts/review-history", { method: "POST", headers: { "Content-Type": "application/json" }, body: request, signal: controller.signal })
         .then(body => { if (!controller.signal.aborted) setHistory({ key, results: body.drafts }); })
         .catch(error => { if (!controller.signal.aborted) setFailure({ key, message: error instanceof Error ? error.message : "History could not be checked." }); });
     }, 250);
@@ -73,7 +74,7 @@ export default function DraftReviewQueue({ active, drafts, sources, activeId, se
           <ol>{draft.cuts.map((cut, index) => <li key={cut.id}><span>{cut.start} → {cut.end}</span>{source && parseSourceClock(cut.start) !== null && <a href={`${source.url}#t=${parseSourceClock(cut.start)},${parseSourceClock(cut.end) ?? ""}`} target="_blank" rel="noreferrer">Preview sequence {index + 1}</a>}</li>)}</ol>
         </details>
         <div className="draft-review-history" aria-live="polite"><strong>Previous exports &amp; publications</strong>
-          {historyError ? <p className="shorts-error">{historyError} Use Refresh history to retry.</p> : !result ? <p>{validation.errors.length ? "Complete valid source timestamps to check history." : "Checking workspace history…"}</p>
+          {historyError ? <ProblemNotice message={historyError} operation="Check export history" /> : !result ? <p>{validation.errors.length ? "Complete valid source timestamps to check history." : "Checking workspace history…"}</p>
             : result.status !== "checked" ? <p>History unavailable. {result.status === "source-unavailable" ? "Reconnect the source to check matches." : "This source has no saved content identity."}</p>
             : !result.matches.length ? <p>No overlapping exports recorded in this workspace.</p>
             : <ul>{result.matches.map(match => <li key={match.id}><strong>{match.title}</strong><span>{Math.round(match.draftCoverage * 100)}% of source selection used · {match.overlapSeconds.toFixed(1)}s overlap</span>

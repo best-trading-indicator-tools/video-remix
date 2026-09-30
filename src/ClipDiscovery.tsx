@@ -1,3 +1,6 @@
+import { apiFetch, responseError, streamError } from "./api-client";
+import { reportProblem } from "./diagnostics-store";
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useRef, useState } from "react";
 import { Check, LoaderCircle, Plus, Sparkles, X } from "lucide-react";
 import type { VideoSource } from "../shared/types";
@@ -24,16 +27,16 @@ export default function ClipDiscovery({ source, active, remaining, onKeep }: {
     const request = new AbortController(); controller.current = request; setBusy(true); setError(""); setPreviewId(null);
     setProgress({ message: "Preparing discovery…", progress: 0 });
     try {
-      const response = await fetch("/api/shorts/discover", { method: "POST", headers: { "Content-Type": "application/json" }, signal: request.signal,
+      const response = await apiFetch("/api/shorts/discover", { method: "POST", headers: { "Content-Type": "application/json" }, signal: request.signal,
         body: JSON.stringify({ sourceId: source.id, prompt, count, minSeconds: min, maxSeconds: max,
           exclude: more ? result?.clips.map(({ start, end }) => ({ start, end })) || [] : [] }) });
-      if (!response.ok) throw new Error((await response.json()).error || "Discovery could not start.");
+      if (!response.ok) throw await responseError(response, "/api/shorts/discover", "POST");
       const reader = response.body?.getReader(); if (!reader) throw new Error("Streaming is unavailable. Please retry.");
       const decoder = new TextDecoder(); let pending = "", complete = false;
       const receive = (line: string) => {
         if (!line.trim()) return;
         const event = JSON.parse(line) as DiscoveryEvent;
-        if (event.type === "error") throw new Error(event.message);
+        if (event.type === "error") throw streamError(event, "/api/shorts/discover", response.headers.get("X-Request-ID"));
         if (event.type === "progress") setProgress(event);
         if (event.type === "result") { complete = true; setResult(event.result); setKept([]); setDismissed([]); }
       };
@@ -43,7 +46,7 @@ export default function ClipDiscovery({ source, active, remaining, onKeep }: {
         if (part.done) { receive(pending); break; }
       }
       if (!complete) throw new Error("Discovery was interrupted. Retry to reuse completed sections.");
-    } catch (error) { if (!request.signal.aborted) setError(error instanceof Error ? error.message : "Discovery failed."); }
+    } catch (error) { if (!request.signal.aborted) { reportProblem(error, { operation: "Find clips", entityId: source.id }); setError(error instanceof Error ? error.message : "Discovery failed."); } }
     finally { if (controller.current === request) { controller.current = null; setBusy(false); } }
   };
   const visible = result?.clips.filter(clip => !dismissed.includes(clip.id)) || [];
@@ -62,10 +65,11 @@ export default function ClipDiscovery({ source, active, remaining, onKeep }: {
       <p className="shorts-helper">Speech recognition runs locally. Idea selection uses your configured DeepSeek account. Fewer clips may fit your brief.</p>
       {!valid && <p className="shorts-error">Choose 1–20 clips and whole-second lengths, with minimum no greater than maximum (up to 24 hours).</p>}
       {busy && <div className="shorts-discovery-progress" role="status"><LoaderCircle className="spin" size={16} /><span>{progress.message}</span><progress value={progress.progress} max={100} aria-label="Clip discovery progress" /><button className="secondary-button" onClick={() => { controller.current?.abort(); setBusy(false); }}>Cancel</button></div>}
-      {error && <p className="shorts-error" role="alert">{error}</p>}
+      {error && <ProblemNotice message={error} operation="Find clips" />}
       {result && <>
         <div className="shorts-discovery-results-heading"><strong>{result.clips.length} suggested clips</strong><span>{result.fullCoverage ? "All speech sections reviewed" : "Partial review"} · {result.reviewedSections}/{result.totalSections} sections</span></div>
-        {result.notes.map(note => <p key={note} className="shorts-helper">{note}</p>)}
+        {result.notes.map(note => result.fullCoverage ? <p key={note} className="shorts-helper">{note}</p>
+          : <ProblemNotice key={note} severity="warning" operation="Find clips" message={note} entityId={source?.id} />)}
         <div className="shorts-suggestions">{visible.map(clip => <article className="shorts-suggestion" key={clip.id}>
           {previewId === clip.id && source ? <video key={clip.id} src={`${source.url}#t=${clip.start},${clip.end}`} controls autoPlay playsInline
             onLoadedMetadata={event => { event.currentTarget.currentTime = clip.start; }}

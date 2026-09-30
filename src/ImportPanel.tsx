@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload, X } from "lucide-react";
 import type { Health, VideoSource } from "../shared/types";
@@ -288,7 +289,7 @@ export default function ImportPanel(props: Props) {
     </div>}
     {!!selectionErrors.length && <details className="import-selection-errors" open>
       <summary>{selectionErrors.length} video{selectionErrors.length === 1 ? "" : "s"} {selectionErrors.length === 1 ? "needs" : "need"} attention</summary>
-      <ul>{selectionErrors.map((message, index) => <li key={index}>{message}</li>)}</ul>
+      <ul>{selectionErrors.map((message, index) => <li key={index}><ProblemNotice message={message} operation="Import videos" /></li>)}</ul>
       <p>Other videos continue importing. Correct these files or links, then try again.</p>
     </details>}
     {!!sessions.length && <div className="import-list" aria-label="Video imports">
@@ -306,7 +307,7 @@ export default function ImportPanel(props: Props) {
           {!complete && <>
             <progress max={100} value={percent} aria-label={`${session.name} import progress`} />
             <small>{uploading ? `${size(session.offset)} of ${size(session.size)}` : session.size ? size(session.size) : "Size available after download"}{session.kind === "local" ? " · linked original" : ""}</small>
-            {(errors[session.id] || session.error) && <p className="import-error" role="alert">{errors[session.id] || session.error}</p>}
+            {(errors[session.id] || session.error) && <ProblemNotice message={errors[session.id] || session.error || "Import failed."} diagnostic={errors[session.id] ? undefined : session.diagnostic} operation="Import video" entityId={session.id} />}
             {session.kind === "remote" && session.status === "failed" && <button className="import-resume" disabled={!props.connected || retrying.includes(session.id)} onClick={() => void retryImport(session)}>
               {retrying.includes(session.id) ? <LoaderCircle size={13} className="spin" /> : <RotateCcw size={13} />}{retrying.includes(session.id) ? "Retrying…" : "Retry import"}
             </button>}

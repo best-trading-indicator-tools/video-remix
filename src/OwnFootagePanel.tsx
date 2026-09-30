@@ -1,3 +1,5 @@
+import { apiRequest, recordResponseProblems } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import { useEffect, useRef, useState } from "react";
 import { Film, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import type { OwnFootageAsset, OwnFootagePlacement } from "../shared/own-footage";
@@ -15,8 +17,7 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, save
   const input = useRef<HTMLInputElement>(null);
   const uploadRequest = useRef<XMLHttpRequest | null>(null);
   const load = async () => {
-    try { const response = await fetch("/api/broll"); if (!response.ok) throw new Error("Could not load your clips. Try Refresh.");
-      const body = await response.json(); setAssets(body.assets); }
+    try { const body = await apiRequest<{ assets: OwnFootageAsset[] }>("/api/broll"); setAssets(body.assets); setError(""); }
     catch (reason) { setError((reason as Error).message); }
   };
   useEffect(() => { void load(); return () => uploadRequest.current?.abort(); }, []);
@@ -31,7 +32,8 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, save
     xhr.upload.onprogress = event => { if (event.lengthComputable) setProgress(Math.round(event.loaded / event.total * 100)); };
     xhr.onload = () => { try {
       const body = JSON.parse(xhr.responseText);
-      if (xhr.status < 200 || xhr.status >= 300 || !body.assets?.length) throw new Error(body.error || "The footage could not be uploaded.");
+      recordResponseProblems(body, xhr.status, "/api/broll", "POST", xhr.getResponseHeader("X-Request-ID"));
+      if (xhr.status < 200 || xhr.status >= 300 || !body.assets?.length) throw new Error(body.error || body.errors?.[0]?.error || "The footage could not be uploaded.");
       setAssets(current => [...current.filter(asset => !body.assets.some((added: OwnFootageAsset) => added.id === asset.id)), ...body.assets]);
       setSelected(body.assets[0].id);
     } catch (reason) { setError((reason as Error).message); } };
@@ -53,7 +55,7 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, save
           const chosen = available.find(asset => asset.id === event.target.value);
           if (chosen) update(item.id, { assetId: chosen.id, start: 0, end: item.appendToEnd ? chosen.duration : Math.min(chosen.duration, item.end - item.start) });
         }}>{!asset && <option value={item.assetId}>Saved clip unavailable</option>}{available.map(asset => <option key={asset.id} value={asset.id}>{asset.name}</option>)}</select></label>}
-        {asset && <video key={`${item.id}-${!!item.appendToEnd}`} src={asset.url} controls preload="metadata" playsInline onLoadedMetadata={event => { event.currentTarget.currentTime = item.appendToEnd ? 0 : item.start; }} onTimeUpdate={event => { const video = event.currentTarget; if (!video.paused && video.currentTime >= (item.appendToEnd ? asset.duration : item.end)) { video.pause(); video.currentTime = item.appendToEnd ? 0 : item.start; } }} />}
+        {asset && <video key={`${item.id}-${!!item.appendToEnd}`} src={asset.url} controls preload="metadata" playsInline onError={() => setError("The browser could not play this footage. Check that the file is still available.")} onLoadedMetadata={event => { event.currentTarget.currentTime = item.appendToEnd ? 0 : item.start; }} onTimeUpdate={event => { const video = event.currentTarget; if (!video.paused && video.currentTime >= (item.appendToEnd ? asset.duration : item.end)) { video.pause(); video.currentTime = item.appendToEnd ? 0 : item.start; } }} />}
         <label className="own-footage-append"><input type="checkbox" checked={!!item.appendToEnd} onChange={event => update(item.id, event.target.checked
           ? { appendToEnd: true, mode: "insert", at: 0, start: 0, end: asset?.duration ?? item.end }
           : { appendToEnd: false })} />
@@ -76,6 +78,6 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, save
       {onApplyAll && value.length > 0 && <button type="button" className="secondary-button" onClick={() => onApplyAll(structuredClone(value))}>Use these placements for all videos</button>}
     </fieldset>
     {progress !== null && <div className="own-footage-upload" role="status"><span>{progress === 100 ? "Preparing your clip…" : `Uploading ${progress}%`}</span><button className="secondary-button" type="button" onClick={() => uploadRequest.current?.abort()}><X size={14} />Cancel upload</button></div>}
-    {error && <p className="own-footage-error" role="alert">{error}</p>}
+    {error && <ProblemNotice message={error} operation="Manage supporting footage" />}
   </details>;
 }

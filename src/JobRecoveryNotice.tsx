@@ -1,3 +1,4 @@
+import ProblemNotice from "./ProblemNotice";
 import { RefreshCw } from "lucide-react";
 import type { RenderJob } from "../shared/types";
 
@@ -19,7 +20,7 @@ export default function JobRecoveryNotice({ job }: { job: RenderJob }) {
         {new Date(retry.nextRetryAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
       </time></span>}
     </div>
-    <p>{retry.reason}</p>
+    <ProblemNotice message={retry.reason} diagnostic={job.diagnostic ? { ...job.diagnostic, severity: job.status === "failed" ? "error" : "warning" } : undefined} operation="Export video" entityId={job.id} severity={job.status === "failed" ? "error" : "warning"} />
     {retry.lastPhase && <p className="job-recovery-context">Stopped during: {retry.lastPhase}</p>}
   </div>;
 }

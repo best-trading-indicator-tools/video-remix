@@ -1,3 +1,5 @@
+import { apiRequest } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
 import DraftReviewQueue from "./DraftReviewQueue";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
@@ -37,10 +39,7 @@ interface FocusResult {
 }
 const durationLabel = (seconds: number) => seconds >= 60 ? `${Math.floor(Math.round(seconds) / 60)}m ${Math.round(seconds) % 60}s` : `${Number(seconds.toFixed(2))}s`;
 async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> {
-  const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error || "The request could not be completed.");
-  return data as T;
+  return apiRequest<T>(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal });
 }
 
 export default function LongFormPanel({ defaultPacing, active, sources, selectedSource: source, engineReady, onSelectSource, onQueued, onNotice }: Props) {
@@ -320,7 +319,7 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
         </div>
         <div className="shorts-player-body">
           <div className="shorts-source-description"><strong title={source.name}>{source.name}</strong><span>{source.width} × {source.height} · {formatSourceClock(source.duration)}</span></div>
-          {codecError && <p className="shorts-message" role="status">This browser cannot play the source format. Enter a timestamp and render a five-second sample to inspect any moment. Your full export uses the original video.</p>}
+          {codecError && <ProblemNotice severity="warning" operation="Play source video" entityId={source.id} message="The browser could not play this source. Enter a timestamp and render a five-second sample to inspect a moment." />}
           <label className="shorts-scrubber"><span className="visually-hidden">Source position</span><input type="range" min={0} max={source.duration} step={0.001} value={playhead} onChange={event => seek(event.target.valueAsNumber)} style={{ "--range-fill": `${playhead / source.duration * 100}%` } as CSSProperties} /></label>
           <div className="shorts-clock-row"><label htmlFor="shorts-source-clock">Source timestamp<input id="shorts-source-clock" className="shorts-clock" value={clock} inputMode="decimal" spellCheck={false} aria-invalid={!clockValid} onFocus={() => setClockEditing(true)} onChange={event => setClock(event.target.value)} onBlur={() => { setClockEditing(false); if (clockValid) seek(clockSeconds!); }} onKeyDown={event => { if (event.key === "Enter") event.currentTarget.blur(); }} /></label><button className="secondary-button" disabled={!clockValid} onClick={() => seek(clockSeconds!)}>Go to time<ChevronRight size={14} /></button></div>
           {!clockValid && <p className="shorts-error" role="alert">Enter a timestamp inside this video: HH:MM:SS.mmm or seconds.</p>}
@@ -328,7 +327,7 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
         </div>
       </> : <div className="shorts-empty"><Clapperboard size={30} /><h3>A long video. Your best moments.</h3><p>Import a video from the source panel, then choose the timestamps that belong in your short.</p></div>}
       {(previewBusy || preview || previewError) && <div className="shorts-rendered-sample">
-        {previewBusy ? <div className="shorts-sample-status"><LoaderCircle size={18} className="spin" /><span>Rendering your five-second sample…</span><button className="icon-button" aria-label="Cancel short preview" onClick={() => { previewRequest.current?.abort(); previewRequest.current = null; setPreviewBusy(false); }}><X size={16} /></button></div> : preview ? <><div className="shorts-sample-status"><strong>{preview.label}</strong><button className="icon-button" aria-label="Close short preview" onClick={() => setPreview(null)}><X size={16} /></button></div><video ref={sampleVideo} key={preview.url} src={preview.url} controls playsInline preload="metadata" onPlay={() => { clockOwner.current = "sample"; video.current?.pause(); }} onSeeking={() => { clockOwner.current = "sample"; }} onTimeUpdate={() => { if (preview.kind !== "source" || clockEditing || !sampleVideo.current || clockOwner.current !== "sample") return; const time = Math.min(source?.duration ?? Infinity, preview.sourceStart + sampleVideo.current.currentTime); setPlayhead(time); setClock(formatSourceClock(time)); }} /><p>Rendered framing, sound and cleanup. Export keeps your chosen resolution.</p></> : <p className="shorts-error" role="alert">{previewError}</p>}
+        {previewBusy ? <div className="shorts-sample-status"><LoaderCircle size={18} className="spin" /><span>Rendering your five-second sample…</span><button className="icon-button" aria-label="Cancel short preview" onClick={() => { previewRequest.current?.abort(); previewRequest.current = null; setPreviewBusy(false); }}><X size={16} /></button></div> : preview ? <><div className="shorts-sample-status"><strong>{preview.label}</strong><button className="icon-button" aria-label="Close short preview" onClick={() => setPreview(null)}><X size={16} /></button></div><video ref={sampleVideo} key={preview.url} src={preview.url} controls playsInline preload="metadata" onPlay={() => { clockOwner.current = "sample"; video.current?.pause(); }} onSeeking={() => { clockOwner.current = "sample"; }} onTimeUpdate={() => { if (preview.kind !== "source" || clockEditing || !sampleVideo.current || clockOwner.current !== "sample") return; const time = Math.min(source?.duration ?? Infinity, preview.sourceStart + sampleVideo.current.currentTime); setPlayhead(time); setClock(formatSourceClock(time)); }} /><p>Rendered framing, sound and cleanup. Export keeps your chosen resolution.</p></> : <ProblemNotice message={previewError} operation="Create short clips" />}
       </div>}
       <TranscriptEditor key={source?.id ?? "none"} source={source} draft={draft} active={active} disabled={rendering} engineReady={engineReady} playhead={playhead}
         canCreate={drafts.length < MAX_SHORTS} onSeek={seek} onPlayRange={playRange} onCreate={createFromTranscript}
@@ -411,6 +410,7 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
     </section>
 
     <section className="shorts-collection panel">
+      {savingError && <ProblemNotice operation="Save short drafts" message="Browser storage is unavailable. Your latest edits have not been saved." />}
       <div className="panel-heading"><h2><Clapperboard size={16} />Your short clips<span className="count-pill">{drafts.length}</span></h2><span className={`shorts-save-state ${savingError ? "shorts-error" : ""}`}>{savingError ? "Browser storage full · keep this tab open" : <><Check size={13} />Saved in this browser</>}</span></div>
       <div className="shorts-collection-body">
         {drafts.length ? <DraftReviewQueue active={active} drafts={drafts} sources={sources} activeId={draft?.id} selectedIds={selectedIds} disabled={rendering}
@@ -422,7 +422,7 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
       </div>
       <div className="shorts-render-bar"><div><strong>{approvedDrafts.length} of {drafts.length} drafts approved</strong><p>Render approved drafts, review flagged moments in Exports, then download.</p></div><div className="shorts-render-controls"><label htmlFor="shorts-render-scope">Render scope<select id="shorts-render-scope" value={scope} onChange={event => setScope(event.target.value as typeof scope)}><option value="approved">All approved drafts ({approvedDrafts.length})</option><option value="current">This short</option><option value="selected">Selected shorts ({selectedIds.length})</option><option value="all">All shorts ({drafts.length})</option></select></label><button className="primary-button" disabled={!engineReady || !targets.length || rendering || targets.some(item => !shortIsApproved(item))} onClick={() => void render()}>{rendering ? <LoaderCircle size={16} className="spin" /> : <Clapperboard size={16} />}<span>{rendering ? "Preparing…" : `Render ${targets.length === 1 ? "this short" : `${targets.length} shorts`}`}</span><ArrowRight size={15} /></button></div></div>
       {!!targets.length && targets.some(item => !shortIsApproved(item)) && <p className="shorts-batch-error shorts-helper">Approve the drafts in this scope, or choose All approved drafts.</p>}
-      {error && <p className="shorts-batch-error shorts-error" role="alert">{error}</p>}
+      {error && <ProblemNotice message={error} operation="Create short clips" />}
     </section>
   </div></fieldset>;
 }

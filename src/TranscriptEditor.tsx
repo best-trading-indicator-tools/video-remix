@@ -1,3 +1,6 @@
+import { apiRequest, apiFetch, responseError, streamError } from "./api-client";
+import { reportProblem } from "./diagnostics-store";
+import ProblemNotice from "./ProblemNotice";
 import { memo, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { FileText, LoaderCircle, Play, Plus, Scissors, Search, Undo2, X } from "lucide-react";
 import type { Transcript, VideoSource } from "../shared/types";
@@ -21,9 +24,8 @@ async function checkSaved(sourceId: string) {
   if (loaded.has(sourceId) || preparing.has(sourceId) || checking.has(sourceId)) return;
   checking.add(sourceId); changed();
   try {
-    const response = await fetch(`/api/shorts/transcript/${encodeURIComponent(sourceId)}`);
-    const data = await response.json();
-    if (response.ok && data.transcript) loaded.set(sourceId, data.transcript as Transcript);
+    const data = await apiRequest<{ transcript: Transcript | null }>(`/api/shorts/transcript/${encodeURIComponent(sourceId)}`);
+    if (data.transcript) loaded.set(sourceId, data.transcript as Transcript);
   } catch { /* Transcribing reports any problem explicitly. */ }
   checking.delete(sourceId); changed();
 }
@@ -34,14 +36,14 @@ async function prepare(sourceId: string) {
   preparing.set(sourceId, job); changed();
   const { signal } = job.controller;
   try {
-    const request = () => fetch("/api/shorts/transcript", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceId }), signal });
+    const request = () => apiFetch("/api/shorts/transcript", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ sourceId }), signal });
     let response = await request();
     // A cancelled preparation can take a moment to release this video on the server.
     for (let attempt = 1; response.status === 409 && attempt <= 3; attempt++) {
       await new Promise(resolve => setTimeout(resolve, 1200)); signal.throwIfAborted();
       response = await request();
     }
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).error || "The transcript could not be prepared.");
+    if (!response.ok) throw await responseError(response, "/api/shorts/transcript", "POST");
     const reader = response.body?.getReader(); if (!reader) throw new Error("Streaming is unavailable. Please retry.");
     const decoder = new TextDecoder(), received: { transcript?: Transcript } = {};
     let pending = "";
@@ -49,7 +51,7 @@ async function prepare(sourceId: string) {
       if (!line.trim()) return;
       let event: TranscriptEvent;
       try { event = JSON.parse(line) as TranscriptEvent; } catch { throw new Error("The transcript response was incomplete. Retry to continue."); }
-      if (event.type === "error") throw new Error(event.message);
+      if (event.type === "error") throw streamError(event, "/api/shorts/transcript", response.headers.get("X-Request-ID"));
       if (event.type === "progress") { job.progress = { message: event.message, progress: event.progress }; changed(); }
       if (event.type === "result") received.transcript = event.transcript;
     };
@@ -62,7 +64,7 @@ async function prepare(sourceId: string) {
     loaded.set(sourceId, received.transcript); preparing.delete(sourceId);
   } catch (error) {
     if (signal.aborted) preparing.delete(sourceId);
-    else job.error = error instanceof Error ? error.message : "The transcript could not be prepared.";
+    else { reportProblem(error, { operation: "Transcribe video", entityId: sourceId }); job.error = error instanceof Error ? error.message : "The transcript could not be prepared."; }
   }
   changed();
 }
@@ -292,7 +294,7 @@ export default function TranscriptEditor({ source, draft, active, disabled, engi
         <button className="text-button" onClick={() => job!.controller.abort()}><X size={13} />Cancel</button>
       </div>
       : status === "error" ? <div className="transcript-start">
-        <p className="shorts-error" role="alert">{job!.error}</p>
+        <ProblemNotice message={job!.error!} operation="Transcribe video" />
         <button className="secondary-button" disabled={!engineReady} onClick={() => void prepare(source.id)}>Retry transcript</button>
       </div>
       : !words.length ? <p className="shorts-helper">No words were recognized in this video. Set sequences with timestamps instead.</p>

@@ -1,3 +1,6 @@
+import { apiRequest as api } from "./api-client";
+import ProblemNotice from "./ProblemNotice";
+import { setDiagnosticEnvironment } from "./diagnostics-store";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OnboardingTour from "./OnboardingTour";
 import { shouldShowOnboarding, type TourDestination } from "./onboarding-steps";
@@ -168,7 +171,7 @@ function sameAutoPreset(first: AutoPreset, second: AutoPreset): boolean {
 type Toast = {
   id: number;
   message: string;
-  kind: "success" | "error" | "info";
+  kind: "success" | "error" | "warning" | "info";
 };
 const formatSize = (bytes: number) =>
   bytes >= 1024 ** 3
@@ -186,15 +189,7 @@ function storedObject<T extends object>(key: string, fallback: T): T {
     return fallback;
   }
 }
-async function api<T>(url: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(url, init);
-  const data = await response.json().catch(() => null);
-  if (!response.ok)
-    throw new Error(
-      data?.error || `Request failed (${response.status}). Please try again.`,
-    );
-  return data as T;
-}
+
 
 function IconButton({
   title,
@@ -326,6 +321,8 @@ export default function App() {
     useState<AutoCapabilities | null>(null);
   const [health, setHealth] = useState<Health | null>(null);
   const [connected, setConnected] = useState(true);
+  const [manualStorageError, setManualStorageError] = useState(false);
+  const [autoStorageError, setAutoStorageError] = useState(false);
   const [sources, setSources] = useState<VideoSource[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -467,10 +464,10 @@ export default function App() {
     (message: string, kind: Toast["kind"] = "info") => {
       const id = Date.now() + Math.random();
       setToasts((current) => [...current.slice(-3), { id, message, kind }]);
-      window.setTimeout(
+      if (kind !== "error" && kind !== "warning") window.setTimeout(
         () =>
           setToasts((current) => current.filter((toast) => toast.id !== id)),
-        kind === "error" ? 11000 : 5000,
+        5000,
       );
     },
     [],
@@ -600,8 +597,9 @@ export default function App() {
         JSON.stringify(defaultSettings),
       );
       localStorage.setItem("remix-attachments", JSON.stringify(attachments));
+      setManualStorageError(false);
     } catch {
-      /* Editing is still available when local storage is disabled. */
+      setManualStorageError(true);
     }
   }, [settingsById, defaultSettings, attachments]);
 
@@ -619,8 +617,9 @@ export default function App() {
         "remix-auto-default-settings",
         JSON.stringify(defaultAuto),
       );
+      setAutoStorageError(false);
     } catch {
-      /* Per-video editing remains available without browser storage. */
+      setAutoStorageError(true);
     }
   }, [autoById, defaultAuto]);
 
@@ -1031,6 +1030,7 @@ export default function App() {
       ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
       : renderScope === "selected" && selected ? 1 : sources.length;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
+  useEffect(() => { if (health) setDiagnosticEnvironment(health.runtime, health); }, [health]);
   const missingBrollSources = (mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources).filter(source => {
     const options = mode === "auto" ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings;
     return hasLibraryVisuals(options) && getVisualSources(options).length === 1 && !options.brollIds?.length && (mode === "auto" || options.brollMaxCoverage !== 0);
@@ -1154,15 +1154,12 @@ export default function App() {
         </div>
 
         {!loading && !engineReady && (
-          <div className="connection-banner">
-            <CircleHelp size={17} />
-            <span>
-              {connected
-                ? "FFmpeg is not ready. Install FFmpeg, then restart the server to enable video processing."
-                : "Connection to the video engine was lost. Your workspace will reconnect automatically."}
-            </span>
-          </div>
+          <ProblemNotice operation="Connect to video engine" message={connected
+            ? "FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server."
+            : "Connection to the video engine was lost. Your workspace will reconnect automatically."} />
         )}
+        {(manualStorageError || autoStorageError) && <ProblemNotice operation="Save workspace settings"
+          message="Browser storage is unavailable. Your latest settings have not been saved; keep this tab open." />}
 
         <div hidden={view !== "studio"} style={{ display: view === "studio" ? undefined : "none" }}>
             <div className="studio-toolbar">
@@ -1444,6 +1441,7 @@ export default function App() {
                           }}
                           onError={() => {
                             if (usingRendered) { setShowRendered(false); setRenderedPreview(null); setManualPreviewError("This preview is no longer available. Render a fresh sample."); }
+                            else setManualPreviewError("The browser could not play this video. Try rendering a preview sample.");
                           }}
                           style={{
                             objectFit: sourcePreview || usingRendered
@@ -1550,7 +1548,7 @@ export default function App() {
                           <p>{previewBusy ? "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of this edit` : "Review the first five seconds before exporting."}</p>
                           {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || !liveInterval} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />Render 5s preview</button>}
                         </div>
-                        {manualPreviewError && <p className="manual-preview-error" role="alert">{manualPreviewError}</p>}
+                        {manualPreviewError && <ProblemNotice message={manualPreviewError} operation="Preview video" />}
                       </>}
                     </>
                   ) : (
@@ -1851,7 +1849,7 @@ export default function App() {
                             </p>
                           )}
                           {attachmentError && (
-                            <p className="inline-error">{attachmentError}</p>
+                            <ProblemNotice message={attachmentError} operation="Attach audio or subtitles" />
                           )}
                         </Section>
                       </>
@@ -2169,7 +2167,7 @@ export default function App() {
                           </>}
                           <CaptionAppearance value={settings.captionStyle} onChange={captionStyle => updateSettings({ captionStyle })} />
                           {attachmentError && (
-                            <p className="inline-error">{attachmentError}</p>
+                            <ProblemNotice message={attachmentError} operation="Attach audio or subtitles" />
                           )}
                         </Section>
                         <Section
@@ -2589,7 +2587,7 @@ export default function App() {
                               </p>}
                               <JobRecoveryNotice job={job} />
                               {job.error && !job.retry && (
-                                <p className="job-error">{job.error}</p>
+                                <ProblemNotice message={job.error} diagnostic={job.diagnostic} operation="Export video" entityId={job.id} />
                               )}
                             </div>
                             <div className={`job-status ${job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || (job.editorialReport && job.editorialReport.status !== "pass") ? "quality-review" : ""}`}>
@@ -2695,7 +2693,7 @@ export default function App() {
             ) : (
               <CircleHelp size={17} />
             )}
-            <span>{toast.message}</span>
+            {toast.kind === "error" || toast.kind === "warning" ? <ProblemNotice message={toast.message} operation="Workspace action" severity={toast.kind} /> : <span>{toast.message}</span>}
             <IconButton
               title="Dismiss notification"
               onClick={() =>

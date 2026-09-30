@@ -1,3 +1,4 @@
+import { diagnosticMiddleware } from "../server/diagnostics.js";
 import assert from "node:assert/strict";
 import { after, test } from "node:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -132,6 +133,7 @@ test("transcript routes return saved speech and stream a fresh local transcripti
   state.sources = [{ id, duration: 6, hasAudio: true } as StoredSource, { id: silent, duration: 6, hasAudio: false } as StoredSource];
   let release!: () => void, calls = 0, fail = false, modelReady = true;
   const app = express();
+  app.use(diagnosticMiddleware);
   app.use(express.json());
   installTranscriptRoutes(app, {
     cached: async () => null,
@@ -175,6 +177,11 @@ test("transcript routes return saved speech and stream a fresh local transcripti
     await waitForCall(2); release();
     const failure = (await events(await broken)).at(-1);
     assert.equal(failure?.type, "error");
+    if (failure?.type === "error") {
+      assert.ok(failure.diagnostic?.requestId);
+      assert.equal(failure.diagnostic?.entityId, id);
+      assert.equal(failure.diagnostic?.code, "TRANSCRIPTION_NOT_READY");
+    }
     assert.match(failure?.type === "error" ? failure.message : "", /npm run setup:auto/);
   } finally {
     state.sources = saved;

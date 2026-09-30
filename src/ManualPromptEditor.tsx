@@ -1,3 +1,4 @@
+import { apiRequest } from "./api-client";
 import { useState } from "react";
 import { DEFAULT_SETTINGS, type RemixSettings } from "../shared/types";
 import PromptEditor, { type PromptExample, type ReviewablePrompt } from "./PromptEditor";
@@ -25,13 +26,10 @@ export default function ManualPromptEditor({ sourceId, settings, disabled = fals
   const [undo, setUndo] = useState<SettingsUndo | null>(null);
   const identity = JSON.stringify(settings);
   const suggest = async (prompt: string, signal: AbortSignal): Promise<ManualPromptProposal> => {
-    const response = await fetch(`/api/sources/${sourceId}/edit-prompt`, {
+    return apiRequest<ManualPromptProposal>(`/api/sources/${sourceId}/edit-prompt`, {
       method: "POST", headers: { "Content-Type": "application/json" }, signal,
       body: JSON.stringify({ prompt, settings }),
     });
-    const body = await response.json().catch(() => null);
-    if (!response.ok) throw new Error(body?.error || "Your edit could not be suggested. Please try again.");
-    return body as ManualPromptProposal;
   };
   const apply = (proposal: ManualPromptProposal) => {
     const next = structuredClone({ ...DEFAULT_SETTINGS, ...proposal.settings, audioId: settings.audioId, subtitleId: settings.subtitleId });
