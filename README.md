@@ -652,6 +652,7 @@ The frontend uses React, TypeScript, and Vite. The Express API validates uploads
 - **Text or subtitles fail:** check your FFmpeg build includes `drawtext` and `subtitles`, and install a system font. The Docker image includes these dependencies.
 - **Slow exports:** reduce resolution, frame rate, or render concurrency. Encoding speed depends on clip duration, effects, and available CPU.
 - **Uploads rejected:** check the per-file size and batch limits in your configuration.
+- **Linked original reported as moved or changed on Windows:** update the app, restart it, remove the failed import card and link the original again. Linked-file checks now resolve the original path before comparing metadata, avoiding inconsistent Windows volume IDs through symbolic links. If the file really moved or changed, re-import it from its current location. You can also use **browse files** or drag and drop to upload a separate copy.
 
 ### Workspace storage and migration
 

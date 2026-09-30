@@ -66,7 +66,9 @@ const signatureOf = (info: NonNullable<Awaited<ReturnType<typeof stat>>>) => ({ 
 export async function assertLinkedSourceUnchanged(source: Pick<StoredSource, "filePath" | "fileSignature">) {
   if (!source.fileSignature) return;
   try {
-    const info = await stat(source.filePath);
+    // Match the resolved-path stat used when capturing the signature. On Windows,
+    // stat through a symlink can use a different API and report a different dev.
+    const info = await stat(await realpath(source.filePath));
     const actual = signatureOf(info);
     if (!info.isFile() || Object.entries(source.fileSignature).some(([key, value]) => actual[key as keyof typeof actual] !== value))
       throw new Error("Changed");

@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
 import { mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -60,11 +62,19 @@ test("history frames retain rendered pictures and selected source moments indepe
     assert.deepEqual(await retainHistoryThumbnail({ ...entry, thumbnailKind: "source" }), preview);
   });
 
-  await t.test("managed source links work while changed linked originals are rejected", async () => {
+  await t.test("managed source links tolerate Windows stat differences while changed originals are rejected", async t => {
     const linked = path.join(directory, "linked source.mp4");
     await symlink(source, linked);
     const { dev, ino, size, mtimeMs } = await stat(source);
     const signature = { dev, ino, size, mtimeMs };
+    const originalStat = fs.stat;
+    const mockedStat = t.mock.method(fs, "stat", async (...args: Parameters<typeof fs.stat>) => {
+      const info = await originalStat(...args);
+      if (args[0] === linked) Object.assign(info, { dev: Number(info.dev) + 1 });
+      return info;
+    });
+    syncBuiltinESMExports();
+    t.after(() => { mockedStat.mock.restore(); syncBuiltinESMExports(); });
     const valid = await retainHistoryThumbnail({ id: "linked-valid", outputDuration: 1 }, undefined, undefined,
       { filePath: linked, start: 4, end: 5, fileSignature: signature });
     assert.equal(valid?.kind, "source");

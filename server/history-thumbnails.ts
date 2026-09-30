@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { lstat, mkdir, rename, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, realpath, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ExportHistoryEntry } from "../shared/types.js";
 import { paths } from "./config.js";
@@ -38,7 +38,8 @@ export async function retainHistoryThumbnail(entry: Pick<ExportHistoryEntry, "id
     let seek = Math.min(1, entry.outputDuration / 4);
     let kind: HistoryThumbnail["kind"] = "export";
     if (!input && source && Number.isFinite(source.start) && Number.isFinite(source.end) && source.start >= 0 && source.end > source.start) {
-      const info = await stat(source.filePath);
+      // Linked-source signatures are captured from the resolved original path.
+      const info = await stat(await realpath(source.filePath));
       if (!info.isFile() || !info.size || (source.fileSignature &&
         (["dev", "ino", "size", "mtimeMs"] as const).some(key => info[key] !== source.fileSignature![key]))) return;
       input = source.filePath;
