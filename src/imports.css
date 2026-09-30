@@ -43,3 +43,6 @@
 .import-item small { display: block; color: var(--muted); font-size: 11px; margin-top: 7px; }
 .import-resume { display: flex; justify-content: center; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface-raised); border-radius: 6px; color: var(--text); width: 100%; min-height: 32px; margin-top: 10px; font-size: 12px; }
 .import-error { margin: 10px 0; color: #ffc4ba; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.import-preparation, .import-preparation-notice, .import-preparation-problem { margin: 12px 0; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.import-preparation p { margin: 0 0 10px; color: var(--muted); }
+.import-preparation-notice { color: var(--muted); }

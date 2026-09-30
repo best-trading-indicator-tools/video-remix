@@ -3,6 +3,69 @@ import type { ImportSession } from "../shared/imports";
 export { apiRequest as importRequest } from "./api-client";
 import { apiRequest as importRequest } from "./api-client";
 import { reportProblem } from "./diagnostics-store";
+import { ApiError } from "./api-client";
+import type { Diagnostic } from "../shared/diagnostics";
+
+const preparationDeadline = 30_000;
+const fileRecovery = "Check that the video is fully downloaded and opens on this computer. Try a copy in another local folder, then select it again.";
+
+function preparationError(message: string, context: Partial<Diagnostic> & { operation: string }) {
+  return new ApiError(message, reportProblem(new Error(message), context));
+}
+
+/** Bound the entire step, including a stalled browser read or response body. */
+async function preparationStep<T>(work: (signal: AbortSignal) => Promise<T>, parent: AbortSignal | undefined,
+  timeoutError: () => ApiError): Promise<T> {
+  parent?.throwIfAborted();
+  const controller = new AbortController();
+  const cancel = () => controller.abort(parent?.reason);
+  parent?.addEventListener("abort", cancel, { once: true });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stop: () => void = () => {};
+  const interrupted = new Promise<never>((_resolve, reject) => {
+    stop = () => reject(controller.signal.reason);
+    controller.signal.addEventListener("abort", stop, { once: true });
+    timer = setTimeout(() => controller.abort(timeoutError()), preparationDeadline);
+  });
+  try {
+    return await Promise.race([work(controller.signal), interrupted]);
+  } finally {
+    clearTimeout(timer);
+    parent?.removeEventListener("abort", cancel);
+    controller.signal.removeEventListener("abort", stop);
+  }
+}
+
+function readSample(blob: Blob, signal: AbortSignal): Promise<ArrayBuffer> {
+  signal.throwIfAborted();
+  // Node regression fixtures use Blob; browsers use an explicitly abortable read.
+  if (typeof FileReader === "undefined") return blob.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    const cleanup = () => {
+      signal.removeEventListener("abort", cancel);
+      reader.onload = reader.onerror = reader.onabort = null;
+    };
+    const cancel = () => { cleanup(); reader.abort(); reject(signal.reason); };
+    reader.onload = () => { cleanup(); resolve(reader.result as ArrayBuffer); };
+    reader.onerror = () => { const error = reader.error; cleanup(); reject(error || new Error("File read failed.")); };
+    reader.onabort = () => { cleanup(); reject(new Error("The file read was interrupted.")); };
+    signal.addEventListener("abort", cancel, { once: true });
+    try { reader.readAsArrayBuffer(blob); }
+    catch (error) { cleanup(); reject(error); }
+  });
+}
+
+export function createUploadImport(file: File, identity: string, signal?: AbortSignal): Promise<ImportSession> {
+  return preparationStep(stepSignal => importRequest<ImportSession>("/api/imports", {
+    method: "POST", headers: { "Content-Type": "application/json" }, signal: stepSignal,
+    body: JSON.stringify({ name: file.name, size: file.size, lastModified: file.lastModified, identity }),
+  }), signal, () => preparationError("The server did not confirm this file import within 30 seconds. Preparation has stopped; the import may already be queued.", {
+    operation: "Create file import", code: "IMPORT_QUEUE_TIMEOUT", title: "The server did not confirm the import",
+    nextStep: "Check the app terminal and refresh the import queue before trying again. If this video is listed, select the same file to resume it. Copy these details if the server keeps failing to respond.",
+    method: "POST", endpoint: "/api/imports",
+  }));
+}
 
 export async function importVideoLinks(links: string[]): Promise<{
   imports: ImportSession[]; errors?: { name: string; error: string }[];
@@ -26,14 +89,35 @@ export async function importVideoLinks(links: string[]): Promise<{
 }
 
 // Read only two small samples. A 40 GB File is never materialized in browser memory.
-export async function uploadIdentity(file: File): Promise<string> {
-  const size = 64 * 1024;
-  const first = new Uint8Array(await file.slice(0, size).arrayBuffer());
-  const last = new Uint8Array(await file.slice(Math.max(size, file.size - size)).arrayBuffer());
-  const bytes = new Uint8Array(first.length + last.length);
-  bytes.set(first);
-  bytes.set(last, first.length);
-  return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), byte => byte.toString(16).padStart(2, "0")).join("");
+export async function uploadIdentity(file: File, signal?: AbortSignal): Promise<string> {
+  signal?.throwIfAborted();
+  if (!globalThis.crypto?.subtle) throw preparationError("This browser cannot check the file identity at the current app address.", {
+    operation: "Read video file for import", code: "BROWSER_CRYPTO_UNAVAILABLE", title: "File import needs a secure browser connection",
+    nextStep: "On the computer running the app, open http://localhost:5173 in a current browser. Remote access needs HTTPS. Then select the video again.",
+  });
+  try {
+    return await preparationStep(async stepSignal => {
+      const size = 64 * 1024;
+      const first = new Uint8Array(await readSample(file.slice(0, size), stepSignal));
+      stepSignal.throwIfAborted();
+      const last = new Uint8Array(await readSample(file.slice(Math.max(size, file.size - size)), stepSignal));
+      stepSignal.throwIfAborted();
+      const bytes = new Uint8Array(first.length + last.length);
+      bytes.set(first); bytes.set(last, first.length);
+      const hash = await crypto.subtle.digest("SHA-256", bytes);
+      stepSignal.throwIfAborted();
+      return Array.from(new Uint8Array(hash), byte => byte.toString(16).padStart(2, "0")).join("");
+    }, signal, () => preparationError("The browser did not finish reading the selected video within 30 seconds. No upload was started for this file.", {
+      operation: "Read video file for import", code: "FILE_READ_TIMEOUT", title: "Reading the video took too long", nextStep: fileRecovery,
+    }));
+  } catch (error) {
+    signal?.throwIfAborted();
+    if (error instanceof ApiError) throw error;
+    throw preparationError("The browser could not read the selected video. No upload was started for this file.", {
+      operation: "Read video file for import", code: "FILE_READ_FAILED", title: "The selected video could not be read", nextStep: fileRecovery,
+      systemCode: error instanceof Error ? error.name.slice(0, 40) : undefined,
+    });
+  }
 }
 
 export async function transferImport(file: File, initial: ImportSession, signal: AbortSignal,

@@ -953,3 +953,16 @@ terminal. Failed import/export diagnostics are saved with their existing records
 Local paths, remote URLs, email addresses and common credential formats are
 redacted. Reports do not attach files, request bodies or environment variables;
 users should still review the error text before sharing it.
+
+If file selection appears to stall before uploading, the import panel shows
+whether it is **Reading video file** or **Waiting for the server**. Each preparation
+step has a 30-second deadline and a **Stop preparing** button. A timeout ends the
+remaining batch preparation; already queued files can continue. A readable file
+starts uploading as soon as its import is created. File reads only sample up to
+128 KiB for resume identity, including for large videos.
+
+The copied report distinguishes `FILE_READ_TIMEOUT` / `FILE_READ_FAILED` from
+`IMPORT_QUEUE_TIMEOUT`. For file-read errors, check that the video opens locally
+and try a copy in another local folder. For server confirmation errors, check the
+app terminal and refresh the queue before retrying: the server may already have
+created that import. Selecting the same unchanged file resumes a listed upload.

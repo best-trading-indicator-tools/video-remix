@@ -4,7 +4,9 @@ import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload,
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
-import { importRequest, importVideoLinks, transferImport, uploadIdentity } from "./import-client";
+import { createUploadImport, importRequest, importVideoLinks, transferImport, uploadIdentity } from "./import-client";
+import { ApiError } from "./api-client";
+import type { Diagnostic } from "../shared/diagnostics";
 import "./imports.css";
 
 const size = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
@@ -21,6 +23,10 @@ export default function ImportPanel(props: Props) {
   const [sessions, setSessions] = useState<ImportSession[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
+  const [preparingFile, setPreparingFile] = useState<{ name: string; index: number; total: number; stage: "reading" | "queueing" } | null>(null);
+  const preparation = useRef<AbortController | null>(null);
+  const [preparationNotice, setPreparationNotice] = useState("");
+  const [preparationProblems, setPreparationProblems] = useState<{ name: string; message: string; diagnostic?: Diagnostic }[]>([]);
   const [dragging, setDragging] = useState(false);
   const [localOpen, setLocalOpen] = useState(false);
   const [localPaths, setLocalPaths] = useState("");
@@ -96,6 +102,7 @@ export default function ImportPanel(props: Props) {
       controller.abort();
       picker?.removeEventListener("cancel", cancelPicker);
       transfer.current?.controller.abort();
+      preparation.current?.abort();
       callbacks.current.onBusyChange(false);
     };
   }, [update]);
@@ -130,44 +137,61 @@ export default function ImportPanel(props: Props) {
   };
 
   const selectFiles = async (selected: File[], requestedId?: string | null) => {
-    if (!selected.length || choosing) return;
+    if (!selected.length || preparation.current) return;
     const maximum = props.health?.maxLargeFileSize || 50 * 1024 ** 3;
     if (selected.length > (props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE)) {
       props.onError(`Choose up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`);
       return;
     }
     setChoosing(true);
+    const controller = new AbortController();
+    preparation.current = controller;
+    setPreparationNotice(""); setPreparationProblems([]);
     setSelectionErrors([]);
     const failures: string[] = [];
     try {
-      for (const file of selected) {
-        if (!mounted.current) return;
+      for (const [index, file] of selected.entries()) {
+        if (!mounted.current || controller.signal.aborted) break;
+        setPreparingFile({ name: file.name, index: index + 1, total: selected.length, stage: "reading" });
         try {
           if (file.size > maximum) throw new Error(`Exceeds the ${size(maximum)} import limit.`);
           if (!/\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg)$/iu.test(file.name)) throw new Error("Choose a supported video file.");
-          const identity = await uploadIdentity(file);
+          const identity = await uploadIdentity(file, controller.signal);
           const requested = requestedId ? sessionsRef.current.find(item => item.id === requestedId) : undefined;
           if (requestedId && !requested) throw new Error("This import is no longer available. Choose the video as a new import.");
           if (requested && (requested.size !== file.size || requested.identity !== identity || requested.name !== file.name || requested.lastModified !== file.lastModified))
             throw new Error("Choose the same unchanged video to resume this import.");
           let session = requested || sessionsRef.current.find(item => item.kind === "upload" && item.status === "uploading" &&
             item.name === file.name && item.size === file.size && item.lastModified === file.lastModified && item.identity === identity);
-          session ||= await importRequest<ImportSession>("/api/imports", { method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ name: file.name, size: file.size, lastModified: file.lastModified, identity }) });
+          setPreparingFile({ name: file.name, index: index + 1, total: selected.length, stage: "queueing" });
+          session ||= await createUploadImport(file, identity, controller.signal);
+          controller.signal.throwIfAborted();
           if (!mounted.current) return;
           setErrors(current => { const next = { ...current }; delete next[session.id]; return next; });
           update([session]);
           files.current.set(session.id, file);
+          void runQueue();
         } catch (error) {
+          if (controller.signal.aborted || !mounted.current) break;
           failures.push(`${file.name}: ${error instanceof Error ? error.message : "Unable to prepare this import."}`);
-          if (mounted.current) setSelectionErrors([...failures]);
+          setPreparationProblems(current => [...current, { name: file.name,
+            message: error instanceof Error ? error.message : "Unable to prepare this import.",
+            diagnostic: error instanceof ApiError ? error.diagnostic : undefined }]);
+          if (error instanceof ApiError && ["FILE_READ_TIMEOUT", "IMPORT_QUEUE_TIMEOUT", "ENGINE_UNREACHABLE", "BROWSER_CRYPTO_UNAVAILABLE"].includes(error.diagnostic.code)) {
+            if (index + 1 < selected.length) setPreparationNotice("Preparation stopped. Files already queued can continue; the remaining files have not been prepared. Fix the reported problem before selecting them again.");
+            break;
+          }
         }
       }
-      if (failures.length && mounted.current) props.onError(`${failures.length} video${failures.length === 1 ? "" : "s"} could not be queued. See the import details; other videos will continue.`);
+      if (failures.length && mounted.current) props.onError(`${failures.length} video${failures.length === 1 ? "" : "s"} could not be queued. See the import details. Files already queued can continue.`);
       void runQueue();
     } finally {
       resumeId.current = null;
-      if (mounted.current) setChoosing(false);
+      if (preparation.current === controller) preparation.current = null;
+      if (mounted.current) {
+        setChoosing(false); setPreparingFile(null);
+        if (controller.signal.aborted) setPreparationNotice("Preparation stopped. Files already queued can continue. If a server request was pending, refresh the queue before selecting the video again.");
+      }
     }
   };
 
@@ -250,10 +274,20 @@ export default function ImportPanel(props: Props) {
       onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
       onDrop={event => { event.preventDefault(); setDragging(false); void selectFiles(Array.from(event.dataTransfer.files)); }}>
       <span className="upload-icon">{choosing ? <LoaderCircle size={22} className="spin" /> : <Upload size={22} />}</span>
-      <strong>{choosing ? "Preparing imports…" : "Drop your videos here"}</strong>
-      <span>or <em>browse files</em></span>
+      <strong>{choosing ? preparingFile?.stage === "queueing" ? "Waiting for the server…" : "Reading video file…" : "Drop your videos here"}</strong>
+      {!choosing && <span>or <em>browse files</em></span>}
       <small>Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos per batch<br />{size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
     </button>
+    {choosing && preparingFile && <div className="import-preparation">
+      <p role="status">{preparingFile.index} of {preparingFile.total} · {preparingFile.name}<br />{preparingFile.stage === "reading"
+        ? "Checking a small file sample before upload. This step stops after 30 seconds if it cannot finish."
+        : "Creating the import before uploading. This step stops after 30 seconds if the server does not respond."}</p>
+      <button type="button" className="secondary-button" onClick={() => preparation.current?.abort()}><X size={14} />Stop preparing</button>
+    </div>}
+    {preparationNotice && <p className="import-preparation-notice" role="status">{preparationNotice}</p>}
+    {preparationProblems.map((problem, index) => <div key={index} className="import-preparation-problem">
+      <strong>{problem.name}</strong><ProblemNotice message={problem.message} diagnostic={problem.diagnostic} operation="Prepare video import" />
+    </div>)}
     <div className="import-local import-social">
       <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video URL</label>
       <p id="social-video-link-hint">Paste a YouTube video or Shorts URL instead of uploading a file. TikTok and Instagram links work too.</p>

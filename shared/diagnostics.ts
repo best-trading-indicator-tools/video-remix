@@ -99,7 +99,9 @@ export function makeDiagnostic(message: string, context: Partial<Diagnostic> & {
   const explanation = explainProblem(message, context.httpStatus);
   return {
     ...explanation, ...context,
-    id: context.id || globalThis.crypto.randomUUID(),
+    // Report references are not security tokens. They must work even when an
+    // insecure browser context disables randomUUID and SubtleCrypto.
+    id: context.id || globalThis.crypto?.randomUUID?.() || `client-${Date.now()}-${Math.random().toString(36).slice(2)}`,
     occurredAt: context.occurredAt || new Date().toISOString(),
     severity: context.severity || "error",
     message: redactDiagnosticText(message),
