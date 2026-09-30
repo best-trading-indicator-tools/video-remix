@@ -280,7 +280,7 @@ export default function ImportPanel(props: Props) {
     {localOpen && <div className="import-local">
       <label htmlFor="local-video-paths">Original video paths</label>
       <textarea id="local-video-paths" rows={3} placeholder="/Users/you/Movies/interview.mp4" value={localPaths} onChange={event => setLocalPaths(event.target.value)} />
-      <p>One full path per line. On Mac, select files in Finder and press Option + Command + C.</p>
+      <p>One full path per line. On Mac, select files in Finder and press Option + Command + C. On Windows, right-click a file and choose Copy as path.</p>
       <p>Uses your originals without copying them. Keep files in place until your exports finish.</p>
       <button className="secondary-button" disabled={!localPaths.trim() || localBusy || !props.connected} onClick={() => void linkFiles()}>
         {localBusy ? <LoaderCircle size={14} className="spin" /> : <FolderOpen size={14} />} Link videos

@@ -1,0 +1,38 @@
+name: Windows compatibility checks
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install FFmpeg
+        run: choco install ffmpeg --no-progress -y
+      - run: npm ci
+      - run: npm run build
+      - name: Check Python detection without downloading models
+        run: >-
+          node --input-type=module -e "import {execFile} from 'node:child_process'; import {promisify} from 'node:util'; import {findPython} from './scripts/setup-python.mjs'; console.log(await findPython((command,args) => promisify(execFile)(command,args)));"
+      - name: Exercise imports, captions, cuts, and file protection
+        # The 4/40 GiB sparse fixtures are reserved for local testing; hosted
+        # Windows runners have limited free disk space and different allocation.
+        run: >-
+          node --import tsx --test --test-concurrency=2
+          --test-skip-pattern="^(40GiB local import|a resumed chunk)"
+          tests/setup-python.test.ts tests/windows-compatibility.test.ts
+          tests/upload-file.test.ts tests/linked-sources.test.ts
+          tests/history-thumbnails.test.ts tests/import-client.test.ts
+          tests/imports.test.ts tests/engine.test.ts

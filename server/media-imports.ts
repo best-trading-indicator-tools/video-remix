@@ -1,8 +1,8 @@
 import { visualIdentity } from "./visual-identity.js";
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
-import { constants, createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, open, readFile, readdir, realpath, rename, rm, stat, statfs, symlink, writeFile, type FileHandle } from "node:fs/promises";
+import { createReadStream, createWriteStream } from "node:fs";
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, statfs, symlink, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -14,6 +14,7 @@ import { config, paths } from "./config.js";
 import { createThumbnail, probeMedia } from "./engine.js";
 import { fingerprintFile } from "./history.js";
 import { publicSource, saveStore, state, type StoredSource } from "./store.js";
+import { openRegularUpload, UnsafeUploadError } from "./upload-file.js";
 
 const TTL = 48 * 60 * 60 * 1000;
 const DISK_RESERVE = 128 * 1024 * 1024;
@@ -95,12 +96,11 @@ async function persist(item: StoredImport) {
   } finally { await rm(temporary, { force: true }).catch(() => undefined); }
 }
 async function openUpload(item: StoredImport) {
-  // Opening the managed upload must never follow a substituted symbolic link.
-  const handle = await open(mediaPath(item), constants.O_RDWR | constants.O_NOFOLLOW);
-  try {
-    if (!(await handle.stat()).isFile()) throw new ImportError(409, "The saved upload is no longer an ordinary file. Cancel it and import the video again.");
-    return handle;
-  } catch (error) { await handle.close(); throw error; }
+  try { return await openRegularUpload(mediaPath(item)); }
+  catch (error) {
+    if (error instanceof UnsafeUploadError) throw new ImportError(409, error.message);
+    throw error;
+  }
 }
 function safeError(error: unknown) {
   if (error instanceof ImportError || error instanceof SocialImportError) return error.message;
@@ -347,7 +347,12 @@ export function installMediaImportRoutes(app: Express) {
             status: "processing", phase: "Waiting to read video", progress: 0, signature: signatureOf(info),
             createdAt: now, updatedAt: now };
           await mkdir(folder(value.id), { recursive: true });
-          await symlink(resolved, mediaPath(value));
+          try { await symlink(resolved, mediaPath(value)); }
+          catch (error) {
+            if (process.platform === "win32" && ["EPERM", "EACCES", "ENOTSUP"].includes((error as NodeJS.ErrnoException).code || ""))
+              throw new ImportError(400, "Windows could not create a link to this video. Use Browse files or drag and drop to import a copy instead.");
+            throw error;
+          }
           try { await persist(value); }
           catch (error) { await rm(mediaPath(value), { force: true }); throw error; }
           sessions.set(value.id, value);

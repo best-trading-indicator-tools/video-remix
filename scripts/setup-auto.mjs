@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { findPython } from "./setup-python.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const args = process.argv.slice(2);
@@ -53,31 +54,12 @@ async function exists(file) {
     return false;
   }
 }
-async function findPython() {
-  const choices = process.env.PYTHON_BIN
-    ? [process.env.PYTHON_BIN]
-    : ["python3.12", "python3.11", "python3.10", "python3"];
-  for (const choice of choices) {
-    try {
-      await run(
-        choice,
-        ["-c", "import sys; assert (3, 10) <= sys.version_info[:2] < (3, 14)"],
-        true,
-      );
-      return choice;
-    } catch {
-      /* Try the next interpreter. */
-    }
-  }
-  throw new Error(
-    "Install Python 3.10–3.13, or set PYTHON_BIN to a supported interpreter, then run setup again.",
-  );
-}
-
 try {
   console.log("Preparing private local transcription in .venv…");
-  if (!(await exists(python)))
-    await run(await findPython(), ["-m", "venv", path.join(root, ".venv")]);
+  if (!(await exists(python))) {
+    const selected = await findPython(run);
+    await run(selected.command, [...selected.args, "-m", "venv", path.join(root, ".venv")]);
+  }
   let uv = false;
   try {
     await run("uv", ["--version"], true);

@@ -3,12 +3,12 @@ import { MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
 import { randomUUID } from "node:crypto";
 import {
   access,
+  cp,
   mkdir,
   readFile,
   realpath,
   rm,
   stat,
-  symlink,
   writeFile,
 } from "node:fs/promises";
 import path from "node:path";
@@ -23,6 +23,7 @@ import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
 import { footageTimeline, ownFootageSchema, resolveFootagePlacement } from "../shared/own-footage.js";
 import { composeFootage, type ResolvedFootage } from "./footage-composition.js";
+import { prepareConcatSource } from "./concat-source.js";
 
 export interface MediaInfo {
   duration: number;
@@ -470,7 +471,7 @@ export function geometry(
 }
 
 
-async function fontOption(): Promise<string> {
+async function fontOption(workDir: string, temporary: string[]): Promise<string> {
   for (const font of [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -482,7 +483,24 @@ async function fontOption(): Promise<string> {
       /* Use the next installed font. */
     }
   }
-  return "font=Sans";
+  // Windows builds need not include fontconfig. Use a bundled font via a safe,
+  // relative path rather than passing a drive letter through the filter parser.
+  return `fontfile=${await prepareCaptionFonts(workDir, temporary)}/Poppins-Bold.ttf`;
+}
+
+async function prepareCaptionFonts(workDir: string, temporary: string[]) {
+  const name = `caption-fonts-${randomUUID()}`;
+  let directory: string | undefined;
+  for (const url of [new URL("../public/caption-fonts", import.meta.url), new URL("../../dist/caption-fonts", import.meta.url)]) {
+    try { await access(new URL(`${url.href}/Poppins-Regular.ttf`)); directory = fileURLToPath(url); break; } catch { /* Try production assets. */ }
+  }
+  if (!directory) throw new Error("Bundled caption fonts are missing. Restore public/caption-fonts or run npm run build.");
+  const destination = path.join(workDir, name);
+  temporary.push(destination);
+  // The bundled fonts total about 1 MB. A private copy avoids symlink privileges
+  // and also works when the project and workspace are on different drives.
+  await cp(directory, destination, { recursive: true });
+  return name;
 }
 
 async function canonicalSubtitles(filePath: string, uppercase = false): Promise<string> {
@@ -536,14 +554,7 @@ async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefi
   const filePath = path.join(workDir, filename);
   temporary.push(filePath);
   await writeFile(filePath, await canonicalSubtitles(subtitlePath, style?.uppercase), "utf8");
-  const fontsName = `caption-fonts-${randomUUID()}`;
-  const fontsLink = path.join(workDir, fontsName);
-  let fontDirectory: string | undefined;
-  for (const url of [new URL("../public/caption-fonts", import.meta.url), new URL("../../dist/caption-fonts", import.meta.url)]) {
-    try { await access(new URL(`${url.href}/Poppins-Regular.ttf`)); fontDirectory = fileURLToPath(url); break; } catch { /* Try production assets. */ }
-  }
-  if (!fontDirectory) throw new Error("Bundled caption fonts are missing. Restore public/caption-fonts or run npm run build.");
-  await symlink(fontDirectory, fontsLink, "dir"); temporary.push(fontsLink);
+  const fontsName = await prepareCaptionFonts(workDir, temporary);
   // The SRT decoder uses a 384 × 288 script canvas at every output resolution.
   return `subtitles=filename=${filename}:fontsdir=${fontsName}:charenc=UTF-8:force_style='${captionAssStyle(style)}'`;
 }
@@ -561,7 +572,7 @@ export async function burnOutputCaptions(options: { input: string; output: strin
       "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "2",
       "-c:a", "copy", "-map_metadata", "0", "-map_chapters", "-1", "-movflags", "+faststart+use_metadata_tags", path.resolve(options.output)],
       { cwd: workDir, signal: options.signal });
-  } finally { await Promise.all(temporary.map(file => rm(file, { force: true }).catch(() => undefined))); }
+  } finally { await Promise.all(temporary.map(file => rm(file, { recursive: true, force: true }).catch(() => undefined))); }
 }
 
 export interface RenderOptions {
@@ -656,20 +667,25 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       `Supporting visuals need valid times within the edited video (maximum ${MAX_BROLL_COUNT})`,
     );
   const temporary: string[] = [];
+  let textFont: string | undefined;
+  const drawTextFont = async () => textFont ??= await fontOption(workDir, temporary);
   try {
     // The concat demuxer seeks each requested interval in order. Its frame
     // metadata lets select/aselect discard keyframe preroll without another
     // encoding pass or dozens of simultaneously buffered decoder branches.
     let editList: string | undefined;
+    let concatSafe = "1";
     if (segments) {
       const sourceName = `edit-source-${randomUUID()}.media`;
       const sourceLink = path.join(workDir, sourceName);
       editList = path.join(workDir, `edit-${randomUUID()}.ffconcat`);
-      temporary.push(sourceLink, editList);
-      await symlink(input, sourceLink);
+      temporary.push(editList);
+      const concatSource = await prepareConcatSource(input, sourceLink, sourceName);
+      if (concatSource.linked) temporary.push(sourceLink);
+      concatSafe = concatSource.safe;
       await writeFile(
         editList,
-        `ffconcat version 1.0\n${segments.map((segment) => `file ${sourceName}\ninpoint ${decimal(segment.start)}\noutpoint ${decimal(segment.end)}\nduration ${decimal(segment.end - segment.start)}`).join("\n")}\n`,
+        `ffconcat version 1.0\n${segments.map((segment) => `file ${concatSource.file}\ninpoint ${decimal(segment.start)}\noutpoint ${decimal(segment.end)}\nduration ${decimal(segment.end - segment.start)}`).join("\n")}\n`,
         "utf8",
       );
     }
@@ -778,7 +794,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       const columns = Math.max(8, Math.floor((width * 0.86) / (size * 0.64)));
       await writeFile(filePath, wrapHook(s.hookText, columns), "utf8");
       filters.push(
-        `drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.08:fix_bounds=1:enable='lt(t,${decimal(Math.min(s.hookDuration, duration))})'`,
+        `drawtext=${await drawTextFont()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.65:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.08:fix_bounds=1:enable='lt(t,${decimal(Math.min(s.hookDuration, duration))})'`,
       );
     }
     for (const callout of s.callouts ?? []) {
@@ -790,7 +806,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       const columns = Math.max(8, Math.floor((width * 0.84) / (size * 0.64)));
       await writeFile(filePath, wrapHook(callout.text, columns), "utf8");
       filters.push(
-        `drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.70:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.24:fix_bounds=1:enable='gte(t,${decimal(callout.start)})*lt(t,${decimal(Math.min(callout.end, duration))})'`,
+        `drawtext=${await drawTextFont()}:textfile=${filename}:expansion=none:fontsize=${size}:fontcolor=white:box=1:boxcolor=black@0.70:boxborderw=${Math.max(4, Math.round(size * 0.45))}:line_spacing=${Math.round(size * 0.25)}:x=(w-text_w)/2:y=h*0.24:fix_bounds=1:enable='gte(t,${decimal(callout.start)})*lt(t,${decimal(Math.min(callout.end, duration))})'`,
       );
     }
     const decorations: string[] = [];
@@ -806,7 +822,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         const filePath = path.join(workDir, filename);
         temporary.push(filePath);
         await writeFile(filePath, layout.text, "utf8");
-        decorations.push(`drawtext=${await fontOption()}:textfile=${filename}:expansion=none:fontsize=${decimal(layout.fontSize)}:fontcolor=white:line_spacing=${decimal(layout.fontSize * 0.25)}:x=(w-text_w)/2:y=${bandTop}+(${bandHeight}-text_h)/2:fix_bounds=1`);
+        decorations.push(`drawtext=${await drawTextFont()}:textfile=${filename}:expansion=none:fontsize=${decimal(layout.fontSize)}:fontcolor=white:line_spacing=${decimal(layout.fontSize * 0.25)}:x=(w-text_w)/2:y=${bandTop}+(${bandHeight}-text_h)/2:fix_bounds=1`);
       }
     }
     if (options.subtitlePath) {
@@ -833,7 +849,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "-f",
         "concat",
         "-safe",
-        "1",
+        concatSafe,
         "-segment_time_metadata",
         "1",
         "-i",
@@ -1042,7 +1058,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     throw error;
   } finally {
     await Promise.all(
-      temporary.map((file) => rm(file, { force: true }).catch(() => {})),
+      temporary.map((file) => rm(file, { recursive: true, force: true }).catch(() => {})),
     );
   }
 }

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { findPython } from "./setup-python.mjs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const python = path.join(
@@ -27,25 +28,8 @@ try {
   try {
     await access(python);
   } catch {
-    let selected;
-    for (const choice of process.env.PYTHON_BIN
-      ? [process.env.PYTHON_BIN]
-      : ["python3.12", "python3.11", "python3.10", "python3"]) {
-      try {
-        await run(
-          choice,
-          ["-c", "import sys; assert (3,10) <= sys.version_info[:2] < (3,14)"],
-          true,
-        );
-        selected = choice;
-        break;
-      } catch {
-        /* Try the next installed interpreter. */
-      }
-    }
-    if (!selected)
-      throw new Error("Install Python 3.10–3.13, then run setup:focus again.");
-    await run(selected, ["-m", "venv", path.join(root, ".venv")]);
+    const selected = await findPython(run);
+    await run(selected.command, [...selected.args, "-m", "venv", path.join(root, ".venv")]);
   }
   await run(python, [
     "-m",

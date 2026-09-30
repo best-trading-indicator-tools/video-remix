@@ -475,6 +475,43 @@ npm run dev
 
 Open **http://127.0.0.1:5173**. Vite forwards API requests to the backend on port 8787. Keep both processes running; `Ctrl+C` stops them.
 
+### Windows setup
+
+Install Node.js 22.13+ and Python 3.12, plus a Windows FFmpeg build containing
+`ffmpeg.exe` and `ffprobe.exe`. Add FFmpeg's `bin` folder to your user `PATH`, then
+open a new PowerShell window in the cloned repository. Check `node --version`,
+`npm --version`, `py -3.12 --version`, `ffmpeg -version`, and `ffprobe -version`.
+The setup scripts also recognize `python` on PATH if the `py` launcher is absent.
+If PowerShell blocks `npm.ps1`, use `npm.cmd` instead of `npm` in the commands below.
+
+```powershell
+npm ci
+npm run setup:auto
+npm run setup:imports
+npm run dev
+```
+
+`setup:imports` is needed for TikTok, Instagram and YouTube links. Face framing is
+optional: run `npm run setup:focus` to enable it. If Python is installed in a
+custom location, set `$env:PYTHON_BIN = 'C:\Path\To\Python312\python.exe'` before
+running setup. Python 3.14+ is not supported by the current transcription/face
+setup; the link downloader accepts Python 3.10+.
+
+Use **browse files** or drag and drop for ordinary imports. **Link files on this
+computer** uses symbolic links and can require Windows Developer Mode or additional
+permissions; it now explains the upload alternative when Windows rejects a link.
+Caption rendering and multi-cut exports do not require symbolic-link privileges.
+Keep linked originals downloaded locally and at the same path until export finishes.
+
+Optional local generated narration remains macOS-only. Windows keeps the original
+audio. FFmpeg must include `libx264`, AAC, `drawtext`, and `subtitles`; missing
+encoders or filters can still prevent export even when FFmpeg is installed.
+
+The manual **Windows compatibility checks** GitHub Actions workflow builds the app
+and exercises imports and real FFmpeg exports on a Windows runner.
+
+### Transcription models and production
+
 `setup:auto` creates an isolated `.venv`, installs [faster-whisper](https://github.com/SYSTRAN/faster-whisper), and downloads the multilingual `small` model into `data/models`. The first setup needs an internet connection; transcription afterward uses cached weights offline. Fresh clones need to run this setup once. Allow roughly 700 MB for the tested environment and model, plus space for videos.
 
 For a smaller speech model:
