@@ -1,6 +1,6 @@
 import ProblemNotice from "./ProblemNotice";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload, X } from "lucide-react";
+import { Check, ChevronDown, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload, X } from "lucide-react";
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
@@ -21,6 +21,7 @@ type Props = {
 
 export default function ImportPanel(props: Props) {
   const [sessions, setSessions] = useState<ImportSession[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [preparingFile, setPreparingFile] = useState<{ name: string; index: number; total: number; stage: "reading" | "queueing" } | null>(null);
@@ -52,6 +53,24 @@ export default function ImportPanel(props: Props) {
   const loopBusy = useRef(false);
   const resumeId = useRef<string | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
+  const importOptions = useRef<HTMLDetailsElement>(null);
+  const pending = sessions.filter(session => session.status !== "completed");
+  const completed = sessions.filter(session => session.status === "completed");
+  const failedCount = pending.filter(session => session.status === "failed" || errors[session.id]).length;
+  const pausedCount = pending.filter(session => session.status === "uploading" && active !== session.id && !files.current.has(session.id) && !errors[session.id]).length;
+  const importingCount = pending.length - failedCount - pausedCount;
+
+  const closeImportOptions = () => {
+    if (!importOptions.current?.open) return;
+    // A submit button can lose focus when it becomes disabled during the request.
+    const hadFocus = importOptions.current.contains(document.activeElement) || document.activeElement === document.body;
+    importOptions.current.open = false;
+    if (hadFocus) {
+      importOptions.current.querySelector("summary")?.focus({ preventScroll: true });
+      // Wait for the new progress cards and collapsed form to finish laying out.
+      requestAnimationFrame(() => importOptions.current?.closest(".import-panel")?.scrollIntoView({ block: "nearest" }));
+    }
+  };
 
   const update = useCallback((incoming: ImportSession[]) => {
     if (!mounted.current) return;
@@ -168,6 +187,7 @@ export default function ImportPanel(props: Props) {
           if (!mounted.current) return;
           setErrors(current => { const next = { ...current }; delete next[session.id]; return next; });
           update([session]);
+          closeImportOptions();
           files.current.set(session.id, file);
           void runQueue();
         } catch (error) {
@@ -230,7 +250,7 @@ export default function ImportPanel(props: Props) {
         setSelectionErrors(result.errors.map(item => `${item.name}: ${item.error}`));
         props.onError(`${result.errors.length} video${result.errors.length === 1 ? "" : "s"} could not be linked. See the import details.`);
       }
-      if (!result.errors?.length) { setLocalPaths(""); setLocalOpen(false); }
+      if (!result.errors?.length) { setLocalPaths(""); setLocalOpen(false); closeImportOptions(); }
     } catch (error) { props.onError(error instanceof Error ? error.message : "Unable to link these videos."); }
     finally { setLocalBusy(false); }
   };
@@ -263,6 +283,7 @@ export default function ImportPanel(props: Props) {
       setSelectionErrors(rejected.map(item => `${item.name}: ${item.error}`));
       setVideoLinks([...invalid.map(item => item.input), ...links.filter(link => rejected.some(item => item.name === link.slice(0, 180)))].join("\n"));
       setLinksNotice(`${result.imports.length} video${result.imports.length === 1 ? "" : "s"} added to the import queue.${duplicates ? ` ${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped.` : ""}`);
+      if (result.imports.length && !rejected.length && !invalid.length) closeImportOptions();
     } catch (error) {
       if (mounted.current) setSelectionErrors([error instanceof Error ? error.message : "Could not import these video links."]);
     } finally { if (mounted.current) setLinksBusy(false); }
@@ -273,14 +294,6 @@ export default function ImportPanel(props: Props) {
       onChange={event => { void selectFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
     <input ref={resumeInput} className="visually-hidden" type="file" accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.mpeg,.mpg" aria-label="Resume video import"
       onChange={event => { const requested = resumeId.current; resumeId.current = null; void selectFiles(Array.from(event.target.files || []), requested); event.target.value = ""; }} />
-    <button className={`dropzone ${dragging ? "dragging" : ""}`} disabled={!props.connected || choosing} onClick={() => props.inputRef.current?.click()}
-      onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
-      onDrop={event => { event.preventDefault(); setDragging(false); void selectFiles(Array.from(event.dataTransfer.files)); }}>
-      <span className="upload-icon">{choosing ? <LoaderCircle size={22} className="spin" /> : <Upload size={22} />}</span>
-      <strong>{choosing ? preparingFile?.stage === "queueing" ? "Waiting for the server…" : "Reading video file…" : "Drop your videos here"}</strong>
-      {!choosing && <span>or <em>browse files</em></span>}
-      <small>Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos per batch<br />{size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} per video · resumable</small>
-    </button>
     {choosing && preparingFile && <div className="import-preparation">
       <p role="status">{preparingFile.index} of {preparingFile.total} · {preparingFile.name}<br />{preparingFile.stage === "reading"
         ? "Checking a small file sample before upload. This step stops after 30 seconds if it cannot finish."
@@ -291,71 +304,99 @@ export default function ImportPanel(props: Props) {
     {preparationProblems.map((problem, index) => <div key={index} className="import-preparation-problem">
       <strong>{problem.name}</strong><ProblemNotice message={problem.diagnostic.message} diagnostic={problem.diagnostic} operation="Prepare video import" />
     </div>)}
-    <div className="import-local import-social">
-      <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video URL</label>
-      <p id="social-video-link-hint">Paste a YouTube video or Shorts URL instead of uploading a file. TikTok and Instagram links work too.</p>
-      <textarea id="social-video-links" rows={5} autoCapitalize="none" spellCheck={false}
-        aria-describedby="social-video-link-hint social-video-link-format social-video-link-count" placeholder={"https://www.youtube.com/watch?v=…\nhttps://www.youtube.com/shorts/…\nhttps://youtu.be/…"} value={videoLinks}
-        disabled={linksBusy} onChange={event => { setVideoLinks(event.target.value); setLinksNotice(""); }} />
-      <p id="social-video-link-format">One link or a batch: separate URLs with new lines, spaces or commas.</p>
-      <p id="social-video-link-count" className={tooManyLinks ? "import-error" : "import-link-count"} role="status">
-        {tooManyLinks ? `${linkBatch.links.length} videos selected. Import up to ${maxLinks} at once.`
-          : `${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"} ready to import · Up to ${maxLinks} per batch`}
-        {linkBatch.duplicates > 0 && ` · ${linkBatch.duplicates} duplicate${linkBatch.duplicates === 1 ? "" : "s"} will be skipped`}
-      </p>
-      {!!linkBatch.invalid.length && <div className="import-link-errors">
-        <p>{linkBatch.invalid.length} {linkBatch.invalid.length === 1 ? "entry needs" : "entries need"} correction. Valid links can still be imported.</p>
-        <ul>{linkBatch.invalid.slice(0, 5).map((item, index) => <li key={index}><strong>{item.input}</strong><span>{item.error}</span></li>)}</ul>
-        {linkBatch.invalid.length > 5 && <p>And {linkBatch.invalid.length - 5} more. Correct the list above.</p>}
-      </div>}
-      <button className="secondary-button" disabled={!linkBatch.links.length || tooManyLinks || linksBusy || !props.connected} onClick={() => void importLinks()}>
-        {linksBusy ? <LoaderCircle size={14} className="spin" /> : <Link2 size={14} />} {linksBusy ? "Adding links…" : linkBatch.links.length ? `Import ${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"}` : "Import videos"}
-      </button>
-      {linksNotice && <p role="status">{linksNotice}</p>}
-      <p>Public videos download into your workspace with progress below, ready for Auto, Manual or Short clips.</p>
-    </div>
-    <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><FolderOpen size={15} /> Link files on this computer</button>
-    {localOpen && <div className="import-local">
-      <label htmlFor="local-video-paths">Original video paths</label>
-      <textarea id="local-video-paths" rows={3} placeholder="/Users/you/Movies/interview.mp4" value={localPaths} onChange={event => setLocalPaths(event.target.value)} />
-      <p>One full path per line. On Mac, select files in Finder and press Option + Command + C. On Windows, right-click a file and choose Copy as path.</p>
-      <p>Uses your originals without copying them. Keep files in place until your exports finish.</p>
-      <button className="secondary-button" disabled={!localPaths.trim() || localBusy || !props.connected} onClick={() => void linkFiles()}>
-        {localBusy ? <LoaderCircle size={14} className="spin" /> : <FolderOpen size={14} />} Link videos
-      </button>
-    </div>}
     {!!selectionErrors.length && <details className="import-selection-errors" open>
       <summary>{selectionErrors.length} video{selectionErrors.length === 1 ? "" : "s"} {selectionErrors.length === 1 ? "needs" : "need"} attention</summary>
       <ul>{selectionErrors.map((message, index) => <li key={index}><ProblemNotice message={message} operation="Import videos" /></li>)}</ul>
       <p>Other videos continue importing. Correct these files or links, then try again.</p>
     </details>}
-    {!!sessions.length && <div className="import-list" aria-label="Video imports">
-      {sessions.map(session => {
-        const complete = session.status === "completed";
-        const uploading = session.status === "uploading";
-        const working = active === session.id || session.status === "processing";
-        const percent = complete ? 100 : uploading ? Math.floor(session.offset / session.size * 100) : session.progress;
-        return <div className={`import-item ${complete ? "complete" : ""}`} key={session.id}>
-          <div className="import-item-heading"><strong title={session.name}>{session.name}</strong>
-            <button className="icon-button" aria-label={`${complete ? "Dismiss" : "Cancel"} import ${session.name}`} onClick={() => void remove(session)}><X size={14} /></button></div>
-          <div className="import-item-status">{complete ? <Check size={13} /> : working ? <LoaderCircle size={13} className="spin" /> : null}
-            <span>{complete ? "Ready in your workspace" : session.status === "failed" ? "Needs attention" : uploading ? active === session.id ? `Uploading · ${percent}%` : files.current.has(session.id) ? "Waiting to upload" : "Paused · select file to resume" : `${session.phase} · ${Math.round(percent)}%`}</span>
-          </div>
-          {!complete && <>
-            <progress max={100} value={percent} aria-label={`${session.name} import progress`} />
-            <small>{uploading ? `${size(session.offset)} of ${size(session.size)}` : session.size ? size(session.size) : "Size available after download"}{session.kind === "local" ? " · linked original" : ""}</small>
-            {(errors[session.id] || session.error) && <ProblemNotice message={errors[session.id] || session.error || "Import failed."} diagnostic={errors[session.id] ? undefined : session.diagnostic} operation="Import video" entityId={session.id} />}
-            {session.kind === "remote" && session.status === "failed" && <button className="import-resume" disabled={!props.connected || retrying.includes(session.id)} onClick={() => void retryImport(session)}>
-              {retrying.includes(session.id) ? <LoaderCircle size={13} className="spin" /> : <RotateCcw size={13} />}{retrying.includes(session.id) ? "Retrying…" : "Retry import"}
-            </button>}
-            {uploading && <button className="import-resume" onClick={() => {
-              if (active === session.id) transfer.current?.controller.abort();
-              else { resumeId.current = session.id; resumeInput.current?.click(); }
-            }}>{active === session.id ? <Pause size={13} /> : <Play size={13} />}{active === session.id ? "Pause upload" : "Choose file to resume"}</button>}
-          </>}
-        </div>;
-      })}
-      {sessions.some(item => item.status === "uploading") && <p className="import-keep-open">Keep this browser tab open while uploading. Resume later by selecting the same file.</p>}
-    </div>}
+    {!!sessions.length && <section className="import-activity" aria-label="Import activity">
+      {!!pending.length && <div className="import-overview">
+        <strong>Import activity</strong>
+        <div className="import-counts" role="status">
+          {importingCount > 0 && <span>{importingCount} importing</span>}
+          {pausedCount > 0 && <span>{pausedCount} paused</span>}
+          {failedCount > 0 && <span className="import-count-error">{failedCount} {failedCount === 1 ? "needs" : "need"} attention</span>}
+          {completed.length > 0 && <span className="import-count-complete">{completed.length} completed</span>}
+        </div>
+      </div>}
+      {completed.length > 0 && <button type="button" className="import-completed-toggle" aria-expanded={showCompleted} aria-controls="video-import-list"
+        onClick={() => setShowCompleted(!showCompleted)}>{showCompleted ? "Hide completed imports" : `${completed.length} completed import${completed.length === 1 ? "" : "s"}`}<ChevronDown size={13} /></button>}
+      <div id="video-import-list" className="import-list" role="region" aria-label="Video imports" tabIndex={pending.length || showCompleted ? 0 : undefined}>
+        {[...pending, ...(showCompleted ? completed : [])].map(session => {
+          const complete = session.status === "completed";
+          const uploading = session.status === "uploading";
+          const working = active === session.id || session.status === "processing";
+          const percent = complete ? 100 : uploading ? Math.floor(session.offset / session.size * 100) : session.progress;
+          return <div className={`import-item ${complete ? "complete" : session.status === "failed" || errors[session.id] ? "failed" : ""}`} key={session.id}>
+            <div className="import-item-heading"><strong title={session.name}>{session.name}</strong>
+              <button className="icon-button" aria-label={`${complete ? "Dismiss" : "Cancel"} import ${session.name}`} onClick={() => void remove(session)}><X size={14} /></button></div>
+            <div className="import-item-status">{complete ? <Check size={13} /> : working ? <LoaderCircle size={13} className="spin" /> : null}
+              <span>{complete ? "Ready in your workspace" : session.status === "failed" ? "Needs attention" : uploading ? active === session.id ? `Uploading · ${percent}%` : files.current.has(session.id) ? "Waiting to upload" : "Paused · select file to resume" : `${session.phase} · ${Math.round(percent)}%`}</span>
+            </div>
+            {!complete && <>
+              <progress max={100} value={percent} aria-label={`${session.name} import progress`} />
+              <small>{uploading ? `${size(session.offset)} of ${size(session.size)}` : session.size ? size(session.size) : "Size available after download"}{session.kind === "local" ? " · linked original" : ""}</small>
+              {(errors[session.id] || session.error) && <ProblemNotice message={errors[session.id] || session.error || "Import failed."} diagnostic={errors[session.id] ? undefined : session.diagnostic} operation="Import video" entityId={session.id} />}
+              {session.kind === "remote" && session.status === "failed" && <button className="import-resume" disabled={!props.connected || retrying.includes(session.id)} onClick={() => void retryImport(session)}>
+                {retrying.includes(session.id) ? <LoaderCircle size={13} className="spin" /> : <RotateCcw size={13} />}{retrying.includes(session.id) ? "Retrying…" : "Retry import"}
+              </button>}
+              {uploading && <button className="import-resume" onClick={() => {
+                if (active === session.id) transfer.current?.controller.abort();
+                else { resumeId.current = session.id; resumeInput.current?.click(); }
+              }}>{active === session.id ? <Pause size={13} /> : <Play size={13} />}{active === session.id ? "Pause upload" : "Choose file to resume"}</button>}
+            </>}
+          </div>;
+        })}
+        {sessions.some(item => item.status === "uploading") && <p className="import-keep-open">Keep this browser tab open while uploading. Resume later by selecting the same file.</p>}
+      </div>
+    </section>}
+    <details className="import-tools" ref={importOptions}>
+      <summary onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
+        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) void selectFiles(Array.from(event.dataTransfer.files)); }}
+        className={dragging ? "dragging" : undefined}><Upload size={15} /> Add videos <ChevronDown size={14} /></summary>
+      <button className={`dropzone import-dropzone ${dragging ? "dragging" : ""}`} disabled={!props.connected || choosing} onClick={() => props.inputRef.current?.click()}
+        onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
+        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) void selectFiles(Array.from(event.dataTransfer.files)); }}>
+        <span className="upload-icon">{choosing ? <LoaderCircle size={18} className="spin" /> : <Upload size={18} />}</span>
+        <strong>{choosing ? preparingFile?.stage === "queueing" ? "Queueing videos…" : "Reading videos…" : "Browse files"}</strong>
+        <span>{choosing ? "Preparing your import" : "or drop videos here"}</span>
+      </button>
+      <p className="import-limits">Up to {props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos · {size(props.health?.maxLargeFileSize || 50 * 1024 ** 3)} each</p>
+      <div className="import-options">
+        <div className="import-local import-social">
+          <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video URL</label>
+          <p id="social-video-link-hint">Paste a YouTube video or Shorts URL instead of uploading a file. TikTok and Instagram links work too.</p>
+          <textarea id="social-video-links" rows={5} autoCapitalize="none" spellCheck={false}
+            aria-describedby="social-video-link-hint social-video-link-format social-video-link-count" placeholder={"https://www.youtube.com/watch?v=…\nhttps://www.youtube.com/shorts/…\nhttps://youtu.be/…"} value={videoLinks}
+            disabled={linksBusy} onChange={event => { setVideoLinks(event.target.value); setLinksNotice(""); }} />
+          <p id="social-video-link-format">One link or a batch: separate URLs with new lines, spaces or commas.</p>
+          <p id="social-video-link-count" className={tooManyLinks ? "import-error" : "import-link-count"} role="status">
+            {tooManyLinks ? `${linkBatch.links.length} videos selected. Import up to ${maxLinks} at once.`
+              : `${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"} ready to import · Up to ${maxLinks} per batch`}
+            {linkBatch.duplicates > 0 && ` · ${linkBatch.duplicates} duplicate${linkBatch.duplicates === 1 ? "" : "s"} will be skipped`}
+          </p>
+          {!!linkBatch.invalid.length && <div className="import-link-errors">
+            <p>{linkBatch.invalid.length} {linkBatch.invalid.length === 1 ? "entry needs" : "entries need"} correction. Valid links can still be imported.</p>
+            <ul>{linkBatch.invalid.slice(0, 5).map((item, index) => <li key={index}><strong>{item.input}</strong><span>{item.error}</span></li>)}</ul>
+            {linkBatch.invalid.length > 5 && <p>And {linkBatch.invalid.length - 5} more. Correct the list above.</p>}
+          </div>}
+          <button className="secondary-button" disabled={!linkBatch.links.length || tooManyLinks || linksBusy || !props.connected} onClick={() => void importLinks()}>
+            {linksBusy ? <LoaderCircle size={14} className="spin" /> : <Link2 size={14} />} {linksBusy ? "Adding links…" : linkBatch.links.length ? `Import ${linkBatch.links.length} video${linkBatch.links.length === 1 ? "" : "s"}` : "Import videos"}
+          </button>
+          {linksNotice && <p role="status">{linksNotice}</p>}
+          <p>Public videos download into your workspace. Follow their progress in Import activity.</p>
+        </div>
+        <button className="import-link-button" aria-expanded={localOpen} onClick={() => setLocalOpen(!localOpen)}><FolderOpen size={15} /> Link files on this computer</button>
+        {localOpen && <div className="import-local">
+          <label htmlFor="local-video-paths">Original video paths</label>
+          <textarea id="local-video-paths" rows={3} placeholder="/Users/you/Movies/interview.mp4" value={localPaths} onChange={event => setLocalPaths(event.target.value)} />
+          <p>One full path per line. On Mac, select files in Finder and press Option + Command + C. On Windows, right-click a file and choose Copy as path.</p>
+          <p>Uses your originals without copying them. Keep files in place until your exports finish.</p>
+          <button className="secondary-button" disabled={!localPaths.trim() || localBusy || !props.connected} onClick={() => void linkFiles()}>
+            {localBusy ? <LoaderCircle size={14} className="spin" /> : <FolderOpen size={14} />} Link videos
+          </button>
+        </div>}
+      </div>
+    </details>
   </div>;
 }

@@ -1226,7 +1226,11 @@ export default function App() {
                 <ImportPanel health={health} connected={connected} inputRef={videoInput}
                   onImported={importedSources} onBusyChange={busy => setUploadProgress(busy ? 0 : null)}
                   onError={(message, diagnostic) => notify(message, "error", diagnostic)} />
-                <div className="source-list">
+                {!!sources.length && <div className="source-ready-heading">
+                  <h3><Check size={13} />Ready to edit</h3>
+                  <span>{sources.length} video{sources.length === 1 ? "" : "s"}</span>
+                </div>}
+                <div className="source-list" role="region" aria-label="Imported videos" tabIndex={sources.length ? 0 : undefined}>
                   {loading ? (
                     <div className="source-empty">
                       <LoaderCircle size={20} className="spin" />

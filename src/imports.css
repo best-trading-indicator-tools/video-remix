@@ -16,6 +16,34 @@
 .source-panel .import-panel .dropzone > span:not(.upload-icon) { max-width: 100%; overflow-wrap: break-word; }
 .source-panel .import-panel .dropzone small br { display: initial; }
 @media (max-width: 680px) { .source-panel .import-panel .dropzone { margin-top: 12px; } }
+.source-panel .import-dropzone { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; min-height: 64px; padding: 10px 12px; text-align: left; }
+.source-panel .import-dropzone .upload-icon { grid-row: 1 / 3; width: 32px; height: 32px; margin: 0; border-radius: 8px; }
+.source-panel .import-dropzone > span:not(.upload-icon) { margin: 0; font-size: 11px; }
+.import-limits { margin: 6px 0 10px; color: var(--muted); font-size: 10px; text-align: center; }
+.import-tools { margin: 12px 0; }
+.import-tools > summary { display: flex; align-items: center; gap: 8px; min-height: 42px; padding: 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 12px; font-weight: 600; cursor: pointer; list-style: none; }
+.import-tools > summary::-webkit-details-marker { display: none; }
+.import-tools > summary > svg { flex-shrink: 0; }
+.import-tools > summary > svg:last-child { margin-left: auto; }
+.import-tools[open] > summary > svg:last-child, .import-completed-toggle[aria-expanded="true"] > svg { transform: rotate(180deg); }
+.import-tools > summary:hover, .import-tools > summary.dragging { border-color: var(--accent); background: var(--surface-hover); }
+.import-options { margin: 10px 0 12px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.import-options .import-local { border: 0; border-top: 1px solid var(--line); border-radius: 0; margin: 0; padding: 12px; }
+.import-options .import-link-button { width: calc(100% - 16px); margin: 8px; font-size: 11px; }
+.import-activity { margin: 12px 0; }
+.import-overview > strong { font-size: 12px; font-weight: 600; }
+.import-counts { display: flex; flex-wrap: wrap; gap: 3px 10px; margin-top: 4px; font-size: 11px; color: var(--subtle); }
+.import-count-complete { color: var(--green); }
+.import-count-error, .import-item.failed .import-item-status { color: #ffc4ba; }
+.import-completed-toggle { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-height: 28px; padding: 4px 0; background: none; color: var(--subtle); font-size: 11px; text-align: left; }
+.import-completed-toggle:hover { color: var(--text); }
+.source-ready-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 12px; padding: 12px 0 0; border-top: 1px solid var(--line); }
+.source-ready-heading h3 { display: flex; align-items: center; gap: 5px; margin: 0; font-size: 12px; font-weight: 600; }
+.source-ready-heading h3 svg { color: var(--green); }
+.source-ready-heading > span { color: var(--subtle); font-size: 11px; }
+.source-panel .source-info { gap: 4px; }
+.source-panel .source-info > .source-auto-preset { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.source-panel .source-auto-preset > span { margin: 0 4px; }
 .import-link-button { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 42px; padding: 9px 10px; margin: 10px 0 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-raised); color: var(--text); font-size: 12px; font-weight: 600; }
 .import-link-button:hover, .import-resume:hover { background: var(--surface-hover); }
 .import-local { padding: 14px; margin-bottom: 16px; border: 1px solid var(--line); background: var(--field); border-radius: 10px; }
@@ -28,7 +56,8 @@
 .import-social textarea { min-height: 140px; overflow-wrap: anywhere; }
 .import-social .secondary-button { margin-top: 10px; }
 .import-social > p:last-child { margin-bottom: 0; }
-.import-list { display: grid; gap: 9px; margin-bottom: 16px; max-height: 430px; overflow-y: auto; }
+.import-list { display: grid; gap: 9px; margin-top: 8px; max-height: clamp(130px, 22vh, 190px); overflow-y: auto; overscroll-behavior-y: contain; }
+.import-list:empty { display: none; }
 .import-item { min-width: 0; border: 1px solid var(--line); border-radius: 9px; padding: 11px; background: var(--field); }
 .import-item-heading { display: flex; align-items: center; gap: 6px; }
 .import-item-heading strong { min-width: 0; flex: 1; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; font-size: 12px; color: var(--text); }
