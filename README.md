@@ -966,3 +966,7 @@ The copied report distinguishes `FILE_READ_TIMEOUT` / `FILE_READ_FAILED` from
 and try a copy in another local folder. For server confirmation errors, check the
 app terminal and refresh the queue before retrying: the server may already have
 created that import. Selecting the same unchanged file resumes a listed upload.
+Empty, oversized and unsupported files fail before reading with
+`EMPTY_VIDEO_FILE`, `LIMIT_EXCEEDED` or `UNSUPPORTED_VIDEO_FORMAT` (the message
+names the extension). When one file fails, the error notification copies that
+file's own report; when several fail, it lists each file with its code.

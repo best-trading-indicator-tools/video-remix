@@ -4,19 +4,19 @@ import { Check, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload,
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
-import { createUploadImport, importRequest, importVideoLinks, transferImport, uploadIdentity } from "./import-client";
+import { checkImportFile, createUploadImport, formatFileSize as size, importRequest, importVideoLinks, preparationSummary, transferImport, uploadIdentity } from "./import-client";
+import { reportProblem } from "./diagnostics-store";
 import { ApiError } from "./api-client";
 import type { Diagnostic } from "../shared/diagnostics";
 import "./imports.css";
 
-const size = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 type Props = {
   health: Health | null;
   connected: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
   onImported: (sources: VideoSource[]) => void;
   onBusyChange: (busy: boolean) => void;
-  onError: (message: string) => void;
+  onError: (message: string, diagnostic?: Diagnostic) => void;
 };
 
 export default function ImportPanel(props: Props) {
@@ -26,7 +26,7 @@ export default function ImportPanel(props: Props) {
   const [preparingFile, setPreparingFile] = useState<{ name: string; index: number; total: number; stage: "reading" | "queueing" } | null>(null);
   const preparation = useRef<AbortController | null>(null);
   const [preparationNotice, setPreparationNotice] = useState("");
-  const [preparationProblems, setPreparationProblems] = useState<{ name: string; message: string; diagnostic?: Diagnostic }[]>([]);
+  const [preparationProblems, setPreparationProblems] = useState<{ name: string; diagnostic: Diagnostic }[]>([]);
   const [dragging, setDragging] = useState(false);
   const [localOpen, setLocalOpen] = useState(false);
   const [localPaths, setLocalPaths] = useState("");
@@ -148,14 +148,13 @@ export default function ImportPanel(props: Props) {
     preparation.current = controller;
     setPreparationNotice(""); setPreparationProblems([]);
     setSelectionErrors([]);
-    const failures: string[] = [];
+    const failures: { name: string; diagnostic: Diagnostic }[] = [];
     try {
       for (const [index, file] of selected.entries()) {
         if (!mounted.current || controller.signal.aborted) break;
         setPreparingFile({ name: file.name, index: index + 1, total: selected.length, stage: "reading" });
         try {
-          if (file.size > maximum) throw new Error(`Exceeds the ${size(maximum)} import limit.`);
-          if (!/\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg)$/iu.test(file.name)) throw new Error("Choose a supported video file.");
+          checkImportFile(file, maximum);
           const identity = await uploadIdentity(file, controller.signal);
           const requested = requestedId ? sessionsRef.current.find(item => item.id === requestedId) : undefined;
           if (requestedId && !requested) throw new Error("This import is no longer available. Choose the video as a new import.");
@@ -173,17 +172,21 @@ export default function ImportPanel(props: Props) {
           void runQueue();
         } catch (error) {
           if (controller.signal.aborted || !mounted.current) break;
-          failures.push(`${file.name}: ${error instanceof Error ? error.message : "Unable to prepare this import."}`);
-          setPreparationProblems(current => [...current, { name: file.name,
-            message: error instanceof Error ? error.message : "Unable to prepare this import.",
-            diagnostic: error instanceof ApiError ? error.diagnostic : undefined }]);
+          const problem = { name: file.name, diagnostic: error instanceof ApiError ? error.diagnostic
+            : reportProblem(error instanceof Error ? error : new Error("Unable to prepare this import."), { operation: "Prepare video import" }) };
+          failures.push(problem);
+          setPreparationProblems(current => [...current, problem]);
           if (error instanceof ApiError && ["FILE_READ_TIMEOUT", "IMPORT_QUEUE_TIMEOUT", "ENGINE_UNREACHABLE", "BROWSER_CRYPTO_UNAVAILABLE"].includes(error.diagnostic.code)) {
             if (index + 1 < selected.length) setPreparationNotice("Preparation stopped. Files already queued can continue; the remaining files have not been prepared. Fix the reported problem before selecting them again.");
             break;
           }
         }
       }
-      if (failures.length && mounted.current) props.onError(`${failures.length} video${failures.length === 1 ? "" : "s"} could not be queued. See the import details. Files already queued can continue.`);
+      if (failures.length && mounted.current) {
+        // The toast's copied report must carry the file's own code, not a generic summary.
+        const summary = preparationSummary(failures);
+        props.onError(summary.message, summary);
+      }
       void runQueue();
     } finally {
       resumeId.current = null;
@@ -286,7 +289,7 @@ export default function ImportPanel(props: Props) {
     </div>}
     {preparationNotice && <p className="import-preparation-notice" role="status">{preparationNotice}</p>}
     {preparationProblems.map((problem, index) => <div key={index} className="import-preparation-problem">
-      <strong>{problem.name}</strong><ProblemNotice message={problem.message} diagnostic={problem.diagnostic} operation="Prepare video import" />
+      <strong>{problem.name}</strong><ProblemNotice message={problem.diagnostic.message} diagnostic={problem.diagnostic} operation="Prepare video import" />
     </div>)}
     <div className="import-local import-social">
       <label htmlFor="social-video-links"><Link2 size={15} /> Import from a video URL</label>

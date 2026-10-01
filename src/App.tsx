@@ -66,6 +66,7 @@ import {
 } from "../shared/types";
 import AutoPanel, { AUTO_FORMAT_NAMES } from "./AutoPanel";
 import type { FinishedIssue } from "../shared/finished-review";
+import type { Diagnostic } from "../shared/diagnostics";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditPlanEditor, { QualityReportSummary } from "./EditPlanEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
@@ -172,6 +173,7 @@ type Toast = {
   id: number;
   message: string;
   kind: "success" | "error" | "warning" | "info";
+  diagnostic?: Diagnostic;
 };
 const formatSize = (bytes: number) =>
   bytes >= 1024 ** 3
@@ -461,9 +463,9 @@ export default function App() {
     if (view !== "studio") videoRef.current?.pause();
   }, [view]);
   const notify = useCallback(
-    (message: string, kind: Toast["kind"] = "info") => {
+    (message: string, kind: Toast["kind"] = "info", diagnostic?: Diagnostic) => {
       const id = Date.now() + Math.random();
-      setToasts((current) => [...current.slice(-3), { id, message, kind }]);
+      setToasts((current) => [...current.slice(-3), { id, message, kind, diagnostic }]);
       if (kind !== "error" && kind !== "warning") window.setTimeout(
         () =>
           setToasts((current) => current.filter((toast) => toast.id !== id)),
@@ -1223,7 +1225,7 @@ export default function App() {
                 </div>
                 <ImportPanel health={health} connected={connected} inputRef={videoInput}
                   onImported={importedSources} onBusyChange={busy => setUploadProgress(busy ? 0 : null)}
-                  onError={message => notify(message, "error")} />
+                  onError={(message, diagnostic) => notify(message, "error", diagnostic)} />
                 <div className="source-list">
                   {loading ? (
                     <div className="source-empty">
@@ -2693,7 +2695,7 @@ export default function App() {
             ) : (
               <CircleHelp size={17} />
             )}
-            {toast.kind === "error" || toast.kind === "warning" ? <ProblemNotice message={toast.message} operation="Workspace action" severity={toast.kind} /> : <span>{toast.message}</span>}
+            {toast.kind === "error" || toast.kind === "warning" ? <ProblemNotice message={toast.message} diagnostic={toast.diagnostic} operation="Workspace action" severity={toast.kind} /> : <span>{toast.message}</span>}
             <IconButton
               title="Dismiss notification"
               onClick={() =>

@@ -3,7 +3,8 @@ import { clearDiagnostics, getDiagnostics } from "../src/diagnostics-store.js";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createHash } from "node:crypto";
-import { createUploadImport, importVideoLinks, uploadIdentity, transferImport } from "../src/import-client.js";
+import { checkImportFile, createUploadImport, importVideoLinks, preparationSummary, uploadIdentity, transferImport } from "../src/import-client.js";
+import { diagnosticReport } from "../src/diagnostics-store.js";
 import type { ImportSession } from "../shared/imports.js";
 
 const videoLinks = ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"];
@@ -272,3 +273,42 @@ test("cancelling a pending queue request aborts it without recording a timeout",
   assert.equal(signal.aborted, true); t.mock.timers.tick(30_000);
   assert.equal(getDiagnostics().length, 0);
 });
+
+test("files the server would refuse fail before reading with a specific report code", () => {
+  const reject = (file: File, maximum = 1024) => {
+    try { checkImportFile(file, maximum); } catch (error) { assert.ok(error instanceof ApiError); return error.diagnostic; }
+    assert.fail("Expected the file to be rejected.");
+  };
+  assert.equal(reject(new File([], "empty.mp4")).code, "EMPTY_VIDEO_FILE");
+  const large = reject(new File(["x".repeat(2048)], "large.mov"));
+  assert.equal(large.code, "LIMIT_EXCEEDED"); assert.match(large.message, /above the 0\.0 MB import limit/u);
+  const format = reject(new File(["video"], "camera.MTS"));
+  assert.equal(format.code, "UNSUPPORTED_VIDEO_FORMAT"); assert.match(format.message, /^\.mts files are not supported/u);
+  assert.match(reject(new File(["video"], "no-extension")).message, /^Files without an extension/u);
+  assert.doesNotThrow(() => checkImportFile(new File(["video"], "Clip.M4V"), 1024));
+});
+
+test("a single preparation failure gives the toast that file's own copyable report", () => {
+  clearDiagnostics();
+  const read = new ApiError("unreadable", { ...getDiagnosticFixture(), code: "FILE_READ_FAILED", systemCode: "NotReadableError" });
+  const summary = preparationSummary([{ name: "clip.mp4", diagnostic: read.diagnostic }]);
+  assert.equal(summary, read.diagnostic);
+  assert.match(diagnosticReport(summary), /Code: FILE_READ_FAILED\nAction: .*[\s\S]*System code: NotReadableError/u);
+});
+
+test("several preparation failures summarise each file's code in the copied report", () => {
+  clearDiagnostics();
+  const read = { ...getDiagnosticFixture(), code: "FILE_READ_FAILED", systemCode: "NotReadableError" };
+  const same = preparationSummary([{ name: "a.mp4", diagnostic: read }, { name: "b.mov", diagnostic: { ...read, id: "other" } }]);
+  assert.equal(same.code, "FILE_READ_FAILED"); assert.equal(same.nextStep, read.nextStep); assert.equal(same.systemCode, "NotReadableError");
+  assert.match(same.message, /^2 videos could not be queued: a\.mp4 \(FILE_READ_FAILED\); b\.mov \(FILE_READ_FAILED\)\./u);
+  const mixed = preparationSummary([{ name: "a.mp4", diagnostic: read }, { name: "b.wmv", diagnostic: { ...read, code: "UNSUPPORTED_VIDEO_FORMAT" } }]);
+  assert.equal(mixed.code, "IMPORT_PREPARATION_FAILED"); assert.match(mixed.nextStep, /Copy recent error details/u);
+  assert.ok(getDiagnostics().some(item => item.id === mixed.id));
+});
+
+function getDiagnosticFixture() {
+  return { id: "fixture", occurredAt: new Date(0).toISOString(), severity: "error" as const, code: "ACTION_FAILED",
+    title: "The selected video could not be read", nextStep: "Try a copy in another local folder.", operation: "Read video file for import",
+    message: "The browser could not read the selected video. No upload was started for this file." };
+}

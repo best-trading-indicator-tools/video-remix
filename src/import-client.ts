@@ -13,6 +13,40 @@ function preparationError(message: string, context: Partial<Diagnostic> & { oper
   return new ApiError(message, reportProblem(new Error(message), context));
 }
 
+export const formatFileSize = (bytes: number) => bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+
+/** Reject files the server would refuse, with a code that survives into copied reports. */
+export function checkImportFile(file: File, maximum: number) {
+  const operation = "Check video file for import";
+  if (file.size <= 0) throw preparationError("This video file is empty (0 bytes). No upload was started for this file.", {
+    operation, code: "EMPTY_VIDEO_FILE", title: "The selected video is empty", nextStep: fileRecovery,
+  });
+  if (file.size > maximum) throw preparationError(`This video is ${formatFileSize(file.size)}, above the ${formatFileSize(maximum)} import limit.`, {
+    operation, code: "LIMIT_EXCEEDED", title: "This video exceeds the import limit",
+    nextStep: "Trim or compress the video below the limit, or use Link files on this computer to use the original without uploading it.",
+  });
+  if (!/\.(mp4|mov|m4v|webm|mkv|avi|mpeg|mpg)$/iu.test(file.name)) {
+    const extension = /\.[\da-z]{1,10}$/iu.exec(file.name)?.[0].toLowerCase();
+    throw preparationError(`${extension ? `${extension} files are` : "Files without an extension are"} not supported. Choose MP4, MOV, M4V, WebM, MKV, AVI or MPEG videos.`, {
+      operation, code: "UNSUPPORTED_VIDEO_FORMAT", title: "This video format is not supported",
+      nextStep: "Convert the video to MP4 (H.264 video, AAC audio), then select the converted copy.",
+    });
+  }
+}
+
+/** One failed file keeps its own diagnostic; several get a summary naming each file's code. */
+export function preparationSummary(problems: { name: string; diagnostic: Diagnostic }[]): Diagnostic {
+  if (problems.length === 1) return problems[0]!.diagnostic;
+  const codes = new Set(problems.map(problem => problem.diagnostic.code));
+  const shared = codes.size === 1 ? problems[0]!.diagnostic : undefined;
+  const message = `${problems.length} videos could not be queued: ${problems.map(problem => `${problem.name} (${problem.diagnostic.code})`).join("; ")}. Files already queued can continue.`;
+  return reportProblem(new Error(message), {
+    operation: "Prepare video imports", code: shared?.code || "IMPORT_PREPARATION_FAILED", title: "Some videos could not be queued",
+    nextStep: shared?.nextStep || "Each file's problem and fix is shown in the import panel. To send them all, open Help & errors and choose Copy recent error details.",
+    ...(shared?.systemCode ? { systemCode: shared.systemCode } : {}),
+  });
+}
+
 /** Bound the entire step, including a stalled browser read or response body. */
 async function preparationStep<T>(work: (signal: AbortSignal) => Promise<T>, parent: AbortSignal | undefined,
   timeoutError: () => ApiError): Promise<T> {
