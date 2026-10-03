@@ -172,19 +172,32 @@ the source meaning is preserved, and captions match the selected speech. Finding
 include validated source quotes and timestamps. Exports, the editor, and durable
 History show the report separately from technical media checks and human verdicts.
 
-The checker uses the configured DeepSeek text model and makes one bounded request. It
+For edits with selected speech, the checker uses the configured DeepSeek text model and makes one bounded request. It
 never treats unavailable AI, missing source evidence, a malformed response, or an
 uncertain judgment as a pass. Partial transcript coverage is disclosed. It does
-not inspect picture content or listen to the rendered audio; narration and
+not inspect picture content in transcript mode or listen to the rendered audio; narration and
 replacement audio need manual review. An edited draft has no current report until
 its revision is rendered with checks enabled. Source text is treated as data.
+
+Without usable selected speech, the checker uses **DeepSeek Flash visual review**.
+It extracts up to 16 timestamped source frames from the opening, middle, and ending
+of up to four cuts, plus neighboring source context, and sends those images to
+`DEEPSEEK_VISION_MODEL` (default `deepseek-flash`). The API accepts image input;
+the app supplies frames in playback order rather than uploading an MP4. This works
+for silent screen recordings, demonstrations, and other videos without transcripts.
+Reports identify visual observations and sampled coverage separately from speech
+quotations. Unreadable frames, unsampled cuts, additional visual layers, or captions
+that still need speech verification keep the review partial. Visual review does
+not certify unsampled motion, rendered composition, or audio, and does not attempt
+speech-based automatic repairs.
 
 If a check cannot finish, its report shows a safe reason such as a request timeout,
 account/configuration issue, response-format error, or unverifiable source evidence.
 Older reports may not have recorded the precise cause. **Retry editorial check**
 reviews that saved export again using DeepSeek and updates its report in Exports
 and History. It does not render a new video, change the edit, or attempt repairs.
-The saved plan and transcript are enough even if the original media has expired.
+For transcript reviews, the saved plan and transcript are enough even if the
+original media has expired. Visual reviews also need the original video available.
 
 The reviewer is a separate request to the same configured model, so it can still
 miss problems or agree with an earlier mistake. A passing report is advisory and

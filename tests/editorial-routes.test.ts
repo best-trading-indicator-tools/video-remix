@@ -2,7 +2,7 @@ import { readWorkspaceFile, failWorkspaceWrites } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import express from "express";
 import { randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import type { Server } from "node:http";
 import os from "node:os";
 import path from "node:path";
@@ -11,6 +11,7 @@ import type { AddressInfo } from "node:net";
 import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS, type EditPlan, type ExportHistoryEntry, type Transcript } from "../shared/types.js";
 import { EDITORIAL_POLICY_VERSION, type EditorialReport, type EditorialReviewer, type EditorialReviewRequest } from "../shared/editorial.js";
 import type { StoredJob } from "../server/store.js";
+import { runLocal } from "../server/auto-process.js";
 
 const pause = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const waitFor = async (predicate: () => boolean) => {
@@ -53,7 +54,16 @@ test("saved editorial review updates evidence reports without rendering, editing
     await initStore();
     const serve = async (timeoutMs?: number) => {
       const app = express(); app.use(express.json());
-      installEditorialReviewRoutes(app, { reviewer, isJobRunning: id => running.has(id), timeoutMs });
+      installEditorialReviewRoutes(app, { reviewer, isJobRunning: id => running.has(id), timeoutMs,
+        visualReviewer: async request => {
+          const selected = request.frames.filter(frame => frame.role === "selected");
+          const context = request.frames.find(frame => frame.role === "context");
+          return { frames: request.frames.map(frame => ({ frameId: frame.id, readable: true })),
+            checks: request.checks.map(check => ({ check, verdict: "pass", explanation: "The sampled source frames show a consistent visual sequence.",
+              evidence: [{ frameId: check === "ending-complete" ? selected.at(-1)!.id : selected[0]!.id, observation: "The test pattern is visible." },
+                ...(check === "meaning-preserved" && context ? [{ frameId: context.id, observation: "The neighboring source shows the same pattern." }] : [])] })) };
+        },
+      });
       const server = await new Promise<Server>(resolve => {
         const result = app.listen(0, "127.0.0.1", () => resolve(result));
       });
@@ -153,6 +163,27 @@ test("saved editorial review updates evidence reports without rendering, editing
       assert.equal(response.status, 200);
       assert.equal((await response.json()).editorialReport.status, "unavailable");
       assert.equal(reviewCalls, before, "Missing source evidence does not invoke the reviewer");
+    });
+    await t.test("retrying a saved silent export reviews original frames and persists the new visual report without rendering", async () => {
+      const [job] = await seed();
+      delete job!.sourceTranscript; job!.editPlan!.captions = []; job!.editPlan!.visuals = [];
+      await runLocal("ffmpeg", ["-v", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=24:duration=8",
+        "-an", "-c:v", "libx264", "-threads", "1", assets.original]);
+      state.sources.push({ id: job!.sourceId, name: "Silent screen recording.mp4", filePath: assets.original,
+        thumbnailPath: "", thumbnailUrl: "", url: "", duration: 8, size: (await stat(assets.original)).size,
+        width: 320, height: 180, fps: 24, hasAudio: false, createdAt: job!.createdAt });
+      const before = immutable(job!), originalOutput = await readFile(assets.output);
+      const response = await post(job!.id);
+      assert.equal(response.status, 200);
+      const result = await response.json();
+      assert.equal(result.editorialReport.status, "pass"); assert.equal(result.editorialReport.coverage.mode, "visual");
+      assert.equal(result.editorialReport.failure, undefined); assert.equal(result.editorialReport.coverage.selectedWords, 0);
+      assert.ok(result.editorialReport.coverage.visual.readableFrames >= 6);
+      assert.equal(reviewCalls, 0); assert.deepEqual(immutable(job!), before);
+      assert.deepEqual(await readFile(assets.output), originalOutput);
+      assert.deepEqual(state.history[0]!.editorialReport, result.editorialReport);
+      assert.equal(JSON.stringify(result).includes("data:image"), false);
+      assert.equal(JSON.stringify(result).includes(directory), false);
     });
     await t.test("unknown, unsaved, non-Auto and unfinished jobs are rejected before review", async () => {
       const [job] = await seed();

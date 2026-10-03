@@ -4,6 +4,7 @@
 .editorial-report-heading > svg { flex-shrink: 0; margin-top: 4px; }
 .editorial-report-title { min-width: 0; }
 .editorial-report-title > strong, .editorial-failure { display: block; }
+.editorial-report-title > .editorial-coverage { display: block; margin-top: 3px; color: var(--subtle); font-weight: 400; }
 .editorial-failure { margin-top: 4px; color: var(--text); font-weight: 400; overflow-wrap: anywhere; }
 .editorial-report.needs-review summary, .editorial-report.unavailable summary { color: #e7be78; }
 .editorial-report p { margin: 10px 0 0; color: var(--subtle); }

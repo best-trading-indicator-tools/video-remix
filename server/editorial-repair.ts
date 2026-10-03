@@ -10,6 +10,7 @@ import { buildEditorialReviewContext, reviewEditorialPlan } from "./editorial-re
 import { applyEditPlanChanges } from "./edit-plan.js";
 import { editorialAIEnabled, generateEditorialJSON } from "./editorial-provider.js";
 import { AIRequestError } from "./ai-errors.js";
+import type { VisualEditorialReviewer } from "./editorial-visual-review.js";
 
 export const EDITORIAL_REPAIR_BUDGET_MS = 120_000;
 const MAX_EXTENSION = 3;
@@ -205,9 +206,9 @@ function abortable<T>(work: (signal: AbortSignal) => Promise<T>, signal: AbortSi
   });
 }
 
-export async function repairEditorialPlan({ plan, transcript, signal, maxDuration, protectedEdit = false, reviewer, proposer = deepseekEditorialRepairProposer, onProgress }: {
-  plan: EditPlan; transcript?: Transcript; signal: AbortSignal; maxDuration: number; protectedEdit?: boolean;
-  reviewer?: EditorialReviewer; proposer?: EditorialRepairProposer;
+export async function repairEditorialPlan({ plan, transcript, sourcePath, signal, maxDuration, protectedEdit = false, reviewer, visualReviewer, proposer = deepseekEditorialRepairProposer, onProgress }: {
+  plan: EditPlan; transcript?: Transcript; sourcePath?: string; signal: AbortSignal; maxDuration: number; protectedEdit?: boolean;
+  reviewer?: EditorialReviewer; visualReviewer?: VisualEditorialReviewer; proposer?: EditorialRepairProposer;
   onProgress?: (progress: EditorialReviewProgress) => void;
 }): Promise<{ plan: EditPlan; report: EditorialReport; repairLog: EditorialRepairLog }> {
   signal.throwIfAborted();
@@ -217,7 +218,7 @@ export async function repairEditorialPlan({ plan, transcript, signal, maxDuratio
   let report: EditorialReport;
   let initialTimedOut = false;
   onProgress?.({ step: "review", attempt: 0 });
-  try { report = await reviewEditorialPlan({ plan: best, transcript, signal: budget, reviewer }); }
+  try { report = await reviewEditorialPlan({ plan: best, transcript, sourcePath, signal: budget, reviewer, visualReviewer }); }
   catch {
     signal.throwIfAborted();
     initialTimedOut = true;
@@ -231,6 +232,9 @@ export async function repairEditorialPlan({ plan, transcript, signal, maxDuratio
     return { plan: best, report, repairLog: log };
   };
   if (initialTimedOut) return finish("The initial independent review exceeded its time budget; the original edit was kept.");
+  if (report.coverage.mode === "visual") return finish(report.status === "pass"
+    ? "The sampled source pictures passed visual editorial review. No speech-based corrections were needed."
+    : "Visual editorial review recorded the available picture evidence. Speech-based automatic corrections were not applied.");
   if (protectedEdit) return finish("User-edited or pinned choices were checked and kept unchanged.");
   if (plan.narration || plan.audioMediaId || plan.settings.audioId || plan.settings.muted || plan.settings.volume === 0)
     return finish("Narration, replacement audio or muted speech requires manual correction; audio and timing were kept unchanged.");
@@ -269,7 +273,7 @@ export async function repairEditorialPlan({ plan, transcript, signal, maxDuratio
     }
     onProgress?.({ step: "verify", attempt });
     let checked: EditorialReport;
-    try { checked = await reviewEditorialPlan({ plan: compiled.plan, transcript, signal: budget, reviewer }); }
+    try { checked = await reviewEditorialPlan({ plan: compiled.plan, transcript, sourcePath, signal: budget, reviewer, visualReviewer }); }
     catch {
       signal.throwIfAborted();
       log.attempts.push({ attempt, outcome: "unavailable", targetCodes: compiled.proposal.targetCodes, patch: compiled.patch, summary: compiled.proposal.summary,

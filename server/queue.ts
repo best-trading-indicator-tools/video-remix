@@ -262,14 +262,14 @@ async function run(job: StoredJob, controller: AbortController) {
       if (mode !== "off") {
         if (mode === "repair" && !savedRepair) {
           const reviewed = await trackEditorialReview(job, EDITORIAL_REPAIR_BUDGET_MS, onProgress => repairEditorialPlan({ plan: job.editPlan!,
-            transcript: job.sourceTranscript, signal: controller.signal, onProgress,
+            transcript: job.sourceTranscript, sourcePath: source.filePath, signal: controller.signal, onProgress,
             maxDuration: job.auto!.targetDuration, protectedEdit: Boolean(job.parentJobId) }));
           job.editPlan = reviewed.plan;
           job.editorialReport = reviewed.report;
           job.editorialRepair = reviewed.repairLog;
         } else {
           job.editorialReport = await trackEditorialReview(job, AI_REQUEST_BUDGET_MS + 5_000, () => reviewEditorialPlan({ plan: job.editPlan!,
-            transcript: job.sourceTranscript, signal: controller.signal }));
+            transcript: job.sourceTranscript, sourcePath: source.filePath, signal: controller.signal }));
           // A retry rechecks the saved result; it does not grant another repair budget.
           if (savedRepair && mode === "repair") job.editorialRepair = { ...savedRepair,
             finalReport: structuredClone(job.editorialReport),
@@ -281,7 +281,7 @@ async function run(job: StoredJob, controller: AbortController) {
       const protectedCaptions = await protectFinalAutoCaptions({ job, source, signal: controller.signal });
       if (protectedCaptions && mode !== "off") {
         job.editorialReport = await trackEditorialReview(job, AI_REQUEST_BUDGET_MS + 5_000, () => reviewEditorialPlan({ plan: job.editPlan!,
-          transcript: job.sourceTranscript, signal: controller.signal }));
+          transcript: job.sourceTranscript, sourcePath: source.filePath, signal: controller.signal }));
         if (job.editorialRepair) job.editorialRepair.finalReport = structuredClone(job.editorialReport);
       }
       // Rebuild every render input from the final reviewed plan. This also writes

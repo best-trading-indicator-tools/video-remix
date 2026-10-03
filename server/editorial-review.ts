@@ -8,6 +8,7 @@ import {
 import { editorialAIConfigured, editorialAIEnabled, editorialModel } from "./editorial-provider.js";
 import { editorialReplySchema, deepseekEditorialReviewer, EditorialValidationError } from "./editorial-model.js";
 import { AIRequestError } from "./ai-errors.js";
+import { reviewVisualEditorialPlan, type VisualEditorialReviewer } from "./editorial-visual-review.js";
 
 const MAX_EXCERPTS = 80;
 const MAX_EVIDENCE_CHARS = 12_000;
@@ -145,12 +146,13 @@ export function buildEditorialReviewContext(plan: EditPlan, transcript?: Transcr
   checks.push({ check: "caption-timing", origin: "structural", status: plan.captions.length
     ? issues.some(issue => issue.code === "caption-timing") ? "needs-review" : "pass" : "not-applicable",
     message: plan.captions.length ? "Checked cue bounds and overlap on the final timeline." : "This edit has no caption cues." });
-  if (plan.narration || plan.audioMediaId || plan.settings.audioId) {
+  const hasSelectedSpeech = excerpts.some(excerpt => excerpt.role === "selected");
+  if (hasSelectedSpeech && (plan.narration || plan.audioMediaId || plan.settings.audioId)) {
     coverage.omittedChecks.push("replacement-audio-fidelity");
     add({ code: "replacement-audio-unverified", check: "meaning-preserved", severity: "warning",
       message: "Replacement or narrated audio is not verified against these source words. Listen to it and check its meaning.", evidence: [] });
   }
-  if (plan.settings.muted || plan.settings.volume === 0) {
+  if (hasSelectedSpeech && (plan.settings.muted || plan.settings.volume === 0)) {
     coverage.omittedChecks.push("audible-selected-speech");
     add({ code: "selected-speech-muted", check: "meaning-preserved", severity: "warning",
       message: "The selected source speech is muted. These text checks cannot establish that the silent edit communicates the same idea.", evidence: [] });
@@ -177,8 +179,9 @@ export function buildEditorialReviewContext(plan: EditPlan, transcript?: Transcr
       narration: plan.narration, outputDuration: plan.outputDuration, excerpts, captions, callouts, checks: semanticChecks } };
 }
 
-export async function reviewEditorialPlan({ plan, transcript, signal, reviewer = deepseekEditorialReviewer, aiEnabled = editorialAIEnabled() }: {
-  plan: EditPlan; transcript?: Transcript; signal: AbortSignal; reviewer?: EditorialReviewer; aiEnabled?: boolean;
+export async function reviewEditorialPlan({ plan, transcript, sourcePath, signal, reviewer = deepseekEditorialReviewer, visualReviewer, aiEnabled = editorialAIEnabled() }: {
+  plan: EditPlan; transcript?: Transcript; sourcePath?: string; signal: AbortSignal; reviewer?: EditorialReviewer;
+  visualReviewer?: VisualEditorialReviewer; aiEnabled?: boolean;
 }): Promise<EditorialReport> {
   signal.throwIfAborted();
   const context = buildEditorialReviewContext(plan, transcript);
@@ -193,7 +196,9 @@ export async function reviewEditorialPlan({ plan, transcript, signal, reviewer =
     return report;
   };
   if (!context.validPlan) return unavailable("Correct the saved timeline before editorial review.", "invalid-plan");
-  if (!context.request.excerpts.some(excerpt => excerpt.role === "selected")) return unavailable("A transcript of the selected speech is required for editorial review.", "missing-transcript");
+  if (!context.request.excerpts.some(excerpt => excerpt.role === "selected")) return reviewVisualEditorialPlan({
+    plan, sourcePath, report, signal, aiEnabled: editorialAIEnabled() && aiEnabled, reviewer: visualReviewer,
+  });
   if (!editorialAIEnabled() || !aiEnabled) return unavailable("AI editorial review is disabled. Enable Auto AI to run this check.", "disabled");
   if (!editorialAIConfigured()) return unavailable("Configure a DeepSeek API key and valid model identifier for editorial review.", "configuration");
   report.modelVersion = editorialModel();

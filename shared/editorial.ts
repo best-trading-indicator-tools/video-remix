@@ -4,6 +4,8 @@ export const SEMANTIC_EDITORIAL_CHECKS = ["opening-context", "ending-complete", 
 export type SemanticEditorialCheck = typeof SEMANTIC_EDITORIAL_CHECKS[number];
 export type EditorialCheckName = SemanticEditorialCheck | "source-evidence" | "cut-boundaries" | "caption-timing" | "plan-structure";
 export interface EditorialEvidence {
+  /** Visual observations are descriptions of sampled frames, not speech quotations. */
+  kind?: "visual";
   sourceId: string;
   /** Original source seconds, never output seconds. */
   start: number;
@@ -28,13 +30,15 @@ export interface EditorialCheck {
   message: string;
 }
 export interface EditorialCoverage {
-  source: "word-timed" | "segment-only" | "missing";
+  source: "word-timed" | "segment-only" | "missing" | "visual";
+  mode?: "visual";
+  visual?: { sampledFrames: number; readableFrames: number; sampledCuts: number; totalCuts: number };
   semantic: "complete" | "partial" | "unavailable";
   selectedWords: number;
   totalSelectedWords: number;
   neighboringContext: boolean;
   omittedChecks: string[];
-  sourceVisuals: false;
+  sourceVisuals: boolean;
   renderedAudio: false;
 }
 export interface EditorialReport {

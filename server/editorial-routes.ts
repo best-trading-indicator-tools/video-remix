@@ -6,10 +6,13 @@ import type { EditorialReviewer } from "../shared/editorial.js";
 import { reviewEditorialPlan } from "./editorial-review.js";
 import { isRunning } from "./queue.js";
 import { publicJob, saveStore, state, type StoredJob } from "./store.js";
+import { assertLinkedSourceUnchanged } from "./media-imports.js";
+import type { VisualEditorialReviewer } from "./editorial-visual-review.js";
 
 interface ReviewRouteOptions {
   /** Replies still pass through the production review and evidence validation. */
   reviewer?: EditorialReviewer;
+  visualReviewer?: VisualEditorialReviewer;
   isJobRunning?: (id: string) => boolean;
   /** A smaller budget is useful to verify cancellation without waiting a minute. */
   timeoutMs?: number;
@@ -45,8 +48,13 @@ export function installEditorialReviewRoutes(app: Express, options: ReviewRouteO
       const originalPlan = job.editPlan;
       const originalRevision = originalPlan.revision;
       const originalSignature = signature(job);
+      const source = state.sources.find(item => item.id === originalPlan.sourceId);
+      let sourcePath = source?.filePath;
+      if (source) try { await assertLinkedSourceUnchanged(source); }
+      catch { controller.signal.throwIfAborted(); sourcePath = undefined; }
       const report = await reviewEditorialPlan({ plan: structuredClone(originalPlan),
         transcript: job.sourceTranscript ? structuredClone(job.sourceTranscript) : undefined,
+        sourcePath, visualReviewer: options.visualReviewer,
         signal: controller.signal, ...(options.reviewer ? { reviewer: options.reviewer } : {}),
       });
       controller.signal.throwIfAborted();
@@ -54,6 +62,8 @@ export function installEditorialReviewRoutes(app: Express, options: ReviewRouteO
       if (job.status !== "completed" || running(job.id) || job.editPlan !== originalPlan ||
         job.editPlan.revision !== originalRevision || signature(job) !== originalSignature)
         return res.status(409).json({ error: "The saved edit changed during review. Review its current version again." });
+      if (report.coverage.source === "visual" && (!source || !state.sources.includes(source) || source.filePath !== sourcePath))
+        return res.status(409).json({ error: "The original video changed during review. Review its current version again." });
 
       const previous = { report: job.editorialReport, repair: job.editorialRepair, phase: job.phase };
       const nextReport = structuredClone(report);
