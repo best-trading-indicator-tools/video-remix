@@ -168,6 +168,12 @@ export async function saveStore(history: ExportHistoryEntry[] = []) {
   if (history.length || replacementHistory) matchCache.clear();
   replacementHistory = undefined;
 }
+export function closeStore() {
+  database?.close();
+  database = undefined;
+  replacementHistory = undefined;
+  matchCache.clear();
+}
 export function publicSource(source: StoredSource): VideoSource {
   const {
     filePath: _filePath,

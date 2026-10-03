@@ -54,7 +54,7 @@ async function localBrowser(): Promise<string | undefined> {
 /** A capability check never downloads a browser or compiles a composition. */
 export async function remotionAvailable(): Promise<boolean> {
   try {
-    await import("@remotion/renderer");
+    import.meta.resolve("@remotion/renderer");
     await access(
       path.join(
         projectRoot,

@@ -159,14 +159,17 @@ p{margin:0;color:#b5c8bf;font-size:${Math.round(short * 0.04)}px;line-height:1.4
 }
 
 export async function browserPath(): Promise<string | undefined> {
-  const puppeteer = await import("puppeteer");
   const candidates = [
     process.env.PRODUCER_HEADLESS_SHELL_PATH,
     process.env.PUPPETEER_EXECUTABLE_PATH,
   ];
+  // Use the package's CommonJS entry to avoid the async ESM loader bridge on Windows.
+  // Node caches the module, but browser paths are checked again after setup or removal.
+  const puppeteer = createRequire(import.meta.url)("puppeteer") as typeof import("puppeteer");
+  const api = typeof puppeteer.executablePath === "function" ? puppeteer : puppeteer.default;
   for (const headless of [true, "shell"] as const) {
     try {
-      candidates.push(await puppeteer.default.executablePath({ headless }));
+      candidates.push(await api.executablePath({ headless }));
     } catch {
       /* Browser has not been installed. */
     }
@@ -185,7 +188,7 @@ export async function browserPath(): Promise<string | undefined> {
 
 export async function graphicsAvailable(): Promise<boolean> {
   try {
-    await import("@hyperframes/producer");
+    import.meta.resolve("@hyperframes/producer");
     return !!(await browserPath());
   } catch {
     return false;

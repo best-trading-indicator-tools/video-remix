@@ -18,7 +18,7 @@ test("legacy workspace migrates once with unchanged backup and survives restart"
     db = new WorkspaceDatabase(path.join(directory, "remixer.sqlite")); await db.initialize();
     assert.equal(await readFile(path.join(directory, "state.json.pre-sqlite.bak"), "utf8"), original);
     assert.equal(await readFile(path.join(directory, "state.json"), "utf8"), original);
-    assert.equal((await stat(db.filename)).mode & 0o777, 0o600);
+    assert.equal((await stat(db.filename)).mode & 0o777, process.platform === "win32" ? 0o666 : 0o600);
     const active = db.loadActive(), updated = [...db.history()][0]!;
     updated.publications[0]!.account = "updated channel";
     db.save(active, [updated]); db.close();
@@ -63,5 +63,29 @@ test("invalid legacy data cannot create an initialized empty workspace", async (
     await writeFile(path.join(directory, "state.json"), JSON.stringify(repaired));
     await db.initialize();
     assert.equal([...db.history()][0]!.id, "recovered");
+  } finally { db.close(); await rm(directory, { recursive: true, force: true }); }
+});
+
+test("history batches release read cursors and do not skip entries when the filter changes during migration", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sqlite-history-batches-"));
+  const db = new WorkspaceDatabase(path.join(directory, "remixer.sqlite"));
+  try {
+    await db.initialize();
+    const history = Array.from({ length: 255 }, (_, i) => ({ ...entry(String(i)),
+      createdAt: `2026-09-${String(1 + i % 28).padStart(2, "0")}T12:00:00.000Z` }));
+    db.save(empty(), history);
+    const expected = [...history].sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+    const seen: string[] = [];
+    for (const value of db.history({ missingPreview: true })) {
+      seen.push(value.id);
+      // A live statement cursor would keep the WAL busy while the caller awaits work.
+      assert.equal(db.db.prepare("PRAGMA wal_checkpoint(TRUNCATE)").get()!.busy, 0);
+      await new Promise<void>(resolve => setImmediate(resolve));
+      db.save(empty(), [{ ...value, thumbnailUrl: `/thumbnail/${value.id}` }]);
+    }
+    assert.deepEqual(seen, expected.map(value => value.id));
+    assert.equal([...db.history({ missingPreview: true })].length, 0);
+    assert.equal([...db.history({ fingerprint: "fingerprint" })].length, 255);
+    assert.deepEqual([...db.identities()].map(value => value.id), history.map(value => value.id));
   } finally { db.close(); await rm(directory, { recursive: true, force: true }); }
 });

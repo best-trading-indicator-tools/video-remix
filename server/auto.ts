@@ -48,8 +48,9 @@ import { ANGLE_CAPTION_PRESET, numberedCallouts, versionAngle } from "../shared/
 import { CAPTION_PRESETS } from "../shared/caption-style.js";
 import { editorialModel } from "./editorial-provider.js";
 import { inspectSourceCaptions, type SourceCaptionInspection } from "./source-captions.js";
+import { cacheCapability } from "./capability-cache.js";
 
-export async function getAutoCapabilities(): Promise<AutoCapabilities> {
+export const getAutoCapabilities = cacheCapability(async (): Promise<AutoCapabilities> => {
   const [transcription, intelligence, voice, motionGraphics, remotionGraphics] =
     await Promise.all([
       transcriptionAvailable(),
@@ -83,7 +84,7 @@ export async function getAutoCapabilities(): Promise<AutoCapabilities> {
           }
         : {}),
   };
-}
+});
 
 const transcriptCacheKey = (source: StoredSource) =>
   `v1:${process.env.WHISPER_MODEL || "small"}:${source.size}:${source.duration}`;

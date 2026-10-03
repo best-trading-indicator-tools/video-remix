@@ -8,13 +8,18 @@ permissions:
 
 jobs:
   windows:
+    name: Windows / Node ${{ matrix.node }}
     runs-on: windows-latest
     timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.14.0', '22']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
           cache: npm
       - uses: actions/setup-python@v5
         with:
@@ -36,4 +41,6 @@ jobs:
           tests/upload-file.test.ts tests/linked-sources.test.ts
           tests/history-thumbnails.test.ts tests/import-client.test.ts
           tests/imports.test.ts tests/engine.test.ts
+          tests/database.test.ts tests/queue.test.ts tests/social-imports.test.ts
+          tests/windows-resilience.test.ts
           tests/diagnostics.test.ts tests/diagnostics-client.test.ts tests/transcript-edit.test.ts

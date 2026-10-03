@@ -67,7 +67,7 @@ export class WorkspaceDatabase {
   loadActive() {
     const result = { sources: [], attachments: [], jobs: [], broll: [] } as Record<Collection, { id: string }[]>;
     this.saved.clear();
-    for (const row of this.db.prepare("SELECT collection,id,data FROM records ORDER BY rowid").iterate()) {
+    for (const row of this.db.prepare("SELECT collection,id,data FROM records ORDER BY rowid").all()) {
       const key = row.collection as Collection;
       if (!collections.includes(key)) continue;
       result[key].push(JSON.parse(row.data as string));
@@ -108,8 +108,22 @@ export class WorkspaceDatabase {
     for (const [key, column] of [["id", "id"], ["jobId", "job_id"], ["fingerprint", "fingerprint"]] as const)
       if (filter[key] !== undefined) { conditions.push(`${column}=?`); values.push(filter[key]!); }
     if (filter.missingPreview) conditions.push("json_extract(data,'$.thumbnailUrl') IS NULL");
-    for (const row of this.db.prepare(`SELECT data FROM history${conditions.length ? ` WHERE ${conditions.join(" AND ")}` : ""} ORDER BY created_at DESC,id DESC`).iterate(...values))
-      yield JSON.parse(row.data as string);
+    // Node 22.14 can finalize a statement while its iterator is still alive.
+    // Keyset batches also release read cursors before callers await work or update history.
+    let cursor: { createdAt: string; id: string } | undefined;
+    while (true) {
+      const clauses = [...conditions], args = [...values];
+      if (cursor) {
+        clauses.push("(created_at < ? OR (created_at = ? AND id < ?))");
+        args.push(cursor.createdAt, cursor.createdAt, cursor.id);
+      }
+      const rows = this.db.prepare(`SELECT id,created_at,data FROM history${clauses.length ? ` WHERE ${clauses.join(" AND ")}` : ""}
+        ORDER BY created_at DESC,id DESC LIMIT 100`).all(...args);
+      if (!rows.length) return;
+      const last = rows.at(-1)!;
+      cursor = { createdAt: last.created_at as string, id: last.id as string };
+      for (const row of rows) yield JSON.parse(row.data as string);
+    }
   }
   page({ limit = 50, offset = 0, search = "", ids }: { limit?: number; offset?: number; search?: string; ids?: string[] } = {}) {
     const conditions: string[] = [], args: (string | number)[] = [];
@@ -124,11 +138,16 @@ export class WorkspaceDatabase {
   }
   *identities() {
     // Similar-picture checks need only compact signatures, not transcripts and review reports.
-    for (const row of this.db.prepare(`SELECT id, fingerprint, json_extract(data,'$.sourcePicture') AS source_picture,
-      json_extract(data,'$.outputPicture') AS output_picture FROM history`).iterate())
-      yield { id: row.id as string, sourceFingerprint: row.fingerprint as string,
+    let cursor = 0;
+    while (true) {
+      const rows = this.db.prepare(`SELECT rowid,id,fingerprint,json_extract(data,'$.sourcePicture') AS source_picture,
+        json_extract(data,'$.outputPicture') AS output_picture FROM history WHERE rowid > ? ORDER BY rowid LIMIT 100`).all(cursor);
+      if (!rows.length) return;
+      cursor = Number(rows.at(-1)!.rowid);
+      for (const row of rows) yield { id: row.id as string, sourceFingerprint: row.fingerprint as string,
         sourcePicture: row.source_picture ? JSON.parse(row.source_picture as string) : undefined,
         outputPicture: row.output_picture ? JSON.parse(row.output_picture as string) : undefined };
+    }
   }
   stockUses(identities: string[]) {
     if (!identities.length) return {};

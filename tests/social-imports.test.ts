@@ -211,6 +211,25 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
       await assert.rejects(access(path.join(data, "imports", item.id)), { code: "ENOENT" });
       await assert.rejects(access(path.join(data, "uploads", `${item.id}.mp4`)), { code: "ENOENT" });
     });
+    await t.test("Windows launches an explicitly configured Node downloader script without a shebang or shell", async () => {
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+      const previous = process.env.YT_DLP_BIN;
+      const work = await mkdtemp(path.join(directory, "windows-wrapper-"));
+      process.env.YT_DLP_BIN = binary;
+      try {
+        Object.defineProperty(process, "platform", { ...originalPlatform, value: "win32" });
+        const result = await downloadSocialVideo("https://youtu.be/BaW_jenozKc", work, {
+          signal: new AbortController().signal, maxBytes: 10 * 1024 * 1024,
+          onProgress: () => {}, checkSpace: async () => {},
+        });
+        assert.ok(result.size > 0);
+        await access(result.file);
+      } finally {
+        Object.defineProperty(process, "platform", originalPlatform);
+        if (previous === undefined) delete process.env.YT_DLP_BIN;
+        else process.env.YT_DLP_BIN = previous;
+      }
+    });
     await t.test("downloaded files are bounded even when size was unavailable before downloading", async () => {
       const previous = process.env.YT_DLP_BIN;
       process.env.YT_DLP_BIN = binary;

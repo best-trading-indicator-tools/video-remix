@@ -2,7 +2,7 @@ import { visualIdentity } from "./visual-identity.js";
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, statfs, symlink, writeFile, type FileHandle } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, symlink, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -17,6 +17,7 @@ import { publicSource, saveStore, state, type StoredSource } from "./store.js";
 import { openRegularUpload, UnsafeUploadError } from "./upload-file.js";
 import { diagnosticSchema } from "../shared/diagnostics.js";
 import { serverDiagnostic } from "./diagnostics.js";
+import { availableDiskSpace } from "./disk-space.js";
 
 const TTL = 48 * 60 * 60 * 1000;
 const DISK_RESERVE = 128 * 1024 * 1024;
@@ -51,6 +52,7 @@ let initialized = false;
 let maintenance: ReturnType<typeof setInterval> | undefined;
 let mutations = Promise.resolve();
 function exclusive<T>(fn: () => Promise<T>): Promise<T> {
+  // Retain ownership until writes really finish; a Promise.race timeout would allow overlapping mutations.
   const next = mutations.catch(() => undefined).then(fn);
   mutations = next.then(() => undefined, () => undefined);
   return next;
@@ -116,8 +118,9 @@ function safeError(error: unknown) {
   return "This video could not be imported. Check that it is a readable video and try again.";
 }
 async function requireSpace(additional = 0) {
-  const disk = await statfs(paths.uploads);
-  const free = Number(disk.bavail) * Number(disk.bsize);
+  let free: number;
+  try { free = await availableDiskSpace(paths.uploads); }
+  catch (error) { throw new ImportError(503, (error as Error).message); }
   const reserved = [...sessions.values()].reduce((total, item) => total +
     (item.kind === "upload" && item.status === "uploading" ? Math.max(0, item.size - item.offset) : 0), 0);
   if (free < reserved + additional + DISK_RESERVE)

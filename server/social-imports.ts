@@ -49,7 +49,11 @@ export async function downloadSocialVideo(input: string, directory: string, opti
   const binary = await downloader();
   options.signal.throwIfAborted();
   return new Promise((resolve, reject) => {
-    const child = spawn(binary, args, { cwd: directory, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
+    // Script fixtures and explicitly configured JS wrappers need Node on Windows;
+    // executable yt-dlp installations continue to launch directly, without a shell.
+    const nodeScript = process.platform === "win32" && /\.[cm]?js$/iu.test(binary);
+    const child = spawn(nodeScript ? process.execPath : binary, nodeScript ? [path.resolve(binary), ...args] : args,
+      { cwd: directory, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "", pending = "", pendingError = "", result: { file?: unknown; title?: unknown } | undefined;
     let failure: Error | undefined, monitoring = false, closed = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;

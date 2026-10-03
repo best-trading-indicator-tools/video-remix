@@ -34,6 +34,7 @@ import { writeFile } from "node:fs/promises";
 import { addManualCaptions, wantsManualCaptions } from "./manual-captions.js";
 import { serverDiagnostic } from "./diagnostics.js";
 const running = new Map<string, AbortController>();
+const runningPromises = new Map<string, Promise<void>>();
 // Only initial analysis and clip selection need exclusive access to a source.
 // Once cuts are chosen, expensive stock searches, reviews and exports can overlap.
 const selecting = new Set<string>();
@@ -73,6 +74,7 @@ export function pumpQueue() {
     const job = state.jobs.find(
       (item) =>
         item.status === "queued" &&
+        !item.cancelledByUser &&
         (!item.retry?.nextRetryAt || Date.parse(item.retry.nextRetryAt) <= now) &&
         !running.has(item.id) &&
         !waitingFor.has(item.id) &&
@@ -85,7 +87,8 @@ export function pumpQueue() {
     job.status = "processing";
     if (job.retry) delete job.retry.nextRetryAt;
     job.phase = job.retry ? `Starting automatic retry ${job.retry.count} of ${job.retry.limit}` : "Preparing your edit";
-    void run(job, controller);
+    const promise = runWithRelease(job, controller);
+    runningPromises.set(job.id, promise);
   }
   for (const job of state.jobs.filter(item => item.status === "queued")) {
     job.phase = job.retry?.nextRetryAt && Date.parse(job.retry.nextRetryAt) > now ? retryPhase(job)
@@ -114,6 +117,28 @@ async function trackEditorialReview<T>(job: StoredJob, budgetMs: number,
   update({ step: "review", attempt: 0 });
   try { return await work(update); }
   finally { delete job.editorialProgress; }
+}
+
+/** Release the worker even if output cleanup or history construction itself throws. */
+async function runWithRelease(job: StoredJob, controller: AbortController) {
+  try { await run(job, controller); }
+  catch (error) {
+    console.error(`Unable to finish export cleanup [${job.id}]:`, error);
+    if (job.status === "processing") {
+      job.status = job.cancelledByUser ? "cancelled" : "failed";
+      job.finishedAt = new Date().toISOString();
+      delete job.phase;
+      job.error = job.cancelledByUser ? undefined : "The export could not finish saving its result. Check the workspace drive and retry.";
+    }
+    await saveStore().catch(saveError => console.error("Unable to save export state:", saveError));
+  } finally {
+    running.delete(job.id);
+    runningPromises.delete(job.id);
+    selecting.delete(job.id);
+    selected.delete(job.id);
+    if (job.status !== "queued") waitingFor.delete(job.id);
+    pumpQueue();
+  }
 }
 
 async function run(job: StoredJob, controller: AbortController) {
@@ -462,32 +487,51 @@ async function run(job: StoredJob, controller: AbortController) {
     const entry = source && historyEntry(source, job);
     if (entry && thumbnail) { entry.thumbnailUrl = thumbnail.url; entry.thumbnailKind = thumbnail.kind; }
     const historyUpdates = entry ? upsertHistory(historyRecords({ jobId: entry.jobId }), entry) : [];
-    running.delete(job.id);
-    selecting.delete(job.id);
-    selected.delete(job.id);
-    if (status !== "queued") waitingFor.delete(job.id);
     await saveStore(historyUpdates).catch((error) =>
       console.error("Unable to save render result:", error),
     );
-    pumpQueue();
   }
 }
 export async function cancelJob(job: StoredJob) {
   if (!isActive(job)) return;
   // Persist intent before aborting so even a simultaneous process crash cannot
   // make startup recovery resurrect a job the user deliberately stopped.
+  const previousIntent = job.cancelledByUser;
+  const controller = running.get(job.id);
   job.cancelledByUser = true;
+  try { await saveStore(); }
+  catch (error) { job.cancelledByUser = previousIntent; throw error; }
   if (job.retry) delete job.retry.nextRetryAt;
-  if (job.status === "queued") {
+  if (controller) {
+    controller.abort();
+    const promise = runningPromises.get(job.id);
+    if (promise) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try { await Promise.race([promise, new Promise<void>(resolve => { timer = setTimeout(resolve, 3000); })]); }
+      finally { clearTimeout(timer); }
+    }
+  }
+  // An active worker owns its files until it settles. Never race its cleanup after a timeout.
+  if (!running.has(job.id) && isActive(job)) {
+    await Promise.all([
+      rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+      rm(job.outputPath, { force: true }),
+      rm(historyThumbnailPath(job.id), { force: true }),
+      ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
+    ]);
     waitingFor.delete(job.id);
+    selecting.delete(job.id);
+    selected.delete(job.id);
     job.status = "cancelled";
     job.finishedAt = new Date().toISOString();
     delete job.phase;
     delete job.error;
+    delete job.captionPath;
+    delete job.captionUrl;
+    delete job.downloadUrl;
+    delete job.outputSize;
   }
-  const saved = saveStore();
-  if (job.status === "processing") running.get(job.id)?.abort();
-  await saved;
+  await saveStore();
   pumpQueue();
 }
 export async function stopQueue() {

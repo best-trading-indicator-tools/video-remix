@@ -1,4 +1,4 @@
-import { readWorkspaceFile } from "./helpers/workspace.js";
+import { failWorkspaceWrites, readWorkspaceFile } from "./helpers/workspace.js";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import {
@@ -13,6 +13,7 @@ import os from "node:os";
 import path from "node:path";
 import { after, beforeEach, test } from "node:test";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
+import { WorkspaceDatabase } from "../server/database.js";
 import type {
   StoredAttachment,
   StoredJob,
@@ -22,7 +23,7 @@ import type {
 const directory = await mkdtemp(path.join(os.tmpdir(), "video-remix-queue-"));
 process.env.DATA_DIR = directory;
 const { config, paths } = await import("../server/config.js");
-const { initStore, publicJob, saveStore, state } = await import(
+const { closeStore, initStore, publicJob, saveStore, state } = await import(
   "../server/store.js"
 );
 const { cancelJob, cleanupExpired, isRunning, pumpQueue, stopQueue } =
@@ -37,6 +38,7 @@ beforeEach(async () => {
 });
 after(async () => {
   await stopQueue();
+  closeStore();
   await rm(directory, { recursive: true, force: true });
 });
 
@@ -130,6 +132,76 @@ test("cancelling a queued job persists cancellation without starting a worker", 
     await readWorkspaceFile(path.join(directory, "state.json"), "utf8"),
   );
   assert.equal(saved.jobs[0].status, "cancelled");
+});
+
+test("cancelling an orphaned processing job removes its work and partial output", async () => {
+  const item = job({ status: "processing" });
+  state.jobs.push(item);
+  const workDir = path.join(paths.work, item.id);
+  await mkdir(workDir, { recursive: true });
+  await writeFile(item.outputPath, "partial");
+  await cancelJob(item);
+  assert.equal(item.status, "cancelled");
+  assert.equal(item.cancelledByUser, true);
+  await assert.rejects(access(workDir), { code: "ENOENT" });
+  await assert.rejects(access(item.outputPath), { code: "ENOENT" });
+});
+
+test("active cancellation saves intent before abort and waits for the worker's cleanup", async t => {
+  const item = job();
+  state.jobs.push(item);
+  await mkdir(path.join(paths.work, item.id), { recursive: true });
+  await writeFile(item.outputPath, "partial");
+  let observed = false;
+  const abort = AbortController.prototype.abort;
+  t.mock.method(AbortController.prototype, "abort", function (this: AbortController, reason?: unknown) {
+    const db = new WorkspaceDatabase(path.join(directory, "remixer.sqlite"));
+    try { assert.equal((db.loadActive().jobs.find(value => value.id === item.id) as StoredJob).cancelledByUser, true); }
+    finally { db.close(); }
+    observed = true;
+    return abort.call(this, reason);
+  });
+  pumpQueue();
+  assert.equal(isRunning(item.id), true);
+  await cancelJob(item);
+  assert.equal(observed, true);
+  assert.equal(item.status, "cancelled");
+  assert.equal(isRunning(item.id), false);
+  await assert.rejects(access(item.outputPath), { code: "ENOENT" });
+});
+
+test("a failed cancellation save is reported instead of silently cancelling the job", async () => {
+  const item = job();
+  state.jobs.push(item);
+  await saveStore();
+  await failWorkspaceWrites(directory, true);
+  try {
+    await assert.rejects(cancelJob(item), /fixture disk write failure/);
+    assert.equal(item.status, "queued");
+    assert.equal(item.cancelledByUser, undefined);
+  } finally { await failWorkspaceWrites(directory, false); }
+});
+
+test("an exception inside finalization releases the worker and starts the next queued job", async () => {
+  const first = job(), next = job();
+  const concurrency = config.concurrency;
+  config.concurrency = 1;
+  let injected = false;
+  const find = state.sources.find.bind(state.sources);
+  Object.defineProperty(state.sources, "find", { configurable: true, value: (...args: Parameters<typeof find>) => {
+    if (!injected && first.status === "failed" && isRunning(first.id)) {
+      injected = true;
+      throw new Error("fixture finalization failure");
+    }
+    return find(...args);
+  } });
+  try {
+    state.jobs.push(first, next);
+    pumpQueue();
+    await until(() => next.status === "failed" && !isRunning(next.id));
+    assert.equal(injected, true);
+    assert.equal(isRunning(first.id), false);
+  } finally { Reflect.deleteProperty(state.sources, "find"); config.concurrency = concurrency; }
 });
 
 test("cleanup claims expired records immediately and protects queued source and attachment references", async () => {
