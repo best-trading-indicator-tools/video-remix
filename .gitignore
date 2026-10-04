@@ -13,3 +13,4 @@ output/
 .venv/
 .venv-imports/
 __pycache__/
+*cookies*.txt

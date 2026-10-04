@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
-import { access, lstat, readdir, realpath } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { access, lstat, open, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { SocialImportError, socialVideoLink } from "../shared/social-imports.js";
 
@@ -12,11 +13,36 @@ async function downloader() {
   return "yt-dlp";
 }
 
+async function prepareCookies(directory: string): Promise<string | undefined> {
+  const configured = process.env.YT_DLP_COOKIES?.trim();
+  if (!configured) return undefined;
+  let contents: string;
+  try {
+    const file = await open(path.resolve(configured), "r");
+    try {
+      const info = await file.stat();
+      if (!info.isFile() || info.size === 0 || info.size > 10 * 1024 * 1024) throw new Error("Invalid cookie file");
+      contents = (await file.readFile("utf8")).replace(/^\uFEFF/u, "");
+    } finally { await file.close(); }
+  } catch {
+    throw new SocialImportError("The configured download cookies could not be read. Check YT_DLP_COOKIES in .env points to a readable cookies file, or remove that setting to import public videos without cookies.");
+  }
+  if (!/^#(?: Netscape)? HTTP Cookie File(?:\r?\n|$)/u.test(contents))
+    throw new SocialImportError("The configured download cookies must be a Netscape-format cookies.txt file. Export it again and check YT_DLP_COOKIES in .env.");
+  // yt-dlp writes its cookie jar back on exit. Each download gets a private
+  // copy so concurrent imports cannot overwrite each other or the user's file.
+  const file = path.join(directory, `cookies-${randomUUID()}.txt`);
+  await writeFile(file, contents, { mode: 0o600, flag: "wx" });
+  return file;
+}
+
 function downloadError(stderr: string) {
   if (/max.filesize|larger than|File is larger|does not pass filter/iu.test(stderr))
     return new SocialImportError("This video exceeds the import limit, is still live, or is longer than 24 hours. Choose a shorter, completed video.");
-  if (/private video|login required|log in|sign in|age.restrict|confirm.{0,30}not a bot/iu.test(stderr))
-    return new SocialImportError("The platform requires a login or age verification for this download. Use a public video, or import a local copy with Browse files.");
+  if (/private video|(?:login|authentication)\s+(?:is\s+)?required|requir(?:e[sd]?|ing)\s+(?:a\s+)?(?:login|authentication)|log in|sign in|age.restrict|confirm.{0,30}not a bot/iu.test(stderr))
+    return new SocialImportError("The platform requires a login or age verification for this download. Configure YT_DLP_COOKIES in .env with your exported cookies file, use a public video, or import a local copy with Browse files.");
+  if (/does not look like a Netscape|failed to load cookies|invalid.*cookies? file/iu.test(stderr))
+    return new SocialImportError("The configured download cookies could not be loaded. Export a fresh Netscape-format cookies.txt file and check YT_DLP_COOKIES in .env.");
   if (/HTTP Error 429|too many requests|rate.limit/iu.test(stderr))
     return new SocialImportError("The platform is limiting downloads right now. Wait a few minutes, then use Retry import.");
   if (/HTTP Error 403|403 Forbidden|HTTP Error 5\d\d|timed out|timeout|connection reset|temporar(?:y|ily)/iu.test(stderr))
@@ -35,7 +61,7 @@ export async function downloadSocialVideo(input: string, directory: string, opti
   options.signal.throwIfAborted();
   directory = await realpath(directory);
   // Only built-in extractors for the three supported platforms. Never load a
-  // user's yt-dlp configuration, plugins, cookies or executable postprocessors.
+  // user's yt-dlp configuration, plugins, browser cookies or executable postprocessors.
   const args = ["--ignore-config", "--no-plugin-dirs", "--no-playlist", "--playlist-items", "1",
     "--use-extractors", "youtube,tiktok,vm.tiktok,instagram", "--no-cache-dir", "--no-colors", "--newline",
     "--socket-timeout", "20", "--retries", "2", "--fragment-retries", "2", "--abort-on-unavailable-fragments",
@@ -48,7 +74,10 @@ export async function downloadSocialVideo(input: string, directory: string, opti
     "--print", 'after_move:remix-result:{"file":%(filepath)j,"title":%(title)j}', "--", link.url];
   const binary = await downloader();
   options.signal.throwIfAborted();
-  return new Promise((resolve, reject) => {
+  const cookiePath = await prepareCookies(directory);
+  if (cookiePath) args.splice(args.indexOf("--"), 0, "--cookies", cookiePath);
+  return new Promise<{ file: string; name: string; size: number }>((resolve, reject) => {
+    options.signal.throwIfAborted();
     // Script fixtures and explicitly configured JS wrappers need Node on Windows;
     // executable yt-dlp installations continue to launch directly, without a shell.
     const nodeScript = process.platform === "win32" && /\.[cm]?js$/iu.test(binary);
@@ -139,5 +168,5 @@ export async function downloadSocialVideo(input: string, directory: string, opti
         resolve({ file, name: `${title || `${link.platform} video`}.mp4`, size: info.size });
       } catch (error) { reject(error); }
     });
-  });
+  }).finally(async () => { if (cookiePath) await rm(cookiePath, { force: true }); });
 }

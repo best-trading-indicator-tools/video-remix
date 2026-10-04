@@ -72,6 +72,12 @@ export function explainProblem(message: string, status?: number) {
     return rule("FILE_ACCESS_DENIED", "The app cannot access this file or folder", "Use Browse files to import a local copy. Check that the app can read the video and write to its workspace, then retry.");
   if (/speech model|setup:auto|faster.whisper|transcription.*unavailable|Python.*(?:install|missing|not found)/iu.test(message))
     return rule("TRANSCRIPTION_NOT_READY", "Speech transcription is not ready", "Install Python 3.10–3.13 and run npm run setup:auto in the project folder, then restart the app. You can still edit timestamps manually.");
+  if (/configured download cookies/iu.test(message))
+    return rule("IMPORT_COOKIES_INVALID", "The download cookies need attention", "Check YT_DLP_COOKIES in .env points to a readable Netscape-format cookies.txt file. Export fresh cookies if needed, or remove the setting to import public videos without cookies.");
+  if (/requires a login|age verification/iu.test(message))
+    return rule("PLATFORM_LOGIN_REQUIRED", "This video requires a login or age verification", "Configure YT_DLP_COOKIES in .env with your exported cookies file, then retry. You can also use a public video or import a local copy with Browse files.");
+  if (/the platform could not provide this video/iu.test(message))
+    return rule("PLATFORM_DOWNLOAD_FAILED", "The platform could not provide this video", "Use Retry import or import a local copy with Browse files. If public links keep failing, update platform support with npm run setup:imports.");
   if (/yt-dlp|setup:imports/iu.test(message))
     return rule("LINK_IMPORTER_NOT_READY", "The video-link importer needs attention", "Run npm run setup:imports in the project folder, then retry. Browse files can import a downloaded video instead.");
   if (/timed out|timeout|took too long|time limit/iu.test(message) || status === 408 || status === 504)

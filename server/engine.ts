@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
 import { blackBandsSchema, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
-import { audioFadeFilters, audioModifierFilters } from "./audio-filters.js";
+import { audioFadeFilters, audioModifierFilters, audioNormalizationFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
@@ -949,7 +949,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       // Shape tone, noise and dynamics before measuring loudness, so the
       // normalizer works on the sound that is actually exported.
       audioFilters.push(...audioModifierFilters(s));
-      if (s.normalizeAudio) audioFilters.push("loudnorm=I=-16:TP=-1.5:LRA=11");
+      if (s.normalizeAudio) audioFilters.push(...audioNormalizationFilters());
       audioFilters.push(
         `volume=${s.volume}`,
         "apad",

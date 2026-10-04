@@ -19,6 +19,10 @@ test("common failures explain the recovery action on Windows and other platforms
     ["Invalid data found when processing input", 422, "MEDIA_UNREADABLE"],
     ["The browser could not play this video", undefined, "BROWSER_PLAYBACK_UNAVAILABLE"],
     ["Browser storage is unavailable", undefined, "BROWSER_STORAGE_UNAVAILABLE"],
+    ["The platform requires a login or age verification for this download.", undefined, "PLATFORM_LOGIN_REQUIRED"],
+    ["The configured download cookies could not be read. Check YT_DLP_COOKIES in .env.", undefined, "IMPORT_COOKIES_INVALID"],
+    ["The platform could not provide this video. Update the importer with npm run setup:imports.", undefined, "PLATFORM_DOWNLOAD_FAILED"],
+    ["Link importing needs yt-dlp. Run npm run setup:imports in the project folder, then retry.", undefined, "LINK_IMPORTER_NOT_READY"],
   ] as const) {
     const issue = explainProblem(message, status);
     assert.equal(issue.code, code, message);

@@ -79,6 +79,61 @@ test("footage placement validation and caption timing preserve the underlying ed
   assert.equal(ownFootageSchema.safeParse([items[0], items[0]]).success, false);
 });
 
+test("short silent inserts and outros render with clip audio selected and normalization enabled", { timeout: 30_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "remix-silent-footage-"));
+  try {
+    const source = path.join(directory, "source.mp4");
+    await exec("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=red:s=320x180:r=30:d=3",
+      "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-shortest", source]);
+    const metadata = await probeMedia(source);
+    for (const kind of ["silent-track", "no-track", "stereo-tones"] as const) {
+      const clip = path.join(directory, `${kind}.mp4`);
+      await exec("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "color=blue:s=180x320:r=30:d=1.8",
+        ...(kind === "no-track" ? [] : ["-f", "lavfi", "-i", kind === "silent-track"
+          ? "anullsrc=r=44100:cl=stereo:d=1.8"
+          : "aevalsrc=0.1*sin(2*PI*880*t)|0.1*sin(2*PI*1320*t):s=44100:d=1.8"]),
+        "-c:v", "libx264", "-threads", "1", "-c:a", "aac", clip]);
+      const media = await probeMedia(clip);
+      assert.equal(media.hasAudio, kind !== "no-track");
+      for (const appendToEnd of [true, false]) {
+        const item = placement({ appendToEnd, at: 1, end: media.duration });
+        const output = path.join(directory, `${kind}-${appendToEnd}.mp4`);
+        await renderVideo({ input: source, output, source: metadata,
+          settings: { ...DEFAULT_SETTINGS, resolution: "source", normalizeAudio: true, ownFootage: [item] },
+          ownFootage: [{ placement: item, path: clip, name: kind, ...media }],
+          workDir: directory, signal: AbortSignal.timeout(10_000), onProgress: () => {} });
+        const rendered = await probeMedia(output);
+        assert.ok(Math.abs(rendered.duration - 4.8) < 0.1, "The full clip adds its duration");
+        assert.equal(rendered.hasAudio, true, "The original soundtrack remains present");
+        const insertedAt = appendToEnd ? 3 : 1;
+        const frame = (await exec("ffmpeg", ["-v", "error", "-ss", String(insertedAt + 0.4), "-i", output,
+          "-frames:v", "1", "-vf", "scale=1:1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"], { encoding: "buffer" })).stdout;
+        assert.ok(frame[2]! > frame[0]! + 50, "The inserted picture remains visible");
+        for (const time of [0.2, insertedAt + 0.2, ...(!appendToEnd ? [3.2] : [])]) {
+          const audio = (await exec("ffmpeg", ["-v", "error", "-ss", String(time), "-i", output,
+            "-t", "0.5", "-f", "s16le", "-ac", "2", "-ar", "8000", "pipe:1"], { encoding: "buffer" })).stdout;
+          assert.ok(audio.length >= 7900, "The soundtrack covers the sampled interval");
+          const inserted = time > insertedAt && time < insertedAt + 1.8;
+          for (const channel of [0, 1]) {
+            let peak = 0, crossings = 0;
+            for (let i = channel * 2; i < audio.length; i += 4) {
+              const sample = audio.readInt16LE(i);
+              peak = Math.max(peak, Math.abs(sample));
+              if (i >= 4 && audio.readInt16LE(i - 4) < 0 && sample >= 0) crossings++;
+            }
+            if (inserted && kind !== "stereo-tones") assert.ok(peak <= 1, "Silent footage stays silent");
+            else {
+              assert.ok(peak > 1000, "Audible clips keep their sound");
+              const frequency = inserted ? (channel === 0 ? 880 : 1320) : 440;
+              assert.ok(Math.abs(crossings * 2 - frequency) < 12, "Original speech and both inserted audio channels are preserved");
+            }
+          }
+        }
+      }
+    }
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test("uploaded clips insert picture and audio together, while cover shots retain original speech", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "remix-own-footage-"));
   try {

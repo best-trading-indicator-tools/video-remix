@@ -36,6 +36,23 @@ export function audioModifierFilters(settings: Partial<AudioAdjustments>): strin
   return filters;
 }
 
+/**
+ * FFmpeg's loudnorm can emit NaN/Infinity for silent tracks shorter than its
+ * three-second analysis window. Turn only those invalid samples into silence
+ * before resampling/encoding; finite samples retain their normalized level.
+ */
+export function audioNormalizationFilters(): string[] {
+  const finiteSamples = [0, 1].map(channel =>
+    `if(isnan(val(${channel}))+isinf(val(${channel})),0,val(${channel}))`).join("|");
+  return [
+    "loudnorm=I=-16:TP=-1.5:LRA=11",
+    // Match the export's stereo layout explicitly: aeval's "same" layout can
+    // crash FFmpeg 8 when a mono input is subsequently converted to stereo.
+    "aformat=channel_layouts=stereo",
+    `aeval=exprs='${finiteSamples}':channel_layout=stereo`,
+  ];
+}
+
 const fade = (value: number | undefined, duration: number) =>
   Math.max(0, Math.min(MAX_AUDIO_FADE, duration / 2, Number.isFinite(value) ? value! : 0));
 

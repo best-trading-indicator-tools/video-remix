@@ -1,5 +1,6 @@
 import type { OwnFootagePlacement } from "../shared/own-footage.js";
 import { footageTimeline } from "../shared/own-footage.js";
+import { audioNormalizationFilters } from "./audio-filters.js";
 
 export interface ResolvedFootage { placement: OwnFootagePlacement; path: string; name: string; duration: number; hasAudio: boolean }
 const number = (value: number) => Number(value.toFixed(8)).toString();
@@ -36,9 +37,14 @@ export async function composeFootage({ graph, footage, duration, fps, width, hei
       ? `scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${width}:${height}`
       : `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`;
     graph.push(`[${inputIndex}:V:0]trim=duration=${number(length)},setpts=PTS-STARTPTS,${fit},setsar=1,fps=${number(fps)},format=yuv420p[pv${index}]`);
-    if (audio) graph.push(clip.hasAudio && piece.item.audio === "clip"
-      ? `[${inputIndex}:a:0]asetpts=PTS-STARTPTS,aresample=48000,aformat=channel_layouts=stereo,${modifiers.map(filter => `${filter},`).join("")}${normalizeAudio ? "loudnorm=I=-16:TP=-1.5:LRA=11," : ""}volume=${number(volume)},apad,atrim=duration=${number(length)}[pa${index}]`
-      : `anullsrc=r=48000:cl=stereo,atrim=duration=${number(length)}[pa${index}]`);
+    if (audio) {
+      const audioFilters = ["asetpts=PTS-STARTPTS", "aresample=48000", "aformat=channel_layouts=stereo",
+        ...modifiers, ...(normalizeAudio ? audioNormalizationFilters() : []),
+        `volume=${number(volume)}`, "apad", `atrim=duration=${number(length)}`];
+      graph.push(clip.hasAudio && piece.item.audio === "clip"
+        ? `[${inputIndex}:a:0]${audioFilters.join(",")}[pa${index}]`
+        : `anullsrc=r=48000:cl=stereo,atrim=duration=${number(length)}[pa${index}]`);
+    }
     inputIndex++;
   }
   graph.push(`${pieces.map((_, i) => `[pv${i}]${audio ? `[pa${i}]` : ""}`).join("")}concat=n=${pieces.length}:v=1:a=${audio ? 1 : 0}[footagevideo]${audio ? "[footageaudio]" : ""}`);

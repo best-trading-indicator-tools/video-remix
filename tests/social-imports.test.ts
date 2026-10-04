@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { access, chmod, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -50,13 +50,23 @@ test("link imports download into normal sources, recover after restart, and canc
   const binary = path.join(directory, "yt-dlp-fixture.mjs");
   const argumentsFile = path.join(directory, "arguments.json");
   const retryMarker = path.join(directory, "retried-download");
+  const originalCookies = process.env.YT_DLP_COOKIES;
+  process.env.YT_DLP_COOKIES = "";
   await writeFile(binary, `#!${process.execPath}
-import { access, copyFile, writeFile } from "node:fs/promises";
+import { access, copyFile, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 const args = process.argv.slice(2);
 await writeFile(${JSON.stringify(argumentsFile)}, JSON.stringify(args));
+await writeFile("arguments.json", JSON.stringify(args));
+const cookieIndex = args.indexOf("--cookies");
+if (cookieIndex >= 0) {
+  await writeFile("cookie-input.txt", await readFile(args[cookieIndex + 1]));
+  await writeFile(args[cookieIndex + 1], "# Netscape HTTP Cookie File\\n# Updated by downloader\\n");
+}
 const url = args.at(-1);
 if (url.includes("PRIVATE0001")) { console.error("ERROR: Private video; sign in"); process.exit(1); }
+if (url.endsWith("/999999999")) { console.error("ERROR: [TikTok] This video is requiring authentication"); process.exit(1); }
+if (url.endsWith("/999999998")) { console.error("ERROR: [TikTok] Unable to extract webpage video data"); process.exit(1); }
 if (url.includes("LIMIT000001")) { console.error("ERROR: HTTP Error 429: Too Many Requests"); process.exit(1); }
 if (url.includes("RETRY000001")) {
   try { await access(${JSON.stringify(retryMarker)}); }
@@ -136,6 +146,8 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
       const args: string[] = JSON.parse(await readFile(argumentsFile, "utf8"));
       assert.equal(args.at(-1), "https://www.instagram.com/reel/Test123/");
       for (const flag of ["--ignore-config", "--no-plugin-dirs", "--no-playlist", "--max-filesize", "--match-filters", "--js-runtimes"]) assert.ok(args.includes(flag));
+      assert.equal(args.includes("--cookies"), false, "Public imports do not require cookies");
+      assert.equal(args.includes("--cookies-from-browser"), false);
       assert.deepEqual(await readdir(path.join(data, "imports", item.id)), ["session.json"]);
       await fetch(`${base}/api/imports/${item.id}`, { method: "DELETE" });
       assert.equal((await fetch(`${base}${item.source!.url}`)).status, 200, "Dismissing preserves the imported source");
@@ -172,6 +184,16 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
       const saved = JSON.parse(await readFile(path.join(data, "imports", item.id, "session.json"), "utf8"));
       assert.equal(saved.status, "completed"); assert.equal(saved.error, undefined);
       assert.equal(saved.remoteUrl, "https://www.youtube.com/watch?v=RETRY000001");
+    });
+    await t.test("TikTok authentication and extractor failures have distinct actionable diagnostics", async () => {
+      for (const [id, code] of [["999999999", "PLATFORM_LOGIN_REQUIRED"], ["999999998", "PLATFORM_DOWNLOAD_FAILED"]]) {
+        const item = await add(`https://www.tiktok.com/@creator/video/${id}`);
+        const failed = await wait(item.id, value => value.status === "failed");
+        assert.equal(failed.diagnostic?.code, code);
+        assert.match(failed.error!, /Browse files/);
+        if (code === "PLATFORM_LOGIN_REQUIRED") assert.match(failed.error!, /YT_DLP_COOKIES/);
+        assert.equal(failed.error!.includes(directory), false);
+      }
     });
     await t.test("rate limits explain waiting instead of incorrectly claiming a login is required", async () => {
       const item = await add("https://youtu.be/LIMIT000001");
@@ -242,5 +264,73 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
           maxBytes: 100, onProgress: () => {}, checkSpace: async () => {} }), /npm run setup:imports/);
       } finally { if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous; }
     });
-  } finally { await stop(); await rm(directory, { recursive: true, force: true }); }
+    await t.test("configured cookies support Windows paths with spaces and remain unchanged across imports", async () => {
+      const previous = process.env.YT_DLP_BIN;
+      const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+      const cookies = path.join(directory, "my exported cookies.txt");
+      const contents = "# Netscape HTTP Cookie File\r\n.tiktok.com\tTRUE\t/\tTRUE\t2147483647\tsessionid\tfixture-only\r\n";
+      await writeFile(cookies, contents);
+      process.env.YT_DLP_BIN = binary;
+      process.env.YT_DLP_COOKIES = path.relative(process.cwd(), cookies);
+      const download = (work: string, url = "https://www.tiktok.com/@creator/video/123456789", signal = new AbortController().signal) =>
+        downloadSocialVideo(url, work, { signal, maxBytes: 10 * 1024 * 1024, onProgress: () => {}, checkSpace: async () => {} });
+      const assertCopyRemoved = async (work: string) => {
+        const args: string[] = JSON.parse(await readFile(path.join(work, "arguments.json"), "utf8"));
+        const copy = args[args.indexOf("--cookies") + 1]!;
+        assert.notEqual(copy, cookies);
+        assert.equal(path.dirname(copy), await realpath(work));
+        assert.equal(await readFile(path.join(work, "cookie-input.txt"), "utf8"), contents);
+        await assert.rejects(access(copy), { code: "ENOENT" });
+        return copy;
+      };
+      try {
+        Object.defineProperty(process, "platform", { ...originalPlatform, value: "win32" });
+        const works = await Promise.all([1, 2].map(() => mkdtemp(path.join(directory, "cookie-import-"))));
+        const results = await Promise.all(works.map(work => download(work)));
+        assert.ok(results.every(result => result.size > 0));
+        const copies = await Promise.all(works.map(assertCopyRemoved));
+        assert.equal(new Set(copies).size, 2, "Concurrent imports use independent cookie jars");
+        const failed = await mkdtemp(path.join(directory, "cookie-failed-"));
+        await assert.rejects(download(failed, "https://youtu.be/PRIVATE0001"), /requires a login/);
+        await assertCopyRemoved(failed);
+        const cancelled = await mkdtemp(path.join(directory, "cookie-cancelled-"));
+        const controller = new AbortController();
+        await assert.rejects(downloadSocialVideo("https://youtu.be/SLOW0000001", cancelled, {
+          signal: controller.signal, maxBytes: 10 * 1024 * 1024,
+          onProgress: () => controller.abort(), checkSpace: async () => {},
+        }), { name: "AbortError" });
+        await assertCopyRemoved(cancelled);
+        process.env.YT_DLP_BIN = path.join(directory, "missing-downloader");
+        const unstarted = await mkdtemp(path.join(directory, "cookie-unstarted-"));
+        await assert.rejects(download(unstarted), /setup:imports/);
+        assert.deepEqual(await readdir(unstarted), [], "Failed startup removes its cookie copy too");
+        assert.equal(await readFile(cookies, "utf8"), contents, "The exported cookie file is never rewritten");
+      } finally {
+        Object.defineProperty(process, "platform", originalPlatform);
+        if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous;
+        process.env.YT_DLP_COOKIES = "";
+      }
+    });
+    await t.test("invalid configured cookies fail clearly without falling back to anonymous downloads", async () => {
+      const malformed = path.join(directory, "invalid-cookies.txt");
+      await writeFile(malformed, "[]");
+      const work = await mkdtemp(path.join(directory, "invalid-cookies-"));
+      try {
+        for (const candidate of [path.join(directory, "missing-cookies.txt"), directory, malformed]) {
+          process.env.YT_DLP_COOKIES = candidate;
+          await assert.rejects(downloadSocialVideo("https://youtu.be/BaW_jenozKc", work, {
+            signal: new AbortController().signal, maxBytes: 100, onProgress: () => {}, checkSpace: async () => {},
+          }), error => {
+            assert.match((error as Error).message, /configured download cookies/);
+            assert.equal((error as Error).message.includes(candidate), false);
+            return true;
+          });
+          assert.deepEqual(await readdir(work), []);
+        }
+      } finally { process.env.YT_DLP_COOKIES = ""; }
+    });
+  } finally {
+    if (originalCookies === undefined) delete process.env.YT_DLP_COOKIES; else process.env.YT_DLP_COOKIES = originalCookies;
+    await stop(); await rm(directory, { recursive: true, force: true });
+  }
 });

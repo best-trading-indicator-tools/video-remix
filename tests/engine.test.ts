@@ -824,6 +824,25 @@ test("normal-speed AAC cuts finish with normalized audio on FFmpeg 6", { timeout
     "Normalized sound must continue through the end of the selected cut");
 });
 
+test("normalization preserves short silent source and replacement soundtracks", async () => {
+  const input = path.join(directory, "silent-track.mp4");
+  const replacement = path.join(directory, "silent-voice.wav");
+  await ffmpeg(["-f", "lavfi", "-i", "color=blue:s=320x180:r=30:d=1.8",
+    "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono:d=1.8",
+    "-c:v", "libx264", "-threads", "1", "-c:a", "aac", "-shortest", input]);
+  await ffmpeg(["-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo:d=1.8", replacement]);
+  for (const useReplacement of [false, true]) {
+    const result = await render(`silent-normalized-${useReplacement}`, { normalizeAudio: true, trimEnd: 1.8 },
+      useReplacement ? { audioPath: replacement } : { input });
+    assert.ok(Math.abs(result.info.duration - 1.8) < 0.1);
+    assert.equal(result.info.hasAudio, true);
+    const audioSamples = await samples(result.output);
+    assert.ok(audioSamples.length > 8000);
+    assert.ok(audioSamples.every(value => Number.isFinite(value) && Math.abs(value) < 0.0001),
+      "Silent normalization must not create invalid samples or noise");
+  }
+});
+
 test("normalization raises quiet audio and cuts also support replacement audio or silent inputs", async () => {
   const normal = await render("normalize-base");
   const normalized = await render("normalize-enabled", {
