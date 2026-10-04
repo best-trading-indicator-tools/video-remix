@@ -30,6 +30,19 @@ test("common failures explain the recovery action on Windows and other platforms
   }
 });
 
+test("login recovery distinguishes absent cookies from cookies refused by the platform", () => {
+  const missing = "The platform requires a login or age verification. No cookies were loaded.";
+  const refused = "The platform requires a login or age verification. Cookies were loaded, but the platform still refused access.";
+  const missingReport = makeDiagnostic(missing, { operation: "Import video" });
+  const refusedReport = makeDiagnostic(refused, { operation: "Import video" });
+  assert.equal(missingReport.code, "PLATFORM_LOGIN_REQUIRED");
+  assert.equal(refusedReport.code, "PLATFORM_LOGIN_REQUIRED");
+  assert.match(missingReport.nextStep, /project folder/);
+  assert.match(refusedReport.nextStep, /export fresh cookies/);
+  assert.match(supportReport(missingReport), /No cookies were loaded/);
+  assert.match(supportReport(refusedReport), /Cookies were loaded/);
+});
+
 test("support reports redact local paths, credentials, emails and remote URLs", () => {
   const privateMessage = [
     String.raw`EPERM: C:\Users\Friend\Private client\film.mp4`,

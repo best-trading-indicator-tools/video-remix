@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { access, chmod, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { access, chmod, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -44,6 +44,8 @@ test("social links allow individual videos, strip tracking, and reject unrelated
 });
 
 test("link imports download into normal sources, recover after restart, and cancel cleanly", { timeout: 120_000 }, async t => {
+  const projectDirectory = process.cwd();
+  const originalDataDir = process.env.DATA_DIR;
   const directory = await mkdtemp(path.join(os.tmpdir(), "remix-social-imports-"));
   const data = path.join(directory, "data");
   const fixture = path.join(directory, "fixture.mp4");
@@ -66,6 +68,7 @@ if (cookieIndex >= 0) {
 const url = args.at(-1);
 if (url.includes("PRIVATE0001")) { console.error("ERROR: Private video; sign in"); process.exit(1); }
 if (url.endsWith("/999999999")) { console.error("ERROR: [TikTok] This video is requiring authentication"); process.exit(1); }
+if (url.endsWith("/888888888") && cookieIndex < 0) { console.error("ERROR: [TikTok] This video is requiring authentication"); process.exit(1); }
 if (url.endsWith("/999999998")) { console.error("ERROR: [TikTok] Unable to extract webpage video data"); process.exit(1); }
 if (url.includes("LIMIT000001")) { console.error("ERROR: HTTP Error 429: Too Many Requests"); process.exit(1); }
 if (url.includes("RETRY000001")) {
@@ -95,7 +98,7 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
   const base = `http://127.0.0.1:${port}`;
   let server: ChildProcess | undefined, log = "";
   const start = async () => {
-    server = spawn(process.execPath, ["--import", "tsx", "server/index.ts"], { cwd: process.cwd(),
+    server = spawn(process.execPath, ["--import", import.meta.resolve("tsx"), path.join(projectDirectory, "server/index.ts")], { cwd: directory,
       env: { ...process.env, PORT: String(port), HOST: "127.0.0.1", DATA_DIR: data, YT_DLP_BIN: binary,
         AUTO_AI: "false", DEEPSEEK_API_KEY: "", PEXELS_API_KEY: "", PIXABAY_API_KEY: "" }, stdio: ["ignore", "pipe", "pipe"] });
     server.stdout?.on("data", chunk => { log = (log + chunk).slice(-10000); });
@@ -128,6 +131,9 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
     return (await response.json()).imports[0] as ImportSession;
   };
   try {
+    // Keep automatic cookie discovery away from the developer's real files.
+    process.chdir(directory);
+    process.env.DATA_DIR = data;
     await start();
     await t.test("rejects unsupported URLs and keeps valid links in a mixed batch", async () => {
       assert.equal((await post("/api/imports/links", { links: ["https://localhost/internal"] })).status, 400);
@@ -191,7 +197,7 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
         const failed = await wait(item.id, value => value.status === "failed");
         assert.equal(failed.diagnostic?.code, code);
         assert.match(failed.error!, /Browse files/);
-        if (code === "PLATFORM_LOGIN_REQUIRED") assert.match(failed.error!, /YT_DLP_COOKIES/);
+        if (code === "PLATFORM_LOGIN_REQUIRED") assert.match(failed.error!, /No cookies were loaded.*YT_DLP_COOKIES/);
         assert.equal(failed.error!.includes(directory), false);
       }
     });
@@ -291,7 +297,7 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
         const copies = await Promise.all(works.map(assertCopyRemoved));
         assert.equal(new Set(copies).size, 2, "Concurrent imports use independent cookie jars");
         const failed = await mkdtemp(path.join(directory, "cookie-failed-"));
-        await assert.rejects(download(failed, "https://youtu.be/PRIVATE0001"), /requires a login/);
+        await assert.rejects(download(failed, "https://youtu.be/PRIVATE0001"), /requires a login.*Cookies were loaded/);
         await assertCopyRemoved(failed);
         const cancelled = await mkdtemp(path.join(directory, "cookie-cancelled-"));
         const controller = new AbortController();
@@ -309,6 +315,51 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
         Object.defineProperty(process, "platform", originalPlatform);
         if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous;
         process.env.YT_DLP_COOKIES = "";
+      }
+    });
+    await t.test("existing project and data cookie files authenticate imports without an env setting", async () => {
+      const previous = process.env.YT_DLP_BIN;
+      const customData = path.join(directory, "custom data");
+      await mkdir(customData);
+      const projectCookies = path.join(directory, "cookies.txt");
+      const dataCookies = path.join(customData, "cookies.txt");
+      const explicitCookies = path.join(directory, "explicit-cookies.txt");
+      const contents = (label: string) => `# Netscape HTTP Cookie File\r\n# ${label}\r\n`;
+      process.env.YT_DLP_BIN = binary;
+      process.env.DATA_DIR = customData;
+      delete process.env.YT_DLP_COOKIES;
+      const download = (work: string) => downloadSocialVideo("https://www.tiktok.com/@creator/video/888888888", work, {
+        signal: new AbortController().signal, maxBytes: 10 * 1024 * 1024, onProgress: () => {}, checkSpace: async () => {},
+      });
+      const check = async (expected: string) => {
+        const work = await mkdtemp(path.join(directory, "discovered-cookies-"));
+        assert.ok((await download(work)).size > 0);
+        assert.equal(await readFile(path.join(work, "cookie-input.txt"), "utf8"), contents(expected));
+        const args: string[] = JSON.parse(await readFile(path.join(work, "arguments.json"), "utf8"));
+        await assert.rejects(access(args[args.indexOf("--cookies") + 1]!), { code: "ENOENT" });
+      };
+      try {
+        const work = await mkdtemp(path.join(directory, "anonymous-import-"));
+        await assert.rejects(download(work), /No cookies were loaded/);
+        await writeFile(dataCookies, contents("data"));
+        await check("data");
+        await writeFile(projectCookies, contents("project"));
+        await check("project");
+        await writeFile(explicitCookies, contents("explicit"));
+        process.env.YT_DLP_COOKIES = explicitCookies;
+        await check("explicit");
+        process.env.YT_DLP_COOKIES = path.join(directory, "missing-cookies.txt");
+        await assert.rejects(download(work), /configured download cookies/, "An invalid explicit setting cannot silently use a different account");
+        process.env.YT_DLP_COOKIES = "";
+        await writeFile(projectCookies, "not a cookie export");
+        await assert.rejects(download(work), /Netscape-format/, "Invalid discovered cookies are explained rather than ignored");
+        assert.equal(await readFile(dataCookies, "utf8"), contents("data"));
+        assert.equal(await readFile(explicitCookies, "utf8"), contents("explicit"));
+      } finally {
+        await rm(projectCookies, { force: true });
+        process.env.DATA_DIR = data;
+        process.env.YT_DLP_COOKIES = "";
+        if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous;
       }
     });
     await t.test("invalid configured cookies fail clearly without falling back to anonymous downloads", async () => {
@@ -330,6 +381,8 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
       } finally { process.env.YT_DLP_COOKIES = ""; }
     });
   } finally {
+    process.chdir(projectDirectory);
+    if (originalDataDir === undefined) delete process.env.DATA_DIR; else process.env.DATA_DIR = originalDataDir;
     if (originalCookies === undefined) delete process.env.YT_DLP_COOKIES; else process.env.YT_DLP_COOKIES = originalCookies;
     await stop(); await rm(directory, { recursive: true, force: true });
   }

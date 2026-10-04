@@ -15,18 +15,24 @@ async function downloader() {
 
 async function prepareCookies(directory: string): Promise<string | undefined> {
   const configured = process.env.YT_DLP_COOKIES?.trim();
-  if (!configured) return undefined;
-  let contents: string;
-  try {
-    const file = await open(path.resolve(configured), "r");
+  const candidates = configured ? [path.resolve(configured)]
+    : [path.resolve("cookies.txt"), path.resolve(process.env.DATA_DIR || "data", "cookies.txt")];
+  let contents: string | undefined;
+  for (const candidate of candidates) {
     try {
-      const info = await file.stat();
-      if (!info.isFile() || info.size === 0 || info.size > 10 * 1024 * 1024) throw new Error("Invalid cookie file");
-      contents = (await file.readFile("utf8")).replace(/^\uFEFF/u, "");
-    } finally { await file.close(); }
-  } catch {
-    throw new SocialImportError("The configured download cookies could not be read. Check YT_DLP_COOKIES in .env points to a readable cookies file, or remove that setting to import public videos without cookies.");
+      const file = await open(candidate, "r");
+      try {
+        const info = await file.stat();
+        if (!info.isFile() || info.size === 0 || info.size > 10 * 1024 * 1024) throw new Error("Invalid cookie file");
+        contents = (await file.readFile("utf8")).replace(/^\uFEFF/u, "");
+      } finally { await file.close(); }
+      break;
+    } catch (error) {
+      if (!configured && (error as NodeJS.ErrnoException).code === "ENOENT") continue;
+      throw new SocialImportError("The configured download cookies could not be read. Check the exported cookies.txt file in the project or data folder, or the YT_DLP_COOKIES setting in .env.");
+    }
   }
+  if (contents === undefined) return undefined;
   if (!/^#(?: Netscape)? HTTP Cookie File(?:\r?\n|$)/u.test(contents))
     throw new SocialImportError("The configured download cookies must be a Netscape-format cookies.txt file. Export it again and check YT_DLP_COOKIES in .env.");
   // yt-dlp writes its cookie jar back on exit. Each download gets a private
@@ -36,11 +42,13 @@ async function prepareCookies(directory: string): Promise<string | undefined> {
   return file;
 }
 
-function downloadError(stderr: string) {
+function downloadError(stderr: string, cookiesLoaded: boolean) {
   if (/max.filesize|larger than|File is larger|does not pass filter/iu.test(stderr))
     return new SocialImportError("This video exceeds the import limit, is still live, or is longer than 24 hours. Choose a shorter, completed video.");
   if (/private video|(?:login|authentication)\s+(?:is\s+)?required|requir(?:e[sd]?|ing)\s+(?:a\s+)?(?:login|authentication)|log in|sign in|age.restrict|confirm.{0,30}not a bot/iu.test(stderr))
-    return new SocialImportError("The platform requires a login or age verification for this download. Configure YT_DLP_COOKIES in .env with your exported cookies file, use a public video, or import a local copy with Browse files.");
+    return new SocialImportError("The platform requires a login or age verification for this download. " + (cookiesLoaded
+      ? "Cookies were loaded, but the platform still refused access. Open the video while signed in, export fresh cookies, then retry."
+      : "No cookies were loaded. Put your exported cookies.txt in the project folder, or set YT_DLP_COOKIES in .env, then retry.") + " You can also import a local copy with Browse files.");
   if (/does not look like a Netscape|failed to load cookies|invalid.*cookies? file/iu.test(stderr))
     return new SocialImportError("The configured download cookies could not be loaded. Export a fresh Netscape-format cookies.txt file and check YT_DLP_COOKIES in .env.");
   if (/HTTP Error 429|too many requests|rate.limit/iu.test(stderr))
@@ -157,8 +165,8 @@ export async function downloadSocialVideo(input: string, directory: string, opti
         options.signal.throwIfAborted();
         line(pending.trim()); line(pendingError.trim());
         if (failure) throw failure;
-        if (code !== 0) throw downloadError(stderr);
-        if (!result || typeof result.file !== "string") throw downloadError(stderr);
+        if (code !== 0) throw downloadError(stderr, !!cookiePath);
+        if (!result || typeof result.file !== "string") throw downloadError(stderr, !!cookiePath);
         const file = path.resolve(directory, result.file);
         if (file !== path.join(directory, "video.mp4")) throw new SocialImportError("The downloaded video could not be prepared as an MP4. Import a local copy instead.");
         const info = await lstat(file);
