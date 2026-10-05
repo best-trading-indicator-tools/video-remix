@@ -1620,7 +1620,7 @@ export default function App() {
                   onChange={updateScopedAuto}
                   onView={setAutoView}
                   selectedId={selected?.id}
-                  selectedVideoCount={sources.filter(source => autoSelectedIds.includes(source.id)).length}
+                  selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
                   onApplySelectedFootage={applyFootageToSelected}
                   disabled={starting || brollBusy}
                 />
@@ -1635,6 +1635,9 @@ export default function App() {
                   selectedId={selected?.id}
                   onSourceChange={setSelectedId}
                   onApplyAll={applyAutoAll}
+                  selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
+                  onApplySelectedFootage={applyFootageToSelected}
+                  footageDisabled={starting || brollBusy}
                   libraryBusy={brollBusy}
                   capabilities={autoCapabilities}
                   variants={selectedAuto.variants}

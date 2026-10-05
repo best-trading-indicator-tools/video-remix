@@ -1,14 +1,16 @@
 import { apiRequest, recordResponseProblems } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
 import { useEffect, useRef, useState } from "react";
-import { Film, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
+import { Copy, Film, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import type { OwnFootageAsset, OwnFootagePlacement } from "../shared/own-footage";
 import "./own-footage.css";
 
-export default function OwnFootagePanel({ value = [], onChange, onApplyAll, applyAllLabel = "Use these placements for all videos", applyAllDescription, applyAllDisabled = false, savedAssets = [], disabled = false, highlightedId }: {
+export type FootageTarget = { id: string; name: string };
+
+export default function OwnFootagePanel({ value = [], onChange, onApplyAll, selectedVideos = [], onApplySelected, savedAssets = [], disabled = false, highlightedId }: {
   value?: OwnFootagePlacement[]; onChange: (value: OwnFootagePlacement[]) => void;
   onApplyAll?: (value: OwnFootagePlacement[]) => void; savedAssets?: OwnFootageAsset[]; disabled?: boolean;
-  applyAllLabel?: string; applyAllDescription?: string; applyAllDisabled?: boolean;
+  selectedVideos?: FootageTarget[]; onApplySelected?: (value: OwnFootagePlacement[]) => void;
   highlightedId?: string;
 }) {
   const [assets, setAssets] = useState<OwnFootageAsset[]>([]);
@@ -50,6 +52,16 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, appl
       <div className="own-footage-toolbar"><button className="secondary-button" type="button" onClick={() => input.current?.click()}><Upload size={14} />Upload my video</button><button className="icon-button" type="button" aria-label="Refresh uploaded footage" onClick={() => void load()}><RefreshCw size={15} /></button></div>
       <div className="own-footage-add"><label>Uploaded clip<select value={selected} onChange={event => setSelected(event.target.value)}><option value="">Choose a clip…</option>{available.map(asset => <option key={asset.id} value={asset.id}>{asset.name} · {asset.duration.toFixed(1)}s</option>)}</select></label>
         <button type="button" className="secondary-button" disabled={!selected || value.length >= 20} onClick={() => { const asset = available.find(asset => asset.id === selected); if (!asset) return; onChange([...value, { id: crypto.randomUUID(), assetId: asset.id, mode: "insert", at: 0, start: 0, end: Math.min(3, asset.duration), audio: "clip", fit: "contain" }]); }}><Plus size={14} />Place clip</button></div>
+      {onApplySelected && <section className="own-footage-batch" aria-label="Apply footage to selected videos">
+        <strong>Use this footage on selected videos</strong>
+        {selectedVideos.length ? <ul aria-label="Selected target videos">{selectedVideos.map(video => <li key={video.id} title={video.name}>{video.name}</li>)}</ul>
+          : <p>Check the videos in <strong>Source videos</strong> to choose where to apply it.</p>}
+        <button type="button" className="secondary-button" disabled={!selectedVideos.length || !value.length} onClick={() => onApplySelected(structuredClone(value))}>
+          <Copy size={14} />Apply footage to {selectedVideos.length} selected video{selectedVideos.length === 1 ? '' : 's'}
+        </button>
+        {!value.length ? <p>Choose an uploaded clip and click <strong>Place clip</strong> first.</p>
+          : <p>Copies the clips below with their timing, audio and framing. Replaces existing footage placements on these videos. Other settings stay the same.</p>}
+      </section>}
       {value.map((item, index) => { const asset = available.find(asset => asset.id === item.assetId); return <article data-review-shot={item.id} className={`own-footage-placement ${highlightedId === item.id ? "review-highlight" : ""}`} key={item.id}>
         <header><strong>{index + 1}. {asset?.name || "Saved clip unavailable"}</strong><button className="icon-button" type="button" aria-label={`Remove footage placement ${index + 1}`} onClick={() => onChange(value.filter(clip => clip.id !== item.id))}><Trash2 size={15} /></button></header>
         {highlightedId === item.id && <label>Replacement clip<select aria-label={`Footage placement ${index + 1} replacement`} value={item.assetId} onChange={event => {
@@ -76,10 +88,7 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, appl
         </div>
         {!item.appendToEnd && (item.start >= item.end || (asset && item.end > asset.duration)) && <p className="own-footage-error" role="alert">Choose an end after the start and within this clip.</p>}
       </article>; })}
-      {onApplyAll && value.length > 0 && <div className="own-footage-batch">
-        <button type="button" className="secondary-button" disabled={applyAllDisabled} onClick={() => onApplyAll(structuredClone(value))}>{applyAllLabel}</button>
-        {applyAllDescription && <p className="own-footage-note">{applyAllDescription}</p>}
-      </div>}
+      {onApplyAll && value.length > 0 && <button type="button" className="secondary-button" onClick={() => onApplyAll(structuredClone(value))}>Use these placements for all videos</button>}
     </fieldset>
     {progress !== null && <div className="own-footage-upload" role="status"><span>{progress === 100 ? "Preparing your clip…" : `Uploading ${progress}%`}</span><button className="secondary-button" type="button" onClick={() => uploadRequest.current?.abort()}><X size={14} />Cancel upload</button></div>}
     {error && <ProblemNotice message={error} operation="Manage supporting footage" />}

@@ -20,6 +20,12 @@
 .own-footage-append strong { display: block; color: var(--text); font-size: 13px; line-height: 1.6; font-weight: 600; }
 .own-footage-append small { display: block; color: var(--subtle); font-size: 12px; line-height: 1.6; margin-top: 5px; }
 .own-footage-error { color: #ffb6ac; margin-top: 12px; font-size: 13px; line-height: 1.7; }
-.own-footage-batch > button { width: 100%; white-space: normal; }
-.own-footage-batch .own-footage-note { margin-bottom: 0; }
+.own-footage-batch { padding: 14px; margin: 16px 0; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--field); }
+.own-footage-batch > strong { display: block; color: var(--text); font-size: 13px; line-height: 1.5; }
+.own-footage-batch ul { display: grid; gap: 5px; max-height: 110px; overflow-y: auto; list-style: none; padding: 0; margin: 10px 0 14px; }
+.own-footage-batch li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--subtle); font-size: 12px; line-height: 1.6; }
+.auto-panel.panel .own-footage-batch > button { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; white-space: normal; background: var(--action); color: var(--action-text); border-color: var(--action); }
+.own-footage-batch > button svg { flex-shrink: 0; }
+.own-footage-batch p { margin: 10px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.6; }
+.own-footage-batch p + button { margin-top: 12px; }
 @media (max-width: 580px) { .own-footage-fields { grid-template-columns: 1fr; } .own-footage { padding: 14px; } }

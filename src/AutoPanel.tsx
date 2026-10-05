@@ -1,6 +1,6 @@
 import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
-import OwnFootagePanel from "./OwnFootagePanel";
+import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
 import { CaptionAppearance } from "./CaptionStyleEditor";
 import { useEffect, useState } from "react";
 import {
@@ -54,6 +54,9 @@ export default function AutoPanel({
   selectedId,
   onSourceChange,
   onApplyAll,
+  selectedVideos,
+  onApplySelectedFootage,
+  footageDisabled,
   libraryBusy,
   maxFiles,
   maxFileSize,
@@ -73,6 +76,9 @@ export default function AutoPanel({
   selectedId?: string;
   onSourceChange: (id: string) => void;
   onApplyAll: () => void;
+  selectedVideos: FootageTarget[];
+  onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
+  footageDisabled: boolean;
   libraryBusy: boolean;
   maxFiles?: number;
   maxFileSize?: number;
@@ -141,12 +147,12 @@ export default function AutoPanel({
           </p>
           {sources.length > 1 && (
             <button type="button" disabled={libraryBusy} onClick={onApplyAll}>
-              <Copy size={14} /> Use for all {sources.length} videos
+              <Copy size={14} /> Copy all Auto settings to all {sources.length} videos
             </button>
           )}
           {sources.length > 1 && (
             <small>
-              Includes visual sources and version count. Future imports change only when selected above.
+              Copies format, captions, sound, footage and version count to every imported video. Future imports change only when selected above.
             </small>
           )}
           {onSaveStyle && (
@@ -188,7 +194,8 @@ export default function AutoPanel({
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })}
             source={selectedSource} aspect={outputAspect} />
         </section>
-        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={libraryBusy} />
+        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={footageDisabled}
+          selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
         <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
         <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
         <div className="auto-output-summary">
