@@ -1314,7 +1314,6 @@ h1 > span {
   align-items: center;
 }
 .select-wrap select {
-  appearance: none;
   width: 100%;
   padding: 8px 23px 8px 9px;
   background: var(--surface-raised);
@@ -1324,12 +1323,6 @@ h1 > span {
   font-size: 12px;
   cursor: pointer;
   min-width: 0;
-}
-.select-wrap > svg {
-  position: absolute;
-  right: 8px;
-  pointer-events: none;
-  color: var(--muted);
 }
 .control-section > .select-field {
   margin-bottom: 17px;

@@ -8,6 +8,7 @@ import "./studio.css";
 import "./manual.css";
 import "./responsive.css";
 import "./library.css";
+import "./selects.css";
 
 installRuntimeDiagnostics();
 ReactDOM.createRoot(document.getElementById("root")!).render(

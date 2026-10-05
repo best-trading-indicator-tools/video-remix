@@ -33,7 +33,6 @@ import {
   AudioLines,
   Check,
   CheckCheck,
-  ChevronDown,
   CircleHelp,
   Clock3,
   Clapperboard,
@@ -280,7 +279,6 @@ function SelectField({
         >
           {children}
         </select>
-        <ChevronDown size={13} />
       </span>
     </label>
   );
