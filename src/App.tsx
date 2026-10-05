@@ -1228,6 +1228,10 @@ export default function App() {
                 </div>
               )}
             </div>
+            {mode === 'shorts' && <section className="shorts-intro panel" aria-labelledby="shorts-intro-title">
+              <h2 id="shorts-intro-title">Turn long-form videos into short clips</h2>
+              <p>Start with a podcast, interview, webinar or other long recording. Find the best moments automatically or choose your own timestamps, then export them as separate clips.</p>
+            </section>}
             {mode !== 'shorts' && <section className="settings-scope-bar" aria-label="Settings scope">
               <label>Apply changes to<select value={settingsScope} disabled={brollBusy} onChange={event => { setSettingsScope(event.target.value as typeof settingsScope); setScopeUndo(null); }}>
                 <option value="current">This video</option><option value="selected">Selected videos ({autoSelectedIds.length})</option><option value="all">All videos ({sources.length})</option>

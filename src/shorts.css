@@ -1,4 +1,7 @@
 /* A source-clock workspace with the same quiet graphite surfaces as the studio. */
+.shorts-intro { margin-bottom: 18px; padding: 24px 28px; border-left: 3px solid var(--accent); }
+.shorts-intro h2 { margin: 0; color: var(--text); font-size: clamp(22px, 2.2vw, 32px); font-weight: 600; line-height: 1.25; letter-spacing: -.025em; }
+.shorts-intro p { max-width: 80ch; margin: 10px 0 0; color: var(--subtle); font-size: 14px; line-height: 1.65; }
 .shorts-studio.studio-grid { grid-template-columns: 238px minmax(0, 1fr); }
 .shorts-workspace { display: grid; grid-template-columns: minmax(0, 1fr) minmax(340px, .92fr); gap: 18px; min-width: 0; align-items: start; }
 .shorts-workspace[hidden] { display: none; }
@@ -137,6 +140,7 @@
 @media (max-width: 1250px) { .shorts-workspace { grid-template-columns: minmax(0, 1fr) minmax(320px, 1fr); gap: 14px; } .shorts-render-bar { flex-wrap: wrap; } .shorts-render-controls { flex: 1; justify-content: flex-end; } .shorts-kicker { display: none; } }
 @media (max-width: 1100px) and (min-width: 681px) { .shorts-studio.studio-grid { grid-template-columns: 215px minmax(0, 1fr); } .shorts-workspace { grid-template-columns: minmax(0, 1fr); } .shorts-player, .shorts-editor { grid-column: 1; } .shorts-source-frame { max-width: 600px; } .shorts-editor-body { padding: 24px; } .shorts-timestamp-pair input { font-size: 13px !important; } }
 @media (max-width: 680px) {
+  .shorts-intro { padding: 20px 16px; }
   .studio-toolbar .mode-switch { display: flex; width: 100%; min-width: 0; }
   .studio-toolbar .mode-switch button { flex: 1; min-width: 0; padding: 9px 7px; font-size: 12px; white-space: nowrap; }
   .studio-toolbar .mode-switch button svg { display: none; }
