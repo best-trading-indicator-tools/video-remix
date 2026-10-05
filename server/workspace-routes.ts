@@ -124,7 +124,7 @@ export function installWorkspaceRoutes(app: Express) {
   app.get('/api/exports/accepted.zip', async (req, res) => {
     const ids = typeof req.query.ids === 'string' ? req.query.ids.split(',') : [];
     if (!ids.length || ids.length > 300) { res.status(400).json({ error: 'Choose between 1 and 300 accepted exports.' }); return; }
-    const jobs = state.jobs.filter(job => ids.includes(job.id) && job.status === 'completed' && reviewStatus(historyRecords({ jobId: job.id })[0]?.measurements?.review) === 'accepted');
+    const jobs = state.jobs.filter(job => ids.includes(job.id) && job.status === 'completed' && reviewStatus(historyRecords({ jobId: job.id })[0]?.measurements?.review ?? job.review) === 'accepted');
     if (!jobs.length) { res.status(404).json({ error: 'No accepted exports are still available.' }); return; }
     for (const job of jobs) await stat(job.outputPath);
     const archive = new ZipArchive({ zlib: { level: 0 } });

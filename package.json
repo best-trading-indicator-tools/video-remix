@@ -11,7 +11,7 @@
     "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && npm run build:remotion",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.remotion.json",
     "start": "node dist-server/server/index.js",
-    "test": "tsx --test --test-concurrency=2 tests/*.test.ts",
+    "test": "tsx --import ./tests/setup.mjs --test --test-concurrency=2 tests/*.test.ts",
     "benchmark": "node --import tsx scripts/benchmark.mjs",
     "setup:auto": "node scripts/setup-auto.mjs",
     "setup:imports": "node scripts/setup-imports.mjs",

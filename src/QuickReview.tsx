@@ -52,10 +52,10 @@ export default function QuickReview({ jobs, paused, onClose, onEdit, onSaved }: 
         <p>{review.verdict ? { 'accepted-unchanged': 'Accepted unchanged', 'accepted-after-correction': 'Accepted after correction', rejected: 'Rejected', 'needs-edit': 'Needs edits' }[review.verdict] : 'No decision yet'}</p>
         <label>Review notes<textarea rows={5} maxLength={500} value={notes} disabled={!loaded || busy} onChange={event => setNotes(event.target.value)} placeholder="What worked? What needs changing?" /></label>
         <div className="quick-review-decisions"><button disabled={!loaded || busy} onClick={accept}><kbd>A</kbd> Accept</button><button disabled={!loaded || busy || !job.editable} onClick={() => void edit()}><kbd>E</kbd> Edit</button><button disabled={!loaded || busy} onClick={() => void move(1, 'rejected')}><kbd>R</kbd> Reject</button></div>
-        <p>Decisions and notes are saved in History. Rejected exports remain available.</p>
+        <p>Decisions and notes are saved. Rejected exports remain available.</p>
         <label className="quick-review-auto"><input type="checkbox" checked={advance} onChange={event => setAdvance(event.target.checked)} />Play the next export when this one ends</label>
         <div className="quick-review-navigation"><button disabled={!loaded || busy || index === 0} onClick={() => void move(-1)}>← Previous</button><button disabled={!loaded || busy} onClick={() => void move(1)}>Next →</button></div>
         {busy && <p role="status">Saving review…</p>}{error && <><ProblemNotice message={error} operation="Save export review" /><button onClick={() => setReload(value => value + 1)}>Reload review</button></>}
-      </aside></div> : <div className="quick-review-complete"><p>You’ve reached the end of this collection. Your decisions and notes are saved in History.</p><button onClick={() => setIndex(0)}>Review again</button><button onClick={onClose}>Done</button></div>}
+      </aside></div> : <div className="quick-review-complete"><p>You’ve reached the end of this collection. Your decisions and notes are saved.</p><button onClick={() => setIndex(0)}>Review again</button><button onClick={onClose}>Done</button></div>}
   </dialog>;
 }

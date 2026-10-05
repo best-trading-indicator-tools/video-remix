@@ -7,6 +7,7 @@ import { EMPTY_FILTERS, matchesExport, reviewStatus, revisionFamilies } from '..
 import { recordDiagnostic } from "./diagnostics-store";
 import { ExportPreview, ExportName } from "./ExportPreview";
 import ExportKeepButton from "./ExportKeepButton";
+import ExportDeleteButton from "./ExportDeleteButton";
 import PublishingPanel from "./PublishingPanel";
 import QuickReview from "./QuickReview";
 import { exportStatus, visibleExportChanges } from "../shared/export-presentation";
@@ -2663,14 +2664,20 @@ export default function App() {
                                   <RefreshCw size={13} />
                                   {repeatedSkip ? "Generate anyway" : "Retry"}
                                 </button>
-                              ) : (
-                                <IconButton
-                                  title={`Cancel ${job.sourceName} version ${job.variant}`}
+                              ) : ["queued", "processing"].includes(job.status) ? (
+                                <button type="button" className="secondary-button"
+                                  aria-label={`Cancel render of ${job.sourceName} version ${job.variant}`}
                                   onClick={() => void jobAction(job, "cancel")}
                                 >
-                                  <X size={17} />
-                                </IconButton>
-                              )}
+                                  <X size={15} />Cancel render
+                                </button>
+                              ) : null}
+                              {!["queued", "processing"].includes(job.status) && <ExportDeleteButton job={job} onDeleted={id => {
+                                setJobs(current => current.filter(item => item.id !== id));
+                                setPreviewJob(current => current?.id === id ? null : current);
+                                setReviewRefresh(value => value + 1);
+                                notify('Export deleted. Original videos and History are kept.', 'success');
+                              }} />}
                             </div>
                           </article>
                         );

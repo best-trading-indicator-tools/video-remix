@@ -38,18 +38,30 @@ export function installExportTools(app: Express) {
   });
   app.get('/api/jobs/:id/review', (req, res) => {
     const entry = historyRecords({ jobId: String(req.params.id) })[0];
-    if (!entry) { res.status(404).json({ error: 'This export has no saved history record.' }); return; }
-    res.json({ review: entry.measurements?.review ?? {}, corrected: Boolean(entry.parentJobId) });
+    const job = state.jobs.find(job => job.id === req.params.id);
+    if (!entry && !job) { res.status(404).json({ error: 'Export not found.' }); return; }
+    if (!entry && job?.status !== 'completed') { res.status(409).json({ error: 'Wait for this export to finish before reviewing it.' }); return; }
+    res.json({ review: entry?.measurements?.review ?? job?.review ?? {}, corrected: Boolean(entry?.parentJobId || job?.parentJobId) });
   });
   app.patch('/api/jobs/:id/review', async (req, res) => {
     const entry = historyRecords({ jobId: String(req.params.id) })[0], parsed = quickReviewSchema.safeParse(req.body);
-    if (!entry) { res.status(404).json({ error: 'This export has no saved history record.' }); return; }
+    const job = state.jobs.find(job => job.id === req.params.id);
+    if (!entry && !job) { res.status(404).json({ error: 'Export not found.' }); return; }
+    if (!entry && job?.status !== 'completed') { res.status(409).json({ error: 'Wait for this export to finish before reviewing it.' }); return; }
     if (!parsed.success) { res.status(400).json({ error: 'Choose a review decision and keep notes under 500 characters.' }); return; }
     const { verdict, ...fields } = parsed.data;
-    const review = { ...entry.measurements?.review, ...fields };
+    const review = { ...(entry?.measurements?.review ?? job?.review), ...fields };
     if (verdict === null) delete review.verdict; else if (verdict) review.verdict = verdict;
-    entry.measurements = { ...entry.measurements, review };
-    await saveStore([entry]); res.json(entry.measurements.review);
+    const previousReview = job?.review, previousMeasurements = entry?.measurements;
+    if (job) job.review = review;
+    if (entry) entry.measurements = { ...entry.measurements, review };
+    try { await saveStore(entry ? [entry] : []); }
+    catch (error) {
+      if (job) job.review = previousReview;
+      if (entry) entry.measurements = previousMeasurements;
+      throw error;
+    }
+    res.json(review);
   });
   app.get('/api/jobs/:id/thumbnail', async (req, res, next) => {
     const job = state.jobs.find(job => job.id === req.params.id);

@@ -21,9 +21,10 @@ Topics cover Auto preferences, black bands, captions, sound, reviews and support
 - **Edit this result** autosaves changes to the workspace with a browser backup while the server is unavailable. Close and reopen to continue. **Resume saved draft** identifies unfinished work. Saving protects the export and its editing files from expiry; **Reset changes** discards the draft, and rendering a revision clears it. Conflicting browser/server drafts require an explicit choice before editing continues.
 - Missing or changed originals open a recovery screen. Import the unchanged original and reconnect a matching source; matching uses its import fingerprint so saved cut timings remain valid. Older exports without fingerprints remain downloadable but need a fresh edit if their original is missing.
 - **Apply changes to** has the same meaning in Quick setup, All settings and Manual. Choose this video, checked videos or all videos; future import defaults have a separate checkbox. Individual control changes preserve each video's other settings. The explicit copy-all controls copy the full configuration, and **Undo batch change** restores the previous state.
-- Exports have human decisions: **Unreviewed**, **Accepted**, **Needs edits**, and **Rejected**. Automated checks remain separate. **Review unreviewed** starts with undecided clips, **E / Edit** marks a clip as needing edits, and **Download accepted** bundles accepted clips matching your filters (up to 300 at a time).
+- Exports have human decisions: **Unreviewed**, **Accepted**, **Needs edits**, and **Rejected**. Automated checks remain separate. Reviews also work for older completed exports without a History entry. **Review unreviewed** starts with undecided clips, **E / Edit** marks a clip as needing edits, and **Download accepted** bundles accepted clips matching your filters (up to 300 at a time).
 - Search sources by name/project. Assign a source project to organize its existing exports and future edits; individual History records can be reassigned separately. Exports and History filter by text, project, decision, publication state, format and dates. History filters apply before pagination. Earlier revisions are collapsed; History groups the revisions present on each page.
 - Each export shows its expiry date or protection reason. **Keep collection** protects all completed exports in that collection. Clearing a collection confirms the number of files to delete, including results hidden by filters; kept exports and saved editing drafts are excluded. History records remain after files expire.
+- **Delete export** removes one finished, failed, or cancelled export after confirmation, including its kept copy and saved editing draft. Original videos, History, and scheduled posts remain. **Cancel render** is available only while an export is queued or rendering.
 - Short-clip drafts remain in browser storage and pin their original sources on the server. Removing those drafts releases that browser's pins. Keep browser data until those drafts are finished; clearing browser storage loses drafts and leaves their source pins in place to avoid deleting footage unexpectedly. **Source videos → Short-draft file protection → Release protection** can release these stale pins after confirmation.
 
 ## Mobile and tablet layouts
@@ -733,6 +734,8 @@ npm run typecheck
 npm run build
 npm test
 ```
+
+`npm test` preloads `tests/setup.mjs` before application imports, giving each test process a temporary workspace and clearing personal provider keys. To run one test with the same isolation, use `node --import ./tests/setup.mjs --import tsx --test tests/export-recovery.test.ts`. Tests that choose their own fixture directory must set `DATA_DIR` before importing server modules; the store rejects a mismatch.
 
 FFmpeg and ffprobe must be installed for media integration tests. Local transcription tests use the cached speech model when present; the spoken fixture uses macOS `say`. Tests skip those optional checks when their prerequisites are absent and never download weights.
 

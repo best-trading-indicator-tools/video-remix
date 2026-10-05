@@ -110,6 +110,8 @@ export async function reconcileHistory(entry: ExportHistoryEntry) {
   await saveStore(upsertHistory(previous, entry));
 }
 export async function initStore() {
+  if (process.env.NODE_TEST_CONTEXT && (!process.env.DATA_DIR || path.resolve(process.env.DATA_DIR) !== config.dataDir))
+    throw new Error("Set the test DATA_DIR before importing server modules. Run tests with tests/setup.mjs preloaded.");
   await apiKeys.initialize();
   await Promise.all(Object.values(paths).map((dir) => mkdir(dir, { recursive: true })));
   database?.close();
@@ -207,7 +209,9 @@ export function publicJob(job: StoredJob): RenderJob {
   const entry = historyRecords({ jobId: job.id })[0];
   const source = state.sources.find(source => source.id === job.sourceId);
   const scheduled = database?.publicationsForJob<import('../shared/publishing.js').Publication>(job.id) ?? [];
-  return { ...value, project: job.project ?? source?.project ?? entry?.project, review: entry?.measurements?.review,
+  return { ...value, project: job.project ?? source?.project ?? entry?.project, review: entry?.measurements?.review ?? job.review,
+    downloadUrl: job.status === 'completed' ? `/api/jobs/${job.id}/download` : undefined,
+    captionUrl: job.status === 'completed' && job.captionPath ? `/api/jobs/${job.id}/captions` : undefined,
     sourceAvailable: Boolean(source), draftSavedAt: job.editorDraft?.savedAt,
     publicationStatus: entry?.publications.length || scheduled.some(post => post.state === 'published') ? 'published' : scheduled.some(post => ['scheduled','uploading','submitting','uncertain'].includes(post.state)) ? 'scheduled' : 'unpublished',
     expiresAt: job.keptAt || job.editorDraft || ['queued','processing'].includes(job.status) ? undefined : new Date(Date.parse(job.retentionResetAt || job.finishedAt || job.createdAt) + config.retentionMs).toISOString(),

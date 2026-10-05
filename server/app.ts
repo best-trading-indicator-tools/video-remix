@@ -780,8 +780,28 @@ export function createApp() {
   app.post("/api/jobs/:id/cancel", async (req, res) => {
     const job = state.jobs.find((item) => item.id === req.params.id);
     if (!job) throw new HttpError(404, "Export not found.");
+    if (!isActive(job)) throw new HttpError(409, "This export is no longer rendering. Use Delete export to remove it.");
     await cancelJob(job);
     res.json(publicJob(job));
+  });
+  app.delete("/api/jobs/:id", async (req, res) => {
+    const job = state.jobs.find(item => item.id === req.params.id);
+    if (!job) throw new HttpError(404, "Export not found or already deleted.");
+    if (isActive(job) || isRunning(job.id) || publishingJobs.has(job.id))
+      throw new HttpError(409, "Wait for rendering and uploads to finish before deleting this export.");
+    if (!z.object({ confirm: z.literal(true) }).strict().safeParse(req.body).success)
+      throw new HttpError(400, "Confirm deleting this export and its editing files, including any Keep or saved draft.");
+    const index = state.jobs.indexOf(job);
+    state.jobs.splice(index, 1);
+    try { await saveStore(); }
+    catch (error) { state.jobs.splice(index, 0, job); throw error; }
+    await Promise.all([
+      rm(job.outputPath, { force: true }),
+      rm(path.join(paths.work, job.id), { recursive: true, force: true }),
+      rm(path.join(paths.plans, job.id), { recursive: true, force: true }),
+      ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
+    ]);
+    res.json({ ok: true, removedId: job.id });
   });
   app.post("/api/jobs/:id/retry", async (req, res) => {
     const job = state.jobs.find((item) => item.id === req.params.id);

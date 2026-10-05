@@ -6,17 +6,19 @@ import { randomUUID } from 'node:crypto';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { PostizClient, PostizError } from '../server/postiz.js';
 import type { CrossPostResult, ScheduleRequest } from '../shared/publishing.js';
 
 // All remote calls use this in-memory Postiz client; no social accounts are contacted.
 test('cross-posting shares uploads across accounts and platforms, isolates failures and never repeats confirmed or uncertain posts', { timeout: 15000 }, async () => {
   const dir = await mkdtemp(path.join(tmpdir(), 'remix-cross-post-')); process.env.DATA_DIR = dir; process.env.AUTO_AI = 'false';
+  const { PostizClient, PostizError } = await import('../server/postiz.js');
   const { initStore, closeStore, state, saveStore, publishingRecords } = await import('../server/store.js');
   const { installPublishingRoutes } = await import('../server/publishing-routes.js');
   const { publishingJobs } = await import('../server/publishing-lock.js');
   const { DEFAULT_SETTINGS } = await import('../shared/types.js');
   const { default: express } = await import('express');
+  const { config } = await import('../server/config.js');
+  assert.equal(config.dataDir, dir, 'The publishing fixture must never open the local workspace');
   await initStore();
   const file = path.join(dir, 'video.mp4'); await writeFile(file, 'fixture');
   const job = { id: 'job', sourceId: 'source', sourceName: 'Video', variant: 1, batchId: 'batch', status: 'completed' as const, progress: 100, createdAt: new Date().toISOString(), settings: DEFAULT_SETTINGS, outputPath: file };

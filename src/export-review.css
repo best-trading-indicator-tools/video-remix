@@ -34,6 +34,10 @@
 .job-card .job-status.export-verdict.problem { color: var(--text); background: transparent; }
 .quick-review-launch { margin: 4px 0 18px; }
 .export-keep-control { display: flex; flex-direction: column; align-items: flex-start; }
+.export-delete-control { min-width: 0; max-width: 100%; }
+.export-delete-confirm { width: 300px; max-width: 100%; padding: 14px; border: 1px solid var(--danger); border-radius: 8px; background: var(--field); }
+.export-delete-confirm p { margin: 0 0 12px; font-size: 12px; line-height: 1.6; color: var(--subtle); white-space: normal; }
+.export-delete-confirm > div { display: flex; flex-wrap: wrap; gap: 8px; }
 .export-keep-button[aria-pressed="true"] { color: var(--text); border-color: var(--line-strong); background: transparent; }
 
 .export-verdict::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }

@@ -35,12 +35,13 @@ jobs:
         # The 4/40 GiB sparse fixtures are reserved for local testing; hosted
         # Windows runners have limited free disk space and different allocation.
         run: >-
-          node --import tsx --test --test-concurrency=2
+          node --import ./tests/setup.mjs --import tsx --test --test-concurrency=2
           --test-skip-pattern="^(40GiB local import|a resumed chunk)"
           tests/setup-python.test.ts tests/windows-compatibility.test.ts
           tests/upload-file.test.ts tests/linked-sources.test.ts
           tests/history-thumbnails.test.ts tests/import-client.test.ts
           tests/imports.test.ts tests/engine.test.ts
           tests/database.test.ts tests/queue.test.ts tests/social-imports.test.ts
+          tests/test-isolation.test.ts tests/export-recovery.test.ts
           tests/windows-resilience.test.ts
           tests/diagnostics.test.ts tests/diagnostics-client.test.ts tests/transcript-edit.test.ts

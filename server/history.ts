@@ -92,6 +92,7 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     ...(job.parentJobId ? { parentJobId: job.parentJobId } : {}),
     stockShots,
     publications: [],
+    ...(job.review ? { measurements: { review: structuredClone(job.review) } } : {}),
     configuration: exportConfiguration(job, outputDuration),
     ...(job.finishedReviewReport ? { finishedReviewReport: structuredClone(job.finishedReviewReport) } : {}),
     ...(job.corrections ? { corrections: structuredClone(job.corrections) } : {}),
