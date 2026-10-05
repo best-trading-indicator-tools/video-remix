@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { sourceAtTime, splitTimelineCut, shiftTimelineInterval } from '../shared/edit-timeline.js';
+import { sourceAtTime, splitTimelineCut, shiftTimelineInterval, storyClips, storyChanges, storyTiming } from '../shared/edit-timeline.js';
 import { applyEditPlanChanges } from '../server/edit-plan.js';
 import { DEFAULT_SETTINGS, type EditPlan } from '../shared/types.js';
 const plan: EditPlan = { version: 1, revision: 1, sourceId: 'source', sourceDuration: 20, outputDuration: 10, createdAt: new Date().toISOString(), settings: { ...DEFAULT_SETTINGS, hookText: 'Hello' }, cuts: [{start: 5,end: 15}], captions: [], visuals: [], media: [{id: 'clip',name: 'Saved clip',kind: 'broll',duration: 4}], narration: false };
@@ -69,4 +69,42 @@ test('uploaded clips can be split, copied and reordered with independent placeme
   assert.deepEqual(changes.ownFootage.map(item=>[item.at,item.start,item.end]),[[0,2,4],[10,0,2],[10,2,4]]);
   assert.equal(new Set(changes.ownFootage.map(item=>item.id)).size,3);
   assert.doesNotThrow(()=>ownFootageSchema.parse(changes.ownFootage));
+});
+
+test('trimming after an outro edit never creates a hidden source fragment', () => {
+  const outro = { id:'c931b7ec-bbaa-4168-95c5-c8720547f6cd',assetId:'a931b7ec-bbaa-4168-95c5-c8720547f6cd',at:0,start:0,end:26.9269,appendToEnd:true,mode:'insert' as const,audio:'clip' as const,fit:'contain' as const };
+  for (const fps of [24, 30, 60, 30000 / 1001]) for (const speed of [1, 1.25, 2]) {
+    let draft: EditPlan = { ...plan, sourceDuration:40, outputDuration:26.041667 / speed, cuts:[{start:0,end:26.041667}], settings:{...plan.settings,speed,ownFootage:[outro]} };
+    // Editing the uploaded clip turns a whole-file outro into a timed insertion.
+    const edited = storyClips(draft, fps).map(clip => clip.kind === 'footage' ? { ...clip, footage:{...clip.footage,end:20,appendToEnd:false} } : clip);
+    draft = applyEditPlanChanges(draft, {revision:draft.revision,...storyChanges(edited,draft)});
+    for (const edge of ['end', 'start', 'end'] as const) {
+      const clips = storyClips(draft, fps);
+      assert.deepEqual(clips.map(clip => clip.kind), ['cut','footage'], `No hidden clip at ${fps} fps / ${speed}×`);
+      const trimmed = clips.map(clip => clip.kind === 'cut' ? { ...clip, cut:shiftTimelineInterval(clip.cut,edge === 'start' ? 1 : -2,edge,{low:0,high:40,minimum:.04}) } : clip);
+      draft = applyEditPlanChanges(draft, {revision:draft.revision,...storyChanges(trimmed,draft)});
+      assert.deepEqual(storyClips(draft,fps).map(clip => clip.kind), ['cut','footage']);
+      assert.ok(Math.abs(draft.settings.ownFootage![0]!.at - draft.outputDuration) < 1e-7);
+    }
+    assert.equal(draft.cuts.length,1);
+    assert.equal(draft.cuts[0]!.start,1);
+    assert.ok(Math.abs(draft.cuts[0]!.end - 22.041667) < 1e-7);
+    assert.equal(draft.settings.ownFootage![0]!.end,20, 'The uploaded clip keeps its trim');
+  }
+});
+
+test('insertions at fractional cut boundaries survive repeated timeline round trips', () => {
+  const inserted = { id:'c931b7ec-bbaa-4168-95c5-c8720547f6cd',assetId:'a931b7ec-bbaa-4168-95c5-c8720547f6cd',at:3.008333,start:0,end:2,mode:'insert' as const,audio:'clip' as const,fit:'contain' as const };
+  for (const fps of [24, 30, 60]) for (const drift of [0, -1e-10, 1e-10]) {
+    const cuts = [{start:1,end:4.008333},{start:10,end:16}];
+    let draft: EditPlan = {...plan,cuts,outputDuration:9.008333,settings:{...plan.settings,ownFootage:[{...inserted,at:inserted.at + drift}]}};
+    for (let edit = 0; edit < 3; edit++) {
+      const clips = storyClips(draft,fps);
+      assert.deepEqual(clips.map(clip => clip.kind), ['cut','footage','cut']);
+      const timed = storyTiming(clips,1);
+      assert.ok(Math.abs(timed[1]!.outputStart - inserted.at) < 1e-7);
+      draft = applyEditPlanChanges(draft,{revision:draft.revision,...storyChanges(clips,draft)});
+      assert.deepEqual(draft.cuts,cuts);
+    }
+  }
 });

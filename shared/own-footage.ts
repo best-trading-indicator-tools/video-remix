@@ -22,8 +22,11 @@ export function resolveFootagePlacement(item: OwnFootagePlacement, assetDuration
 /** Times stay on the edit's clock, before inserted footage lengthens it. */
 export function footageTimeline(placements: OwnFootagePlacement[] = [], duration: number, fps = 30) {
   const frame = (time: number) => Math.round(time * fps) / fps;
+  // Cut boundaries can fall between output frames (source fps and speed differ).
+  // Re-rounding a saved insertion can move it inside its neighboring cut and
+  // create a tiny source fragment that makes the next timeline edit invalid.
   const inserts = placements.filter(item => item.mode === "insert").map(item => ({ ...item,
-    at: item.appendToEnd ? duration : Math.min(duration, frame(item.at)), length: Math.max(1 / fps, frame(item.end - item.start)),
+    at: item.appendToEnd ? duration : Math.min(duration, item.at), length: Math.max(1 / fps, frame(item.end - item.start)),
   })).sort((a, b) => a.at - b.at);
   const covers = placements.filter(item => item.mode === "cover" && item.at < duration).map(item => ({ ...item,
     length: Math.min(item.end - item.start, duration - item.at),

@@ -44,7 +44,7 @@ export function storyClips(plan: EditPlan, fps = 30): StoryClip[] {
     }
   };
   for (const cut of cuts) {
-    const edges = [...new Set([cut.outputStart, ...inserts.filter(item => item.at > cut.outputStart && item.at < cut.outputEnd).map(item => item.at), cut.outputEnd])];
+    const edges = [...new Set([cut.outputStart, ...inserts.filter(item => item.at > cut.outputStart + 1e-7 && item.at < cut.outputEnd - 1e-7).map(item => item.at), cut.outputEnd])];
     for (let i = 0; i < edges.length - 1; i++) {
       insertThrough(edges[i]!);
       result.push({ id: `cut:${cut.index}:${i}`, kind: 'cut', cut: withTrackBounds({ ...plan.cuts[cut.index]!, start: cut.start + (edges[i]! - cut.outputStart) * plan.settings.speed, end: cut.start + (edges[i + 1]! - cut.outputStart) * plan.settings.speed }) });
