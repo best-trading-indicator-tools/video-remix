@@ -8,6 +8,9 @@ output/
 .env
 .env.*
 !.env.example
+api-keys.key
+api-keys.enc
+api-keys.enc.*.tmp
 .DS_Store
 *.log
 .venv/

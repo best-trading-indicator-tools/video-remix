@@ -41,7 +41,7 @@ export async function findBestClips({ transcript, sourceDuration, options, signa
 }): Promise<ClipDiscoveryResult> {
   signal.throwIfAborted();
   if (generate === generateCreativeJSON && !(await intelligenceAvailable()))
-    throw new Error("Clip discovery needs DeepSeek. Enable Auto AI and configure DEEPSEEK_API_KEY in the server .env file.");
+    throw new Error("Clip discovery needs DeepSeek. Enable Auto AI and add a DeepSeek API key in Settings.");
   const context = buildIdeaContext(transcript, sourceDuration, options.maxSeconds, true);
   const reasoning = semanticReasoning();
   const notes: string[] = [];

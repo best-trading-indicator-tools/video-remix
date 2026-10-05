@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -13,7 +14,7 @@ import { inspectBrollWindows } from "./broll-motion.js";
 
 export type StockProvider = "pixabay" | "pexels";
 export const configuredStockProviders = (): StockProvider[] => (["pixabay", "pexels"] as const)
-  .filter(provider => Boolean(process.env[provider === "pixabay" ? "PIXABAY_API_KEY" : "PEXELS_API_KEY"]?.trim()));
+  .filter(provider => Boolean(providerApiKey(provider)));
 export const stockBrollConfigured = (providers: readonly StockProvider[] = ["pixabay", "pexels"]) =>
   configuredStockProviders().some(provider => providers.includes(provider));
 export function stockProvidersForEdit(options?: AutoOptions): StockProvider[] {
@@ -149,13 +150,13 @@ async function searchStock(
     signal.throwIfAborted();
   }
   if (!data) {
-    if (provider === "pixabay") params.set("key", process.env.PIXABAY_API_KEY!.trim());
+    if (provider === "pixabay") params.set("key", providerApiKey("pixabay"));
     const response = await fetcher(
       provider === "pexels" ? `https://api.pexels.com/v1/videos/search?${params}` : `https://pixabay.com/api/videos/?${params}`,
       {
         signal: AbortSignal.any([signal, AbortSignal.timeout(12000)]),
         redirect: "error",
-        ...(provider === "pexels" ? { headers: { Authorization: process.env.PEXELS_API_KEY!.trim() } } : {}),
+        ...(provider === "pexels" ? { headers: { Authorization: providerApiKey("pexels") } } : {}),
       },
     );
     if (!response.ok) {

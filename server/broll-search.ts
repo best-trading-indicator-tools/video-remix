@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -34,7 +35,7 @@ export async function planStockSearch({ moments, language = "en", targetCount = 
   signal.throwIfAborted();
   const budget = brollSearchBudget(targetCount);
   const responseSchema = z.object({ briefs: z.array(briefSchema).max(budget.briefLimit) }).strict();
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+  const apiKey = providerApiKey("deepseek");
   const model = process.env.DEEPSEEK_TEXT_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
   if (!apiKey || !/^[a-zA-Z0-9._:-]{1,96}$/u.test(model))
     return { briefs: [], notes: ["AI stock search needs a configured DeepSeek model and API key. Original footage was kept."] };

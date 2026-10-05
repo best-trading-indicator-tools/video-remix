@@ -85,6 +85,7 @@ import EditorialReportSummary from "./EditorialReportSummary";
 import JobRecoveryNotice from "./JobRecoveryNotice";
 import JobProgress, { jobProgressLabel } from "./JobProgress";
 import HistoryPanel from "./HistoryPanel";
+import ApiSettings from "./ApiSettings";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
 import LongFormPanel from "./LongFormPanel";
@@ -353,7 +354,8 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [brollBusy, setBrollBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState<string | null>(null);
-  const [view, setView] = useState<"studio" | "exports" | "history">("studio");
+  const [capabilityVersion, setCapabilityVersion] = useState(0);
+  const [view, setView] = useState<"studio" | "exports" | "history" | "settings">("studio");
   const [historySource, setHistorySource] = useState<VideoSource | null>(null);
   const [tab, setTab] = useState<"essentials" | "color" | "advanced" | "all">(
     "essentials",
@@ -533,7 +535,7 @@ export default function App() {
       stopped = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [capabilityVersion]);
 
   useEffect(() => {
     let stopped = false;
@@ -1114,6 +1116,9 @@ export default function App() {
           <button className={`history-nav-button ${view === "history" ? "active" : ""}`} aria-current={view === "history" ? "page" : undefined} aria-label="History" title="History" onClick={() => { setHistorySource(null); setView("history"); }}>
             <History size={15} />History
           </button>
+          <button className={view === "settings" ? "active" : ""} aria-current={view === "settings" ? "page" : undefined} aria-label="Settings" title="Settings" onClick={() => setView("settings")}>
+            <Settings2 size={15} />Settings
+          </button>
         </nav>
         <div className="header-right">
           <span className={`engine-status ${engineReady ? "" : "offline"}`}>
@@ -1140,7 +1145,7 @@ export default function App() {
         <div className="page-heading">
           <div>
             <h1>
-              {view === "studio" ? "Your workspace" : view === "history" ? "History" : "Exports"}
+              {view === "studio" ? "Your workspace" : view === "settings" ? "Settings" : view === "history" ? "History" : "Exports"}
             </h1>
             <p>
               {view === "studio"
@@ -1148,13 +1153,14 @@ export default function App() {
                   ? "Find a focused excerpt, shape the edit, and refine every detail before your next post."
                   : mode === "shorts" ? "Choose precise moments from your long videos, join sequences, and export each short in Full HD."
                   : "Shape the frame, dial in your look, and make every version your own."
+                : view === "settings" ? "Manage the API keys used by your workspace."
                 : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>
           </div>
         </div>
 
-        <button className="text-button contextual-help" onClick={() => openTour(view === 'history' ? 'history' : view === 'exports' ? 'exports' : mode === 'shorts' ? 'shorts-discovery' : mode === 'manual' ? 'modes' : 'quick-setup')}>Help with {view === 'studio' ? mode === 'shorts' ? 'Short clips' : mode === 'auto' ? 'Auto' : 'Manual' : view}</button>
+        {view !== "settings" && <button className="text-button contextual-help" onClick={() => openTour(view === 'history' ? 'history' : view === 'exports' ? 'exports' : mode === 'shorts' ? 'shorts-discovery' : mode === 'manual' ? 'modes' : 'quick-setup')}>Help with {view === 'studio' ? mode === 'shorts' ? 'Short clips' : mode === 'auto' ? 'Auto' : 'Manual' : view}</button>}
         {!loading && !engineReady && (
           connected && health
             ? <ProblemNotice operation="Set up video engine" message="FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server." />
@@ -2344,7 +2350,9 @@ export default function App() {
               </div>
             </section>}
         </div>
-        {view === "history" ? (
+        {view === "settings" ? (
+          <ApiSettings onSaved={() => setCapabilityVersion(value => value + 1)} />
+        ) : view === "history" ? (
           <HistoryPanel source={historySource} refreshKey={`${reviewRefresh}:${completed.map((job) => job.id).sort().join("|")}`} onClearSource={() => setHistorySource(null)} onBack={() => setView("studio")} />
         ) : view === "exports" ? (
           <section className="exports-panel panel">

@@ -26,8 +26,8 @@ export default function SupportingVisualsEditor({ options, onChange, capabilitie
   const librarySelected = hasLibraryVisuals(options);
   const graphicsSelected = hasGraphicVisuals(options);
   const visualChoices: { id: VisualSource; description: string; icon: typeof Film; available: boolean; setup: string }[] = [
-    { id: "pixabay", description: "Moving stock footage", icon: Film, available: capabilities?.stockProviders?.includes("pixabay") ?? !!capabilities?.stockBroll, setup: "Add a Pixabay API key to enable stock search." },
-    { id: "pexels", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockProviders?.includes("pexels"), setup: "Add a Pexels API key to enable stock search." },
+    { id: "pixabay", description: "Moving stock footage", icon: Film, available: capabilities?.stockProviders?.includes("pixabay") ?? !!capabilities?.stockBroll, setup: "Add a Pixabay API key in Settings to enable stock search." },
+    { id: "pexels", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockProviders?.includes("pexels"), setup: "Add a Pexels API key in Settings to enable stock search." },
     { id: "hyperframes", description: "Illustrated explainers", icon: Layers3, available: !!capabilities?.motionGraphics, setup: "HyperFrames renderer is unavailable on this engine." },
     { id: "remotion", description: "Illustrated explainers", icon: Shapes, available: !!capabilities?.remotionGraphics, setup: "Remotion renderer is unavailable on this engine." },
     { id: "library", description: "Your uploaded clips", icon: FolderOpen, available: true, setup: "" },
@@ -94,7 +94,7 @@ export default function SupportingVisualsEditor({ options, onChange, capabilitie
             </option>
           </select>
           <p className="auto-preferences-note">Searches your selected stock libraries using the speech. Each chosen interval is checked for motion and crop suitability. Animation-only filtering is available on Pixabay.</p>
-          {!capabilities?.stockBroll && <p className="auto-preferences-note" role="status">Add a free Pixabay or Pexels API key on the server to enable stock search.</p>}
+          {!capabilities?.stockBroll && <p className="auto-preferences-note" role="status">Add a free Pixabay or Pexels API key in Settings to enable stock search.</p>}
         </div>
       )}
       {visualSources.length > 0 && (
@@ -171,7 +171,7 @@ export default function SupportingVisualsEditor({ options, onChange, capabilitie
               <p className="auto-preferences-note">
                 {aiMatching
                   ? "AI matching needs a DeepSeek key on the server. Other selected visual sources can still be used."
-                  : "Add a DeepSeek API key on the server to enable AI matching."}
+                  : "Add a DeepSeek API key in Settings to enable AI matching."}
               </p>
             )}
           </div>

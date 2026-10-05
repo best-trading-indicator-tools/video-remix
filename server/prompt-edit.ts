@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { z } from "zod";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import { withTrackBounds } from "../shared/focus.js";
@@ -237,9 +238,9 @@ export async function proposePromptEdit({ plan, prompt, signal, sourceTranscript
   signal.throwIfAborted();
   if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 2000 || /[\u0000-\u0008\u000b-\u001f\u007f]/u.test(prompt))
     throw new PromptEditError(400, "Describe the changes in 1–2,000 characters of plain text.");
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+  const apiKey = providerApiKey("deepseek");
   const model = process.env.DEEPSEEK_TEXT_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
-  if (!apiKey) throw new PromptEditError(503, "Prompt editing needs DEEPSEEK_API_KEY in the server’s local .env file.");
+  if (!apiKey) throw new PromptEditError(503, "Prompt editing needs a DeepSeek API key. Add one in Settings.");
   if (!/^[a-zA-Z0-9._:-]{1,96}$/u.test(model)) throw new PromptEditError(503, "The configured DeepSeek text model is invalid.");
   const context = contextFor(plan, canRefreshBroll, sourceTranscript, pendingBrollCount);
   let raw: unknown;

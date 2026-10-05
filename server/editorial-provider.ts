@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { z } from "zod";
 import { config } from "./config.js";
 import { AI_REQUEST_BUDGET_MS, jsonCompletion, type AIReasoning } from "./ai-json.js";
@@ -6,7 +7,7 @@ import { AIRequestError } from "./ai-errors.js";
 /** Reuse the same private DeepSeek configuration as prompt editing and stock search. */
 export const editorialModel = () => process.env.DEEPSEEK_TEXT_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
 export const editorialAIEnabled = () => config.aiEnabled;
-export const editorialAIConfigured = () => editorialAIEnabled() && Boolean(process.env.DEEPSEEK_API_KEY?.trim()) &&
+export const editorialAIConfigured = () => editorialAIEnabled() && Boolean(providerApiKey("deepseek")) &&
   /^[a-zA-Z0-9._:-]{1,96}$/u.test(editorialModel());
 
 /** Text-only, bounded DeepSeek request. Provider failures never switch to another model. */
@@ -27,7 +28,7 @@ export async function generateEditorialJSON({ prompt, schema, signal, system, ma
   const content = JSON.stringify({ input: prompt, outputSchema });
   if (content.length > 100_000 || (system?.length ?? 0) > 12_000) throw new Error("The editing request exceeds its limit.");
   try {
-    return await jsonCompletion({ model: editorialModel(), apiKey: process.env.DEEPSEEK_API_KEY!.trim(),
+    return await jsonCompletion({ model: editorialModel(), apiKey: providerApiKey("deepseek"),
       signal, timeoutMs, maxTokens: Math.min(3200, Math.floor(maxTokens)), temperature, reasoning,
       validate: reply => {
         const parsed = schema.safeParse(reply);

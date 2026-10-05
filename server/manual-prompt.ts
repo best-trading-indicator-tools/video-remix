@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { z } from "zod";
 import type { RemixSettings } from "../shared/types.js";
 import { manualPreviewInterval } from "../shared/manual.js";
@@ -151,9 +152,9 @@ export async function proposeManualPrompt({ settings, source, prompt, signal }: 
     throw new PromptEditError(400, "The imported video needs valid duration and picture dimensions.");
   const validSettings = settingsSchema.safeParse(settings);
   if (!validSettings.success) throw new PromptEditError(400, "Correct the current manual settings before requesting an edit.");
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+  const apiKey = providerApiKey("deepseek");
   const model = process.env.DEEPSEEK_TEXT_MODEL?.trim() || process.env.DEEPSEEK_MODEL?.trim() || "deepseek-flash";
-  if (!apiKey) throw new PromptEditError(503, "Prompt editing needs DEEPSEEK_API_KEY in the server’s local .env file.");
+  if (!apiKey) throw new PromptEditError(503, "Prompt editing needs a DeepSeek API key. Add one in Settings.");
   if (!/^[a-zA-Z0-9._:-]{1,96}$/u.test(model)) throw new PromptEditError(503, "The configured DeepSeek text model is invalid.");
   const { audioId, subtitleId, device: _device, stripMetadata: _metadata, callouts: _callouts, ...currentSettings } = settings;
   let raw: unknown;

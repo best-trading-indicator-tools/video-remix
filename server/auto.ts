@@ -50,15 +50,21 @@ import { editorialModel } from "./editorial-provider.js";
 import { inspectSourceCaptions, type SourceCaptionInspection } from "./source-captions.js";
 import { cacheCapability } from "./capability-cache.js";
 
-export const getAutoCapabilities = cacheCapability(async (): Promise<AutoCapabilities> => {
-  const [transcription, intelligence, voice, motionGraphics, remotionGraphics] =
+const localAutoCapabilities = cacheCapability(async () => {
+  const [transcription, voice, motionGraphics, remotionGraphics] =
     await Promise.all([
       transcriptionAvailable(),
-      intelligenceAvailable(),
       narrationAvailable(),
       graphicsAvailable(),
       remotionAvailable(),
     ]);
+  return { transcription, voice, motionGraphics, remotionGraphics };
+});
+
+export async function getAutoCapabilities(): Promise<AutoCapabilities> {
+  const { transcription, voice, motionGraphics, remotionGraphics } = await localAutoCapabilities();
+  // Keys can change in Settings while the slower local tool checks stay cached.
+  const intelligence = await intelligenceAvailable();
   return {
     transcription,
     intelligence,
@@ -80,11 +86,11 @@ export const getAutoCapabilities = cacheCapability(async (): Promise<AutoCapabil
       : !intelligence
         ? {
             message:
-              "Local captions and automatic cuts are ready. Enable Auto AI and configure DeepSeek in the server .env file for idea selection, rewritten hooks, and editorial checks.",
+              "Local captions and automatic cuts are ready. Enable Auto AI and add a DeepSeek key in Settings for idea selection, rewritten hooks, and editorial checks.",
           }
         : {}),
   };
-});
+}
 
 const transcriptCacheKey = (source: StoredSource) =>
   `v1:${process.env.WHISPER_MODEL || "small"}:${source.size}:${source.duration}`;

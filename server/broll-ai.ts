@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { createHash, randomUUID } from "node:crypto";
 import {
   mkdir,
@@ -78,7 +79,7 @@ interface PendingDescription {
 const pendingDescriptions = new Map<string, PendingDescription>();
 
 export function brollAIConfigured(): boolean {
-  return Boolean(process.env.DEEPSEEK_API_KEY?.trim());
+  return Boolean(providerApiKey("deepseek"));
 }
 const abortError = () => new DOMException("Cancelled", "AbortError");
 function throwIfAborted(signal: AbortSignal) {
@@ -302,12 +303,12 @@ export async function matchBrollWithAI({
   throwIfAborted(signal);
   const budget = brollSearchBudget(targetCount);
   const assetLimit = Math.max(20, budget.downloadLimit);
-  const apiKey = process.env.DEEPSEEK_API_KEY?.trim();
+  const apiKey = providerApiKey("deepseek");
   if (!apiKey)
     return {
       matches: [],
       notes: [
-        "AI B-roll matching needs DEEPSEEK_API_KEY in the server settings. Original footage was kept.",
+        "AI B-roll matching needs a DeepSeek API key in Settings. Original footage was kept.",
       ],
     };
   const model = process.env.DEEPSEEK_MODEL?.trim() || DEFAULT_MODEL;

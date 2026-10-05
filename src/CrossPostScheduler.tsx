@@ -85,7 +85,7 @@ export default function CrossPostScheduler({ job, seed, channels, publications, 
   return <section aria-label="Cross-post this export" hidden={!visible}>
     <h3>Choose accounts</h3>
     <p>Send this export to several accounts at once, including multiple accounts on the same platform.</p>
-    {!configured ? <p>Add your Postiz API key to the server configuration to enable scheduling.</p> : <>
+    {!configured ? <p>Add your Postiz API key in Settings to enable scheduling.</p> : <>
       <div className="publishing-actions"><button type="button" className="secondary-button" disabled={locked || !enabled.length} onClick={() => setSelected(enabled.every(channel => selected.includes(channel.id)) ? [] : enabled.map(channel => channel.id))}>{enabled.length && enabled.every(channel => selected.includes(channel.id)) ? 'Clear selection' : 'Select all accounts'}</button><button type="button" className="secondary-button" disabled={locked} onClick={onRefresh}>Refresh accounts</button><a href={dashboard} target="_blank" rel="noreferrer">Connect accounts in Postiz</a></div>
       {channelError && <p className="publishing-error" role="alert">{channelError}</p>}
       <div className="cross-post-accounts">{platforms.map(platform => {

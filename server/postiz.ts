@@ -1,3 +1,4 @@
+import { providerApiKey } from "./api-keys.js";
 import { openAsBlob } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import { z } from 'zod';
@@ -14,14 +15,14 @@ export function postizConfiguration() {
   const dashboard = process.env.POSTIZ_WEB_URL?.trim() || (url.hostname === 'api.postiz.com' ? 'https://platform.postiz.com' : url.origin);
   const web = new URL(dashboard);
   if (!['http:', 'https:'].includes(web.protocol) || web.username || web.password) throw new PostizError('Configure a valid Postiz web URL without credentials.', 503);
-  return { endpoint, dashboard, apiKey: process.env.POSTIZ_API_KEY?.trim() || '' };
+  return { endpoint, dashboard, apiKey: providerApiKey("postiz") || '' };
 }
 const channelSchema = z.object({ id: z.string(), name: z.string(), identifier: z.string(), disabled: z.boolean().optional().default(false), profile: z.string().nullish() });
 const mediaSchema = z.object({ id: z.string().min(1).max(200), path: z.url().max(3000).refine(url => /^https?:\/\//u.test(url)) });
 export class PostizClient {
   constructor(readonly config = postizConfiguration(), private fetcher: typeof fetch = fetch) {}
   async request(route: string, init: RequestInit = {}, timeoutMs = 30000): Promise<unknown> {
-    if (!this.config.apiKey) throw new PostizError('Add a Postiz API key to the server configuration.', 503);
+    if (!this.config.apiKey) throw new PostizError('Add a Postiz API key in Settings.', 503);
     const creating = init.method === 'POST' && route === '/posts';
     let response: Response;
     try { response = await this.fetcher(`${this.config.endpoint}${route}`, { ...init, redirect: 'error',

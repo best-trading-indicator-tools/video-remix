@@ -339,7 +339,7 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
       await assert.rejects(propose(large), /too much caption text/);
       for (const prompt of ["", " ", "x".repeat(2001), "unsafe\u0000prompt"]) await assert.rejects(propose(makePlan(), prompt), /plain text/);
       delete process.env.DEEPSEEK_API_KEY;
-      await assert.rejects(propose(), (error: unknown) => error instanceof PromptEditError && error.status === 503 && /DEEPSEEK_API_KEY/.test(error.message));
+      await assert.rejects(propose(), (error: unknown) => error instanceof PromptEditError && error.status === 503 && /DeepSeek API key.*Settings/.test(error.message));
       process.env.DEEPSEEK_API_KEY = "private-prompt-test-key";
       process.env.DEEPSEEK_MODEL = "https://unexpected-provider.example";
       await assert.rejects(propose(), /model is invalid/);

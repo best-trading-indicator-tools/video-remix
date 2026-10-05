@@ -637,7 +637,7 @@ test(
           };
           const missing = await matchBrollWithAI(options([asset]));
           assert.deepEqual(missing.matches, []);
-          assert.match(missing.notes.join(" "), /DEEPSEEK_API_KEY/);
+          assert.match(missing.notes.join(" "), /DeepSeek API key.*Settings/);
           process.env.DEEPSEEK_API_KEY = "test-provider-key-do-not-leak";
           assert.equal(brollAIConfigured(), true);
           globalThis.fetch = async () => {

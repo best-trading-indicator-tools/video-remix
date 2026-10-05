@@ -1,3 +1,4 @@
+import { apiKeys } from "./api-keys.js";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
 import type {
@@ -109,6 +110,7 @@ export async function reconcileHistory(entry: ExportHistoryEntry) {
   await saveStore(upsertHistory(previous, entry));
 }
 export async function initStore() {
+  await apiKeys.initialize();
   await Promise.all(Object.values(paths).map((dir) => mkdir(dir, { recursive: true })));
   database?.close();
   database = new WorkspaceDatabase(path.join(config.dataDir, "remixer.sqlite"));

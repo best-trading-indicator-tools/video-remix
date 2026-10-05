@@ -2,6 +2,14 @@
 
 A private video repurposing workspace with **Auto remix** selected by default. Import your videos, start the batch, and download fresh edits as MP4s or a ZIP. Editing, speech recognition, and rendering run locally. Auto's AI selection, writing, editorial checks, and repairs use DeepSeek through the existing private API key; built-in selection remains available without it.
 
+## API keys
+
+Open **Settings** in the top navigation to add or replace your **DeepSeek**, **Pixabay**, **Pexels**, and **Postiz** API keys. Each field has its own **Save key** button. Configured keys stay hidden; leaving a field blank keeps its current key. Saving does not contact a provider or verify the key. New provider requests use the saved key without restarting the app.
+
+Keys saved here take precedence over the corresponding environment variable. Your `.env` file and existing database are left intact. **Use environment key** removes an override and restores your original environment key; **Remove saved key** removes a key when there is no environment fallback. Model names and custom Postiz URLs remain in the server environment.
+
+Saved keys are encrypted in `DATA_DIR/private/api-keys.enc`, with a local encryption key in `DATA_DIR/private/api-keys.key`. Keep both files together in private backups; losing the encryption key makes the saved keys unreadable. These settings belong to the current private installation. Run it privately; shared hosting still requires authentication and customer isolation.
+
 ## Interactive tour
 
 A three-step introduction opens once per browser: import footage, choose output settings, and review clips. Dismiss it at any point; completion is remembered across tabs and restarts. **Quick guide** and **How it works** replay it, while **Help with Auto / Manual / Short clips / exports / history** opens detailed help for the current workflow. **Browse all help topics** retains the complete reference tour. Closing help restores the original view without changing edit settings or starting renders.

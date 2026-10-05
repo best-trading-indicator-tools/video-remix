@@ -1,3 +1,4 @@
+import { installApiKeyRoutes } from "./api-key-routes.js";
 import { installWorkspaceRoutes } from "./workspace-routes.js";
 import { installExportTools } from "./export-tools.js";
 import { installPublishingRoutes } from "./publishing-routes.js";
@@ -159,6 +160,7 @@ export function createApp() {
     if (req.path.startsWith("/api")) res.setHeader("Cache-Control", "no-store");
     next();
   });
+  installApiKeyRoutes(app);
   app.use(express.json({ limit: "512kb" }));
   installWorkspaceRoutes(app);
   installMediaImportRoutes(app);
