@@ -1,4 +1,6 @@
 import { installExportTools } from "./export-tools.js";
+import { installPublishingRoutes } from "./publishing-routes.js";
+import { publishingJobs } from "./publishing-lock.js";
 import { historyRecords, historyMatches, historyPage, historyStockUses } from "./store.js";
 import { visualIdentity } from "./visual-identity.js";
 import { relatedHistory } from "./history.js";
@@ -163,6 +165,7 @@ export function createApp() {
   installClipDiscoveryRoutes(app);
   installPacingRoutes(app);
   installTranscriptRoutes(app);
+  installPublishingRoutes(app);
   let binaries = checkBinaries();
   app.get("/api/health", async (_req, res) => {
     let tools = await binaries;
@@ -504,6 +507,8 @@ export function createApp() {
   app.delete("/api/sources/:id", async (req, res) => {
     const source = state.sources.find((item) => item.id === req.params.id);
     if (!source) throw new HttpError(404, "Video not found.");
+    if (state.jobs.some(job => job.sourceId === source.id && publishingJobs.has(job.id)))
+      throw new HttpError(409, "Wait for this video to finish uploading to Postiz before removing its source.");
     if (state.jobs.some((job) => job.sourceId === source.id && job.keptAt))
       throw new HttpError(409, "This video is needed to edit a kept export. Turn off Keep on its exports before removing the source.");
     if (state.jobs.some((job) => job.sourceId === source.id && isActive(job)))
@@ -886,10 +891,10 @@ export function createApp() {
   app.delete("/api/batches/:id", async (req, res) => {
     const jobs = state.jobs.filter((job) => job.batchId === req.params.id);
     if (!jobs.length) throw new HttpError(404, "Export collection not found.");
-    if (jobs.some((job) => isActive(job) || isRunning(job.id)))
+    if (jobs.some((job) => isActive(job) || isRunning(job.id) || publishingJobs.has(job.id)))
       throw new HttpError(
         409,
-        "Wait for these exports to finish or cancel them before clearing the collection.",
+        "Wait for these exports and Postiz uploads to finish before clearing the collection.",
       );
     const removable = jobs.filter((job) => !job.keptAt);
     const ids = new Set(removable.map((job) => job.id));

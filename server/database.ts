@@ -18,6 +18,7 @@ export class WorkspaceDatabase {
     this.db.exec(`PRAGMA busy_timeout=1000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
       PRAGMA cache_size=-8192;
       CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS publishing (kind TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(kind,id));
       CREATE TABLE IF NOT EXISTS records (collection TEXT NOT NULL, id TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY(collection,id));
       CREATE TABLE IF NOT EXISTS history (id TEXT PRIMARY KEY, job_id TEXT NOT NULL, fingerprint TEXT NOT NULL,
         created_at TEXT NOT NULL, search_text TEXT NOT NULL, data TEXT NOT NULL);
@@ -157,4 +158,12 @@ export class WorkspaceDatabase {
       .all(JSON.stringify(identities)).map(row => [row.identity, Number(row.uses)]));
   }
   close() { this.db.close(); }
+  publishing<T>(kind: string, id?: string): T[] {
+    const rows = id === undefined ? this.db.prepare('SELECT data FROM publishing WHERE kind=? ORDER BY rowid DESC').all(kind)
+      : this.db.prepare('SELECT data FROM publishing WHERE kind=? AND id=?').all(kind, id);
+    return rows.map(row => JSON.parse(row.data as string) as T);
+  }
+  savePublishing(kind: string, id: string, data: unknown) {
+    this.db.prepare('INSERT INTO publishing VALUES(?,?,?) ON CONFLICT(kind,id) DO UPDATE SET data=excluded.data').run(kind, id, JSON.stringify(data));
+  }
 }

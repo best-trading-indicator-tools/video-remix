@@ -1,6 +1,7 @@
 import { recordDiagnostic } from "./diagnostics-store";
 import { ExportPreview, ExportName } from "./ExportPreview";
 import ExportKeepButton from "./ExportKeepButton";
+import PublishingPanel from "./PublishingPanel";
 import QuickReview from "./QuickReview";
 import { exportStatus, visibleExportChanges } from "../shared/export-presentation";
 import { apiRequest as api } from "./api-client";
@@ -392,6 +393,7 @@ export default function App() {
   }, []);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
   const [editingJob, setEditingJob] = useState<RenderJob | null>(null);
+  const [publishing, setPublishing] = useState<{ job: RenderJob | null } | null>(null);
   const [editingIssue, setEditingIssue] = useState<FinishedIssue>();
   const [original, setOriginal] = useState(false);
   const [renderedPreview, setRenderedPreview] = useState<{ id: string; url: string; duration: number; signature: string } | null>(null);
@@ -2373,7 +2375,10 @@ export default function App() {
                 Back to workspace
               </button>
             </div>
-            {completed.length > 0 && <button className="secondary-button quick-review-launch" onClick={() => setQuickReview([...completed])}><MonitorPlay size={16} />Quick review · {completed.length} exports</button>}
+            <div className="publishing-actions">
+              {completed.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...completed])}><MonitorPlay size={16} />Quick review · {completed.length} exports</button>}
+              <button className="secondary-button" onClick={() => setPublishing({ job: null })}>App profiles &amp; scheduled posts</button>
+            </div>
             {completed.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>
               <summary>Review flagged moments · {completed.reduce((sum, job) => sum + (job.finishedReviewReport?.issues.length || 0), 0)} findings</summary>
               <p>Open a timestamp to review its picture and sound. Use Edit this moment to make a correction.</p>
@@ -2597,6 +2602,7 @@ export default function App() {
                                 <>
                                   <ExportKeepButton job={job} retentionHours={health?.retentionHours || 24}
                                     onSaved={saved => setJobs(current => current.map(item => item.id === saved.id ? saved : item))} />
+                                  <button className="secondary-button" onClick={() => setPublishing({ job })}>Post copy &amp; schedule</button>
                                   {job.editable && <button className="secondary-button job-edit-button" onClick={() => { setEditingIssue(undefined); setEditingJob(job); }}>
                                     <Scissors size={13} />Edit this result
                                   </button>}
@@ -2696,6 +2702,7 @@ export default function App() {
         ))}
       </div>
       {quickReview && <QuickReview jobs={quickReview} paused={!!editingJob} onClose={() => setQuickReview(null)} onEdit={job => { setEditingIssue(undefined); setEditingJob(job); }} onSaved={() => setReviewRefresh(value => value + 1)} />}
+      {publishing && <PublishingPanel job={publishing.job} onClose={() => { setPublishing(null); setReviewRefresh(value => value + 1); }} onJobSaved={saved => setJobs(current => current.map(item => item.id === saved.id ? saved : item))} />}
       {editingJob && <EditPlanEditor key={editingJob.id} job={editingJob} initialIssue={editingIssue} sourceFps={sources.find(source => source.id === editingJob.sourceId)?.fps} onClose={() => setEditingJob(null)} onCreated={(created) => {
         setJobs((current) => [created, ...current.filter((job) => job.id !== created.id)]);
         setEditingJob(null);

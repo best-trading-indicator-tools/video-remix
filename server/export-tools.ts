@@ -5,6 +5,7 @@ import { historyThumbnailExists, historyThumbnailPath, retainHistoryThumbnail } 
 import { publicEditPlan, planMediaPath } from './plan-storage.js';
 import { applyEditPlanChanges, editPlanChangesSchema } from './edit-plan.js';
 import { audioWaveform } from './waveform.js';
+import { publishingJobs } from './publishing-lock.js';
 
 const titleSchema = z.object({ title: z.string().trim().min(1).max(90).regex(/^[^\u0000-\u001f\u007f]+$/u) }).strict();
 export const quickReviewSchema = z.object({ verdict: z.enum(['accepted-unchanged', 'accepted-after-correction', 'rejected']).optional(), notes: z.string().trim().max(500).regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]*$/u).optional() }).strict();
@@ -14,6 +15,7 @@ export function installExportTools(app: Express) {
     const parsed = z.object({ keep: z.boolean() }).strict().safeParse(req.body);
     if (!job) { res.status(404).json({ error: 'Export not found or already expired.' }); return; }
     if (!parsed.success) { res.status(400).json({ error: 'Choose whether to keep this export.' }); return; }
+    if (!parsed.data.keep && publishingJobs.has(job.id)) { res.status(409).json({ error: 'Wait for the Postiz upload to finish before releasing Keep.' }); return; }
     if (job.status !== 'completed') { res.status(409).json({ error: 'Wait for this export to finish before keeping it.' }); return; }
     const previous = { keptAt: job.keptAt, retentionResetAt: job.retentionResetAt };
     if (parsed.data.keep) job.keptAt ??= new Date().toISOString();

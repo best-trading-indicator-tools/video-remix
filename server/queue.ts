@@ -4,6 +4,7 @@ import { visualIdentity } from "./visual-identity.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
 import { copyFile, mkdir, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { publishingJobs } from './publishing-lock.js';
 import { config, paths } from "./config.js";
 import { geometry, renderVideo, probeMedia } from "./engine.js";
 import { AutoSkipError, prepareAutoRemix, protectFinalAutoCaptions } from "./auto.js";
@@ -555,6 +556,7 @@ export async function cleanupExpired() {
   const jobs = state.jobs.filter(
     (job) =>
       !job.keptAt &&
+      !publishingJobs.has(job.id) &&
       !isActive(job) &&
       !running.has(job.id) &&
       expired(job.retentionResetAt || job.finishedAt || job.createdAt),

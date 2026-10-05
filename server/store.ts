@@ -174,6 +174,14 @@ export function closeStore() {
   replacementHistory = undefined;
   matchCache.clear();
 }
+export function publishingRecords<T>(kind: 'profile' | 'draft' | 'publication', id?: string): T[] {
+  if (!database) throw new Error('Workspace database is not initialized');
+  return database.publishing<T>(kind, id);
+}
+export function savePublishing(kind: 'profile' | 'draft' | 'publication', id: string, data: unknown) {
+  if (!database) throw new Error('Workspace database is not initialized');
+  database.savePublishing(kind, id, data);
+}
 export function publicSource(source: StoredSource): VideoSource {
   const {
     filePath: _filePath,

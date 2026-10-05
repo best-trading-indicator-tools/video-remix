@@ -634,6 +634,24 @@ Recoverable failures and backend interruptions retry automatically up to three t
 
 Sources and queue manifests are stored on disk so they survive backend restarts. In Exports, choose **Keep** to retain a finished video, its SRT, saved edit, source and referenced attachments beyond `RETENTION_HOURS`, including across restarts. **Kept** exports stay in the workspace's data directory and are skipped when clearing a collection. Turn off Keep to start a fresh retention window; a source needed by a kept export cannot be removed until Keep is turned off. Download still saves a separate copy wherever your browser chooses. Unkept expired jobs and unreferenced sources are cleaned up automatically. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
 
+### App promotion copy and Postiz scheduling
+
+Open **Exports → Post copy & schedule** on a finished video. Save a profile for the mobile app you promote: benefit, audience, real features, call to action, store/landing URL, language and country. Profiles are reusable across exports. **Generate short & long** uses the configured DeepSeek text API and saves two editable captions, a recommendation and relevant hashtags for the selected platform. Each Copy button includes that version's hashtags. Generation runs only when requested and uses the profile plus this export's saved text; it does not inspect the finished video. Provider charges depend on actual token usage. Without DeepSeek, the hook and saved app hashtags are used as editable starting text. This recommendation is an initial hypothesis, not automatic learning from install data.
+
+Hashtags are topical suggestions unless a recent, matching source is available. DeepSeek's training knowledge never counts as live trend evidence. The optional server setting `HASHTAG_TRENDS_URL` can point to a trusted HTTPS evidence feed. Remix adds `platform=tiktok|instagram|youtube` and `country=FR` query parameters. The feed must return an array (at most 200 records, 150 KB) shaped like this:
+
+```json
+[{"tag":"#Example","platform":"tiktok","country":"FR","sourceUrl":"https://ads.tiktok.com/creative/creativeCenter/trends","observedAt":"2026-10-05T09:00:00Z"}]
+```
+
+Only references for the chosen country/platform observed within the past 24 hours qualify; stale, future-dated and mismatched references are excluded. Selected references retain their source URL and observation date. An unavailable feed produces topical hashtags with an explicit notice. No TikTok scraping service or live feed is bundled. Check [TikTok Creative Center](https://ads.tiktok.com/creative/creativeCenter/trends) before publication; a TikTok trend is not evidence for Instagram.
+
+To schedule posts, set `POSTIZ_API_KEY` in the ignored server `.env` and connect accounts in Postiz. Cloud defaults to `POSTIZ_API_URL=https://api.postiz.com/public/v1` and `POSTIZ_WEB_URL=https://platform.postiz.com`. For self-hosting, use the full public API base URL, usually `https://your-postiz.example/api/public/v1`, and your dashboard URL. HTTPS is required except for localhost test/self-hosted instances. Keys are never sent to the browser or included in exports. The API follows [Postiz's public API](https://docs.postiz.com/public-api/introduction).
+
+Choose **Schedule**, one connected TikTok, Instagram or YouTube account, a date at least two minutes ahead, an IANA time zone and the platform settings. Ambiguous daylight-saving times require choosing the occurrence; skipped local times cannot be scheduled. Review the video and exact post text, then click **Schedule on…**. The server uploads the MP4 directly to Postiz and schedules that uploaded media. TikTok uses direct posting, not the inbox upload workflow; Instagram uses a single-video Reel. Postiz performs the later publication, so Remix Studio can close after confirmation. The export is automatically kept and protected during upload.
+
+**App profiles & scheduled posts** lists the durable scheduling history, even after local media expires. Refresh status to reconcile with Postiz, cancel a future post, or open its published link. Confirmed publications also appear in the existing export History. The app does not silently retry post creation: identical scheduling requests reuse the same record, and a lost response blocks another attempt until its status is checked. An interrupted upload can be tried again; interrupted post creation is marked unconfirmed. Actual posting still depends on the connected account, Postiz service and each platform's requirements.
+
 This is a private tool with **no user authentication**. Keep the default loopback binding or run it behind your own authenticated access layer.
 
 ## Docker
