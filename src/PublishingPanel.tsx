@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { CalendarDays, Copy, Sparkles, X } from 'lucide-react';
+import { Copy, Sparkles, X } from 'lucide-react';
 import type { RenderJob } from '../shared/types';
-import { PLATFORM_NAMES, contentLimit, platformForChannel, postContent, scheduleInstants,
-  type PostDraft, type PostPlatform, type PostizChannel, type PromotionProfile, type Publication, type ProviderSettings } from '../shared/publishing';
+import { postContent,
+  type PostDraft, type PostPlatform, type PostizChannel, type PromotionProfile, type Publication } from '../shared/publishing';
 import { exportTitle } from '../shared/export-presentation';
 import { apiRequest } from './api-client';
 import PromotionProfileEditor from './PromotionProfileEditor';
@@ -10,28 +10,23 @@ import AppStoreSourceCard from './AppStoreSourceCard';
 import PostLanguageSelect from './PostLanguageSelect';
 import { DEFAULT_PUBLISHING_LANGUAGE } from '../shared/publishing-language';
 import PublicationList from './PublicationList';
+import CrossPostScheduler from './CrossPostScheduler';
 import './publishing.css';
 
 interface PublishingConfig { configured: boolean; dashboard: string; aiConfigured: boolean; profiles: PromotionProfile[] }
 const json = (body: unknown, method = 'POST') => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
 export default function PublishingPanel({ job, onClose, onJobSaved }: { job: RenderJob | null; onClose: () => void; onJobSaved: (job: RenderJob) => void }) {
-  const dialog = useRef<HTMLDialogElement>(null), requestKey = useRef<{ payload: string; id: string } | null>(null);
+  const dialog = useRef<HTMLDialogElement>(null);
   const [config, setConfig] = useState<PublishingConfig>(), [channels, setChannels] = useState<PostizChannel[]>([]), [channelError, setChannelError] = useState('');
   const [publications, setPublications] = useState<Publication[]>([]), [platform, setPlatform] = useState<PostPlatform>('tiktok');
   const [publicationTotal, setPublicationTotal] = useState(0);
   const [draft, setDraft] = useState<PostDraft>(), [profileId, setProfileId] = useState(''), [editingProfile, setEditingProfile] = useState<PromotionProfile | 'new' | null>(null);
   const [postLanguage, setPostLanguage] = useState<string | null>(null);
   const [tab, setTab] = useState<'copy' | 'schedule' | 'queue'>(job ? 'copy' : 'queue'), [busy, setBusy] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState('');
-  const [tags, setTags] = useState(''), [channelId, setChannelId] = useState(''), [date, setDate] = useState(''), [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone), [fold, setFold] = useState('');
-  const [privacy, setPrivacy] = useState(''), [youtubeVisibility, setYoutubeVisibility] = useState<'public' | 'unlisted' | 'private'>('public'), [kids, setKids] = useState<'yes' | 'no'>('no');
-  const [ownBrand, setOwnBrand] = useState(true), [partnership, setPartnership] = useState(false), [aiVideo, setAiVideo] = useState(false);
-  const [comments, setComments] = useState(true), [duet, setDuet] = useState(false), [stitch, setStitch] = useState(false);
+  const [tags, setTags] = useState('');
   const profile = config?.profiles.find(profile => profile.id === profileId);
   const language = postLanguage ?? profile?.language ?? DEFAULT_PUBLISHING_LANGUAGE;
-  const instants = scheduleInstants(date, timezone), instant = instants.length === 1 ? instants[0] : instants.includes(fold) ? fold : '';
-  const chosen = channels.find(channel => channel.id === channelId), matching = channels.filter(channel => platformForChannel(channel.identifier) === platform);
   const current = draft ? { ...draft, hashtags: tags.trim().split(/\s+/u).filter(Boolean) } : undefined;
-  const content = current ? postContent(current) : '', limit = contentLimit(platform);
   const dirty = useRef(false);
   const close = () => { if (!busy && !dirty.current) onClose(); else if (!busy) setNotice('Save your post copy before closing, or use Discard changes.'); };
   const loadPublications = async (append = false) => {
@@ -58,7 +53,7 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
   }, []);
   useEffect(() => {
     if (!job) return;
-    const abort = new AbortController(); setDraft(undefined); setChannelId(''); setPrivacy(''); setError('');
+    const abort = new AbortController(); setDraft(undefined); setError('');
     void apiRequest<PostDraft>(`/api/publishing/jobs/${job.id}/draft?platform=${platform}`, { signal: abort.signal }).then(data => {
       if (abort.signal.aborted) return; setDraft(data); setTags(data.hashtags.join(' ')); dirty.current = false;
       setPostLanguage(data.language ?? null);
@@ -82,32 +77,10 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
     try { await navigator.clipboard.writeText(postContent(current, length)); setNotice(`${length === 'short' ? 'Short' : 'Long'} caption and hashtags copied.`); }
     catch { setError('Clipboard access is unavailable. Select the caption text and hashtags to copy them.'); }
   };
-  const schedule = async () => {
-    if (!job || !current || !chosen || !instant) return;
-    await saveCopy();
-    let settings: ProviderSettings;
-    if (platform === 'tiktok') settings = { __type: 'tiktok', title: current.title, privacy_level: privacy as 'PUBLIC_TO_EVERYONE',
-      duet, stitch, comment: comments, autoAddMusic: 'no', brand_content_toggle: partnership, brand_organic_toggle: ownBrand, video_made_with_ai: aiVideo, content_posting_method: 'DIRECT_POST' };
-    else if (platform === 'youtube') settings = { __type: 'youtube', title: current.title, type: youtubeVisibility, selfDeclaredMadeForKids: kids, tags: current.hashtags.map(tag => ({ value: tag.slice(1), label: tag.slice(1) })) };
-    else settings = { __type: chosen.identifier as 'instagram' | 'instagram-standalone', post_type: 'post', is_trial_reel: false, collaborators: [] };
-    const payload = { channelId, content, date: instant, timezone, settings }, signature = JSON.stringify(payload);
-    if (requestKey.current?.payload !== signature) requestKey.current = { payload: signature, id: crypto.randomUUID() };
-    try {
-      const result = await apiRequest<{ publication: Publication; job: RenderJob }>(`/api/publishing/jobs/${job.id}/schedule`, json({ ...payload, requestId: requestKey.current.id }));
-      onJobSaved(result.job);
-      await loadPublications(); setTab('queue');
-      if (result.publication.state === 'failed') requestKey.current = null;
-      setNotice(result.publication.state === 'scheduled' ? 'Scheduled in Postiz. The export is kept; you can close Remix Studio.' : 'Check the saved post status below.');
-    } catch (error) {
-      const entries = await loadPublications().catch(() => []);
-      if (entries.find(entry => entry.id === requestKey.current?.id)?.state === 'failed') requestKey.current = null;
-      throw error;
-    }
-  };
   const upsertProfile = (saved: PromotionProfile) => { setConfig(value => value && ({ ...value, profiles: [saved, ...value.profiles.filter(profile => profile.id !== saved.id)] })); setProfileId(saved.id); setPostLanguage(null); setEditingProfile(null); setNotice('App profile saved.'); };
   return <dialog ref={dialog} className="publishing-dialog" aria-labelledby="publishing-title" onCancel={event => { event.preventDefault(); close(); }}>
     <header><div><small>APP PROMOTION</small><h2 id="publishing-title">{job ? exportTitle(job) : 'App profiles & scheduled posts'}</h2></div><button type="button" aria-label="Close publishing" className="icon-button" disabled={!!busy} onClick={close}><X size={20} /></button></header>
-    <nav aria-label="Publishing steps">{job && <><button aria-current={tab === 'copy' ? 'step' : undefined} disabled={!!busy} onClick={() => setTab('copy')}>1 · Post copy</button><button aria-current={tab === 'schedule' ? 'step' : undefined} disabled={!!busy || !draft} onClick={() => setTab('schedule')}>2 · Schedule</button></>}<button aria-current={tab === 'queue' ? 'step' : undefined} disabled={!!busy} onClick={() => setTab('queue')}>Scheduled posts</button></nav>
+    <nav aria-label="Publishing steps">{job && <><button aria-current={tab === 'copy' ? 'step' : undefined} disabled={!!busy} onClick={() => setTab('copy')}>1 · Post copy</button><button aria-current={tab === 'schedule' ? 'step' : undefined} disabled={!!busy || !draft} onClick={() => void run('Saving copy…', async () => { await saveCopy(); setTab('schedule'); })}>2 · Accounts & schedule</button></>}<button aria-current={tab === 'queue' ? 'step' : undefined} disabled={!!busy} onClick={() => setTab('queue')}>Scheduled posts</button></nav>
     <div className="publishing-body">
       {error && <p className="publishing-error" role="alert">{error}</p>}{notice && <p className="publishing-notice" role="status">{notice}</p>}
       {busy && <p role="status">{busy}{busy.startsWith('Uploading') ? ' Keep this window open until Postiz confirms the schedule.' : ''}</p>}
@@ -118,7 +91,7 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
         {profile?.appStore && !editingProfile && <><AppStoreSourceCard source={profile.appStore} compact />{profile.appStore.country !== profile.country && <p className="publishing-note">This listing is for {profile.appStore.country}; your target is {profile.country}. Use Edit app → Refresh listing to check the target market.</p>}</>}
         {editingProfile && <PromotionProfileEditor key={editingProfile === 'new' ? 'new' : editingProfile.id} profile={editingProfile === 'new' ? undefined : editingProfile} aiConfigured={config.aiConfigured} onSaved={upsertProfile} onCancel={() => setEditingProfile(null)} onImporting={active => setBusy(active ? 'Importing app details…' : '')} />}
       </details>}
-      {job && tab !== 'queue' && <div className="publishing-row"><label>Platform<select value={platform} disabled={!!busy || !!editingProfile} onChange={e => { if (dirty.current) { setNotice('Save the current caption before switching platforms.'); return; } setPlatform(e.target.value as PostPlatform); }}><option value="tiktok">TikTok</option><option value="instagram">Instagram Reels</option><option value="youtube">YouTube</option></select></label><PostLanguageSelect label="Post language" value={language} onChange={setPostLanguage} disabled={!!busy || !!editingProfile || !profile || !draft} />{profile && <span>Target: {profile.country}</span>}</div>}
+      {job && tab === 'copy' && <div className="publishing-row"><label>Caption for<select value={platform} disabled={!!busy || !!editingProfile} onChange={e => { if (dirty.current) { setNotice('Save the current caption before switching platforms.'); return; } setPlatform(e.target.value as PostPlatform); }}><option value="tiktok">TikTok</option><option value="instagram">Instagram Reels</option><option value="youtube">YouTube</option></select></label><PostLanguageSelect label="Post language" value={language} onChange={setPostLanguage} disabled={!!busy || !!editingProfile || !profile || !draft} />{profile && <span>Target: {profile.country}</span>}</div>}
       {tab === 'copy' && job && draft && <section aria-label="Post copy">
         <div className="publishing-actions"><button className="primary-button" disabled={!!busy || !profile || !!editingProfile} onClick={() => void run(config?.aiConfigured ? 'Writing two captions…' : 'Preparing hook…', async () => {
           const result = await apiRequest<PostDraft>(`/api/publishing/jobs/${job.id}/generate`, json({ platform, profileId, language })); setDraft(result); setTags(result.hashtags.join(' ')); dirty.current = false;
@@ -138,25 +111,11 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
         {!!draft.trends.length && <ul className="trend-references">{draft.trends.map(item => <li key={item.tag}><a href={item.sourceUrl} target="_blank" rel="noreferrer">{item.tag}</a> · {item.country} · observed {new Date(item.observedAt).toLocaleString()}{Date.now() - Date.parse(item.observedAt) > 24 * 3600000 ? ' · stale: recheck before posting' : ''}</li>)}</ul>}
         {platform === 'tiktok' && <a href="https://ads.tiktok.com/creative/creativeCenter/trends" target="_blank" rel="noreferrer">Check TikTok Creative Center trends</a>}
         <p className="publishing-note">Compare short and long captions using app visits and attributed installs. This recommendation is a starting hypothesis, not measured performance.</p>
-        <div className="publishing-actions"><button className="secondary-button" disabled={!!busy} onClick={() => void run('Saving copy…', async () => { await saveCopy(); setNotice('Post copy saved.'); })}>Save copy</button><button className="primary-button" disabled={!!busy} onClick={() => void run('Saving copy…', async () => { await saveCopy(); setTab('schedule'); })}>Continue to schedule</button></div>
+        <div className="publishing-actions"><button className="secondary-button" disabled={!!busy} onClick={() => void run('Saving copy…', async () => { await saveCopy(); setNotice('Post copy saved.'); })}>Save copy</button><button className="primary-button" disabled={!!busy} onClick={() => void run('Saving copy…', async () => { await saveCopy(); setTab('schedule'); })}>Choose accounts &amp; schedule</button></div>
       </section>}
-      {tab === 'schedule' && job && draft && <section aria-label="Schedule this export">
-        {!config?.configured ? <p>Add your Postiz API key to the server configuration to enable scheduling.</p> : <>
-          <div className="publishing-row"><label>Postiz account<select aria-label="Postiz account" value={channelId} disabled={!!busy} onChange={e => { setChannelId(e.target.value); setPrivacy(''); }}><option value="">Choose an account</option>{matching.map(channel => <option key={channel.id} value={channel.id} disabled={channel.disabled}>{channel.name}{channel.profile ? ` · ${channel.profile}` : ''}{channel.disabled ? ' · reconnect in Postiz' : ''}</option>)}</select></label><button className="secondary-button" disabled={!!busy} onClick={() => void run('Refreshing accounts…', loadChannels)}>Refresh accounts</button></div>
-          {channelError && <p className="publishing-error">{channelError}</p>}
-          {!matching.length && <p>No {PLATFORM_NAMES[platform]} account is connected. <a href={config.dashboard} target="_blank" rel="noreferrer">Connect an account in Postiz</a>, then refresh.</p>}
-          <fieldset disabled={!!busy}>
-            <div className="publishing-row"><label>Publication date &amp; time<input type="datetime-local" value={date} onChange={e => { setDate(e.target.value); setFold(''); }} /></label><label>Time zone<input list="publishing-timezones" value={timezone} onChange={e => { setTimezone(e.target.value); setFold(''); }} /><datalist id="publishing-timezones">{['Europe/Paris', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo', 'UTC'].map(zone => <option key={zone} value={zone} />)}</datalist></label></div>
-            {date && !instants.length && <p role="alert">This local time or time zone is invalid, or the clock skips this time. Choose another time.</p>}
-            {instants.length > 1 && <label>This time occurs twice — choose the instant<select value={fold} onChange={e => setFold(e.target.value)}><option value="">Choose an occurrence</option>{instants.map(value => <option key={value} value={value}>{new Date(value).toLocaleString('en-GB', { timeZone: timezone, timeZoneName: 'shortOffset' })}</option>)}</select></label>}
-            {platform === 'tiktok' && <><label>TikTok visibility<select value={privacy} onChange={e => setPrivacy(e.target.value)}><option value="">Choose visibility</option><option value="PUBLIC_TO_EVERYONE">Everyone</option><option value="MUTUAL_FOLLOW_FRIENDS">Mutual followers</option><option value="FOLLOWER_OF_CREATOR">Followers</option><option value="SELF_ONLY">Only me</option></select></label><div className="publishing-checks">{[[ownBrand, setOwnBrand, 'Promotes my own app / brand'], [partnership, setPartnership, 'Paid partnership with another brand'], [aiVideo, setAiVideo, 'Video contains AI-generated content'], [comments, setComments, 'Allow comments'], [duet, setDuet, 'Allow duets'], [stitch, setStitch, 'Allow stitches']].map(([checked, setter, label]) => <label key={String(label)}><input type="checkbox" checked={checked as boolean} onChange={e => (setter as (value: boolean) => void)(e.target.checked)} />{label as string}</label>)}</div></>}
-            {platform === 'youtube' && <div className="publishing-row"><label>YouTube visibility<select value={youtubeVisibility} onChange={e => setYoutubeVisibility(e.target.value as typeof youtubeVisibility)}><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select></label><label>Made for kids?<select value={kids} onChange={e => setKids(e.target.value as typeof kids)}><option value="no">No</option><option value="yes">Yes</option></select></label></div>}
-          </fieldset>
-          <div className="publishing-confirmation"><video src={`/api/jobs/${job.id}/video`} controls preload="metadata" playsInline /><div><strong>{draft.title}</strong><p className="publication-content">{content}</p><p className={[...content].length > limit ? 'publishing-error' : 'publishing-note'}>{[...content].length} / {limit} characters · {draft.selected} version</p>{instant && <p>{new Date(instant).toLocaleString(undefined, { timeZone: timezone, dateStyle: 'full', timeStyle: 'short' })} · {timezone}</p>}</div></div>
-          <p className="publishing-note">Scheduling uploads this MP4 to Postiz and keeps the local export. Postiz handles publication at the selected time. Platform settings may restrict what your connected account can publish.</p>
-          <button className="primary-button" disabled={!!busy || !chosen || chosen.disabled || !instant || Date.parse(instant) < Date.now() + 120000 || !content.trim() || [...content].length > limit || (platform === 'tiktok' && !privacy)} onClick={() => void run('Uploading video and scheduling…', schedule)}><CalendarDays size={16} />Schedule on {PLATFORM_NAMES[platform]}</button>
-        </>}
-      </section>}
+      {job && draft && config && <CrossPostScheduler key={job.id} visible={tab === 'schedule'} job={job} seed={draft} channels={channels} publications={publications} configured={config.configured} dashboard={config.dashboard} channelError={channelError} disabled={!!busy || !!editingProfile}
+        onRefresh={() => void run('Refreshing accounts…', loadChannels)} onBusy={active => setBusy(active ? 'Uploading video and scheduling accounts…' : '')}
+        onFinished={async saved => { onJobSaved(saved); await loadPublications(); }} onViewPosts={() => setTab('queue')} />}
       {tab === 'queue' && <><div className="publishing-row"><h3>{job ? 'Posts for this export' : 'Scheduled posts'}</h3><button className="secondary-button" disabled={!!busy} onClick={() => void run('Loading saved posts…', async () => { await loadPublications(); })}>Reload list</button></div><PublicationList publications={publications} dashboard={config?.dashboard || 'https://platform.postiz.com'} onUpdated={updated => setPublications(entries => entries.map(entry => entry.id === updated.id ? updated : entry))} />{publications.length < publicationTotal && <button className="secondary-button" disabled={!!busy} onClick={() => void run('Loading older posts…', async () => { await loadPublications(true); })}>Load older posts · {publications.length} of {publicationTotal}</button>}</>}
       {dirty.current && <button type="button" className="publishing-discard" disabled={!!busy} onClick={onClose}>Discard unsaved copy changes &amp; close</button>}
     </div>

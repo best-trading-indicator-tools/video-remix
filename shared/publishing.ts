@@ -75,6 +75,10 @@ export const scheduleSchema = z.object({
   settings: providerSettingsSchema,
 }).strict();
 export type ScheduleRequest = z.infer<typeof scheduleSchema>;
+export const crossPostSchema = z.object({ requests: z.array(scheduleSchema).min(1).max(50)
+  .refine(requests => new Set(requests.map(request => request.channelId)).size === requests.length, 'Choose each account only once.')
+  .refine(requests => new Set(requests.map(request => request.requestId)).size === requests.length, 'Use a separate request ID for each account.') }).strict();
+export interface CrossPostResult { channelId: string; publication?: Publication; message?: string }
 export interface PostizChannel { id: string; name: string; identifier: string; disabled: boolean; profile?: string }
 export interface Publication {
   id: string; jobId: string; exportTitle: string; request: ScheduleRequest; fingerprint: string;

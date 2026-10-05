@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto';
 import { Router, type Express, type ErrorRequestHandler } from 'express';
 import { z } from 'zod';
-import { contentLimit, platformForChannel, platformSchema, postDraftSchema, promotionProfileSchema, scheduleSchema, validPublicationUrl,
-  type PostDraft, type PromotionProfile, type Publication, type ScheduleRequest } from '../shared/publishing.js';
+import { contentLimit, crossPostSchema, platformForChannel, platformSchema, postDraftSchema, promotionProfileSchema, scheduleSchema, validPublicationUrl,
+  type CrossPostResult, type PostizChannel, type PostDraft, type PromotionProfile, type Publication, type ScheduleRequest } from '../shared/publishing.js';
 import { exportTitle } from '../shared/export-presentation.js';
-import { publishingRecords, savePublishing, state, saveStore, publicJob, historyRecords } from './store.js';
+import { publishingRecords, savePublishing, state, saveStore, publicJob, historyRecords, type StoredJob } from './store.js';
 import { PostizClient, PostizError, postizConfiguration } from './postiz.js';
 import { fallbackPostDraft, generatePostDraft } from './post-copy.js';
 import { editorialAIConfigured } from './editorial-provider.js';
@@ -15,6 +15,7 @@ import { AppStoreError, importAppStoreProfile } from './app-store.js';
 import { languageNameSchema, publishingLanguageSchema } from '../shared/publishing-language.js';
 
 const activePublications = new Set(['uploading', 'submitting', 'scheduled', 'published', 'uncertain', 'cancelling', 'draft']);
+interface SchedulingBatch { upload?: Promise<NonNullable<Publication['media']>>; channels: PostizChannel[]; startedAt: number }
 export function publicationFingerprint(jobId: string, endpoint: string, request: ScheduleRequest) {
   return createHash('sha256').update(JSON.stringify({ jobId, endpoint, channelId: request.channelId,
     content: request.content, date: new Date(request.date).toISOString(), settings: request.settings })).digest('hex');
@@ -93,45 +94,70 @@ export function installPublishingRoutes(app: Express, options: { client?: Postiz
       availableJob(job.id); savePublishing('draft', id, draft); res.json(draft);
     } finally { generating.delete(id); }
   });
-  router.post('/jobs/:id/schedule', async (req, res) => {
-    const job = availableJob(String(req.params.id)), request = scheduleSchema.parse(req.body), api = client();
+  const scheduleOne = async (job: StoredJob, request: ScheduleRequest, api: PostizClient, batch?: SchedulingBatch) => {
     const previous = publishingRecords<Publication>('publication', request.requestId)[0];
     const fingerprint = publicationFingerprint(job.id, api.config.endpoint, request);
     if (previous) {
       if (previous.fingerprint !== fingerprint) throw new PostizError('This request was already used with different content. Refresh before scheduling.', 409);
-      res.json({ publication: previous, job: publicJob(job) }); return;
+      return { publication: previous, created: false };
     }
     const duplicate = publishingRecords<Publication>('publication').find(entry => entry.fingerprint === fingerprint && activePublications.has(entry.state));
-    if (duplicate) { res.json({ publication: duplicate, job: publicJob(job) }); return; }
+    if (duplicate) return { publication: duplicate, created: false };
     if (publishingRecords<Publication>('publication').some(entry => entry.jobId === job.id && entry.request.channelId === request.channelId && entry.endpoint === api.config.endpoint && ['uncertain', 'submitting', 'cancelling'].includes(entry.state)))
       throw new PostizError('An earlier post has an unconfirmed status. Refresh it or check Postiz before scheduling another copy.', 409);
     const date = Date.parse(request.date);
-    if (date < Date.now() + 120000 || date > Date.now() + 366 * 24 * 3600000) throw new PostizError('Choose a date at least two minutes ahead and within the next year.', 400);
-    if (publishingJobs.has(job.id)) throw new PostizError('This export is already being sent to Postiz.', 409);
-    publishingJobs.add(job.id);
+    if (date < (batch?.startedAt ?? Date.now()) + 120000 || date > Date.now() + 366 * 24 * 3600000) throw new PostizError('Choose a date at least two minutes ahead and within the next year.', 400);
+    if (!batch && publishingJobs.has(job.id)) throw new PostizError('This export is already being sent to Postiz.', 409);
+    if (!batch) publishingJobs.add(job.id);
     const entry: Publication = { id: request.requestId, jobId: job.id, exportTitle: exportTitle(job), request: { ...request, date: new Date(date).toISOString() }, fingerprint,
       endpoint: api.config.endpoint, channelName: '', platform: platformForChannel(request.settings.__type)!, state: 'uploading', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     try {
       const oldKeptAt = job.keptAt; job.keptAt ??= new Date().toISOString();
       try { await saveStore(); } catch (error) { job.keptAt = oldKeptAt; throw error; }
       persist(entry);
-      const channel = (await api.channels()).find(item => item.id === request.channelId);
+      const channel = (batch?.channels ?? await api.channels()).find(item => item.id === request.channelId);
       if (!channel || channel.disabled || channel.identifier !== request.settings.__type) throw new PostizError('Choose a connected account matching this post’s platform.', 400);
       entry.channelName = channel.name; persist(entry);
       const rules = await api.settings(channel.id);
       const limit = Math.min(contentLimit(entry.platform), rules.maxLength ?? Infinity);
       if ([...request.content].length > limit) throw new PostizError(`This channel allows ${limit} characters, including hashtags. Shorten the post first.`, 400);
-      entry.media = await api.upload(job.outputPath); persist(entry);
+      entry.media = await (batch ? batch.upload ??= api.upload(job.outputPath) : api.upload(job.outputPath));
+      persist(entry);
       if (date < Date.now() + 15000) throw new PostizError('The selected time passed during the upload. Choose a later time and try again.', 400);
       entry.state = 'submitting'; persist(entry);
       entry.postId = await api.schedule(entry.request, entry.media); entry.state = 'scheduled'; delete entry.statusMessage; persist(entry);
-      res.status(201).json({ publication: entry, job: publicJob(job) });
+      return { publication: entry, created: true };
     } catch (error) {
       // Once creation was attempted, a lost response or local save failure must not trigger another POST.
       if (entry.state === 'submitting' || entry.state === 'scheduled') entry.state = error instanceof PostizError && !error.uncertain ? 'failed' : 'uncertain';
       else entry.state = 'failed';
       entry.statusMessage = error instanceof PostizError ? error.message : 'The operation could not finish. Check Postiz before trying again.';
       persist(entry); throw error;
+    } finally { if (!batch) publishingJobs.delete(job.id); }
+  };
+  router.post('/jobs/:id/schedule', async (req, res) => {
+    const job = availableJob(String(req.params.id));
+    const result = await scheduleOne(job, scheduleSchema.parse(req.body), client());
+    res.status(result.created ? 201 : 200).json({ publication: result.publication, job: publicJob(job) });
+  });
+  router.post('/jobs/:id/schedule-batch', async (req, res) => {
+    const job = availableJob(String(req.params.id)), { requests } = crossPostSchema.parse(req.body), api = client();
+    if (publishingJobs.has(job.id)) throw new PostizError('This export is already being sent to Postiz.', 409);
+    publishingJobs.add(job.id);
+    try {
+      const batch: SchedulingBatch = { startedAt: Date.now(), channels: await api.channels() };
+      const results: CrossPostResult[] = [];
+      // One upload, independent durable posts. A failed account does not repeat or block completed accounts.
+      for (const request of requests) {
+        try { results.push({ channelId: request.channelId, publication: (await scheduleOne(job, request, api, batch)).publication }); }
+        catch (error) {
+          const saved = publishingRecords<Publication>('publication', request.requestId)[0];
+          results.push({ channelId: request.channelId,
+            publication: saved?.fingerprint === publicationFingerprint(job.id, api.config.endpoint, request) ? saved : undefined,
+            message: error instanceof PostizError ? error.message : 'This account could not be scheduled. Check its saved status before retrying.' });
+        }
+      }
+      res.json({ results, job: publicJob(job) });
     } finally { publishingJobs.delete(job.id); }
   });
   router.post('/publications/:id/refresh', async (req, res) => {
