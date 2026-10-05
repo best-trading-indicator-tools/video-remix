@@ -7,7 +7,7 @@
 @font-face { font-family: "Caption Serif"; src: url("/caption-fonts/DMSerifDisplay-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
 .caption-overlay { position: absolute; z-index: 1; left: 2.6%; right: 2.6%; line-height: 1.2; white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none; }
 .caption-overlay span { font-synthesis: weight style; paint-order: stroke fill; }
-.caption-styler { min-width: 0; margin: 14px 0 24px; padding: 18px; background: var(--field); border: 1px solid var(--line); border-radius: 12px; }
+.caption-styler { min-width: 0; margin: 14px 0 24px; padding: 18px 0; background: transparent; border: 0; border-radius: 0; border-block: 1px solid var(--line); }
 .caption-styler header { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; margin-bottom: 16px; }
 .caption-styler h4 { margin: 0; font-size: 15px; color: var(--text); }
 .caption-styler header p, .caption-style-note { font-size: 12px; line-height: 1.5; color: var(--subtle); margin: 5px 0 0; }

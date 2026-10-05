@@ -8,30 +8,43 @@
 .export-card-details { margin-top: 10px; }
 .export-card-details > summary { color: var(--subtle); font-size: 12px; cursor: pointer; }
 .export-card-details .job-source-name { margin-top: 12px; }
-.export-verdict { display: inline-flex; padding: 5px 9px; border-radius: 6px; font-size: 12px; background: #72798722; }
-.export-verdict.ready { color: #278658; background: #27865818; }
-.export-verdict.review { color: #b77b23; background: #b77b2318; }
-.export-verdict.problem { color: #d05454; background: #d0545418; }
-.quick-review { box-sizing: border-box; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; padding: 24px; background: #10141b; color: #edf1f7; }
+.export-verdict { display: inline-flex; padding: 5px 9px; border-radius: 6px; font-size: 12px; background: transparent; color: var(--text); gap: 7px; align-items: center; font-weight: 500; }
+.export-verdict.ready { color: var(--text); background: transparent; }
+.export-verdict.review { color: var(--text); background: transparent; }
+.export-verdict.problem { color: var(--text); background: transparent; }
+.quick-review { box-sizing: border-box; width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; border-radius: 0; padding: 24px; background: var(--canvas); color: var(--text); }
 .quick-review::backdrop { background: #000d; }
 .quick-review header { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
 .quick-review h2 { margin: 6px 0 14px; font-size: 20px; }
-.quick-review button { color: inherit; background: #252e3b; border: 1px solid #455064; border-radius: 8px; padding: 10px 14px; cursor: pointer; }
+.quick-review button { color: inherit; background: var(--surface-raised); border: 1px solid var(--line-strong); border-radius: 8px; padding: 10px 14px; cursor: pointer; }
 .quick-review button:disabled { opacity: .45; cursor: default; }
 .quick-review-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 340px); gap: 32px; max-width: 1080px; height: calc(100% - 85px); margin: auto; }
 .quick-review-screen { min-height: 0; display: flex; align-items: center; justify-content: center; }
 .quick-review-screen video { aspect-ratio: 9 / 16; height: 100%; max-width: 100%; object-fit: contain; background: black; border-radius: 12px; }
 .quick-review aside { overflow-y: auto; padding: 20px 0; }
-.quick-review aside p { color: #aab6c8; font-size: 13px; line-height: 1.6; }
-.quick-review textarea { display: block; width: 100%; box-sizing: border-box; padding: 12px; margin: 10px 0; background: #19222f; color: white; border: 1px solid #455064; border-radius: 8px; resize: vertical; }
+.quick-review aside p { color: var(--subtle); font-size: 13px; line-height: 1.6; }
+.quick-review textarea { display: block; width: 100%; box-sizing: border-box; padding: 12px; margin: 10px 0; background: var(--field); color: var(--text); border: 1px solid var(--line-strong); border-radius: 8px; resize: vertical; }
 .quick-review-decisions, .quick-review-navigation { display: flex; gap: 8px; margin: 18px 0; flex-wrap: wrap; }
 .quick-review-decisions kbd { font-weight: 700; margin-right: 4px; }
 .quick-review-auto { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .quick-review-complete { max-width: 600px; margin: 20vh auto; text-align: center; }
 @media (max-width: 700px) { .quick-review { padding: 14px; } .quick-review-body { height: auto; grid-template-columns: 1fr; gap: 10px; } .quick-review-screen video { height: 55dvh; } .quick-review aside { padding: 0; } .export-preview { width: 80px; height: 110px; } }
-.job-card .job-status.export-verdict.review { color: #e8b55b; background: #b77b2322; }
-.job-card .job-status.export-verdict.ready { color: #8bd1ae; background: #27865822; }
-.job-card .job-status.export-verdict.problem { color: #f09999; background: #d0545422; }
+.job-card .job-status.export-verdict.review { color: var(--text); background: transparent; }
+.job-card .job-status.export-verdict.ready { color: var(--text); background: transparent; }
+.job-card .job-status.export-verdict.problem { color: var(--text); background: transparent; }
 .quick-review-launch { margin: 4px 0 18px; }
 .export-keep-control { display: flex; flex-direction: column; align-items: flex-start; }
-.export-keep-button[aria-pressed="true"] { color: #8bd1ae; border-color: #278658; background: #27865818; }
+.export-keep-button[aria-pressed="true"] { color: var(--text); border-color: var(--line-strong); background: transparent; }
+
+.export-verdict::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+.export-verdict.ready::before { background: var(--green); }
+.export-verdict.review::before { background: var(--warning); }
+.export-verdict.problem::before { background: var(--danger); }
+.export-keep-button[aria-pressed="true"] svg { color: var(--green); }
+/* Expanded checks use the card width; actions stay together below the details. */
+@media (min-width: 981px) {
+  .job-card.status-completed:has(.export-card-details[open]) { flex-wrap: wrap; align-items: flex-start; }
+  .job-card.status-completed:has(.export-card-details[open]) .job-main { flex-basis: calc(100% - 134px); }
+  .job-card.status-completed:has(.export-card-details[open]) > .job-status { margin-left: 134px; align-self: center; }
+  .job-card.status-completed:has(.export-card-details[open]) > .job-actions { flex: 1; }
+}

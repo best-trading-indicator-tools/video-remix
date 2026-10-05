@@ -1,4 +1,4 @@
-.finishing-presets { border: 1px solid #465267; background: #11171e; border-radius: 9px; margin: 12px 0 22px; color: #eff3f9; }
+.finishing-presets { border: 0; background: transparent; border-radius: 0; margin: 12px 0 22px; color: var(--text); border-block: 1px solid var(--line); }
 .finishing-presets > summary { display: flex; align-items: center; gap: 8px; padding: 14px; cursor: pointer; font-size: 12px; font-weight: 600; list-style: none; }
 .finishing-presets > summary::after { content: "+"; margin-left: auto; color: #ffbc92; font-size: 16px; }
 .finishing-presets[open] > summary::after { content: "−"; }

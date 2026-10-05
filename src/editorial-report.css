@@ -1,4 +1,4 @@
-.editorial-report { margin-top: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font-size: 13px; line-height: 1.6; }
+.editorial-report { margin-top: 12px; padding: 16px 0; border: 0; border-radius: 0; background: transparent; font-size: 13px; line-height: 1.6; border-top: 1px solid var(--line); }
 .editorial-report summary { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .editorial-report .editorial-report-heading { align-items: flex-start; }
 .editorial-report-heading > svg { flex-shrink: 0; margin-top: 4px; }
@@ -6,7 +6,8 @@
 .editorial-report-title > strong, .editorial-failure { display: block; }
 .editorial-report-title > .editorial-coverage { display: block; margin-top: 3px; color: var(--subtle); font-weight: 400; }
 .editorial-failure { margin-top: 4px; color: var(--text); font-weight: 400; overflow-wrap: anywhere; }
-.editorial-report.needs-review summary, .editorial-report.unavailable summary { color: #e7be78; }
+.editorial-report.needs-review summary, .editorial-report.unavailable summary { color: var(--text); }
+.editorial-report.needs-review > summary > svg, .editorial-report.unavailable > summary > svg { color: var(--warning); }
 .editorial-report p { margin: 10px 0 0; color: var(--subtle); }
 .editorial-issues { margin: 12px 0 0; padding-left: 20px; }
 .editorial-issues > li + li { margin-top: 12px; }
@@ -23,7 +24,7 @@
 .editorial-retry > p { flex: 1 1 200px; margin: 0; font-size: 12px; }
 .editorial-report .editorial-retry-error { color: #f5aaa7; overflow-wrap: anywhere; }
 .editorial-repair { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
-.editorial-repair-attempt { margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 6px; }
+.editorial-repair-attempt { margin-top: 12px; padding: 2px 14px; border: 0; border-radius: 0; border-left: 2px solid var(--line-strong); }
 .editorial-repair-attempt > summary { font-weight: 600; }
 .editorial-repair-findings { display: grid; gap: 12px; margin-top: 12px; }
 .editorial-repair-findings > section { min-width: 0; }

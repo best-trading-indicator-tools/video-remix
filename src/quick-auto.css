@@ -4,23 +4,23 @@
 .auto-panel.panel .auto-view-switch button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .quick-auto .panel-heading { gap: 10px; flex-wrap: wrap; }
 .quick-auto-scope { margin: 0; color: var(--subtle); font-size: 12px; line-height: 1.65; }
-.quick-auto-group { display: grid; gap: 10px; min-width: 0; margin: 0; padding: 0; border: 0; }
+.quick-auto-group { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .quick-auto-group legend { margin-bottom: 10px; padding: 0; color: var(--text); font-size: 13px; font-weight: 600; }
 .quick-auto-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 8px; }
 .quick-auto-option { position: relative; display: flex; min-width: 0; cursor: pointer; }
 .quick-auto-option input, .quick-auto-chip input { position: absolute; opacity: 0; pointer-events: none; }
-.quick-auto-option > span { display: grid; gap: 3px; width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); }
+.quick-auto-option > span { display: grid; gap: 3px; width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: transparent; border-color: var(--line); }
 .quick-auto-option strong { color: var(--text); font-size: 12px; font-weight: 600; line-height: 1.4; }
 .quick-auto-option small { color: var(--muted); font-size: 11px; line-height: 1.5; }
 .quick-auto-option:hover > span { border-color: #566274; }
-.quick-auto-option input:checked + span { border-color: var(--accent); background: var(--accent-dark); }
-.quick-auto-option input:checked + span strong { color: var(--accent-bright); }
+.quick-auto-option input:checked + span { border-color: var(--line-strong); background: var(--surface-raised); box-shadow: inset 2px 0 var(--accent); }
+.quick-auto-option input:checked + span strong { color: var(--text); }
 .quick-auto-option input:focus-visible + span, .quick-auto-chip input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .quick-auto-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .quick-auto-chip { position: relative; cursor: pointer; }
-.quick-auto-chip > span { display: inline-flex; align-items: center; min-height: 34px; padding: 6px 13px; border: 1px solid var(--line); border-radius: 999px; background: var(--field); color: var(--subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
+.quick-auto-chip > span { display: inline-flex; align-items: center; min-height: 34px; padding: 6px 13px; border: 1px solid var(--line); border-radius: 7px; background: transparent; color: var(--subtle); font-size: 12px; font-variant-numeric: tabular-nums; }
 .quick-auto-chip:hover > span { border-color: #566274; color: var(--text); }
-.quick-auto-chip input:checked + span { border-color: var(--accent); background: var(--accent-dark); color: var(--accent-bright); }
+.quick-auto-chip input:checked + span { border-color: var(--action); background: var(--action); color: var(--action-text); }
 .quick-auto-stepper { display: inline-flex; align-items: center; justify-self: start; border: 1px solid var(--line); border-radius: 9px; background: var(--field); }
 .auto-panel.panel .quick-auto-stepper button { min-width: 38px; min-height: 38px; border: 0; background: transparent; font-size: 16px; }
 .quick-auto-stepper output { min-width: 34px; color: var(--text); font-size: 14px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }

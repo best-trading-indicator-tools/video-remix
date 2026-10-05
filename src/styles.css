@@ -10,19 +10,28 @@
   -moz-osx-font-smoothing: grayscale;
   font-size: 14px;
   font-weight: 400;
-  --canvas: #0c0f14;
-  --surface: #151920;
-  --surface-raised: #1e242e;
-  --surface-hover: #293240;
-  --field: #10151c;
-  --line: #343e4d;
-  --text: #f4f6fa;
-  --subtle: #bac2cf;
-  --muted: #9aa6b8;
-  --accent: #ffbc92;
-  --accent-bright: #ffd0b3;
-  --accent-dark: #392a22;
-  --green: #a9dfc4;
+  /* Neutral surfaces carry the content; color marks actions and small status cues. */
+  --canvas: #0e1013;
+  --surface: #17191d;
+  --surface-raised: #202328;
+  --surface-hover: #2b2f35;
+  --field: #111317;
+  --line: #30343b;
+  --line-strong: #535b67;
+  --text: #f2f1ef;
+  --subtle: #bdc0c7;
+  --muted: #969da8;
+  --text-secondary: var(--subtle);
+  --accent: #e4bb95;
+  --accent-bright: #f5d6b8;
+  --accent-dark: #292521;
+  --green: #a4d9bc;
+  --warning: #e7c88f;
+  --danger: #f1aaaa;
+  --action: #eee8df;
+  --action-text: #20201e;
+  --shadow-panel: 0 2px 8px #00000012;
+  --shadow-dialog: 0 24px 100px #0008, 0 0 0 1px #ffffff05;
   color-scheme: dark;
 }
 * {
@@ -3465,9 +3474,9 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  color: #e2af8f !important;
-  border-color: #785137 !important;
-  background: #35251d !important;
+  color: var(--subtle);
+  border-color: var(--line);
+  background: transparent;
 }
 .job-phase {
   display: flex;
@@ -5162,7 +5171,7 @@ body {
   color: var(--subtle);
 }
 .source-info > .source-auto-preset {
-  color: #b79782 !important;
+  color: var(--subtle) !important;
 }
 @media (min-width: 681px) and (max-width: 980px) {
   .auto-scope {

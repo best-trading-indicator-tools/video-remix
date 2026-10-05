@@ -87,17 +87,19 @@
 .edit-framing-slider small { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
 .edit-cut-heading { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; font-size: 14px; }
 .edit-custom-crop { margin-top: 20px; }
-.edit-layout-issues { margin-top: 18px; border: 1px solid #725039; background: var(--accent-dark); color: #ffd2b5; border-radius: 10px; padding: 16px; }
+.edit-layout-issues { margin-top: 18px; border: 1px solid #725039; background: var(--field); color: var(--text); border-radius: 10px; padding: 16px; border-color: var(--line); }
 .edit-layout-issues strong { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .edit-layout-issues ul { margin: 8px 0 0; padding-left: 17px; font-size: 13px; line-height: 1.7; }
-.quality-report { border: 1px solid #365447; border-radius: 10px; padding: 14px 16px; background: #192a23; margin-top: 18px; color: var(--green); }
-.quality-report.review { border-color: #725039; background: var(--accent-dark); color: #ffd2b5; }
+.quality-report { border: 0; border-radius: 0; padding: 16px 0; background: transparent; margin-top: 18px; color: var(--text); border-top: 1px solid var(--line); }
+.quality-report.review { border-color: var(--line); background: transparent; color: var(--text); }
+.quality-report > summary > svg { color: var(--green); }
+.quality-report.review > summary > svg { color: var(--warning); }
 .quality-report summary { cursor: pointer; display: flex; align-items: center; flex-wrap: wrap; gap: 7px; font-size: 13px; }
 .quality-report summary strong { font-weight: 600; }
 .quality-report summary span { font-size: 12px; }
 .quality-report ul { font-size: 13px; line-height: 1.7; padding-left: 17px; margin: 9px 0 0; }
 .quality-report p { font-size: 12px; line-height: 1.6; margin-top: 8px; color: inherit; }
-.quality-report.compact { padding: 11px 13px; max-width: 560px; }
+.quality-report.compact { padding: 14px 0; max-width: 560px; }
 .job-status.quality-review { color: var(--accent); }
 @media (max-width: 900px) {
   .edit-plan-body { grid-template-columns: minmax(220px, .75fr) minmax(0, 1.25fr); gap: 24px; padding: 24px; }
@@ -166,13 +168,13 @@
 .timeline-editor .edit-plan-playback { padding: 0; background: var(--canvas); border: 1px solid var(--line); border-radius: 10px; }
 .timeline-editor .edit-preview-tabs { max-width: 390px; margin: 8px auto; padding: 2px; border: 0; background: transparent; }
 .timeline-editor .edit-preview-tabs button { min-height: 30px; padding: 5px 12px; font-size: 12px; }
-.timeline-editor .edit-plan-fields { border: 1px solid var(--line); border-radius: 10px; padding: 16px; background: var(--field); }
+.timeline-editor .edit-plan-fields { border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 16px; background: transparent; }
 .edit-inspector-heading h3 { font-size: 14px; margin: 0; }
 .edit-inspector-heading p { font-size: 12px; line-height: 1.6; margin: 6px 0 16px; color: var(--subtle); }
 .timeline-editor .edit-plan-section, .timeline-editor .edit-framing-section { border-top: 1px solid var(--line); border-bottom: 0; margin: 0; padding: 12px 0; }
 .timeline-editor .edit-plan-section > summary { padding: 0; font-size: 13px; }
 .timeline-editor .edit-plan-section[open] > summary { padding-bottom: 14px; }
-.timeline-editor .edit-prompt-section .prompt-editor { padding: 12px; }
+.timeline-editor .edit-prompt-section .prompt-editor { padding: 12px 0; }
 .timeline-editor .edit-prompt-section textarea { min-height: 90px; }
 .timeline-editor .edit-plan-footer { padding: 10px 18px; }
 .timeline-editor .edit-plan-footer p { font-size: 12px; }

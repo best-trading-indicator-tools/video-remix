@@ -1067,6 +1067,7 @@ export default function App() {
         <nav className="main-nav" aria-label="Main navigation">
           <button
             className={view === "studio" ? "active" : ""}
+            aria-current={view === "studio" ? "page" : undefined}
             onClick={() => setView("studio")}
           >
             <SlidersHorizontal size={15} />
@@ -1074,6 +1075,7 @@ export default function App() {
           </button>
           <button
             className={view === "exports" ? "active" : ""}
+            aria-current={view === "exports" ? "page" : undefined}
             onClick={() => setView("exports")}
           >
             <FolderDown size={15} />
@@ -1086,7 +1088,7 @@ export default function App() {
               </span>
             )}
           </button>
-          <button className={`history-nav-button ${view === "history" ? "active" : ""}`} aria-label="History" title="History" onClick={() => { setHistorySource(null); setView("history"); }}>
+          <button className={`history-nav-button ${view === "history" ? "active" : ""}`} aria-current={view === "history" ? "page" : undefined} aria-label="History" title="History" onClick={() => { setHistorySource(null); setView("history"); }}>
             <History size={15} />History
           </button>
         </nav>
@@ -1114,32 +1116,8 @@ export default function App() {
       <main>
         <div className="page-heading">
           <div>
-            <div className="eyebrow">
-              <span />
-              REMIX STUDIO / YOUR CREATIVE WORKSPACE
-            </div>
             <h1>
-              {view === "studio" ? (
-                <>
-                  {mode === "auto" ? (
-                    <>
-                      Good footage. <span>A sharper story.</span>
-                    </>
-                  ) : mode === "shorts" ? (
-                    <>Long stories. <span>Great short clips.</span></>
-                  ) : (
-                    <>
-                      Make your next <span>great cut.</span>
-                    </>
-                  )}
-                </>
-              ) : view === "history" ? (
-                <>Your work, <span>in perspective.</span></>
-              ) : (
-                <>
-                  Ready for your <span>next post.</span>
-                </>
-              )}
+              {view === "studio" ? "Your workspace" : view === "history" ? "History" : "Exports"}
             </h1>
             <p>
               {view === "studio"
@@ -1150,17 +1128,6 @@ export default function App() {
                 : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>
-          </div>
-          <div className="heading-note">
-            <span className="tiny-stack">
-              <Film size={17} />
-              <Film size={17} />
-            </span>
-            <span>
-              One workspace.
-              <br />
-              <strong>Every version.</strong>
-            </span>
           </div>
         </div>
 
@@ -2367,7 +2334,7 @@ export default function App() {
               </button>
             </div>
             <div className="publishing-actions">
-              {completed.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...completed])}><MonitorPlay size={16} />Quick review · {completed.length} exports</button>}
+              {completed.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...completed])}><MonitorPlay size={16} />Quick review · {completed.length} {completed.length === 1 ? 'export' : 'exports'}</button>}
               <button className="secondary-button" onClick={() => setPublishing({ job: null })}>App profiles &amp; scheduled posts</button>
             </div>
             {completed.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>

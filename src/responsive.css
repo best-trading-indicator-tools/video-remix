@@ -106,11 +106,20 @@ textarea { resize: vertical; }
   .job-thumb { width: 48px; height: 66px; }
   .job-source-name { overflow-wrap: anywhere; }
   .job-actions .secondary-button, .job-actions .download-button { white-space: normal; }
+  .job-card .job-actions { flex-wrap: wrap; }
+  .job-card .job-actions > .secondary-button { flex: 1 1 145px; overflow-wrap: normal; }
+  .job-card .job-actions > .download-button { flex: 1 1 100%; }
+  .job-card .export-keep-control { flex: 0 0 auto; }
   .export-keep-button { min-height: 44px; }
   .edit-plan-buttons { width: 100%; flex-direction: row; }
   .edit-plan-buttons button { flex: 1 1 160px; }
   .export-preview-footer > * { max-width: 100%; }
   .history-card-actions > div { flex-wrap: wrap; }
+}
+
+@media (max-width: 380px) {
+  .main-nav button { font-size: 11px; padding: 8px 5px; gap: 4px; white-space: nowrap; }
+  .main-nav .nav-count { min-width: 16px; font-size: 11px; padding: 2px 4px; }
 }
 
 /* On a narrow editor, keep the timeline between playback and the long settings form. */

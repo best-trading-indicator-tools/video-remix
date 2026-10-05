@@ -5,8 +5,8 @@
 .history-toolbar { display: flex; align-items: center; gap: 12px; margin: 28px 0; }
 .history-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 14px; border: 1px solid var(--line); border-radius: 9px; background: var(--field); color: var(--muted); }
 .history-search input { width: 100%; min-width: 0; min-height: 44px; padding: 12px 0; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 14px; }
-.history-source-filter { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; padding: 16px 18px; border: 1px solid #725039; background: var(--accent-dark); border-radius: 10px; margin-top: 24px; }
-.history-source-filter > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 14px; color: #ffd2b5; }
+.history-source-filter { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; padding: 16px 18px; border: 1px solid #725039; background: var(--surface); border-radius: 10px; margin-top: 24px; border-color: var(--line); }
+.history-source-filter > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 14px; color: var(--text); }
 .history-source-filter span { color: var(--subtle); font-size: 13px; overflow-wrap: anywhere; }
 .history-list { display: grid; gap: 20px; }
 .history-card { border: 1px solid var(--line); border-radius: 14px; padding: 24px; background: var(--surface); min-width: 0; }
@@ -26,7 +26,7 @@ a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-of
 .history-card h3 { font-size: 16px; line-height: 1.5; font-weight: 650; overflow-wrap: anywhere; }
 .history-card-title p { font-size: 13px; line-height: 1.65; color: var(--subtle); margin-top: 5px; overflow-wrap: anywhere; }
 .history-status { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface-raised); color: var(--subtle); border-radius: 6px; padding: 6px 9px; font-size: 12px; font-weight: 500; flex-shrink: 0; line-height: 1.4; }
-.history-status.published { border-color: #365447; color: var(--green); background: #192a23; }
+.history-status.published { border-color: var(--line); color: var(--text); background: transparent; }
 .history-entry-meta { display: flex; gap: 8px 20px; flex-wrap: wrap; font-size: 12px; color: var(--subtle); margin: 16px 0 0; line-height: 1.6; }
 .history-excerpts { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 12px; }
 .history-excerpts summary { cursor: pointer; font-size: 14px; color: var(--subtle); padding: 8px 0; font-weight: 500; line-height: 1.5; }
@@ -38,12 +38,12 @@ a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-of
 .history-stock-list li { display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: var(--text); overflow-wrap: anywhere; }
 .history-stock-list small { font-size: 12px; color: var(--muted); }
 .history-publications { display: grid; gap: 10px; }
-.history-publication { display: flex; align-items: center; gap: 12px; border: 1px solid #365447; border-radius: 8px; padding: 10px 14px; background: #192a23; color: var(--green); }
+.history-publication { display: flex; align-items: center; gap: 12px; border: 0; border-radius: 0; padding: 10px 14px; background: transparent; color: var(--text); border-left: 2px solid var(--green); }
 .history-publication > div { display: flex; align-items: center; gap: 6px 14px; flex: 1; flex-wrap: wrap; min-width: 0; }
 .history-publication strong { font-size: 13px; font-weight: 600; }
 .history-publication span { font-size: 12px; color: var(--subtle); }
 .history-publication a { display: flex; padding: 10px; border-radius: 6px; }
-.history-publication-form { padding: 20px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: 10px; margin-top: 20px; }
+.history-publication-form { padding: 20px 0; background: transparent; border: 0; border-radius: 0; margin-top: 20px; border-top: 1px solid var(--line); }
 .history-publication-form > p { font-size: 14px; color: var(--text); font-weight: 550; margin-bottom: 18px; }
 .history-publication-form fieldset { min-width: 0; padding: 0; margin: 0; border: 0; }
 .history-publication-fields { display: grid; grid-template-columns: minmax(120px, .5fr) minmax(200px, 1fr) minmax(200px, 1.3fr); gap: 16px; }
@@ -65,7 +65,7 @@ a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-of
 .history-measurements > summary, .measurement-comparison > summary { cursor: pointer; font-size: 14px; font-weight: 550; color: var(--subtle); padding: 8px 0; line-height: 1.5; }
 .history-measurements > summary > span { color: var(--accent); font-size: 12px; margin-left: 12px; font-weight: 400; overflow-wrap: anywhere; }
 .measurement-note { font-size: 13px; color: var(--subtle); line-height: 1.75; margin: 12px 0; }
-.measurement-auto-counts { font-size: 13px; color: var(--subtle); padding: 13px 16px; background: var(--surface-raised); border: 1px solid var(--line); border-radius: 8px; line-height: 1.75; margin: 16px 0; }
+.measurement-auto-counts { font-size: 13px; color: var(--subtle); padding: 13px 0; background: transparent; border: 0; border-radius: 0; line-height: 1.75; margin: 16px 0; }
 .history-measurements fieldset { border: 0; padding: 0; margin: 24px 0 0; min-width: 0; }
 .history-measurements legend { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 18px; }
 .measurement-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
@@ -89,9 +89,9 @@ a.history-thumbnail:focus-visible { outline: 2px solid var(--accent); outline-of
 .measurement-snapshot p { font-size: 13px; color: var(--subtle); line-height: 1.8; margin-top: 10px; overflow-wrap: anywhere; }
 .measurement-snapshot p.measurement-notice { color: var(--accent); }
 .measurement-add-post { margin-top: 10px; }
-.measurement-post-form { padding: 0 20px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); margin-top: 20px; }
+.measurement-post-form { padding: 0 0 20px; border: 0; border-radius: 0; background: transparent; margin-top: 20px; border-top: 1px solid var(--line); }
 .measurement-saved { color: var(--green); font-size: 13px; margin-top: 16px; }
-.measurement-comparison { padding: 18px 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface-raised); margin: 0 0 28px; }
+.measurement-comparison { padding: 18px 0; border: 0; border-radius: 0; background: transparent; margin: 0 0 28px; border-block: 1px solid var(--line); }
 .measurement-comparison > summary { color: var(--text); font-size: 16px; font-weight: 600; padding: 2px 0; }
 .measurement-comparison h3 { color: var(--text); font-size: 16px; margin: 28px 0 12px; }
 .measurement-downloads { display: flex; flex-wrap: wrap; gap: 10px; margin: 18px 0; }
