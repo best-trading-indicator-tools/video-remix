@@ -9,6 +9,18 @@
 .library-filters .library-search { flex:1 1 240px; }
 .library-result-count { color:var(--subtle); font-size:12px; }
 .source-filters { display:grid; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); }
+.source-selection-help { margin: 7px 12px 4px; color: var(--subtle); font-size: 11px; line-height: 1.6; }
+.source-filter-tools { margin: 0 12px 4px; }
+.source-filter-tools > summary { display: flex; align-items: center; gap: 7px; min-height: 36px; color: var(--subtle); cursor: pointer; font-size: 11px; }
+.source-filter-tools > summary > span { margin-left: auto; color: var(--accent); font-variant-numeric: tabular-nums; }
+.source-filter-tools[open] > summary, .source-filter-tools > summary:hover { color: var(--text); }
+.source-filter-tools .source-filters { padding: 4px 0 12px; }
+.source-browser { min-width: 0; }
+.source-browser .source-list { scrollbar-width: thin; scrollbar-color: var(--line-strong) var(--field); }
+.source-scroll-controls { display: flex; gap: 8px; padding: 0 12px 12px; }
+.source-scroll-controls > button { display: flex; flex: 1; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 8px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface-raised); color: var(--text); font-size: 11px; }
+.source-scroll-controls > button:hover { background: var(--surface-hover); }
+.source-scroll-controls svg { flex-shrink: 0; }
 .source-filters > span, .source-project > small { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
 .source-project { padding:12px 14px; border-top:1px solid var(--line); }
 .project-field { display:flex; align-items:end; flex-wrap:wrap; gap:8px; margin:10px 0; }

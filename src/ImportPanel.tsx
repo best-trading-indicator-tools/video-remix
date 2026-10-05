@@ -21,7 +21,6 @@ type Props = {
 
 export default function ImportPanel(props: Props) {
   const [sessions, setSessions] = useState<ImportSession[]>([]);
-  const [showCompleted, setShowCompleted] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [preparingFile, setPreparingFile] = useState<{ name: string; index: number; total: number; stage: "reading" | "queueing" } | null>(null);
@@ -309,7 +308,7 @@ export default function ImportPanel(props: Props) {
       <ul>{selectionErrors.map((message, index) => <li key={index}><ProblemNotice message={message} operation="Import videos" /></li>)}</ul>
       <p>Other videos continue importing. Correct these files or links, then try again.</p>
     </details>}
-    {!!sessions.length && <section className="import-activity" aria-label="Import activity">
+    {!!pending.length && <section className="import-activity" aria-label="Import activity">
       {!!pending.length && <div className="import-overview">
         <strong>Import activity</strong>
         <div className="import-counts" role="status">
@@ -319,10 +318,8 @@ export default function ImportPanel(props: Props) {
           {completed.length > 0 && <span className="import-count-complete">{completed.length} completed</span>}
         </div>
       </div>}
-      {completed.length > 0 && <button type="button" className="import-completed-toggle" aria-expanded={showCompleted} aria-controls="video-import-list"
-        onClick={() => setShowCompleted(!showCompleted)}>{showCompleted ? "Hide completed imports" : `${completed.length} completed import${completed.length === 1 ? "" : "s"}`}<ChevronDown size={13} /></button>}
-      <div id="video-import-list" className="import-list" role="region" aria-label="Video imports" tabIndex={pending.length || showCompleted ? 0 : undefined}>
-        {[...pending, ...(showCompleted ? completed : [])].map(session => {
+      <div id="video-import-list" className="import-list" role="region" aria-label="Video imports" tabIndex={0}>
+        {pending.map(session => {
           const complete = session.status === "completed";
           const uploading = session.status === "uploading";
           const working = active === session.id || session.status === "processing";
@@ -397,6 +394,16 @@ export default function ImportPanel(props: Props) {
           </button>
         </div>}
       </div>
+      {!!completed.length && <details className="import-history">
+        <summary className="import-completed-toggle">{completed.length} completed import{completed.length === 1 ? "" : "s"}<ChevronDown size={13} /></summary>
+        <div className="import-list" role="region" aria-label="Completed video imports" tabIndex={0}>
+          {completed.map(session => <div className="import-item complete" key={session.id}>
+            <div className="import-item-heading"><strong title={session.name}>{session.name}</strong>
+              <button className="icon-button" aria-label={`Dismiss import ${session.name}`} onClick={() => void remove(session)}><X size={14} /></button></div>
+            <div className="import-item-status"><Check size={13} /><span>Ready in your workspace</span></div>
+          </div>)}
+        </div>
+      </details>}
     </details>
   </div>;
 }

@@ -88,6 +88,7 @@ import HistoryPanel from "./HistoryPanel";
 import ApiSettings from "./ApiSettings";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
+import SourceList from "./SourceList";
 import LongFormPanel from "./LongFormPanel";
 import ManualPromptEditor from "./ManualPromptEditor";
 import FinishingPresets from "./FinishingPresets";
@@ -1257,11 +1258,15 @@ export default function App() {
                   onImported={importedSources} onBusyChange={busy => setUploadProgress(busy ? 0 : null)}
                   onError={(message, diagnostic) => notify(message, "error", diagnostic)} />
                 {!!sources.length && <div className="source-ready-heading">
-                  <h3><Check size={13} />Ready to edit</h3>
-                  <span>{sources.length} video{sources.length === 1 ? "" : "s"}</span>
+                  <h3>{mode === "shorts" ? "Choose a video" : "Select videos"}</h3>
+                  <span>{mode === "shorts" ? `${sources.length} available` : `${sources.filter(source => autoSelectedIds.includes(source.id)).length} selected`}</span>
                 </div>}
-                {!!sources.length && <div className="source-filters"><label>Find a source<input type="search" placeholder="Name or project…" value={sourceSearch} maxLength={200} onChange={event => setSourceSearch(event.target.value)} /></label><label>Project<select value={sourceProject} onChange={event => setSourceProject(event.target.value)}><option value="">All projects</option>{projects.map(project => <option key={project}>{project}</option>)}</select></label><span>{visibleSources.length} of {sources.length} sources</span></div>}
-                <div className="source-list" role="region" aria-label="Imported videos" tabIndex={sources.length ? 0 : undefined}>
+                {!!sources.length && <p className="source-selection-help">{mode === "shorts" ? "Click a video below to start clipping." : "Click a video to open it. Check boxes to work on several."}</p>}
+                {!!sources.length && <details className="source-filter-tools">
+                  <summary><SlidersHorizontal size={13} />Search &amp; filter{(sourceSearch.trim() || sourceProject) && <span>{visibleSources.length} of {sources.length}</span>}</summary>
+                  <div className="source-filters"><label>Find a source<input type="search" placeholder="Name or project…" value={sourceSearch} maxLength={200} onChange={event => setSourceSearch(event.target.value)} /></label><label>Project<select value={sourceProject} onChange={event => setSourceProject(event.target.value)}><option value="">All projects</option>{projects.map(project => <option key={project}>{project}</option>)}</select></label><span>{visibleSources.length} of {sources.length} sources</span>{(sourceSearch.trim() || sourceProject) && <button className="text-button" onClick={() => { setSourceSearch(''); setSourceProject(''); }}>Clear source filters</button>}</div>
+                </details>}
+                <SourceList hasSources={!!sources.length}>
                   {loading ? (
                     <div className="source-empty">
                       <LoaderCircle size={20} className="spin" />
@@ -1357,7 +1362,7 @@ export default function App() {
                       </div>
                     ))
                   )}
-                </div>
+                </SourceList>
                 {!!sources.length && !visibleSources.length && <p className="library-empty">No sources match. <button onClick={() => { setSourceSearch(''); setSourceProject(''); }}>Clear filters</button></p>}
                 {selected && <div className="source-project"><small>Organize {selected.name}</small><ProjectField key={selected.id} value={selected.project} endpoint={`/api/sources/${selected.id}/project`} onSaved={project => { setSources(current => current.map(source => source.id === selected.id ? { ...source, project } : source)); setJobs(current => current.map(job => job.sourceId === selected.id ? { ...job, project } : job)); }} /><SourceProtection key={`protection-${selected.id}`} source={selected} onSaved={saved => setSources(current => current.map(source => source.id === saved.id ? saved : source))} /></div>}
                 {mode === "auto" && selected && ((selected.previousExports || 0) + (selected.similarExports || 0)) > 0 && <button className="source-history-notice" onClick={() => { setHistorySource(selected); setView("history"); }}>
