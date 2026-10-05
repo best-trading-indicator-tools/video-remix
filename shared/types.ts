@@ -286,6 +286,7 @@ export interface EditPlan {
   settings: RemixSettings;
   cuts: EditSegment[];
   captions: CaptionCue[];
+  captionWords?: TranscriptWord[];
   /** Prevent cut changes or automatic repairs from restoring deliberately omitted captions. */
   captionMode?: "generated" | "off";
   visuals: EditPlanVisual[];
@@ -304,6 +305,7 @@ export interface EditPlanChanges {
   /** Maximum percent of the output covered by stock, library shots and animation cards. */
   brollMaxCoverage?: number;
   hookText?: string;
+  hookDuration?: number;
   captions?: CaptionCue[];
   cuts?: EditSegment[];
   visuals?: EditPlanVisual[];
@@ -413,6 +415,7 @@ export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  exportName?: string;
   diagnostic?: import("./diagnostics.js").Diagnostic;
   draftReview?: DraftReview;
   /** Provider work has no measurable completion percentage. */

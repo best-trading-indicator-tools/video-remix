@@ -62,3 +62,13 @@ test("a retry warning escalates to an error when the export finally fails", () =
   recordDiagnostic(issue); recordDiagnostic({ ...issue, severity: "error" });
   assert.equal(getDiagnostics().length, 1); assert.equal(getDiagnostics()[0].severity, "error");
 });
+
+ test("saved review reports do not become recent action failures", () => {
+  clearDiagnostics();
+  for (const operation of ["Editorial check", "Review finished picture", "Review finished audio"])
+    recordDiagnostic(makeDiagnostic("A transcript of the selected speech is required", { operation, severity: "warning" }));
+  assert.equal(getDiagnostics().length, 0);
+  recordDiagnostic(makeDiagnostic("Server connection lost", { operation: "Review export" }));
+  assert.equal(getDiagnostics().length, 1);
+  clearDiagnostics();
+});

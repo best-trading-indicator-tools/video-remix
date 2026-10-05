@@ -133,14 +133,14 @@ async function retainFile(source: string, destination: string) {
 
 export function publicEditPlan(job: StoredJob): EditPlan {
   if (!job.editPlan) throw new Error("This export has no saved edit plan.");
-  return { ...structuredClone(job.editPlan), media: job.editPlan.media.map(item => ({
+  return { ...structuredClone(job.editPlan), captionWords: (job.editPlan.narration ? job.editPlan.captionWords : planSpeech(job)?.segments.flatMap(segment => segment.words) ?? job.editPlan.captionWords), media: job.editPlan.media.map(item => ({
     ...item, url: `/api/jobs/${job.id}/plan/media/${item.id}`,
   })) };
 }
 
-export async function captureEditPlan({ job, source, visuals, audioPath, subtitlePath, sourceTranscript, signal }: {
+export async function captureEditPlan({ job, source, visuals, audioPath, subtitlePath, sourceTranscript, captionWords, signal }: {
   job: StoredJob; source: StoredSource; visuals: SupportingVisual[]; audioPath?: string;
-  subtitlePath?: string; sourceTranscript?: Transcript; signal: AbortSignal;
+  subtitlePath?: string; sourceTranscript?: Transcript; captionWords?: EditPlan["captionWords"]; signal: AbortSignal;
 }) {
   const directory = path.join(paths.plans, job.id);
   await mkdir(directory, { recursive: true });
@@ -188,7 +188,7 @@ export async function captureEditPlan({ job, source, visuals, audioPath, subtitl
       sourceDuration: source.duration, outputDuration: job.summary!.outputDuration,
       createdAt: new Date().toISOString(), settings: structuredClone(job.settings),
       cuts: structuredClone(job.settings.segments || [{ start: job.settings.trimStart, end: job.settings.trimEnd ?? source.duration }]),
-      captions, captionMode: captions.length ? "generated" : "off",
+      captions, captionWords: structuredClone(captionWords), captionMode: captions.length ? "generated" : "off",
       visuals: plannedVisuals, media, narration: job.summary!.narration, audioMediaId };
     job.planFiles = files;
     job.sourceTranscript = sourceTranscript;
@@ -257,6 +257,6 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
     await writeFile(subtitlePath, captionCuesSrt(plan.captions), "utf8");
   }
   return { supportingVisuals, subtitlePath,
-    captionWords: subtitlePath && plan.settings.captionStyle?.wordHighlight ? planSpeech(job)?.segments.flatMap(segment => segment.words) : undefined,
+    captionWords: subtitlePath && plan.settings.captionStyle?.wordHighlight ? (plan.narration ? plan.captionWords : planSpeech(job)?.segments.flatMap(segment => segment.words) ?? plan.captionWords) : undefined,
     audioPath: plan.audioMediaId ? planMediaPath(job, plan.audioMediaId) : undefined };
 }

@@ -77,7 +77,7 @@ export default function EditorialReportSummary({ report: savedReport, repair, co
       </details>)}
     </details>}
     </details>
-    {failureMessage && <ProblemNotice severity="warning" operation="Editorial check" message={failureMessage} />}
+    {failureMessage && <ProblemNotice register={false} severity="warning" operation="Editorial check" message={failureMessage} />}
     {canRetry && <div className="editorial-retry">
       <button type="button" className="secondary-button" onClick={onRetry} disabled={retrying} aria-label={retrying ? "Checking edit…" : undefined}>
         {retrying ? <LoaderCircle size={14} className="spin" /> : <RefreshCw size={14} />}

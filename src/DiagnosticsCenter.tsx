@@ -12,7 +12,7 @@ export default function DiagnosticsCenter() {
     <button type="button" className="diagnostics-launcher" onClick={() => dialog.current?.showModal()}><CircleHelp size={16} />Help & errors{issues.length > 0 && <span>{issues.length}</span>}</button>
     <dialog ref={dialog} className="diagnostics-dialog" aria-labelledby="diagnostics-title">
       <div className="diagnostics-header"><h2 id="diagnostics-title">Help & errors</h2><button type="button" aria-label="Close help and errors" onClick={() => dialog.current?.close()}><X size={18} /></button></div>
-      <p>When something goes wrong, copy its details and send them to the app owner. Nothing is sent automatically.</p>
+      <p>Recent action failures appear here. Copy a report to troubleshoot with your coding assistant or inspect the app terminal. Saved export reviews stay with their exports.</p>
       <p className="diagnostics-retention">The latest 30 errors and warnings stay here for this browser tab, including after a refresh.</p>
       {!!issues.length && <div className="diagnostics-actions"><CopyDiagnostic diagnostic={issues[0]!} all={issues.map(diagnosticReport).join("\n\n---\n\n")} /><button type="button" onClick={clearDiagnostics}>Clear history</button></div>}
       {!issues.length ? <p className="diagnostics-empty">No errors or warnings recorded in this tab.</p> : <div className="diagnostics-list">{issues.map(issue => <section key={issue.id}>

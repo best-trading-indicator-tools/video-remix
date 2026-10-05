@@ -39,6 +39,7 @@ export const editPlanChangesSchema = z.object({
   brollCount: z.number().int().min(1).max(MAX_BROLL_COUNT).optional(),
   brollMaxCoverage: z.number().int().min(0).max(100).optional(),
   hookText: safeText(120, true).optional(),
+  hookDuration: z.number().finite().min(0.5).max(15).optional(),
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: cutsSchema.optional(),
   visuals: z.array(visualSchema).max(60).optional(),
@@ -220,6 +221,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
 
   if (cutsChanged && !plan.narration) {
     next.captions = retimedCaptions(plan, cuts, sourceTranscript);
+    next.captionWords = plan.captionWords?.flatMap(word => mappedIntervals(word, plan.cuts, cuts, plan.settings.speed).map(timing => ({ ...word, ...timing })));
     next.settings.callouts = next.settings.callouts?.flatMap(callout => {
       const timing = mappedIntervals(callout, plan.cuts, cuts, plan.settings.speed)[0];
       return timing ? [{ ...callout, ...timing }] : [];
@@ -229,6 +231,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
       return timing ? [{ ...visual, ...timing }] : [];
     });
   }
+  if (changes.hookDuration !== undefined) next.settings.hookDuration = changes.hookDuration;
   if (changes.hookText !== undefined) next.settings.hookText = changes.hookText;
   if (changes.framing) Object.assign(next.settings, structuredClone(changes.framing));
   if (changes.captions !== undefined) {
@@ -240,7 +243,8 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
     const retimed = new Map(next.visuals.map(visual => [visual.id, visual]));
     for (const visual of changes.visuals) {
       const prior = original.get(visual.id);
-      if (!prior) throw new Error("Supporting shot IDs must refer to an existing shot in this edit");
+      // New shots may use only media already retained by this edit (validated below).
+      if (!prior) { if (visual.locked) throw new Error("New supporting shots must start unlocked"); continue; }
       const baseline = retimed.get(visual.id) ?? prior;
       if (prior.locked && visual.locked && (
         visual.mediaId !== baseline.mediaId || Math.abs(visual.start - baseline.start) > 1e-9 ||

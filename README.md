@@ -989,3 +989,12 @@ Empty, oversized and unsupported files fail before reading with
 `EMPTY_VIDEO_FILE`, `LIMIT_EXCEEDED` or `UNSUPPORTED_VIDEO_FORMAT` (the message
 names the extension). When one file fails, the error notification copies that
 file's own report; when several fail, it lists each file with its code.
+
+
+### Faster export editing and review
+
+- Turn on **Highlight each word as it’s spoken** in caption appearance. The selected word changes color in the exported video and draft preview. Saved speech timings are used when the words match; uploaded SRTs and rewritten wording use estimated timings. The four caption looks keep their existing appearance when highlighting is off.
+- Export cards show a retained thumbnail, a muted preview on hover or keyboard focus, and a short title that can be renamed. One status summarizes the available checks: **Ready**, **Review needed**, or **Problem**. Open **Details & checks** for the individual reports, source filename, credits and notes.
+- **Help & errors** records action failures rather than adding old editorial reports when History opens. Saved findings remain available with each export.
+- **Edit this result → Timeline** shows cuts, hook, captions, saved B-roll and an audio waveform. Click the ruler or enter a precise playhead time, split a cut, trim edges, move captions and unlocked B-roll, or drag saved footage onto an empty B-roll interval to add up to two seconds. The same controls work with the keyboard. Render a revision to apply the draft; the previous export stays available. Uploaded inserts and covers remain in **Your footage** on their existing placement controls.
+- **Exports → Quick review** opens a full-window portrait player. Use **A** to accept, **E** to edit and **R** to reject, or the visible buttons. Left/right arrows move through the collection. Notes and explicit decisions are saved in History and included in its acceptance statistics. Advancing or letting a video end does not imply acceptance; rejected files are retained. Typing in notes never triggers the shortcuts.

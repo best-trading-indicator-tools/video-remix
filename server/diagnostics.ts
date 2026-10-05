@@ -20,7 +20,7 @@ export function serverDiagnostic(error: unknown, context: Partial<Diagnostic> & 
     ? explainProblem(context.message, context.httpStatus) : underlying;
   // Unexpected internal failures may contain user content in upstream exceptions.
   const message = context.httpStatus === 500 ? (explanation.code === "SERVER_ERROR"
-    ? "The server could not complete this action. Send the reference below to the app owner so they can check the app terminal."
+    ? "The server could not complete this action. Use the reference below to find the error in the app terminal."
     : explanation.title) : context.message ?? value.message;
   return makeDiagnostic(message, { ...explanation, ...context, server: runtimeInfo,
     ...(typeof code === "string" && /^[A-Z_\d]{2,40}$/u.test(code) ? { systemCode: code } : {}),

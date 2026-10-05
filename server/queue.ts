@@ -273,7 +273,7 @@ async function run(job: StoredJob, controller: AbortController) {
       });
       job.phase = "Saving editable cut and footage";
       await captureEditPlan({ job, source, visuals: supportingVisuals, audioPath, subtitlePath,
-        sourceTranscript: prepared.sourceTranscript, signal: controller.signal });
+        sourceTranscript: prepared.sourceTranscript, captionWords: prepared.transcript?.segments.flatMap(segment => segment.words), signal: controller.signal });
       job.phase = "Rendering your edit";
       await saveStore();
     } else {
@@ -398,7 +398,8 @@ async function run(job: StoredJob, controller: AbortController) {
     if (job.summary && job.settings.ownFootage?.length) {
       const timeline = footageTimeline(job.settings.ownFootage, job.editPlan?.outputDuration ?? job.summary.outputDuration, job.settings.fps === "source" ? source.fps : Number(job.settings.fps));
       job.summary.outputDuration = timeline.duration;
-      job.summary.changes.push(`${timeline.inserts.length} uploaded segment${timeline.inserts.length === 1 ? "" : "s"} inserted`, `${timeline.covers.length} uploaded cover shot${timeline.covers.length === 1 ? "" : "s"}`);
+      if (timeline.inserts.length) job.summary.changes.push(`${timeline.inserts.length} uploaded segment${timeline.inserts.length === 1 ? "" : "s"} inserted`);
+      if (timeline.covers.length) job.summary.changes.push(`${timeline.covers.length} uploaded cover shot${timeline.covers.length === 1 ? "" : "s"}`);
     }
     job.outputPicture = await visualIdentity(job.outputPath, (await probeMedia(job.outputPath, controller.signal)).duration, controller.signal);
     outputSize = (await stat(job.outputPath)).size;

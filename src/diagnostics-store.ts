@@ -1,13 +1,14 @@
 import { diagnosticSchema, makeDiagnostic, redactDiagnosticText, supportReport, type Diagnostic, type RuntimeInfo } from "../shared/diagnostics";
 
 const STORAGE = "remix-support-events-v1";
+const savedReviewOperations = new Set(["Editorial check", "Review finished picture", "Review finished audio"]);
 const listeners = new Set<() => void>();
 let server: RuntimeInfo | undefined;
 let tools: string | undefined;
 let issues: Diagnostic[] = [];
 try {
   const saved = JSON.parse(sessionStorage.getItem(STORAGE) || "[]");
-  if (Array.isArray(saved)) issues = saved.flatMap(item => { const parsed = diagnosticSchema.safeParse(item); return parsed.success ? [parsed.data] : []; }).slice(0, 30);
+  if (Array.isArray(saved)) issues = saved.flatMap(item => { const parsed = diagnosticSchema.safeParse(item); return parsed.success && !savedReviewOperations.has(parsed.data.operation) ? [parsed.data] : []; }).slice(0, 30);
 } catch { /* Diagnostics remain available in memory when storage is blocked. */ }
 const empty: Diagnostic[] = [];
 export const subscribeDiagnostics = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
@@ -22,6 +23,7 @@ export function setDiagnosticEnvironment(runtime?: RuntimeInfo, capabilities?: {
   if (capabilities) tools = `FFmpeg ${capabilities.ffmpeg ? "ready" : "missing"}; ffprobe ${capabilities.ffprobe ? "ready" : "missing"}`;
 }
 export function recordDiagnostic(issue: Diagnostic): Diagnostic {
+  if (savedReviewOperations.has(issue.operation)) return issue;
   const existing = issues.find(item => item.id === issue.id || (item.code === issue.code && item.operation === issue.operation &&
     item.entityId === issue.entityId && item.message === issue.message && Date.now() - Date.parse(item.occurredAt) < 60_000));
   if (existing) {

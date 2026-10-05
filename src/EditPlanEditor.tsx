@@ -1,3 +1,6 @@
+import { exportTitle } from "../shared/export-presentation";
+import EditTimeline from "./EditTimeline";
+import { sourceAtTime } from "../shared/edit-timeline";
 import { apiRequest as request } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
 import { GRAPHIC_KIND_LABELS } from "../shared/graphic-scene";
@@ -16,7 +19,7 @@ import { focusPointAt, withTrackBounds } from "../shared/focus";
 import { VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
-import CaptionStyleEditor, { CaptionOverlay } from "./CaptionStyleEditor";
+import CaptionStyleEditor, { CaptionOverlay, activeCaptionWord } from "./CaptionStyleEditor";
 import { DEFAULT_CAPTION_STYLE } from "../shared/caption-style";
 import "./edit-plan.css";
 
@@ -37,6 +40,7 @@ function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: bool
     if (anchor?.changes.preserveBroll) changes.preserveBroll = true;
   }
   if (differs(plan.settings.ownFootage, draft.settings.ownFootage)) changes.ownFootage = draft.settings.ownFootage || [];
+  if (plan.settings.hookDuration !== draft.settings.hookDuration) changes.hookDuration = draft.settings.hookDuration;
   if (plan.settings.hookText !== draft.settings.hookText) changes.hookText = draft.settings.hookText;
   if (differs(plan.cuts, draft.cuts)) changes.cuts = draft.cuts;
   for (const key of ["captions", "visuals"] as const) {
@@ -103,10 +107,13 @@ function cropPosition(width: number, height: number, aspect: number, point: Foca
   return `${percent(width, cropWidth, point.x)}% ${percent(height, cropHeight, point.y)}%`;
 }
 
-function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "crop", height = 350, onTime, onAspect, overlay, blackBands }: {
+function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "crop", height = 350, onTime, onAspect, overlay, blackBands, seek, speed = 1 }: {
+  seek?: { time: number; token: number }; speed?: number;
   url: string; label: string; start: number; end: number; aspect?: number; focalPoint: FocalPoint;
   fit?: RemixSettings["fit"]; height?: number; onTime?: (time: number) => void; onAspect?: (aspect: number) => void; overlay?: (height: number) => ReactNode; blackBands?: BlackBands;
 }) {
+  const player = useRef<HTMLVideoElement>(null);
+  useEffect(() => { if (seek && player.current?.readyState) { player.current.currentTime = seek.time; onTime?.(seek.time); } }, [seek?.token]);
   const frame = useRef<HTMLDivElement>(null);
   const background = useRef<HTMLVideoElement>(null);
   const [size, setSize] = useState({ width: 16, height: 9 });
@@ -126,9 +133,9 @@ function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "cro
   };
   return <div ref={frame} className="edit-framing-picture" style={{ aspectRatio: ratio, width: `min(100%, ${height * ratio}px)`, background: bands ? "black" : undefined }}>
     {fit === "blur" && <video ref={background} className="edit-framing-blur" src={`${url}#t=${start},${end}`} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} style={{ objectPosition: position }} onLoadedMetadata={(event) => { event.currentTarget.currentTime = start; }} />}
-    <video className="edit-framing-video" src={`${url}#t=${start},${end}`} controls muted playsInline preload="metadata" aria-label={label}
+    <video ref={player} className="edit-framing-video" src={`${url}#t=${start},${end}`} controls muted playsInline preload="metadata" aria-label={label}
       style={{ objectFit: fit === "crop" ? "cover" : "contain", objectPosition: fit === "crop" ? position : "center", ...bandVideoStyle(bands) }}
-      onLoadedMetadata={(event) => { const video = event.currentTarget; setSize({ width: video.videoWidth, height: video.videoHeight }); if (video.videoHeight > 0) onAspect?.(aspect || video.videoWidth / video.videoHeight); video.currentTime = start; }}
+      onLoadedMetadata={(event) => { const video = event.currentTarget; setSize({ width: video.videoWidth, height: video.videoHeight }); if (video.videoHeight > 0) onAspect?.(aspect || video.videoWidth / video.videoHeight); video.currentTime = seek?.time ?? start; video.playbackRate = speed; }}
       onSeeked={(event) => { const video = event.currentTarget; if (video.currentTime < start) video.currentTime = start; else if (video.currentTime > end) video.currentTime = end; syncBackground(video.currentTime); }}
       onPlay={(event) => { const video = event.currentTarget; if (video.currentTime < start || video.currentTime >= end - 0.02) video.currentTime = start; void background.current?.play().catch(() => {}); }}
       onPause={() => background.current?.pause()}
@@ -162,6 +169,8 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
   const [reload, setReload] = useState(0);
   const [previewMode, setPreviewMode] = useState<"export" | "framing">("export");
   const [previewCut, setPreviewCut] = useState(0);
+  const [timelineBusy, setTimelineBusy] = useState(false);
+  const [timelineSeek, setTimelineSeek] = useState<{ time: number; token: number }>();
   const [previewSourceTime, setPreviewSourceTime] = useState(0);
   const [platformGuide, setPlatformGuide] = useState<"off" | "instagram" | "tiktok">("off");
   const [guideBottom, setGuideBottom] = useState(22);
@@ -171,6 +180,18 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
   const form = useRef<HTMLFormElement>(null);
   const savingRef = useRef(false);
   const exportVideo = useRef<HTMLVideoElement>(null);
+  const playbackPane = useRef<HTMLElement>(null);
+  const [previewHeight, setPreviewHeight] = useState(280);
+  useEffect(() => {
+    if (!playbackPane.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      if (!entry) return;
+      const stacked = window.innerWidth <= 940 || window.innerHeight <= 690;
+      setPreviewHeight(stacked ? 300 : Math.max(120, Math.min(480, entry.contentRect.height - (previewMode === "framing" ? 140 : 60))));
+    });
+    observer.observe(playbackPane.current);
+    return () => observer.disconnect();
+  }, [loading, previewMode]);
   const [reviewTime, setReviewTime] = useState(initialIssue?.start ?? 0);
   const [highlightedShot, setHighlightedShot] = useState<ReviewShotTarget>();
   const [reviewNotice, setReviewNotice] = useState("");
@@ -366,8 +387,28 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
     setError("");
   };
 
+  const seekTimeline = (time: number) => {
+    if (!draft) return;
+    setReviewTime(time);
+    if (previewMode === "export" && !changed) { if (exportVideo.current) exportVideo.current.currentTime = time; return; }
+    const point = sourceAtTime(draft.cuts, draft.settings.speed, time);
+    setPreviewCut(point.index); setPreviewSourceTime(point.time);
+    setTimelineSeek({ time: point.time, token: performance.now() }); setPreviewMode("framing");
+  };
+  const changeTimelineCuts = async (cuts: EditPlan["cuts"]) => {
+    if (!plan || !draft || savingRef.current || timelineBusy) return;
+    setTimelineBusy(true);
+    try {
+      const changes = { ...collectDraftChanges(plan, draft, refreshBroll, promptAnchor), cuts };
+      const next = await request<EditPlan>(`/api/jobs/${job.id}/plan/preview`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes) });
+      setPromptAnchor({ plan: structuredClone(next), changes }); setDraft(next);
+      setPreviewCut(0); setPreviewSourceTime(next.cuts[0]!.start); setTimelineSeek({ time: next.cuts[0]!.start, token: performance.now() });
+      setPreviewMode("framing"); setError("");
+    } finally { setTimelineBusy(false); }
+  };
+
   const submit = async (searchAgain = refreshBroll) => {
-    if (!plan || !draft || (!changed && !searchAgain) || savingRef.current) return;
+    if (!plan || !draft || (!changed && !searchAgain) || savingRef.current || timelineBusy) return;
     setError("");
     const changes = collectDraftChanges(plan, draft, searchAgain, promptAnchor);
     if (searchAgain) { changes.brollCount = brollCount; changes.brollMaxCoverage = brollMaxCoverage; }
@@ -390,18 +431,18 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
     <section ref={dialog} className="edit-plan-modal" role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="edit-plan-title" onClick={(event) => event.stopPropagation()}>
       <header className="edit-plan-heading">
         <div><span className="eyebrow">REFINE YOUR FINISHED CUT{plan ? ` · REVISION ${plan.revision}` : ""}</span>
-          <h2 id="edit-plan-title">Edit this result</h2><p>{job.summary?.title || job.sourceName}</p></div>
+          <h2 id="edit-plan-title">Edit this result</h2><p>{exportTitle(job)}</p></div>
         <button type="button" className="icon-button" aria-label="Close result editor" onClick={onClose} disabled={saving}><X size={20} /></button>
       </header>
       {loading ? <div className="edit-plan-loading" role="status"><LoaderCircle className="spin" size={22} /> Loading your edit…</div> :
         plan && draft ? <form ref={form} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="edit-plan-body">
-            <aside className="edit-plan-playback" aria-label="Video preview and checks" tabIndex={0}>
+            <aside ref={playbackPane} className="edit-plan-playback" aria-label="Video preview and checks" tabIndex={0}>
               <div className="edit-preview-tabs" aria-label="Preview view">
                 <button type="button" aria-pressed={previewMode === "export"} onClick={() => setPreviewMode("export")}>Current export</button>
                 <button type="button" aria-pressed={previewMode === "framing"} onClick={() => setPreviewMode("framing")}>Draft framing</button>
               </div>
-              {previewMode === "export" ? <video ref={exportVideo} src={`/api/jobs/${job.id}/video`} controls playsInline preload="metadata" aria-label="Current exported video" onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.videoHeight > 0) setKnownOutputAspect(video.videoWidth / video.videoHeight); video.currentTime = reviewTime; }} /> : activeCut && <>
+              {previewMode === "export" ? <video ref={exportVideo} style={{ height: previewHeight, maxHeight: previewHeight, objectFit: "contain" }} src={`/api/jobs/${job.id}/video`} controls playsInline preload="metadata" aria-label="Current exported video" onTimeUpdate={event => setReviewTime(event.currentTarget.currentTime)} onLoadedMetadata={(event) => { const video = event.currentTarget; if (video.videoHeight > 0) setKnownOutputAspect(video.videoWidth / video.videoHeight); video.currentTime = reviewTime; }} /> : activeCut && <>
                 <label className="edit-plan-field edit-preview-cut">Preview source cut
                   <select value={previewCut} onChange={(event) => { setPreviewCut(Number(event.target.value)); setPreviewSourceTime(draft.cuts[Number(event.target.value)]?.start || 0); }}>
                     {draft.cuts.map((cut, index) => <option key={index} value={index}>Cut {index + 1} · {seconds(cut.start)}–{seconds(cut.end)}</option>)}
@@ -409,10 +450,10 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                 </label>
                 <FootagePreview key={`${plan.sourceId}-${previewCut}-${activeCut.start}-${activeCut.end}`} url={`/api/sources/${plan.sourceId}/video`} label={`Framing preview for cut ${previewCut + 1}`} start={Number.isFinite(activeCut.start) ? activeCut.start : 0} end={Number.isFinite(activeCut.end) ? activeCut.end : plan.sourceDuration}
                   aspect={draft.settings.aspect === "original" ? undefined : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])}
-                  blackBands={draft.settings.blackBands} focalPoint={focusPointAt(activeCut.focusTrack, previewSourceTime, activeCut.focalPoint || focalPoint)} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
+                  height={previewHeight} seek={timelineSeek} speed={draft.settings.speed} blackBands={draft.settings.blackBands} focalPoint={focusPointAt(activeCut.focusTrack, previewSourceTime, activeCut.focalPoint || focalPoint)} fit={draft.settings.fit} onTime={setPreviewSourceTime} onAspect={setKnownOutputAspect} overlay={(height) => <>
                     {draft.settings.hookText && previewOutputTime < draft.settings.hookDuration && <div className="edit-framing-hook" style={bandEditorialStyle(draft.settings.blackBands, height, knownOutputAspect || 9 / 16, 0.08, 0.054)}>{draft.settings.hookText}</div>}
                     {(draft.settings.callouts || []).filter((callout) => callout.start <= previewOutputTime && callout.end > previewOutputTime).map((callout, index) => <div className="edit-framing-callout" key={index} style={bandEditorialStyle(draft.settings.blackBands, height, knownOutputAspect || 9 / 16, 0.24, 0.047)}>{callout.text}</div>)}
-                    {activeCaption && <CaptionOverlay style={captionStyle} height={height} text={activeCaption.text} />}
+                    {activeCaption && <CaptionOverlay style={captionStyle} height={height} text={activeCaption.text} activeWord={activeCaptionWord(activeCaption.text, activeCaption.start, activeCaption.end, previewOutputTime, draft.captionWords)} />}
                     {platformGuide !== "off" && <div className={`edit-platform-guide ${platformGuide}`} aria-hidden="true"><span className="guide-top">App header</span><span className="guide-right" style={{ width: `${guideRight}%`, bottom: `${guideBottom}%` }}>Actions</span><span className="guide-bottom" style={{ height: `${guideBottom}%` }}>Post text &amp; navigation</span></div>}
                   </>} />
                 <label className="edit-plan-field edit-guide-field">Platform interface guide
@@ -588,10 +629,13 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
               </details>
             </div>
           </div>
+          <EditTimeline jobId={job.id} plan={draft} time={previewMode === "export" ? reviewTime : previewOutputTime} onSeek={seekTimeline}
+            onChange={next => { setDraft(next); setPreviewMode("framing"); }} onCuts={changeTimelineCuts} disabled={saving || timelineBusy || refreshBroll}
+            cutsDisabled={timelineCorrectionsChanged} />
           <footer className="edit-plan-footer">
             <div><p>A new revision keeps this export available.</p>{refreshBroll && <p className="edit-plan-pending-search">A stock search will request {brollCount} total supporting shots. {promptAnchor?.changes.preserveBroll ? "All existing shots will be kept." : "Saved animations and uploaded B-roll will be kept."}</p>}{error && <ProblemNotice message={error} operation="Edit export" />}</div>
-            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || (!changed && brollCount === savedBrollCount && brollMaxCoverage === savedCoverage)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setBrollMaxCoverage(savedCoverage); setCoverageInput(String(savedCoverage)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setReviewNotice(""); setError(""); }}><RotateCcw size={14} />Reset changes</button>
-              <button className="primary-button" type="submit" disabled={saving || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
+            <div className="edit-plan-buttons"><button type="button" className="secondary-button" disabled={saving || timelineBusy || (!changed && brollCount === savedBrollCount && brollMaxCoverage === savedCoverage)} onClick={() => { setDraft(structuredClone(plan)); setRefreshBroll(false); setBrollCount(savedBrollCount); setBrollCountInput(String(savedBrollCount)); setBrollMaxCoverage(savedCoverage); setCoverageInput(String(savedCoverage)); setPromptAnchor(null); setPromptUndo(null); setPreviewCut(0); setReviewNotice(""); setError(""); }}><RotateCcw size={14} />Reset changes</button>
+              <button className="primary-button" type="submit" disabled={saving || timelineBusy || !changed}>{saving ? <LoaderCircle className="spin" size={16} /> : <ArrowRight size={16} />}{saving ? "Queuing revision…" : "Render this revision"}</button></div>
           </footer>
         </form> : <div className="edit-plan-loading"><ProblemNotice message={error || "This edit is unavailable."} operation="Load edit" /><button className="secondary-button" onClick={() => setReload((value) => value + 1)}>Try again</button></div>}
     </section>

@@ -82,7 +82,8 @@ export function captionWordStarts(text: string, start: number, end: number, word
   const tokens = captionLines(text).flat();
   if (!tokens.length || !(end > start)) return tokens.map(() => start);
   const spoken = words.filter(word => word.word.trim() && (word.start + word.end) / 2 >= start - 0.05 && (word.start + word.end) / 2 <= end + 0.05);
-  if (spoken.length === tokens.length) {
+  const normalize = (word: string) => word.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  if (spoken.length === tokens.length && spoken.every((word, index) => normalize(word.word) === normalize(tokens[index]!))) {
     let previous = start;
     return spoken.map((word, index) => (previous = index ? Math.min(end, Math.max(previous, word.start)) : start));
   }

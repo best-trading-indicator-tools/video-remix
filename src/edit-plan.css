@@ -147,3 +147,11 @@
 .review-highlight { outline: 2px solid var(--accent); outline-offset: 3px; }
 .finished-shot-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .finished-shot-actions p { flex-basis: 100%; }
+/* Keep the moving picture and the timeline visible together. */
+.edit-plan-modal { width: 1280px; height: calc(100dvh - 40px); }
+.edit-plan-modal > form { flex: 1 1 auto; }
+.edit-plan-heading { padding: 16px 24px; }
+.edit-plan-body { flex: 1 1 0; padding: 16px 24px; min-height: 180px; }
+.edit-plan-modal > form > .edit-timeline { box-sizing: border-box; flex: 0 0 min(36dvh, 360px); height: min(36dvh, 360px); overflow-y: auto; margin: 0 24px 12px; }
+.edit-plan-playback > video { max-height: 32dvh; }
+@media (max-width: 700px) { .edit-plan-modal { height: calc(100dvh - 24px); } .edit-plan-modal > form > .edit-timeline { max-height: 33dvh; margin: 0 12px 10px; } .edit-plan-heading { padding: 12px; } .edit-plan-heading h2 { font-size: 20px; } .edit-plan-heading p { margin: 0; } .edit-plan-body { min-height: 160px; padding: 12px; } }

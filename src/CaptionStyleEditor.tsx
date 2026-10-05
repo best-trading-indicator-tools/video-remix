@@ -28,15 +28,15 @@ export function WordHighlightToggle({ value, onChange }: { value?: CaptionStyle;
       <input type="checkbox" checked={s.wordHighlight} onChange={event => onChange({ ...s, wordHighlight: event.target.checked,
         highlightColor: event.target.checked && !value?.highlightColor ? contrastingHighlight(s.color) : s.highlightColor })} />
       <span><strong>Highlight each word as it’s spoken</strong>
-        <small>{s.wordHighlight ? "The spoken word lights up in your highlight color." : "Off: each caption appears in one color."}</small></span>
+        <small>{s.wordHighlight ? "Uses speech timings when available; imported or rewritten captions use estimated timing." : "Off: each caption appears in one color."}</small></span>
     </label>
     {s.wordHighlight && <ColorControl label="Highlight color" value={s.highlightColor} onChange={highlightColor => onChange({ ...s, highlightColor })} />}
   </div>;
 }
 
 /** Index of the word being spoken at `time`, using the same timing as the export's fallback. */
-export function activeCaptionWord(text: string, start: number, end: number, time: number): number {
-  const starts = captionWordStarts(text, start, end);
+export function activeCaptionWord(text: string, start: number, end: number, time: number, words?: { start: number; end: number; word: string }[]): number {
+  const starts = captionWordStarts(text, start, end, words);
   let active = 0;
   starts.forEach((at, index) => { if (at <= time) active = index; });
   return active;

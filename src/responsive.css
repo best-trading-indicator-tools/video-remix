@@ -110,3 +110,13 @@ textarea { resize: vertical; }
   .export-preview-footer > * { max-width: 100%; }
   .history-card-actions > div { flex-wrap: wrap; }
 }
+
+/* On a narrow editor, keep the timeline between playback and the long settings form. */
+@container dialog-viewport (max-width: 900px) or (max-height: 650px) {
+  .edit-plan-modal > form { display: flex; flex-direction: column; overflow: visible; }
+  .edit-plan-body { display: contents; }
+  .edit-plan-playback { order: 0; padding: 16px; margin: 0; }
+  .edit-plan-modal > form > .edit-timeline { order: 1; flex: none; height: auto; max-height: none; overflow-y: visible; margin: 0 12px 12px; }
+  .edit-plan-fields { order: 2; padding: 16px; }
+  .edit-plan-footer { order: 3; }
+}

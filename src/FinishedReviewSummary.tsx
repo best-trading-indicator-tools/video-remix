@@ -29,8 +29,8 @@ export default function FinishedReviewSummary({ report, compact = false, onSeek,
         {onEditMoment && <button type="button" className="secondary-button" onClick={() => onEditMoment(issue)}>Edit this moment</button>}
         {issueActions?.(issue)}
       </li>)}</ol>}
-      {report.picture.reason && <ProblemNotice severity="warning" operation="Review finished picture" message={report.picture.reason} />}
-      {report.audio.reason && <ProblemNotice severity="warning" operation="Review finished audio" message={report.audio.reason} />}
+      {report.picture.reason && <ProblemNotice register={false} severity="warning" operation="Review finished picture" message={report.picture.reason} />}
+      {report.audio.reason && <ProblemNotice register={false} severity="warning" operation="Review finished audio" message={report.audio.reason} />}
       {retry}
     </div>
   </details>;

@@ -15,7 +15,7 @@ export function CopyDiagnostic({ diagnostic, all }: { diagnostic: Diagnostic; al
         if (!navigator.clipboard?.writeText) throw new Error("Clipboard unavailable");
         await navigator.clipboard.writeText(report); setCopied(true); setFallback(false);
       } catch { setFallback(true); setCopied(false); }
-    }}>{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? "Copied — send this to the app owner" : all ? "Copy recent error details" : "Copy error details"}</button>
+    }}>{copied ? <Check size={13} /> : <Copy size={13} />}{copied ? "Error details copied" : all ? "Copy recent error details" : "Copy error details"}</button>
     {fallback && <div className="diagnostic-copy-fallback"><p role="status">Clipboard access is unavailable. Select and copy this report manually.</p>
       <textarea aria-label="Error details to copy" readOnly value={report} rows={8} onFocus={event => event.currentTarget.select()} />
     </div>}

@@ -1,3 +1,4 @@
+import { installExportTools } from "./export-tools.js";
 import { historyRecords, historyMatches, historyPage, historyStockUses } from "./store.js";
 import { visualIdentity } from "./visual-identity.js";
 import { relatedHistory } from "./history.js";
@@ -584,6 +585,7 @@ export function createApp() {
       throw new HttpError(404, "Saved footage is unavailable.");
     res.sendFile(planMediaPath(job, req.params.mediaId), error => { if (error) next(error); });
   });
+  installExportTools(app);
   installPromptEditRoutes(app);
   installEditorialReviewRoutes(app);
   installFinishedReviewRoutes(app);
@@ -630,6 +632,7 @@ export function createApp() {
       outputPath: path.join(paths.outputs, `${id}.mp4`), settings: plan.settings, editPlan: plan,
       sourceTranscript: parent.sourceTranscript,
       draftReview: parent.draftReview,
+      exportName: parent.exportName,
       ...(parsed.data.refreshBroll ? { refreshBroll: true, preserveBroll: parsed.data.preserveBroll === true } : {}),
       notes: [parsed.data.refreshBroll
         ? "A new stock search was requested for this video. Its saved cuts, captions and narration are used."

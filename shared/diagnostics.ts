@@ -97,10 +97,10 @@ export function explainProblem(message: string, status?: number) {
   if (/no longer available|not found|ENOENT|missing.*file/iu.test(message) || status === 404)
     return rule("RESOURCE_UNAVAILABLE", "The requested file or item is unavailable", "Refresh the workspace. If the original was moved, removed or expired, import it again before continuing.");
   if (/ffmpeg failed|ffprobe failed|rendering failed/iu.test(message))
-    return rule("MEDIA_PROCESSING_FAILED", "The video could not be processed", "Try a short preview with basic settings. If it fails again, copy the error details and send them to the app owner.");
+    return rule("MEDIA_PROCESSING_FAILED", "The video could not be processed", "Try a short preview with basic settings. If it fails again, copy the error details and use them to troubleshoot with your coding assistant.");
   if (/unexpected.*(?:response|json)|response.*(?:incomplete|invalid)|invalid.*response/iu.test(message))
     return rule("INVALID_RESPONSE", "The app received an incomplete response", "Check that both the frontend and server are running the same app version, then refresh. Check the queue before submitting the operation again.");
-  return rule(status && status >= 500 ? "SERVER_ERROR" : "ACTION_FAILED", "This action could not be completed", "Check the message below and correct any highlighted settings. If the problem persists, copy the error details and send them to the app owner.");
+  return rule(status && status >= 500 ? "SERVER_ERROR" : "ACTION_FAILED", "This action could not be completed", "Check the message below and correct any highlighted settings. If the problem persists, copy the error details and use them to troubleshoot with your coding assistant.");
 }
 
 export function makeDiagnostic(message: string, context: Partial<Diagnostic> & { operation: string }): Diagnostic {

@@ -1,3 +1,7 @@
+import { recordDiagnostic } from "./diagnostics-store";
+import { ExportPreview, ExportName } from "./ExportPreview";
+import QuickReview from "./QuickReview";
+import { exportStatus, visibleExportChanges } from "../shared/export-presentation";
 import { apiRequest as api } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
 import { setDiagnosticEnvironment } from "./diagnostics-store";
@@ -355,6 +359,9 @@ export default function App() {
       document.querySelector(".settings-tabs")?.scrollIntoView({ block: "start", behavior: "instant" });
     });
   };
+  const [quickReview, setQuickReview] = useState<RenderJob[] | null>(null);
+  const [reviewRefresh, setReviewRefresh] = useState(0);
+  const observedJobDiagnostics = useRef<Set<string> | null>(null);
   const [jobs, setJobs] = useState<RenderJob[]>([]);
   const [editorialRetries, setEditorialRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
   const editorialRequests = useRef(new Set<string>());
@@ -542,6 +549,14 @@ export default function App() {
       try {
         const data = await api<{ jobs: RenderJob[] }>("/api/jobs");
         if (!stopped) {
+          const seen = observedJobDiagnostics.current;
+          if (seen) for (const job of data.jobs) {
+            if (job.status === "failed" && job.diagnostic && !seen.has(job.diagnostic.id)) {
+              seen.add(job.diagnostic.id);
+              recordDiagnostic(job.diagnostic);
+            }
+          }
+          else observedJobDiagnostics.current = new Set(data.jobs.flatMap(job => job.diagnostic ? [job.diagnostic.id] : []));
           setJobs(data.jobs);
           setConnected(true);
         }
@@ -2330,7 +2345,7 @@ export default function App() {
             </section>}
         </div>
         {view === "history" ? (
-          <HistoryPanel source={historySource} refreshKey={completed.map((job) => job.id).sort().join("|")} onClearSource={() => setHistorySource(null)} onBack={() => setView("studio")} />
+          <HistoryPanel source={historySource} refreshKey={`${reviewRefresh}:${completed.map((job) => job.id).sort().join("|")}`} onClearSource={() => setHistorySource(null)} onBack={() => setView("studio")} />
         ) : view === "exports" ? (
           <section className="exports-panel panel">
             <div className="exports-heading">
@@ -2357,6 +2372,7 @@ export default function App() {
                 Back to workspace
               </button>
             </div>
+            {completed.length > 0 && <button className="secondary-button quick-review-launch" onClick={() => setQuickReview([...completed])}><MonitorPlay size={16} />Quick review · {completed.length} exports</button>}
             {completed.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>
               <summary>Review flagged moments · {completed.reduce((sum, job) => sum + (job.finishedReviewReport?.issues.length || 0), 0)} findings</summary>
               <p>Open a timestamp to review its picture and sound. Use Edit this moment to make a correction.</p>
@@ -2454,25 +2470,10 @@ export default function App() {
                             className={`job-card status-${job.status}`}
                             key={job.id}
                           >
-                            <div className="job-thumb">
-                              {source ? (
-                                <img src={source.thumbnailUrl} alt="" />
-                              ) : (
-                                <Film size={21} />
-                              )}
-                              {job.status === "processing" && (
-                                <span>
-                                  <LoaderCircle size={18} className="spin" />
-                                </span>
-                              )}
-                            </div>
+                            {job.status === "completed" ? <ExportPreview job={job} onOpen={() => setPreviewJob(job)} /> : <div className="job-thumb">{source ? <img src={source.thumbnailUrl} alt="" /> : <Film size={21} />}{job.status === "processing" && <LoaderCircle className="spin" size={18} />}</div>}
                             <div className="job-main">
                               <div className="job-title">
-                                <strong
-                                  title={job.summary?.title || job.sourceName}
-                                >
-                                  {job.summary?.title || job.sourceName}
-                                </strong>
+                                <ExportName job={job} onSaved={updated => setJobs(current => current.map(item => item.id === updated.id ? updated : item))} />
                                 <span>V{job.variant}</span>
                                 {job.parentJobId && <span>Revision {job.revision ?? 1}</span>}
                                 {job.auto && (
@@ -2482,14 +2483,6 @@ export default function App() {
                                   </span>
                                 )}
                               </div>
-                              {job.summary?.title && (
-                                <p
-                                  className="job-source-name"
-                                  title={job.sourceName}
-                                >
-                                  {job.sourceName}
-                                </p>
-                              )}
                               <div className="job-details">
                                 <span>
                                   {jobAspect === "original"
@@ -2518,9 +2511,11 @@ export default function App() {
                                 </p>
                               )}
                               {job.status === "processing" && <JobProgress job={job} />}
+                              <details className="export-card-details"><summary>Details &amp; checks</summary>
+                              <p className="job-source-name" title={job.sourceName}>{job.sourceName}</p>
                               {job.summary && (
                                 <div className="job-summary">
-                                  {job.summary.changes.map((change, index) => (
+                                  {visibleExportChanges(job.summary.changes).map((change, index) => (
                                     <span key={index}>{change}</span>
                                   ))}
                                   {job.summary.narration &&
@@ -2569,7 +2564,7 @@ export default function App() {
                                     ))}
                                 </ul>
                               )}
-                              {job.visualFulfillment && <p className="job-notes" role="status"><strong>Supporting visuals: {job.visualFulfillment.placed}/{job.visualFulfillment.requested}</strong>{job.visualFulfillment.placed < job.visualFulfillment.requested && <> · {job.visualFulfillment.reason || "Some requested visuals could not be added."}</>}</p>}
+                              {job.visualFulfillment && job.visualFulfillment.requested > 0 && <p className="job-notes" role="status"><strong>Supporting visuals: {job.visualFulfillment.placed}/{job.visualFulfillment.requested}</strong>{job.visualFulfillment.placed < job.visualFulfillment.requested && <> · {job.visualFulfillment.reason || "Some requested visuals could not be added."}</>}</p>}
                               {!!job.notes?.length && (
                                 <ul className="job-notes">
                                   {compactBrollNotes(job.notes).map((note, index) => (
@@ -2587,26 +2582,14 @@ export default function App() {
                               {retryStatus && !source && <p id={`retry-source-${job.id}`} className="job-skip-note">
                                 The source video is no longer available. Import it again to start a new edit.
                               </p>}
+                              </details>
                               <JobRecoveryNotice job={job} />
                               {job.error && !job.retry && (
-                                <ProblemNotice message={job.error} diagnostic={job.diagnostic} operation="Export video" entityId={job.id} />
+                                <ProblemNotice register={false} message={job.error} diagnostic={job.diagnostic} operation="Export video" entityId={job.id} />
                               )}
                             </div>
-                            <div className={`job-status ${job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || (job.editorialReport && job.editorialReport.status !== "pass") ? "quality-review" : ""}`}>
-                              {job.status === "completed" ? (
-                                <>
-                                  <Check size={12} />
-                                  {job.qualityReport?.status === "review" || (job.finishedReviewReport && job.finishedReviewReport.status !== "pass") || (job.editorialReport && job.editorialReport.status !== "pass") ? "Review" : "Rendered"}
-                                </>
-                              ) : job.status === "processing" ? (
-                                <>
-                                  <span className="live-dot" />
-                                  {jobProgressLabel(job)}
-                                </>
-                              ) : (
-                                job.status.charAt(0).toUpperCase() +
-                                job.status.slice(1)
-                              )}
+                            <div className={`job-status export-verdict ${exportStatus(job).kind}`}>
+                              {job.status === "processing" ? jobProgressLabel(job) : exportStatus(job).label}
                             </div>
                             <div className="job-actions">
                               {job.status === "completed" && job.downloadUrl ? (
@@ -2709,6 +2692,7 @@ export default function App() {
           </div>
         ))}
       </div>
+      {quickReview && <QuickReview jobs={quickReview} paused={!!editingJob} onClose={() => setQuickReview(null)} onEdit={job => { setEditingIssue(undefined); setEditingJob(job); }} onSaved={() => setReviewRefresh(value => value + 1)} />}
       {editingJob && <EditPlanEditor key={editingJob.id} job={editingJob} initialIssue={editingIssue} sourceFps={sources.find(source => source.id === editingJob.sourceId)?.fps} onClose={() => setEditingJob(null)} onCreated={(created) => {
         setJobs((current) => [created, ...current.filter((job) => job.id !== created.id)]);
         setEditingJob(null);
