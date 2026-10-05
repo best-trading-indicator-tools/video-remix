@@ -12,6 +12,7 @@ import { AIRequestError } from './ai-errors.js';
 import { publishingJobs } from './publishing-lock.js';
 import { appStoreImportSchema } from '../shared/app-store.js';
 import { AppStoreError, importAppStoreProfile } from './app-store.js';
+import { languageNameSchema, publishingLanguageSchema } from '../shared/publishing-language.js';
 
 const activePublications = new Set(['uploading', 'submitting', 'scheduled', 'published', 'uncertain', 'cancelling', 'draft']);
 export function publicationFingerprint(jobId: string, endpoint: string, request: ScheduleRequest) {
@@ -78,14 +79,14 @@ export function installPublishingRoutes(app: Express, options: { client?: Postiz
   });
   router.post('/jobs/:id/generate', async (req, res) => {
     const job = availableJob(String(req.params.id));
-    const { platform, profileId } = z.object({ platform: platformSchema, profileId: z.uuid() }).strict().parse(req.body);
+    const { platform, profileId, language } = z.object({ platform: platformSchema, profileId: z.uuid(), language: languageNameSchema.optional() }).strict().parse(req.body);
     const profile = publishingRecords<PromotionProfile>('profile', profileId)[0];
     if (!profile) throw new PostizError('Save an app profile before generating its post copy.', 400);
     const id = `${job.id}:${platform}`;
     if (generating.has(id)) throw new PostizError('Post copy is already being generated for this export.', 409);
     generating.add(id);
     try {
-      const draft = await (options.generate ?? generatePostDraft)(job, platform, profile, AbortSignal.timeout(65000));
+      const draft = await (options.generate ?? generatePostDraft)(job, platform, { ...profile, language: language ?? publishingLanguageSchema.parse(profile.language) }, AbortSignal.timeout(65000));
       availableJob(job.id); savePublishing('draft', id, draft); res.json(draft);
     } finally { generating.delete(id); }
   });

@@ -7,6 +7,8 @@ import { exportTitle } from '../shared/export-presentation';
 import { apiRequest } from './api-client';
 import PromotionProfileEditor from './PromotionProfileEditor';
 import AppStoreSourceCard from './AppStoreSourceCard';
+import PostLanguageSelect from './PostLanguageSelect';
+import { DEFAULT_PUBLISHING_LANGUAGE } from '../shared/publishing-language';
 import PublicationList from './PublicationList';
 import './publishing.css';
 
@@ -18,12 +20,14 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
   const [publications, setPublications] = useState<Publication[]>([]), [platform, setPlatform] = useState<PostPlatform>('tiktok');
   const [publicationTotal, setPublicationTotal] = useState(0);
   const [draft, setDraft] = useState<PostDraft>(), [profileId, setProfileId] = useState(''), [editingProfile, setEditingProfile] = useState<PromotionProfile | 'new' | null>(null);
+  const [postLanguage, setPostLanguage] = useState<string | null>(null);
   const [tab, setTab] = useState<'copy' | 'schedule' | 'queue'>(job ? 'copy' : 'queue'), [busy, setBusy] = useState(''), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [tags, setTags] = useState(''), [channelId, setChannelId] = useState(''), [date, setDate] = useState(''), [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone), [fold, setFold] = useState('');
   const [privacy, setPrivacy] = useState(''), [youtubeVisibility, setYoutubeVisibility] = useState<'public' | 'unlisted' | 'private'>('public'), [kids, setKids] = useState<'yes' | 'no'>('no');
   const [ownBrand, setOwnBrand] = useState(true), [partnership, setPartnership] = useState(false), [aiVideo, setAiVideo] = useState(false);
   const [comments, setComments] = useState(true), [duet, setDuet] = useState(false), [stitch, setStitch] = useState(false);
   const profile = config?.profiles.find(profile => profile.id === profileId);
+  const language = postLanguage ?? profile?.language ?? DEFAULT_PUBLISHING_LANGUAGE;
   const instants = scheduleInstants(date, timezone), instant = instants.length === 1 ? instants[0] : instants.includes(fold) ? fold : '';
   const chosen = channels.find(channel => channel.id === channelId), matching = channels.filter(channel => platformForChannel(channel.identifier) === platform);
   const current = draft ? { ...draft, hashtags: tags.trim().split(/\s+/u).filter(Boolean) } : undefined;
@@ -57,6 +61,7 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
     const abort = new AbortController(); setDraft(undefined); setChannelId(''); setPrivacy(''); setError('');
     void apiRequest<PostDraft>(`/api/publishing/jobs/${job.id}/draft?platform=${platform}`, { signal: abort.signal }).then(data => {
       if (abort.signal.aborted) return; setDraft(data); setTags(data.hashtags.join(' ')); dirty.current = false;
+      setPostLanguage(data.language ?? null);
       if (data.profileId) setProfileId(data.profileId);
     }).catch(error => { if (!abort.signal.aborted) setError(error.message); });
     return () => abort.abort();
@@ -99,7 +104,7 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
       throw error;
     }
   };
-  const upsertProfile = (saved: PromotionProfile) => { setConfig(value => value && ({ ...value, profiles: [saved, ...value.profiles.filter(profile => profile.id !== saved.id)] })); setProfileId(saved.id); setEditingProfile(null); setNotice('App profile saved.'); };
+  const upsertProfile = (saved: PromotionProfile) => { setConfig(value => value && ({ ...value, profiles: [saved, ...value.profiles.filter(profile => profile.id !== saved.id)] })); setProfileId(saved.id); setPostLanguage(null); setEditingProfile(null); setNotice('App profile saved.'); };
   return <dialog ref={dialog} className="publishing-dialog" aria-labelledby="publishing-title" onCancel={event => { event.preventDefault(); close(); }}>
     <header><div><small>APP PROMOTION</small><h2 id="publishing-title">{job ? exportTitle(job) : 'App profiles & scheduled posts'}</h2></div><button type="button" aria-label="Close publishing" className="icon-button" disabled={!!busy} onClick={close}><X size={20} /></button></header>
     <nav aria-label="Publishing steps">{job && <><button aria-current={tab === 'copy' ? 'step' : undefined} disabled={!!busy} onClick={() => setTab('copy')}>1 · Post copy</button><button aria-current={tab === 'schedule' ? 'step' : undefined} disabled={!!busy || !draft} onClick={() => setTab('schedule')}>2 · Schedule</button></>}<button aria-current={tab === 'queue' ? 'step' : undefined} disabled={!!busy} onClick={() => setTab('queue')}>Scheduled posts</button></nav>
@@ -108,17 +113,18 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
       {busy && <p role="status">{busy}{busy.startsWith('Uploading') ? ' Keep this window open until Postiz confirms the schedule.' : ''}</p>}
       {config && <details className="publishing-profiles" open={editingProfile !== null || (!config.profiles.length && tab === 'copy')}>
         <summary>App profiles · {profile?.name || 'Set your app, audience and market'}</summary>
-        <div className="publishing-row"><label>Mobile app<select value={profileId} disabled={!!busy || !!editingProfile} onChange={e => setProfileId(e.target.value)}><option value="">Choose an app</option>{config.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.country}</option>)}</select></label>
+        <div className="publishing-row"><label>Mobile app<select value={profileId} disabled={!!busy || !!editingProfile} onChange={e => { setProfileId(e.target.value); setPostLanguage(null); }}><option value="">Choose an app</option>{config.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.country}</option>)}</select></label>
           <button className="secondary-button" disabled={!!busy || !!editingProfile} onClick={() => setEditingProfile('new')}>Add app</button>{profile && <button className="secondary-button" disabled={!!busy || !!editingProfile} onClick={() => setEditingProfile(profile)}>Edit app</button>}</div>
         {profile?.appStore && !editingProfile && <><AppStoreSourceCard source={profile.appStore} compact />{profile.appStore.country !== profile.country && <p className="publishing-note">This listing is for {profile.appStore.country}; your target is {profile.country}. Use Edit app → Refresh listing to check the target market.</p>}</>}
         {editingProfile && <PromotionProfileEditor key={editingProfile === 'new' ? 'new' : editingProfile.id} profile={editingProfile === 'new' ? undefined : editingProfile} aiConfigured={config.aiConfigured} onSaved={upsertProfile} onCancel={() => setEditingProfile(null)} onImporting={active => setBusy(active ? 'Importing app details…' : '')} />}
       </details>}
-      {job && tab !== 'queue' && <div className="publishing-row"><label>Platform<select value={platform} disabled={!!busy || !!editingProfile} onChange={e => { if (dirty.current) { setNotice('Save the current caption before switching platforms.'); return; } setPlatform(e.target.value as PostPlatform); }}><option value="tiktok">TikTok</option><option value="instagram">Instagram Reels</option><option value="youtube">YouTube</option></select></label>{profile && <span>{profile.language} · {profile.country}</span>}</div>}
+      {job && tab !== 'queue' && <div className="publishing-row"><label>Platform<select value={platform} disabled={!!busy || !!editingProfile} onChange={e => { if (dirty.current) { setNotice('Save the current caption before switching platforms.'); return; } setPlatform(e.target.value as PostPlatform); }}><option value="tiktok">TikTok</option><option value="instagram">Instagram Reels</option><option value="youtube">YouTube</option></select></label><PostLanguageSelect label="Post language" value={language} onChange={setPostLanguage} disabled={!!busy || !!editingProfile || !profile || !draft} />{profile && <span>Target: {profile.country}</span>}</div>}
       {tab === 'copy' && job && draft && <section aria-label="Post copy">
         <div className="publishing-actions"><button className="primary-button" disabled={!!busy || !profile || !!editingProfile} onClick={() => void run(config?.aiConfigured ? 'Writing two captions…' : 'Preparing hook…', async () => {
-          const result = await apiRequest<PostDraft>(`/api/publishing/jobs/${job.id}/generate`, json({ platform, profileId })); setDraft(result); setTags(result.hashtags.join(' ')); dirty.current = false;
+          const result = await apiRequest<PostDraft>(`/api/publishing/jobs/${job.id}/generate`, json({ platform, profileId, language })); setDraft(result); setTags(result.hashtags.join(' ')); dirty.current = false;
         })}><Sparkles size={15} />{config?.aiConfigured ? 'Generate short & long · DeepSeek' : 'Use hook & app hashtags'}</button></div>
-        <p className="publishing-note">{config?.aiConfigured ? 'Uses the app profile and this export’s saved text. DeepSeek usage is billed by your API provider.' : 'DeepSeek is unavailable. The hook is used as a starting point; you can write and save your own caption.'}</p>
+        <p className="publishing-note">{config?.aiConfigured ? `Generates titles, short and long captions, calls to action and descriptive hashtags in ${language}. Uses the app profile and this export’s saved text. DeepSeek usage is billed by your API provider.` : `DeepSeek is unavailable. The original hook and saved hashtags are copied without translation; write your caption in ${language} before posting.`}</p>
+        {draft.language && draft.language !== language && <p className="publishing-note" role="status">This copy was generated in {draft.language}. Generate again to create it in {language}; changing this selector does not translate existing text.</p>}
         {draft.profileId && draft.profileId !== profileId && <p className="publishing-note">This caption was written for a different app profile. Generate new copy or review the text before scheduling.</p>}
         <label>Post title<input value={draft.title} maxLength={platform === 'tiktok' ? 90 : 100} disabled={!!busy} onChange={event => patch({ title: event.target.value })} /></label>
         <p>{draft.reason}</p>

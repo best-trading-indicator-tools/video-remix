@@ -11,7 +11,7 @@ export default function AppStoreSourceCard({ source, compact = false }: { source
       <p>{[source.developer, source.category, source.version && `Version ${source.version}`].filter(Boolean).join(' · ')}</p>
       {source.downloadPrice && <p>Download price: {source.downloadPrice}. In-app purchases and subscriptions may cost extra; their prices are not supplied by this import.</p>}
       {!!source.ratingCount && source.rating !== undefined && <p>{source.rating.toFixed(1)} / 5 from {source.ratingCount.toLocaleString()} ratings in {source.country}.</p>}
-      {!!source.languages.length && <p>Supported app languages: {source.languages.join(', ')}. Set the post language separately below.</p>}
+      {!!source.languages.length && <p>Supported app languages: {source.languages.join(', ')}. Content language is chosen separately; the original listing below stays as published by the developer.</p>}
       <p className="app-store-description">{source.description}</p>
       {!!source.screenshots.length && <div className="app-store-screenshots">{source.screenshots.map((url, index) => <a key={url} href={url} target="_blank" rel="noreferrer"><img src={url} alt={`App Store screenshot ${index + 1}`} loading="lazy" referrerPolicy="no-referrer" /></a>)}</div>}
     </details>}

@@ -79,3 +79,19 @@ test('saved profiles accept dated listing metadata, retain legacy compatibility 
   assert.equal(promotionProfileSchema.safeParse({ ...profile, storeUrl: 'https://apps.apple.com/us/app/id12', appStore }).success, false);
   assert.equal(promotionProfileSchema.safeParse({ ...profile, appStore: { ...appStore, url: 'https://evil.test' } }).success, false);
 });
+test('a French store link still defaults the generated brief to English and retains original source quotes', async () => {
+  const frenchDescription = 'Un journal pour les propriétaires de chiens. Consignez vos observations quotidiennes.';
+  const request = appStoreImportSchema.parse({ url: url.replace('/us/', '/fr/'), summarize: true });
+  assert.equal(request.language, 'English');
+  const result = await importAppStoreProfile(request, signal(), { aiConfigured: true,
+    fetcher: async () => Response.json({ resultCount: 1, results: [{ ...record, description: frenchDescription }] }),
+    generate: async input => {
+      assert.equal((input.prompt as { language: string }).language, 'English');
+      assert.match(input.system!, /even if the listing or target country uses another language/u);
+      return { benefit: { text: 'Keep a journal of daily observations.', quote: 'Consignez vos observations quotidiennes.' },
+        audience: { text: 'Dog owners', quote: 'propriétaires de chiens' }, features: [] };
+    } });
+  assert.equal(result.source.country, 'FR'); assert.equal(result.source.description, frenchDescription);
+  assert.equal(result.suggestions.benefit, 'Keep a journal of daily observations.'); assert.equal(result.suggestions.audience, 'Dog owners');
+  assert.equal(result.suggestions.features, '', 'An empty translated field must not fall back to French source text');
+});

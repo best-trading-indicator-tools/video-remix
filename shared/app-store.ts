@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { publishingLanguageSchema } from './publishing-language.js';
 
 /** Parse public listing links only. Never fetch the supplied URL. */
 export function parseAppStoreUrl(value: string): { id: string; country?: string } | undefined {
@@ -28,7 +29,7 @@ export const appStoreSourceSchema = z.object({
 export type AppStoreSource = z.infer<typeof appStoreSourceSchema>;
 export const appStoreImportSchema = z.object({
   url: z.string().trim().min(1).max(2000).refine(value => !!parseAppStoreUrl(value), 'Paste an HTTPS App Store app link containing its id.'),
-  country: z.string().regex(/^[A-Z]{2}$/u).optional(), language: plain(60).min(1).default('English'), summarize: z.boolean().default(false),
+  country: z.string().regex(/^[A-Z]{2}$/u).optional(), language: publishingLanguageSchema, summarize: z.boolean().default(false),
 }).strict();
 export type AppStoreImportRequest = z.infer<typeof appStoreImportSchema>;
 export interface AppStoreImportResult {

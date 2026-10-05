@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { appStoreSourceSchema, parseAppStoreUrl } from './app-store.js';
+import { languageNameSchema, publishingLanguageSchema } from './publishing-language.js';
 import type { ExportHistoryEntry, PostMetrics, PublishingPlatform, ReachAssessment } from "./types.js";
 
 export const PLATFORM_NAMES: Record<PublishingPlatform, string> = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
@@ -35,7 +36,7 @@ export const webUrlSchema = z.url().max(2000).refine(value => { const url = new 
 export const promotionProfileSchema = z.object({
   id: z.uuid(), name: text(80).min(1), benefit: text(500).min(1), audience: text(300).min(1),
   features: text(2000), callToAction: text(200).min(1), storeUrl: z.union([z.literal(''), webUrlSchema]),
-  language: text(60).min(1), country: z.string().regex(/^[A-Z]{2}$/u),
+  language: publishingLanguageSchema, country: z.string().regex(/^[A-Z]{2}$/u),
   hashtags: z.array(hashtagSchema).max(6),
   appStore: appStoreSourceSchema.optional(),
 }).strict().refine(profile => !profile.appStore || parseAppStoreUrl(profile.storeUrl)?.id === profile.appStore.appId,
@@ -51,6 +52,7 @@ export const postDraftSchema = z.object({
   title: text(100).min(1), short: text(5000), long: text(5000), hashtags: z.array(hashtagSchema).max(8),
   selected: z.enum(['short', 'long']), recommended: z.enum(['short', 'long']), reason: text(800),
   provider: z.enum(['deepseek', 'hook']), generatedAt: z.iso.datetime(),
+  language: languageNameSchema.optional(),
   trends: z.array(trendEvidenceSchema).max(8), trendNote: text(500),
 }).strict();
 export type PostDraft = z.infer<typeof postDraftSchema>;

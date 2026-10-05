@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { randomUUID } from 'node:crypto';
-import { scheduleInstants, promotionProfileSchema, postContent, providerSettingsSchema, type PromotionProfile } from '../shared/publishing.js';
+import { scheduleInstants, promotionProfileSchema, postDraftSchema, postContent, providerSettingsSchema, type PromotionProfile } from '../shared/publishing.js';
 import { fallbackPostDraft, freshTrends, generatePostDraft } from '../server/post-copy.js';
 import { DEFAULT_SETTINGS } from '../shared/types.js';
 import type { StoredJob } from '../server/store.js';
@@ -58,4 +58,24 @@ test('imported listing text grounds generated copy without implying screenshot a
     assert.match(input.system!, /free download is not evidence of a free service/u);
     return { title: 'Focus', short: 'Try Focus', long: 'Plan your sessions.', hashtags: [], recommended: 'short', reason: 'One benefit.' };
   } });
+});
+test('new profiles default to English independently of country; old or untranslated drafts have no assumed language', () => {
+  const { language: _language, ...withoutLanguage } = profile;
+  assert.equal(promotionProfileSchema.parse(withoutLanguage).language, 'English');
+  assert.equal(promotionProfileSchema.parse(profile).language, 'French');
+  assert.equal(postDraftSchema.parse(fallbackPostDraft(job, 'tiktok', profile)).language, undefined);
+});
+test('English controls every generated field and foreign saved hashtags are not silently appended', async () => {
+  const englishProfile = { ...profile, language: 'English', country: 'FR', hashtags: ['#Études', '#FocusApp'] };
+  const draft = await generatePostDraft(job, 'tiktok', englishProfile, new AbortController().signal, { aiConfigured: true,
+    trends: [{ tag: '#Études', platform: 'tiktok', country: 'FR', sourceUrl: 'https://example.com/trends', observedAt: new Date().toISOString() }],
+    generate: async input => {
+      const prompt = input.prompt as { outputLanguage: string; profile: PromotionProfile };
+      assert.equal(prompt.outputLanguage, 'English'); assert.equal(prompt.profile.country, 'FR');
+      assert.deepEqual(prompt.profile.hashtags, ['#Études', '#FocusApp']);
+      assert.match(input.system!, /ALL generated text: title, short caption, long caption, call-to-action wording, recommendation reason and descriptive hashtags/u);
+      return { title: 'Time to focus', short: 'Start your next session. Try Focus.', long: 'Choose a task and start your session. Try Focus.', hashtags: ['#Study', '#FocusApp', '#study'], recommended: 'short', reason: 'One clear benefit.' };
+    } });
+  assert.equal(draft.language, 'English'); assert.deepEqual(draft.hashtags, ['#study', '#FocusApp']); assert.deepEqual(draft.trends, []);
+  assert.equal(postDraftSchema.parse(draft).language, 'English');
 });
