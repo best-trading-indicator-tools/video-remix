@@ -10,6 +10,8 @@ import { fallbackPostDraft, generatePostDraft } from './post-copy.js';
 import { editorialAIConfigured } from './editorial-provider.js';
 import { AIRequestError } from './ai-errors.js';
 import { publishingJobs } from './publishing-lock.js';
+import { appStoreImportSchema } from '../shared/app-store.js';
+import { AppStoreError, importAppStoreProfile } from './app-store.js';
 
 const activePublications = new Set(['uploading', 'submitting', 'scheduled', 'published', 'uncertain', 'cancelling', 'draft']);
 export function publicationFingerprint(jobId: string, endpoint: string, request: ScheduleRequest) {
@@ -30,8 +32,9 @@ function persist(entry: Publication) { entry.updatedAt = new Date().toISOString(
 function checkEndpoint(entry: Publication, client: PostizClient) {
   if (entry.endpoint !== client.config.endpoint) throw new PostizError('This post belongs to another Postiz server. Restore its configuration to manage it.', 409);
 }
-export function installPublishingRoutes(app: Express, options: { client?: PostizClient; generate?: typeof generatePostDraft } = {}) {
+export function installPublishingRoutes(app: Express, options: { client?: PostizClient; generate?: typeof generatePostDraft; importApp?: typeof importAppStoreProfile } = {}) {
   const router = Router(), generating = new Set<string>(), updating = new Set<string>();
+  let importing = false;
   const client = () => options.client ?? new PostizClient();
   // Never resend a post after a process restart: it may already exist remotely.
   for (const entry of publishingRecords<Publication>('publication')) {
@@ -47,6 +50,13 @@ export function installPublishingRoutes(app: Express, options: { client?: Postiz
     if (profile.id !== req.params.id) throw new PostizError('Profile ID does not match.', 400);
     if (publishingRecords<PromotionProfile>('profile').length >= 100 && !publishingRecords('profile', profile.id).length) throw new PostizError('The workspace already has 100 app profiles.', 400);
     savePublishing('profile', profile.id, profile); res.json(profile);
+  });
+  router.post('/profiles/import-app-store', async (req, res) => {
+    const input = appStoreImportSchema.parse(req.body);
+    if (importing) throw new AppStoreError('An app import is already running. Wait for it to finish.', 409);
+    importing = true;
+    try { res.json(await (options.importApp ?? importAppStoreProfile)(input, AbortSignal.timeout(60000))); }
+    finally { importing = false; }
   });
   router.get('/channels', async (_req, res) => res.json({ channels: await client().channels() }));
   router.get('/publications', (req, res) => {
@@ -172,7 +182,7 @@ export function installPublishingRoutes(app: Express, options: { client?: Postiz
   const errors: ErrorRequestHandler = (error, _req, res, next) => {
     if (res.headersSent) { next(error); return; }
     if (error instanceof z.ZodError) { res.status(400).json({ error: `Check the publishing form: ${error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).slice(0, 3).join('; ')}` }); return; }
-    if (error instanceof PostizError) { res.status(error.status).json({ error: error.message }); return; }
+    if (error instanceof PostizError || error instanceof AppStoreError) { res.status(error.status).json({ error: error.message }); return; }
     if (error instanceof AIRequestError) { res.status(502).json({ error: error.message }); return; }
     next(error);
   };

@@ -6,6 +6,7 @@ import { PLATFORM_NAMES, contentLimit, platformForChannel, postContent, schedule
 import { exportTitle } from '../shared/export-presentation';
 import { apiRequest } from './api-client';
 import PromotionProfileEditor from './PromotionProfileEditor';
+import AppStoreSourceCard from './AppStoreSourceCard';
 import PublicationList from './PublicationList';
 import './publishing.css';
 
@@ -109,7 +110,8 @@ export default function PublishingPanel({ job, onClose, onJobSaved }: { job: Ren
         <summary>App profiles · {profile?.name || 'Set your app, audience and market'}</summary>
         <div className="publishing-row"><label>Mobile app<select value={profileId} disabled={!!busy || !!editingProfile} onChange={e => setProfileId(e.target.value)}><option value="">Choose an app</option>{config.profiles.map(profile => <option key={profile.id} value={profile.id}>{profile.name} · {profile.country}</option>)}</select></label>
           <button className="secondary-button" disabled={!!busy || !!editingProfile} onClick={() => setEditingProfile('new')}>Add app</button>{profile && <button className="secondary-button" disabled={!!busy || !!editingProfile} onClick={() => setEditingProfile(profile)}>Edit app</button>}</div>
-        {editingProfile && <PromotionProfileEditor key={editingProfile === 'new' ? 'new' : editingProfile.id} profile={editingProfile === 'new' ? undefined : editingProfile} onSaved={upsertProfile} onCancel={() => setEditingProfile(null)} />}
+        {profile?.appStore && !editingProfile && <><AppStoreSourceCard source={profile.appStore} compact />{profile.appStore.country !== profile.country && <p className="publishing-note">This listing is for {profile.appStore.country}; your target is {profile.country}. Use Edit app → Refresh listing to check the target market.</p>}</>}
+        {editingProfile && <PromotionProfileEditor key={editingProfile === 'new' ? 'new' : editingProfile.id} profile={editingProfile === 'new' ? undefined : editingProfile} aiConfigured={config.aiConfigured} onSaved={upsertProfile} onCancel={() => setEditingProfile(null)} onImporting={active => setBusy(active ? 'Importing app details…' : '')} />}
       </details>}
       {job && tab !== 'queue' && <div className="publishing-row"><label>Platform<select value={platform} disabled={!!busy || !!editingProfile} onChange={e => { if (dirty.current) { setNotice('Save the current caption before switching platforms.'); return; } setPlatform(e.target.value as PostPlatform); }}><option value="tiktok">TikTok</option><option value="instagram">Instagram Reels</option><option value="youtube">YouTube</option></select></label>{profile && <span>{profile.language} · {profile.country}</span>}</div>}
       {tab === 'copy' && job && draft && <section aria-label="Post copy">

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { appStoreSourceSchema, parseAppStoreUrl } from './app-store.js';
 import type { ExportHistoryEntry, PostMetrics, PublishingPlatform, ReachAssessment } from "./types.js";
 
 export const PLATFORM_NAMES: Record<PublishingPlatform, string> = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
@@ -36,7 +37,9 @@ export const promotionProfileSchema = z.object({
   features: text(2000), callToAction: text(200).min(1), storeUrl: z.union([z.literal(''), webUrlSchema]),
   language: text(60).min(1), country: z.string().regex(/^[A-Z]{2}$/u),
   hashtags: z.array(hashtagSchema).max(6),
-}).strict();
+  appStore: appStoreSourceSchema.optional(),
+}).strict().refine(profile => !profile.appStore || parseAppStoreUrl(profile.storeUrl)?.id === profile.appStore.appId,
+  'The imported listing must match the app URL. Import the new app before saving.');
 export type PromotionProfile = z.infer<typeof promotionProfileSchema>;
 export const trendEvidenceSchema = z.object({
   tag: hashtagSchema, platform: platformSchema, country: z.string().regex(/^[A-Z]{2}$/u),

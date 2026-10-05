@@ -23,6 +23,18 @@
 .publishing-actions button, .publishing-dialog .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; }
 .publishing-profiles { padding: 10px 16px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 18px; }
 .promotion-profile-form { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.app-store-import { padding: 0 16px 4px; border: 1px solid var(--line); border-radius: 9px; background: #ffffff04; }
+.app-store-import .publishing-row { align-items: center; }
+.app-store-source { margin: 16px 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; min-width: 0; }
+.app-store-source-heading { display: flex; align-items: center; gap: 12px; }
+.app-store-source-heading > img { border-radius: 12px; flex-shrink: 0; }
+.app-store-source-heading > div { min-width: 0; overflow-wrap: anywhere; }
+.app-store-source-heading p { margin: 4px 0 0; color: var(--subtle); }
+.app-store-source a { color: var(--accent); }
+.app-store-description { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 280px; overflow-y: auto; padding-right: 10px; }
+.app-store-screenshots { display: flex; gap: 12px; overflow-x: auto; padding: 6px 0 12px; }
+.app-store-screenshots a { flex: 0 0 auto; }
+.app-store-screenshots img { display: block; height: 200px; width: auto; max-width: 300px; object-fit: contain; border-radius: 8px; }
 .post-copy-variants { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 18px 0; }
 .post-copy-variants article, .publication-list article { padding: 16px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 .post-copy-variants small { font-size: 11px; color: var(--accent); }

@@ -48,3 +48,14 @@ test('AI receives app facts and only this export context; a suggested tag cannot
   assert.equal(draft.hashtags.filter(tag => tag.toLowerCase() === '#focus').length, 1);
   assert.equal(draft.selected, draft.recommended);
 });
+test('imported listing text grounds generated copy without implying screenshot analysis or live hashtag evidence', async () => {
+  const appStore = { provider: 'apple' as const, appId: '12', url: 'https://apps.apple.com/us/app/id12', country: 'US', checkedAt: new Date().toISOString(),
+    name: 'Focus', description: 'Premium timers require a subscription.', developer: '', category: '', version: '1', languages: ['EN'], downloadPrice: 'Free', screenshots: ['https://is1.mzstatic.com/image/shot.png'] };
+  await generatePostDraft(job, 'tiktok', { ...profile, appStore }, new AbortController().signal, { aiConfigured: true, trends: [], generate: async input => {
+    const prompt = input.prompt as { profile: { appStore: Record<string, unknown> } };
+    assert.equal(prompt.profile.appStore.description, appStore.description); assert.equal(prompt.profile.appStore.sourceUrl, appStore.url);
+    assert.equal(prompt.profile.appStore.retrievedAt, appStore.checkedAt); assert.equal(prompt.profile.appStore.screenshots, undefined);
+    assert.match(input.system!, /free download is not evidence of a free service/u);
+    return { title: 'Focus', short: 'Try Focus', long: 'Plan your sessions.', hashtags: [], recommended: 'short', reason: 'One benefit.' };
+  } });
+});
