@@ -4,6 +4,7 @@ import { apiRequest } from './api-client';
 import { parseAppStoreUrl, type AppStoreImportResult } from '../shared/app-store';
 import AppStoreSourceCard from './AppStoreSourceCard';
 import PostLanguageSelect from './PostLanguageSelect';
+import CountrySelect from './CountrySelect';
 import { DEFAULT_PUBLISHING_LANGUAGE } from '../shared/publishing-language';
 
 export default function PromotionProfileEditor({ profile, aiConfigured = false, onSaved, onCancel, onImporting }: {
@@ -31,7 +32,7 @@ export default function PromotionProfileEditor({ profile, aiConfigured = false, 
   };
   const field = (key: keyof PromotionProfile, label: string, max: number, required = true, multiline = false) => <label>{label}{multiline
     ? <textarea rows={3} maxLength={max} required={required} value={String(value[key])} onChange={e => setValue({ ...value, [key]: e.target.value })} />
-    : <input maxLength={max} required={required} value={String(value[key])} onChange={e => setValue({ ...value, [key]: key === 'country' ? e.target.value.toUpperCase() : e.target.value })} />}</label>;
+    : <input maxLength={max} required={required} value={String(value[key])} onChange={e => setValue({ ...value, [key]: e.target.value })} />}</label>;
   return <form className="promotion-profile-form" onSubmit={async event => {
     event.preventDefault(); if (locked) return; setError('');
     const parsed = promotionProfileSchema.safeParse({ ...value, hashtags: tags.trim().split(/\s+/u).filter(Boolean) });
@@ -49,7 +50,7 @@ export default function PromotionProfileEditor({ profile, aiConfigured = false, 
           setValue(current => ({ ...current, storeUrl, country: parsed?.country ?? current.country,
             appStore: parsed?.id === current.appStore?.appId ? current.appStore : undefined }));
         }} /></label>
-        <div className="publishing-row">{field('country', 'Target country — two-letter code', 2)}<PostLanguageSelect label="Default content language" value={value.language} onChange={language => setValue(current => ({ ...current, language }))} /></div>
+        <div className="publishing-row"><CountrySelect value={value.country} onChange={country => setValue(current => ({ ...current, country }))} /><PostLanguageSelect label="Default content language" value={value.language} onChange={language => setValue(current => ({ ...current, language }))} /></div>
         <p className="publishing-note">English by default, independently of the target country. Used for generated app summaries, titles, captions and descriptive hashtags. Changing language applies when you import or generate again.</p>
         <button type="button" className="secondary-button" disabled={!appLink || !/^[A-Z]{2}$/u.test(value.country)} onClick={() => void importApp()}>{importing ? 'Importing app…' : refresh ? 'Refresh listing' : 'Import app details'}</button>
         <p className="publishing-note">Import uses the App Store in your target country. Google Play and website links can be used with a manually written profile.</p>
