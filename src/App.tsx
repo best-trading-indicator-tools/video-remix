@@ -1,5 +1,6 @@
 import { recordDiagnostic } from "./diagnostics-store";
 import { ExportPreview, ExportName } from "./ExportPreview";
+import ExportKeepButton from "./ExportKeepButton";
 import QuickReview from "./QuickReview";
 import { exportStatus, visibleExportChanges } from "../shared/export-presentation";
 import { apiRequest as api } from "./api-client";
@@ -1007,10 +1008,10 @@ export default function App() {
 
   const clearBatch = async (batchId: string) => {
     try {
-      await api(`/api/batches/${batchId}`, { method: "DELETE" });
-      setJobs((current) => current.filter((job) => job.batchId !== batchId));
+      const result = await api<{ removedIds: string[] }>(`/api/batches/${batchId}`, { method: "DELETE" });
+      setJobs((current) => current.filter((job) => !result.removedIds.includes(job.id)));
       notify(
-        "Export files removed. Source videos and History records are kept.",
+        "Unkept export files removed. Kept exports, source videos and History records remain.",
         "success",
       );
     } catch (error) {
@@ -2360,8 +2361,8 @@ export default function App() {
                     : `${completed.length} finished ${completed.length === 1 ? "video" : "videos"} in your collection.`}
                 </p>
                 <p className="retention-note">
-                  Download within {health?.retentionHours || 24} hours. Older
-                  files are cleared automatically.
+                  Choose Keep to save an export and its editing files in this workspace.
+                  Unkept exports are cleared after {health?.retentionHours || 24} hours.
                 </p>
               </div>
               <button
@@ -2444,9 +2445,9 @@ export default function App() {
                           <span className="zip-tag">ZIP</span>
                         </a>
                       )}
-                      {!batchActive && (
+                      {!batchActive && batch.some(job => !job.keptAt) && (
                         <IconButton
-                          title="Clear export files; keep source videos and History"
+                          title="Clear unkept export files; kept exports, source videos and History remain"
                           onClick={() => void clearBatch(batch[0].batchId)}
                         >
                           <Trash2 size={15} />
@@ -2594,6 +2595,8 @@ export default function App() {
                             <div className="job-actions">
                               {job.status === "completed" && job.downloadUrl ? (
                                 <>
+                                  <ExportKeepButton job={job} retentionHours={health?.retentionHours || 24}
+                                    onSaved={saved => setJobs(current => current.map(item => item.id === saved.id ? saved : item))} />
                                   {job.editable && <button className="secondary-button job-edit-button" onClick={() => { setEditingIssue(undefined); setEditingJob(job); }}>
                                     <Scissors size={13} />Edit this result
                                   </button>}

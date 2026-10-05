@@ -554,9 +554,10 @@ export async function cleanupExpired() {
   const expired = (date: string) => new Date(date).getTime() < cutoff;
   const jobs = state.jobs.filter(
     (job) =>
+      !job.keptAt &&
       !isActive(job) &&
       !running.has(job.id) &&
-      expired(job.finishedAt || job.createdAt),
+      expired(job.retentionResetAt || job.finishedAt || job.createdAt),
   );
   const expiredJobIds = new Set(jobs.map((job) => job.id));
   state.jobs = state.jobs.filter((job) => !expiredJobIds.has(job.id));

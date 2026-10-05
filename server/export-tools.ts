@@ -9,6 +9,22 @@ import { audioWaveform } from './waveform.js';
 const titleSchema = z.object({ title: z.string().trim().min(1).max(90).regex(/^[^\u0000-\u001f\u007f]+$/u) }).strict();
 export const quickReviewSchema = z.object({ verdict: z.enum(['accepted-unchanged', 'accepted-after-correction', 'rejected']).optional(), notes: z.string().trim().max(500).regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]*$/u).optional() }).strict();
 export function installExportTools(app: Express) {
+  app.patch('/api/jobs/:id/keep', async (req, res) => {
+    const job = state.jobs.find(job => job.id === req.params.id);
+    const parsed = z.object({ keep: z.boolean() }).strict().safeParse(req.body);
+    if (!job) { res.status(404).json({ error: 'Export not found or already expired.' }); return; }
+    if (!parsed.success) { res.status(400).json({ error: 'Choose whether to keep this export.' }); return; }
+    if (job.status !== 'completed') { res.status(409).json({ error: 'Wait for this export to finish before keeping it.' }); return; }
+    const previous = { keptAt: job.keptAt, retentionResetAt: job.retentionResetAt };
+    if (parsed.data.keep) job.keptAt ??= new Date().toISOString();
+    else if (job.keptAt) {
+      delete job.keptAt;
+      job.retentionResetAt = new Date().toISOString();
+    }
+    try { await saveStore(); }
+    catch (error) { Object.assign(job, previous); throw error; }
+    res.json(publicJob(job));
+  });
   app.patch('/api/jobs/:id/title', async (req, res) => {
     const job = state.jobs.find(job => job.id === req.params.id), parsed = titleSchema.safeParse(req.body);
     if (!job) { res.status(404).json({ error: 'Export not found.' }); return; }

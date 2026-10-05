@@ -416,6 +416,10 @@ export type JobStatus =
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
   exportName?: string;
+  /** User-kept exports and their editing files are exempt from automatic expiry. */
+  keptAt?: string;
+  /** Releasing Keep starts a fresh retention window. */
+  retentionResetAt?: string;
   diagnostic?: import("./diagnostics.js").Diagnostic;
   draftReview?: DraftReview;
   /** Provider work has no measurable completion percentage. */

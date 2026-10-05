@@ -23,7 +23,7 @@ for the layout rules and browser verification matrix.
 - **Link files on this computer:** paste one absolute video path per line. On Mac, select files in Finder and press **Option + Command + C** to copy their paths. The app reads the originals through managed links, without copying a 40 GB file. Removing or expiring an import removes the link, leaving the original intact. Keep originals at the same path and unchanged until exports finish. In Docker, the paths must be visible inside the container.
 - **Import from a video URL:** an alternative to uploading a file, directly below the uploader. Paste a regular YouTube video URL (`https://www.youtube.com/watch?v=VIDEO_ID`), a Shorts URL (`https://www.youtube.com/shorts/VIDEO_ID`), or a share link (`https://youtu.be/VIDEO_ID`). TikTok videos (including share links) and Instagram Reels/video posts work too. Import one link or multiple links separated by new lines, spaces or commas. The count and **Import N videos** button show the batch size (up to 100 by default, controlled by `MAX_FILES`). Duplicate video links in the batch are skipped, and invalid entries stay available to correct while the valid links import. Downloads join the same workspace for Auto, Manual and Short clips, with progress and cancellation. If a platform requires login, supply an exported cookies file as described below, or save the video yourself and browse to the local copy. Profiles, playlists, live streams and arbitrary website URLs are not accepted. For multi-video posts, only the first item is imported.
 - **Preparation runs in the background:** video metadata, a preview image, and a streaming content fingerprint are prepared with visible progress. Two videos can be analyzed at once. The fingerprint reads the full file to recognize earlier exports, so large originals still take time to prepare.
-- Interrupted uploads and pending analysis survive backend restarts. Unused import sessions expire after 48 hours. Source/export retention starts when the source is ready and follows `RETENTION_HOURS`. Available disk space is checked against unfinished uploads; copied sources and exports still need local storage.
+- Interrupted uploads and pending analysis survive backend restarts. Unused import sessions expire after 48 hours. Source retention starts when the source is ready; export retention starts when rendering finishes. Both follow `RETENTION_HOURS`. **Keep** protects exports and their editing files from expiry. Available disk space is checked against unfinished uploads; copied sources and exports still need local storage.
 
 Imports support MP4, MOV, M4V, WebM, MKV, AVI, and MPEG, up to 24 hours long. Browser playback depends on the video codec; FFmpeg supports more formats than browsers. The separate B-roll/legacy multipart limit remains `MAX_FILE_SIZE_MB` (500 MiB by default).
 
@@ -337,8 +337,8 @@ available. If no suitable replacement is found, existing supporting shots stay
 in place. Render or reset manual shot changes before requesting a new search.
 
 Auto can render the current video, checked videos, or all videos. Saved plans and
-their media snapshots follow the export retention period; keep the source video
-available to make further revisions. Older exports created before this feature
+their media snapshots follow the export retention period; choose **Keep** to retain
+an export and its source for further revisions. Older exports created before this feature
 need a new Auto edit to gain a saved plan.
 
 ### Automatic captions in Manual
@@ -612,7 +612,7 @@ Put your settings and API keys in a private `.env` file in the project root. The
 | `RENDER_CONCURRENCY` | `2`                      | Simultaneous processing jobs; accepts 1–4.                           |
 | `RENDER_MAX_RETRIES` | `3`                      | Additional attempts after a failed/interrupted export; 0–10.         |
 | `RENDER_RETRY_DELAY_SECONDS` | `5`               | Initial retry delay; 1–300 seconds, triples up to five minutes.      |
-| `RETENTION_HOURS`    | `24`                     | Retention window for finished jobs and source files; accepts 1–720.  |
+| `RETENTION_HOURS`    | `24`                     | Retention window for unkept finished jobs and unreferenced source files; accepts 1–720. |
 | `WHISPER_MODEL`      | `small`                  | Local speech model; run setup for the chosen model before use.       |
 | `WHISPER_CACHE_DIR`  | `DATA_DIR/models`        | Persistent speech-model cache.                                       |
 | `AUTO_AI`            | `true`                   | Set exactly `false` to disable Auto AI selection, writing, checks, and repairs. |
@@ -632,7 +632,7 @@ The queue processes two videos at once by default, including multiple Auto versi
 
 Recoverable failures and backend interruptions retry automatically up to three times, after 5, 15 and 45 seconds by default. Waiting retries release their processing slot. The retry budget and schedule survive restarts; saved edit plans are reused when available. Export cards show the reason, interrupted stage, next retry time and exhausted retry budget. Missing media, invalid inputs, permissions, credentials and full disks require intervention. Pressing **Cancel** stops automatic retries, including after a restart. **Retry** starts a fresh retry budget. Older cancelled records lack a recorded reason and require a manual Retry; they are never silently restarted.
 
-Sources and queue manifests are stored on disk so they survive backend restarts. Automatic cleanup removes expired finished jobs and sources while protecting files referenced by active jobs. Download anything you want to keep before its retention period expires. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
+Sources and queue manifests are stored on disk so they survive backend restarts. In Exports, choose **Keep** to retain a finished video, its SRT, saved edit, source and referenced attachments beyond `RETENTION_HOURS`, including across restarts. **Kept** exports stay in the workspace's data directory and are skipped when clearing a collection. Turn off Keep to start a fresh retention window; a source needed by a kept export cannot be removed until Keep is turned off. Download still saves a separate copy wherever your browser chooses. Unkept expired jobs and unreferenced sources are cleaned up automatically. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
 
 This is a private tool with **no user authentication**. Keep the default loopback binding or run it behind your own authenticated access layer.
 

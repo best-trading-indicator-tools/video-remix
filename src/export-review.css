@@ -33,3 +33,5 @@
 .job-card .job-status.export-verdict.ready { color: #8bd1ae; background: #27865822; }
 .job-card .job-status.export-verdict.problem { color: #f09999; background: #d0545422; }
 .quick-review-launch { margin: 4px 0 18px; }
+.export-keep-control { display: flex; flex-direction: column; align-items: flex-start; }
+.export-keep-button[aria-pressed="true"] { color: #8bd1ae; border-color: #278658; background: #27865818; }

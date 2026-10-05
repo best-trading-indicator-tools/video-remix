@@ -78,6 +78,7 @@ textarea { resize: vertical; }
 }
 @media (max-width: 1180px) {
   .job-card { display: grid; grid-template-columns: 62px minmax(0, 1fr); align-items: start; }
+  .job-card:has(> .export-preview) { grid-template-columns: max-content minmax(0, 1fr); }
   .job-main { display: contents; }
   .job-title { grid-column: 2; align-self: center; margin: 0; }
   .job-main > :not(.job-title), .job-status, .job-actions { grid-column: 1 / -1; grid-row: auto; }
@@ -105,6 +106,7 @@ textarea { resize: vertical; }
   .job-thumb { width: 48px; height: 66px; }
   .job-source-name { overflow-wrap: anywhere; }
   .job-actions .secondary-button, .job-actions .download-button { white-space: normal; }
+  .export-keep-button { min-height: 44px; }
   .edit-plan-buttons { width: 100%; flex-direction: row; }
   .edit-plan-buttons button { flex: 1 1 160px; }
   .export-preview-footer > * { max-width: 100%; }

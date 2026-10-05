@@ -504,6 +504,8 @@ export function createApp() {
   app.delete("/api/sources/:id", async (req, res) => {
     const source = state.sources.find((item) => item.id === req.params.id);
     if (!source) throw new HttpError(404, "Video not found.");
+    if (state.jobs.some((job) => job.sourceId === source.id && job.keptAt))
+      throw new HttpError(409, "This video is needed to edit a kept export. Turn off Keep on its exports before removing the source.");
     if (state.jobs.some((job) => job.sourceId === source.id && isActive(job)))
       throw new HttpError(
         409,
@@ -889,18 +891,19 @@ export function createApp() {
         409,
         "Wait for these exports to finish or cancel them before clearing the collection.",
       );
-    const ids = new Set(jobs.map((job) => job.id));
+    const removable = jobs.filter((job) => !job.keptAt);
+    const ids = new Set(removable.map((job) => job.id));
     state.jobs = state.jobs.filter((job) => !ids.has(job.id));
     await saveStore();
     await Promise.all(
-      jobs.flatMap((job) => [
+      removable.flatMap((job) => [
         rm(job.outputPath, { force: true }),
         rm(path.join(paths.work, job.id), { recursive: true, force: true }),
         rm(path.join(paths.plans, job.id), { recursive: true, force: true }),
         ...(job.captionPath ? [rm(job.captionPath, { force: true })] : []),
       ]),
     );
-    res.json({ ok: true });
+    res.json({ ok: true, removedIds: [...ids] });
   });
   app.use("/api", (_req, res) =>
     res.status(404).json({ error: "This API endpoint does not exist." }),
