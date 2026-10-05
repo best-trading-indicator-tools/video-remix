@@ -59,10 +59,19 @@ export function installExportTools(app: Express) {
     res.sendFile(file, error => { if (error) next(error); });
   });
   app.post('/api/jobs/:id/plan/preview', (req, res) => {
-    const job = state.jobs.find(job => job.id === req.params.id), parsed = editPlanChangesSchema.safeParse(req.body);
+    const job = state.jobs.find(job => job.id === req.params.id);
+    // An interactive gesture starts from the current draft, including corrected
+    // captions. Validate both stages against retained media, never trust a client plan.
+    const envelope = z.object({ base: editPlanChangesSchema, changes: editPlanChangesSchema }).strict().safeParse(req.body);
+    const parsed = editPlanChangesSchema.safeParse(envelope.success ? envelope.data.changes : req.body);
     if (!job?.editPlan) { res.status(404).json({ error: 'Saved edit not found.' }); return; }
     if (!parsed.success) { res.status(400).json({ error: 'Check the timeline intervals.' }); return; }
-    try { const editPlan = applyEditPlanChanges(job.editPlan, parsed.data, job.sourceTranscript); editPlan.revision = job.editPlan.revision; res.json(publicEditPlan({ ...job, editPlan })); }
+    try {
+      const base = envelope.success ? applyEditPlanChanges(job.editPlan, envelope.data.base, job.sourceTranscript) : job.editPlan;
+      base.revision = job.editPlan.revision;
+      const editPlan = applyEditPlanChanges(base, parsed.data, job.sourceTranscript);
+      editPlan.revision = job.editPlan.revision; res.json(publicEditPlan({ ...job, editPlan }));
+    }
     catch (error) { res.status(400).json({ error: (error as Error).message }); }
   });
   app.get('/api/jobs/:id/waveform', async (req, res) => {

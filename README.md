@@ -323,11 +323,11 @@ or disable/replace a supporting shot from the saved choices. B-roll is locked
 initially; unlock a shot to change its footage or timing. Each shot has a moving
 preview of its selected interval and keeps its source credits.
 
-**Render this revision** creates one corrected export and preserves the previous
+**Render new revision** creates one corrected export and preserves the previous
 version. It reuses saved narration and footage without calling the planners or
 stock provider again. Source-cut changes retime retained captions and supporting
 shots; clipped phrases are dropped for review. Narrated edits keep their audio
-duration. Make cut changes separately from caption/shot timing corrections.
+duration. Timeline gestures start from the current draft, so corrected captions and unlocked shots follow later cut changes.
 
 For edits containing Pixabay, set the combined supporting-shot target, then use **Find B-roll again & render**
 to search the saved speech and create one new export. Changing this target affects
@@ -1014,5 +1014,7 @@ file's own report; when several fail, it lists each file with its code.
 - Turn on **Highlight each word as it’s spoken** in caption appearance. The selected word changes color in the exported video and draft preview. Saved speech timings are used when the words match; uploaded SRTs and rewritten wording use estimated timings. The four caption looks keep their existing appearance when highlighting is off.
 - Export cards show a retained thumbnail, a muted preview on hover or keyboard focus, and a short title that can be renamed. One status summarizes the available checks: **Ready**, **Review needed**, or **Problem**. Open **Details & checks** for the individual reports, source filename, credits and notes.
 - **Help & errors** records action failures rather than adding old editorial reports when History opens. Saved findings remain available with each export.
-- **Edit this result → Timeline** shows cuts, hook, captions, saved B-roll and an audio waveform. Click the ruler or enter a precise playhead time, split a cut, trim edges, move captions and unlocked B-roll, or drag saved footage onto an empty B-roll interval to add up to two seconds. The same controls work with the keyboard. Render a revision to apply the draft; the previous export stays available. Uploaded inserts and covers remain in **Your footage** on their existing placement controls.
+- **Edit this result** opens a montage workspace: **Live edit** plays the draft across cuts and uploaded clips; **Compare saved export** plays the previous render separately. Framing, captions, prompts and review notes are in collapsible sections. **Render new revision** saves a new export and preserves the original. The live view previews cuts, text and supporting picture; final sound processing, transitions and effects require rendering.
+- The **Timeline** uses the complete movie clock, including inserted clips and full-length outros. Click or scrub the ruler to seek. Drag video clips to reorder them, use their edge handles to trim, or Shift-click a sequence of clips. Copy/paste inserts at the playhead and moves following clips; the destination clip is split when needed. **Import clip**, or dropping video files onto the Video track, inserts footage at that point. Saved B-roll can be dragged onto the supporting track. Source audio has its own waveform. Undo/redo retains up to 100 draft states.
+- **Shortcuts** in the timeline lists the supported [Final Cut Pro conventions](https://support.apple.com/guide/final-cut-pro/keyboard-shortcuts-ver90ba5929/mac): `A` Select, `B` Blade, `⌘B` split, `⌘C/X/V` copy/cut/insert clips, Delete to remove and close the gap, `⌘Z` / `⇧⌘Z` undo/redo, Space play/pause, `J/K/L` reverse/pause/forward (repeat J or L for 2× and 4×), arrows for one frame, Shift-arrows for ten frames, up/down for adjacent cuts, `N` snapping, `⇧Z` fit and `⌘+/-` zoom. Windows uses Ctrl instead of ⌘. Text fields retain their normal shortcuts. At least one main-source clip must remain; saved narration still requires an unchanged main duration.
 - **Exports → Quick review** opens a full-window portrait player. Use **A** to accept, **E** to edit and **R** to reject, or the visible buttons. Left/right arrows move through the collection. Notes and explicit decisions are saved in History and included in its acceptance statistics. Advancing or letting a video end does not imply acceptance; rejected files are retained. Typing in notes never triggers the shortcuts.

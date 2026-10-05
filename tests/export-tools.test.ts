@@ -45,6 +45,14 @@ test('export tools persist names and quick verdicts without losing metrics, and 
     assert.match(JSON.stringify(measurementSummary(historyRecords())),/"rejected":1/);
     const preview=await request('/api/jobs/job/plan/preview',{revision:1,cuts:[{start:0,end:1},{start:1,end:2}]},'POST');
     assert.equal(preview.status,200); assert.equal((await preview.json()).cuts.length,2); assert.equal(job.editPlan!.cuts.length,1);
+    const corrected = [{id:'corrected',start:.2,end:.7,text:'My correction'}];
+    const gesture = await request('/api/jobs/job/plan/preview', {base:{revision:1,captions:corrected},changes:{revision:1,cuts:[{start:1,end:2},{start:0,end:1}]}}, 'POST');
+    assert.equal(gesture.status,200);
+    const draft = await gesture.json();
+    assert.equal(draft.revision,1); assert.equal(draft.captions[0].text,'My correction'); assert.equal(draft.captions[0].start,1.2);
+    assert.deepEqual(job.editPlan!.captions,[]);
+    const invalidBase = await request('/api/jobs/job/plan/preview', {base:{revision:2},changes:{revision:1,cuts:[{start:0,end:1}]}}, 'POST');
+    assert.equal(invalidBase.status,400); assert.equal(job.editPlan!.revision,1);
     const waveform=await request('/api/jobs/job/waveform'); assert.equal(waveform.status,200);
     const wave=await waveform.json(); assert.equal(wave.clock,'source'); assert.equal(wave.peaks.length,1200); assert.ok(wave.peaks.some((peak:number)=>peak>0));
     const thumb=await request('/api/jobs/job/thumbnail'); assert.equal(thumb.status,200); assert.match(thumb.headers.get('content-type')!,/image\/jpeg/);
