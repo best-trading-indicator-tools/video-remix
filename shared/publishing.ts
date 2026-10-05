@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { appStoreSourceSchema, parseAppStoreUrl } from './app-store.js';
+import { appStoreSourceSchema, parseStoreUrl } from './app-store.js';
 import { languageNameSchema, publishingLanguageSchema } from './publishing-language.js';
 import type { ExportHistoryEntry, PostMetrics, PublishingPlatform, ReachAssessment } from "./types.js";
 
@@ -34,12 +34,12 @@ export type PostPlatform = z.infer<typeof platformSchema>;
 export const hashtagSchema = z.string().trim().regex(/^#[\p{L}\p{N}_]{1,80}$/u);
 export const webUrlSchema = z.url().max(2000).refine(value => { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) && !url.username && !url.password; }, 'Use an HTTP or HTTPS URL without credentials.');
 export const promotionProfileSchema = z.object({
-  id: z.uuid(), name: text(80).min(1), benefit: text(500).min(1), audience: text(300).min(1),
+  id: z.uuid(), name: text(80).min(1), benefit: text(500).min(1), audience: text(300),
   features: text(2000), callToAction: text(200).min(1), storeUrl: z.union([z.literal(''), webUrlSchema]),
   language: publishingLanguageSchema, country: z.string().regex(/^[A-Z]{2}$/u),
   hashtags: z.array(hashtagSchema).max(6),
   appStore: appStoreSourceSchema.optional(),
-}).strict().refine(profile => !profile.appStore || parseAppStoreUrl(profile.storeUrl)?.id === profile.appStore.appId,
+}).strict().refine(profile => !profile.appStore || (parseStoreUrl(profile.storeUrl)?.id === profile.appStore.appId && parseStoreUrl(profile.storeUrl)?.provider === profile.appStore.provider),
   'The imported listing must match the app URL. Import the new app before saving.');
 export type PromotionProfile = z.infer<typeof promotionProfileSchema>;
 export const trendEvidenceSchema = z.object({

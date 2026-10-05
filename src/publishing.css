@@ -25,6 +25,8 @@
 .publishing-actions button, .publishing-dialog .primary-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 42px; }
 .publishing-profiles { padding: 10px 16px; border: 1px solid var(--line); border-radius: 9px; margin-bottom: 18px; }
 .promotion-profile-form { border-top: 1px solid var(--line); margin-top: 12px; padding-top: 12px; }
+.promotion-brief { border: 1px solid var(--line); border-radius: 9px; padding: 8px 16px; margin-top: 14px; }
+.promotion-brief-preview { white-space: pre-wrap; overflow-wrap: anywhere; }
 .app-store-import { padding: 0 16px 4px; border: 1px solid var(--line); border-radius: 9px; background: #ffffff04; }
 .app-store-import .publishing-row { align-items: center; }
 .app-store-source { margin: 16px 0; padding: 14px; border: 1px solid var(--line); border-radius: 9px; min-width: 0; }

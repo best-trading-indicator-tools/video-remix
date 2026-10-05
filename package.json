@@ -26,6 +26,7 @@
     "@remotion/bundler": "4.0.525",
     "@remotion/renderer": "4.0.525",
     "archiver": "^8.0.0",
+    "cheerio": "1.2.0",
     "express": "^5.2.1",
     "lucide-react": "^1.46.0",
     "multer": "^2.4.0",

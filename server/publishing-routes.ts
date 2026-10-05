@@ -52,12 +52,15 @@ export function installPublishingRoutes(app: Express, options: { client?: Postiz
     if (publishingRecords<PromotionProfile>('profile').length >= 100 && !publishingRecords('profile', profile.id).length) throw new PostizError('The workspace already has 100 app profiles.', 400);
     savePublishing('profile', profile.id, profile); res.json(profile);
   });
-  router.post('/profiles/import-app-store', async (req, res) => {
+  router.post(['/profiles/import-store', '/profiles/import-app-store'], async (req, res) => {
     const input = appStoreImportSchema.parse(req.body);
     if (importing) throw new AppStoreError('An app import is already running. Wait for it to finish.', 409);
     importing = true;
-    try { res.json(await (options.importApp ?? importAppStoreProfile)(input, AbortSignal.timeout(60000))); }
-    finally { importing = false; }
+    const disconnected = new AbortController();
+    const onClose = () => { if (!res.writableEnded) disconnected.abort(); };
+    res.on('close', onClose);
+    try { res.json(await (options.importApp ?? importAppStoreProfile)(input, AbortSignal.any([disconnected.signal, AbortSignal.timeout(60000)]))); }
+    finally { importing = false; res.off('close', onClose); }
   });
   router.get('/channels', async (_req, res) => res.json({ channels: await client().channels() }));
   router.get('/publications', (req, res) => {
