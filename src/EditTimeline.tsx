@@ -17,6 +17,10 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
   onUndo: () => void; onRedo: () => void; canUndo: boolean; canRedo: boolean; onTransport: (command: 'toggle' | 'pause' | 'forward' | 'reverse') => void;
   onImported: (assets: OwnFootageAsset[]) => void; onBusy: (busy: boolean) => void;
 }) {
+  const appleKeyboard = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/iu.test(navigator.platform);
+  const modifier = appleKeyboard ? '⌘' : 'Ctrl+', shift = appleKeyboard ? '⇧' : 'Shift+';
+  const shortcut = (key: string, shifted = false) => appleKeyboard ? `${shifted ? '⇧' : ''}⌘${key}` : `Ctrl+${shifted ? 'Shift+' : ''}${key}`;
+  const redoShortcut = appleKeyboard ? shortcut('Z', true) : 'Ctrl+Y / Ctrl+Shift+Z';
   const [selected, setSelected] = useState<string[]>([]), [zoom, setZoom] = useState(1), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const [tool, setTool] = useState<'select' | 'blade'>('select'), [snapping, setSnapping] = useState(true), [help, setHelp] = useState(false);
   const [clipboard, setClipboard] = useState<StoryClip[]>([]), [wave, setWave] = useState<Waveform>(), [waveError, setWaveError] = useState('');
@@ -171,13 +175,14 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
   };
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
-      if (event.defaultPrevented || !section.current?.closest('[role="dialog"]')?.contains(document.activeElement) || isTyping(event.target) || event.altKey) return;
+      if (event.defaultPrevented || event.isComposing || !section.current?.closest('[role="dialog"]')?.contains(document.activeElement) || isTyping(event.target) || event.altKey) return;
       const key = event.key.toLowerCase(), command = event.metaKey || event.ctrlKey;
       if (command && key === 'b') { event.preventDefault(); void split(); }
       else if (command && key === 'c') { if (activeClip) { event.preventDefault(); copy(); } }
       else if (command && key === 'x') { if (activeClip && !disabled) { event.preventDefault(); copy(); void remove(); } }
       else if (command && key === 'v') { if (clipboard.length) { event.preventDefault(); void paste(); } }
       else if (command && key === 'z') { event.preventDefault(); if (!disabled) { if (event.shiftKey) onRedo(); else onUndo(); } }
+      else if (event.ctrlKey && !event.metaKey && !event.shiftKey && key === 'y') { event.preventDefault(); if (!disabled) onRedo(); }
       else if (command && key === 'a') { event.preventDefault(); setSelected(clips.map(clip => clip.id)); }
       else if (command && (key === '=' || key === '+' || key === '-')) { event.preventDefault(); setZoom(value => clamp(value + (key === '-' ? -.5 : .5), 1, 8)); }
       else if (!command && key === 'z' && event.shiftKey) { event.preventDefault(); setZoom(1); }
@@ -207,17 +212,23 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
     <header><div><h3>Timeline <span>{clips.length} clip{clips.length === 1 ? '' : 's'} · {duration.toFixed(2)} s</span></h3><p>Select a clip. Drag to reorder; drag its edges to trim. Shift-click to select a sequence.</p></div><button type="button" onClick={() => setHelp(!help)} aria-expanded={help}><Keyboard size={15} /> Shortcuts <kbd>?</kbd></button></header>
     <div className="timeline-toolbar" aria-label="Editing tools">
       <div className="timeline-tool-group"><button type="button" aria-label="Select tool" aria-pressed={tool === 'select'} title="Select tool (A)" onClick={() => setTool('select')}><MousePointer2 size={15} /><span>Select</span><kbd>A</kbd></button><button type="button" aria-label="Blade tool" aria-pressed={tool === 'blade'} title="Blade tool (B): click a clip to split" onClick={() => setTool('blade')}><Scissors size={15} /><span>Blade</span><kbd>B</kbd></button></div>
-      <button type="button" disabled={disabled} onClick={() => void split()} title="Split at playhead (⌘B)"><Scissors size={15} /> Split <kbd>⌘B</kbd></button>
-      <button type="button" disabled={!activeClip || disabled} onClick={copy} title="Copy selected clips (⌘C)"><Copy size={15} /><span>Copy</span></button>
-      <button type="button" disabled={!clipboard.length || disabled} onClick={() => void paste()} title="Insert copied clips at playhead (⌘V)"><ClipboardPaste size={15} /><span>Paste</span></button>
+      <button type="button" disabled={disabled} onClick={() => void split()} title={`Split at playhead (${shortcut('B')})`}><Scissors size={15} /> Split <kbd>{shortcut('B')}</kbd></button>
+      <button type="button" disabled={!activeClip || disabled} onClick={copy} title={`Copy selected clips (${shortcut('C')})`}><Copy size={15} /><span>Copy</span></button>
+      <button type="button" disabled={!clipboard.length || disabled} onClick={() => void paste()} title={`Insert copied clips at playhead (${shortcut('V')})`}><ClipboardPaste size={15} /><span>Paste</span></button>
       <button type="button" disabled={!selected.length || disabled || !!active?.locked} onClick={() => void remove()} title="Delete selected and close gap (Delete)"><Trash2 size={15} /><span>Delete</span></button>
-      <div className="timeline-tool-group"><button type="button" aria-label="Undo edit" title="Undo (⌘Z)" disabled={!canUndo || disabled} onClick={onUndo}><Undo2 size={15} /></button><button type="button" aria-label="Redo edit" title="Redo (⇧⌘Z)" disabled={!canRedo || disabled} onClick={onRedo}><Redo2 size={15} /></button></div>
+      <div className="timeline-tool-group"><button type="button" aria-label="Undo edit" title={`Undo (${shortcut('Z')})`} disabled={!canUndo || disabled} onClick={onUndo}><Undo2 size={15} /></button><button type="button" aria-label="Redo edit" title={`Redo (${redoShortcut})`} disabled={!canRedo || disabled} onClick={onRedo}><Redo2 size={15} /></button></div>
       <button type="button" aria-label="Snapping" aria-pressed={snapping} title="Snap to playhead and clip edges (N)" onClick={() => setSnapping(!snapping)}><Magnet size={15} /></button>
       <button type="button" disabled={disabled} onClick={() => fileInput.current?.click()} title="Insert video files at the playhead"><Upload size={15} /><span>Import clip</span></button>
       <input ref={fileInput} aria-label="Import video clips" type="file" accept="video/*,.mkv,.mov,.mp4,.webm" multiple hidden onChange={event => { const files=Array.from(event.target.files || []); event.target.value=''; void importClips(files,time); }} />
-      <label className="timeline-zoom">Zoom <input aria-label="Timeline zoom" type="range" min={1} max={8} step={.5} value={zoom} onChange={event => setZoom(event.target.valueAsNumber)} /><button type="button" onClick={() => setZoom(1)} title="Fit timeline (⇧Z)">Fit</button></label>
+      <label className="timeline-zoom">Zoom <input aria-label="Timeline zoom" type="range" min={1} max={8} step={.5} value={zoom} onChange={event => setZoom(event.target.valueAsNumber)} /><button type="button" onClick={() => setZoom(1)} title={`Fit timeline (${shift}Z)`}>Fit</button></label>
     </div>
-    {help && <div className="timeline-shortcuts"><strong>Final Cut–style shortcuts <small>Use Ctrl instead of ⌘ on Windows. Text fields keep their usual shortcuts.</small></strong>{[['A / B','Select / Blade tool'],['⌘B','Split at playhead'],['⌘C / ⌘X / ⌘V','Copy / cut / insert clips'],['Delete','Delete and close gap'],['⌘Z / ⇧⌘Z','Undo / redo'],['Space · J K L','Play/pause · reverse, pause, forward'],['← → · ⇧← ⇧→','Move 1 frame · 10 frames'],['↑ ↓','Previous / next cut'],['N · ⇧Z','Snapping · fit timeline'],['⇧ click · ⌘ click','Select range · add/remove clip']].map(([key,value]) => <div key={key}><kbd>{key}</kbd><span>{value}</span></div>)}</div>}
+    {help && <div className="timeline-shortcuts"><strong>Timeline shortcuts <small>{appleKeyboard ? 'Mac: ⌘ Command' : 'Windows / Linux: Ctrl'}. Text fields keep their usual shortcuts.</small></strong>{[
+      ['A / B','Select / Blade tool'],[shortcut('B'),'Split at playhead'],[`${shortcut('C')} / ${shortcut('X')} / ${shortcut('V')}`,'Copy / cut / insert clips'],
+      ['Delete / Backspace','Delete and close gap'],[shortcut('Z'),'Undo'],[redoShortcut,'Redo'],[shortcut('A'),'Select all clips'],
+      ['Space · J K L','Play/pause · reverse, pause, forward'],[`← → · ${shift}← ${shift}→`,'Move 1 frame · 10 frames'],['↑ ↓ · Home / End','Cut boundaries · start / end'],
+      [`N · ${shift}Z`,'Snapping · fit timeline'],[`${shortcut('+')} / ${shortcut('-')}`,'Zoom in / out'],
+      [`${shift}click · ${modifier}${appleKeyboard ? ' ' : ''}click`,'Select range · add/remove clip'],[shortcut('Enter'),'Add/remove focused clip'],
+    ].map(([key,value]) => <div key={key}><kbd>{key}</kbd><span>{value}</span></div>)}</div>}
     <div className="timeline-position"><output>{timecode(clamp(time,0,duration),fps)}</output><label>Playhead <input aria-label="Timeline playhead seconds" type="number" min={0} max={duration} step="any" value={Math.min(duration,Number(time.toFixed(3)))} onChange={event => { if (Number.isFinite(event.target.valueAsNumber)) onSeek(clamp(event.target.valueAsNumber,0,duration)); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); section.current?.focus(); } }} /> s</label><span>{tool === 'blade' ? 'Blade: click inside a video clip to split it.' : selected.length ? `${selected.length} selected` : 'Click a clip to select it'}</span>{disabled && <span role="status">Updating…</span>}</div>
     <div className="timeline-scroll" ref={scroll}><div className={`timeline-canvas ${tool === 'blade' ? 'blade-tool' : ''}`} ref={track} style={{ width: `${zoom * 100}%` }}>
       <div className="timeline-ruler" role="slider" tabIndex={0} aria-label="Seek timeline" aria-valuemin={0} aria-valuemax={duration} aria-valuenow={clamp(time,0,duration)} onPointerDown={event => { event.currentTarget.setPointerCapture(event.pointerId); onSeek(quantize(at(event.clientX))); }} onPointerMove={event => { if (event.buttons === 1) onSeek(quantize(at(event.clientX))); }}>{Array.from({length: 11}, (_, i) => <span key={i} style={{ left: `${i * 10}%` }}>{(duration * i / 10).toFixed(1)}s</span>)}</div>
@@ -226,7 +237,7 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
         let start = clip.outputStart, end = clip.outputEnd;
         if (moving && gesture.mode === 'start') start = clamp(start + gesture.delta, 0, end - .04);
         if (moving && gesture.mode === 'end') end = Math.max(start + .04, end + gesture.delta);
-        return <div key={clip.id} role="button" tabIndex={0} aria-label={`${title}, ${clip.outputStart.toFixed(2)} to ${clip.outputEnd.toFixed(2)} seconds`} aria-pressed={selectedClip} className={`timeline-item ${selectedClip ? 'selected' : ''} ${clip.kind === 'footage' ? 'uploaded-clip' : ''} ${moving ? 'is-dragging' : ''}`} style={{ left: `${start/duration*100}%`, width: `${(end-start)/duration*100}%` }} onPointerDown={event => begin(event,clip.id,'move')} {...handlers}  onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); select(clip.id,event.shiftKey,event.metaKey); } }}>
+        return <div key={clip.id} role="button" tabIndex={0} aria-label={`${title}, ${clip.outputStart.toFixed(2)} to ${clip.outputEnd.toFixed(2)} seconds`} aria-pressed={selectedClip} className={`timeline-item ${selectedClip ? 'selected' : ''} ${clip.kind === 'footage' ? 'uploaded-clip' : ''} ${moving ? 'is-dragging' : ''}`} style={{ left: `${start/duration*100}%`, width: `${(end-start)/duration*100}%` }} onPointerDown={event => begin(event,clip.id,'move')} {...handlers}  onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); select(clip.id,event.shiftKey,event.metaKey || event.ctrlKey); } }}>
           {handle(clip.id,title,'start')}<img src={clip.kind === 'cut' ? `/api/sources/${plan.sourceId}/thumbnail` : job.footageAssets?.find(asset => asset.id === clip.footage.assetId)?.thumbnailUrl} alt="" hidden={clip.kind === 'footage'} draggable={false} /><span>{title}<small>{(clip.outputEnd-clip.outputStart).toFixed(2)} s</small></span>{handle(clip.id,title,'end')}
         </div>;
       })}</div>

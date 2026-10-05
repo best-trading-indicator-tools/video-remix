@@ -72,7 +72,7 @@
 .timeline-shortcuts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 8px 20px; padding: 14px; background: var(--field); border: 1px solid var(--line); border-radius: 7px; margin-bottom: 10px; }
 .timeline-shortcuts > strong { grid-column: 1/-1; font-size: 12px; }
 .timeline-shortcuts small { display: block; color: var(--subtle); font-weight: normal; font-size: 11px; margin: 5px 0; }
-.timeline-shortcuts > div { display: flex; gap: 10px; font-size: 11px; align-items: center; }
+.timeline-shortcuts > div { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; align-items: center; min-width: 0; }
 .timeline-shortcuts kbd { min-width: 80px; }
 .timeline-media { display: block; }
 .timeline-media summary { font-size: 11px; color: var(--subtle); cursor: pointer; }
