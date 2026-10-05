@@ -49,7 +49,9 @@ export interface AutoOptions extends SupportingVisualOptions {
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
   aspect: Aspect;
-  /** Maximum output length in whole seconds, starting at 1. */
+  /** Missing on older preferences: keep their existing excerpt-selection behavior. */
+  durationMode?: "full" | "excerpt";
+  /** Maximum source excerpt length in seconds; ignored in full mode. Inserted footage adds time. */
   targetDuration: number;
   narration: boolean;
   pacing?: PacingOptions;

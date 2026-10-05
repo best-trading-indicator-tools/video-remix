@@ -63,11 +63,18 @@ Failed link imports have a **Retry import** button that requests a fresh downloa
 
 ### Quick setup and your style
 
-Auto opens on **Quick setup**, four choices that follow **Apply changes to**.
+Auto opens on **Quick setup**, with choices that follow **Apply changes to**.
 Choose this video, selected videos or all videos; future imports have a separate
-checkbox. The choices are: **where you will post** (TikTok, Reels & Shorts 9:16, Instagram feed 4:5,
-square, or YouTube 16:9), **how long each clip can be** (15–90 seconds), **how many
-clips per video**, and **what changes between versions**. **All settings** in the
+checkbox. Choose **where you will post** (TikTok, Reels & Shorts 9:16, Instagram feed 4:5,
+square, or YouTube 16:9), then choose **Keep the full video** or **Let Auto choose a shorter clip**.
+Full video makes one export per source, keeping all its footage in order, including pauses and the original voice.
+A 15-second source stays 15 seconds and a 30-second source stays 30 seconds in the same batch.
+Your added footage adds time: appending a 17-second clip to a 50-second original makes a 67-second export.
+Captions, framing, sound and supporting visuals still follow your preferences; editorial review checks without recutting.
+Shorter clips let you choose a **maximum excerpt length** (15–90 seconds), **how many
+clips per video**, and **what changes between versions**. Auto can select less than the maximum;
+inserted footage adds time beyond that limit. Existing saved setups retain excerpt selection until you choose full video.
+**All settings** in the
 panel header exposes every Auto control with the same settings scope; your choice
 of view is remembered.
 
@@ -80,9 +87,9 @@ sound look or None carries over; Auto's measured sound has no Manual equivalent,
 Manual keeps its own sound in that case. Short clips starts new pacing reviews from
 your style's pacing. The style is stored in this browser.
 
-Optional output preferences let you enter **any whole-number target length from 1 second**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. The target length is an upper limit; shorter sources stay short. Custom lengths are saved per video and survive reloading.
+For shorter clips, optional output preferences let you enter **any whole-number maximum excerpt length from 1 second**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. The maximum limits the source excerpt; inserted footage adds time. Length mode and custom limits are saved per video and survive reloading.
 
-Select a source video to change **only that video's Auto settings**, including format, duration, narration, supporting visuals, selected B-roll clips, and maximum versions. **Apply to all** copies the selected video's complete settings to the other sources and updates the defaults for future imports. One Auto remix click still processes the whole batch, with each video using its own saved settings. Manual settings remain separate.
+Select a source video and use **This video** to change only its Auto settings, including format, length mode, narration, supporting visuals, selected B-roll clips, and maximum versions. **Copy all Auto settings to all N videos** copies the selected video's complete settings to the other sources. Future imports change only when their checkbox is enabled. One Auto remix click processes the selected batch, with each video using its own saved settings. Manual settings remain separate.
 
 **What changes between versions** decides how versions of one video differ. **A different moment** (the default) looks for another excerpt each time. **New angles on the same moment** keeps version 1's excerpt and builds up to three more versions from it, each with its own opening, on-screen text and caption look:
 

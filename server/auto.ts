@@ -231,15 +231,16 @@ export async function prepareAutoRemix({
   historyPlans?: EditorialPlan[];
 }): Promise<PreparedAuto> {
   const options = job.auto!;
+  const fullLength = options.durationMode === "full";
   const keepOriginalAudio = isAutoAudioNone(options.audio);
-  const angle = versionAngle(options, job.variant);
+  const angle = fullLength ? undefined : versionAngle(options, job.variant);
   // Angle versions share version 1's footage and speech, so every version keeps the original voice.
-  const useNarration = options.narration && !keepOriginalAudio && options.versionMode !== "angles";
+  const useNarration = !fullLength && options.narration && !keepOriginalAudio && options.versionMode !== "angles";
   const notes: string[] = [];
   const changes: string[] = [];
   let keepSourceCaptions = options.captions === "keep";
   if (keepSourceCaptions) notes.push("Original captions were kept. No new captions were added.");
-  if (options.narration && !keepOriginalAudio && options.versionMode === "angles")
+  if (!fullLength && options.narration && !keepOriginalAudio && options.versionMode === "angles")
     notes.push("New angles on one moment keep the original voice, so no narration was added.");
   const variant = job.variant - 1;
   const siblings = [...completedAutoSiblings(job, previous), ...reserved.filter(other =>
@@ -252,7 +253,7 @@ export async function prepareAutoRemix({
   const shortSourceSkip = "This batch already has a version of this short source. Choose Generate anyway to make another version using the same footage.";
   signal.throwIfAborted();
   // A new angle reuses version 1's footage on purpose; other versions look for unused footage.
-  if (!lead && repeatsShortSource()) throw new AutoSkipError(shortSourceSkip);
+  if (!fullLength && !lead && repeatsShortSource()) throw new AutoSkipError(shortSourceSkip);
   let transcript: Transcript | undefined;
   onPhase("Checking your footage", 2);
   if (source.hasAudio) {
@@ -313,10 +314,10 @@ export async function prepareAutoRemix({
     const unused = select(previousPlans);
     return unused.length || !historyPlans.length ? unused : select(batchPlans);
   };
-  let candidates = transcript && !anglePlan
+  let candidates = !fullLength && transcript && !anglePlan
     ? preferUnused(previous => buildCandidates(transcript!, source.duration, options.targetDuration, variant, previous))
     : [];
-  if (transcript?.segments.length && !anglePlan) {
+  if (!fullLength && transcript?.segments.length && !anglePlan) {
     onPhase("Finding complete spoken ideas", 36);
     const ideas = await discoverSourceIdeas({ transcript, sourceDuration: source.duration,
       targetDuration: options.targetDuration, signal });
@@ -332,7 +333,7 @@ export async function prepareAutoRemix({
     }
   }
   if (
-    transcript &&
+    !fullLength && transcript &&
     !anglePlan &&
     batchPlans.length &&
     !candidates.length &&
@@ -364,10 +365,19 @@ export async function prepareAutoRemix({
       }
       if (keepSourceCaptions) notes.push(captionProtectionNote(inspection.status));
     }
-    if (!hookRewritten && !keepSourceCaptions)
+    if (!fullLength && !hookRewritten && !keepSourceCaptions)
       notes.push("The hook was taken from the selected speech because AI rewriting did not finish for this version.");
   };
-  if (anglePlan && transcript) {
+  if (fullLength) {
+    onPhase("Keeping the full video", 38);
+    cuts = [{ start: 0, end: source.duration }];
+    changes.push("Full video kept");
+    notes.push("The full original video is kept in order, including pauses and its original voice. Inserted footage adds to its length.");
+    if (transcript?.segments.length) {
+      captionTranscript = retimeTranscript(transcript, cuts);
+      await checkSourceCaptions(cuts, transcript);
+    }
+  } else if (anglePlan && transcript) {
     cuts = anglePlan.cuts;
     captionTranscript = retimeTranscript(transcript, cuts);
     hook = anglePlan.hook;

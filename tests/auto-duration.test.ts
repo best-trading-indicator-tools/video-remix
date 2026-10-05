@@ -37,3 +37,34 @@ test("custom lengths bound scene and spoken cuts and never extend a shorter orig
   assert.ok(buildCandidates(transcript, 180, 75, 0).some(candidate => candidate.end - candidate.start > 60),
     "Longer requested lengths must allow spoken ideas beyond the old 60-second ceiling");
 });
+
+test("full-video batches keep one original-voice export per source without changing older excerpt requests", () => {
+  const sourceId = "3f4509be-8c84-4cec-aa7c-0af38bd794d9";
+  const otherId = "081cfedb-0175-49d3-a915-c22958871056";
+  const options = { durationMode: "full", targetDuration: 15, narration: true, versionMode: "angles" };
+  for (const request of [
+    { sourceIds: [sourceId, otherId], variants: 3, options },
+    { items: [sourceId, otherId].map(sourceId => ({ sourceId, variants: 3, options })) },
+  ]) {
+    const batch = autoBatchSchema.parse(request);
+    assert.equal(batch.items.length, 2);
+    for (const item of batch.items) {
+      assert.equal(item.variants, 1);
+      assert.equal(item.options.durationMode, "full");
+      assert.equal(item.options.narration, false);
+      assert.equal(item.options.versionMode, "moments");
+      assert.equal(item.options.targetDuration, 15, "The saved excerpt limit remains available when switching back");
+    }
+  }
+  const mixed = autoBatchSchema.parse({ items: [
+    { sourceId, variants: 3, options },
+    { sourceId: otherId, variants: 3, options: { targetDuration: 30, narration: true } },
+  ] });
+  assert.equal(mixed.items[0].variants, 1);
+  assert.equal(mixed.items[1].variants, 3);
+  assert.equal(mixed.items[1].options.durationMode, undefined);
+  assert.equal(mixed.items[1].options.narration, true);
+  assert.equal(mixed.items[1].options.targetDuration, 30);
+  assert.equal(autoOptionsSchema.parse({ durationMode: "excerpt" }).durationMode, "excerpt");
+  assert.equal(autoOptionsSchema.safeParse({ durationMode: "unknown" }).success, false);
+});

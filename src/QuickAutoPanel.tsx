@@ -3,6 +3,7 @@ import type { AutoOptions } from "../shared/types";
 import { MAX_AUTO_VERSIONS } from "../shared/types";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
+import AutoLengthMode from "./AutoLengthMode";
 import "./quick-auto.css";
 
 export type AutoView = "quick" | "all";
@@ -28,13 +29,14 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, mixed, scopeDescription, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, disabled }: {
-  scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean;
+export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, disabled }: {
+  scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean; mixedLength: boolean;
   onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
   selectedId?: string; selectedVideos: FootageTarget[]; disabled: boolean;
   onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
 }) {
   const angles = options.versionMode === "angles";
+  const fullLength = options.durationMode === "full";
   const maxClips = angles ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS;
   return <aside className="auto-panel panel quick-auto">
     <div className="panel-heading"><h2><Zap size={16} />Quick setup</h2><AutoViewSwitch view="quick" onView={onView} /></div>
@@ -53,15 +55,17 @@ export default function QuickAutoPanel({ options, variants, mixed, scopeDescript
         </div>
         {!PLATFORMS.some(platform => platform.aspect === options.aspect) && <p className="auto-preferences-note">Currently: original format, set in All settings.</p>}
       </fieldset>
+      <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={durationMode => onChange({ options: { durationMode } })} />
+      {fullLength ? <p className="auto-preferences-note">One export per video, with its original order, pauses and voice. A 15s video stays 15s; a 30s video stays 30s. Inserted footage adds to each video’s length.</p> : <>
       <fieldset className="quick-auto-group">
-        <legend>How long can each clip be?</legend>
+        <legend>Maximum excerpt length</legend>
         <div className="quick-auto-chips">{LENGTHS.map(seconds =>
           <label key={seconds} className="quick-auto-chip">
             <input type="radio" name="quick-auto-length" checked={options.targetDuration === seconds} onChange={() => onChange({ options: { targetDuration: seconds } })} />
             <span>{seconds}s</span>
           </label>)}
         </div>
-        <p className="auto-preferences-note">{LENGTHS.includes(options.targetDuration) ? "An upper limit: Auto keeps a complete idea shorter when it fits." : `Currently up to ${options.targetDuration}s, set in All settings.`}</p>
+        <p className="auto-preferences-note">{LENGTHS.includes(options.targetDuration) ? "Limits the selected part of the original, not the final export. Inserted footage adds time." : `Up to ${options.targetDuration}s of the original, set in All settings. Inserted footage adds time.`}</p>
       </fieldset>
       <fieldset className="quick-auto-group">
         <legend>How many clips per video?</legend>
@@ -79,6 +83,7 @@ export default function QuickAutoPanel({ options, variants, mixed, scopeDescript
         </div>
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
+      </>}
       <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage}
         onChange={ownFootage => onChange({ options: { ownFootage } })} disabled={disabled}
         selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />

@@ -110,13 +110,14 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
   const versionMode = options?.versionMode === "angles" ? "angles" : "moments";
   return {
     // Each angle is a distinct treatment of one moment, so angle batches stop at the number of angles.
-    variants: Math.max(
+    variants: options?.durationMode === "full" ? 1 : Math.max(
       1,
       Math.min(versionMode === "angles" ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS, Math.floor(Number(value?.variants)) || 1),
     ),
     options: {
       ...DEFAULT_AUTO_OPTIONS,
       ...options,
+      durationMode: options?.durationMode === "full" ? "full" : "excerpt",
       aspect: ["original", "9:16", "1:1", "4:5", "16:9"].includes(
         options?.aspect || "",
       )
@@ -445,6 +446,8 @@ export default function App() {
     ? autoById[selected.id] || defaultAuto
     : defaultAuto;
   const autoOptions = selectedAuto.options;
+  const lengthTargets = [...settingTargets.map(source => autoById[source.id] || defaultAuto), ...(futureSettings ? [defaultAuto] : [])];
+  const mixedAutoLength = lengthTargets.some(preset => (preset.options.durationMode ?? "excerpt") !== (autoOptions.durationMode ?? "excerpt"));
   const autoPresets = sources.map(
     (source) => autoById[source.id] || defaultAuto,
   );
@@ -1324,12 +1327,10 @@ export default function App() {
                                   : (autoById[source.id] || defaultAuto).options
                                       .aspect}
                                 <span>·</span>
-                                Up to{" "}
-                                {
-                                  (autoById[source.id] || defaultAuto).options
-                                    .targetDuration
-                                }
-                                s<span>·</span>
+                                {(autoById[source.id] || defaultAuto).options.durationMode === "full"
+                                  ? `Full video · ${duration(source.duration)}`
+                                  : `Up to ${(autoById[source.id] || defaultAuto).options.targetDuration}s`}
+                                <span>·</span>
                                 {
                                   (autoById[source.id] || defaultAuto).variants
                                 }{" "}
@@ -1616,6 +1617,7 @@ export default function App() {
                   variants={selectedAuto.variants}
 
                   mixed={!uniformAuto}
+                  mixedLength={mixedAutoLength}
                   scopeDescription={scopeDescription}
                   onChange={updateScopedAuto}
                   onView={setAutoView}
@@ -1631,6 +1633,8 @@ export default function App() {
                   onSaveStyle={saveMyStyle}
                   options={autoOptions}
                   onChange={(options) => updateAuto({ options })}
+                  mixedLength={mixedAutoLength}
+                  onLengthChange={durationMode => updateScopedAuto({ options: { durationMode } })}
                   sources={sources}
                   selectedId={selected?.id}
                   onSourceChange={setSelectedId}
@@ -2299,7 +2303,7 @@ export default function App() {
                   </span>
                   <span>
                     {uniformAuto
-                      ? `Up to ${autoOptions.targetDuration}s · `
+                      ? autoOptions.durationMode === "full" ? "Full length for each video · " : `Up to ${autoOptions.targetDuration}s · `
                       : ""}
                     Up to {exportCount} exports total
                   </span>
@@ -2534,7 +2538,7 @@ export default function App() {
                                   {job.summary
                                     ? `${duration(job.summary.sourceDuration)} → ${duration(job.summary.outputDuration)}`
                                     : job.auto
-                                      ? `Up to ${job.auto.targetDuration}s`
+                                      ? job.auto.durationMode === "full" ? "Full video" : `Up to ${job.auto.targetDuration}s`
                                       : `${job.settings.speed.toFixed(2)}× speed`}
                                 </span>
                                 <span>·</span>

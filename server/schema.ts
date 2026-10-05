@@ -139,6 +139,7 @@ export const autoOptionsSchema = z
     blackBands: blackBandsSchema.optional(),
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
     targetDuration: z.number().int().min(1).default(45),
+    durationMode: z.enum(["full", "excerpt"]).optional(),
     narration: z.boolean().default(false),
     pacing: pacingOptionsSchema.optional(),
     captions: z.enum(["auto", "add", "keep"]).optional(),
@@ -192,4 +193,6 @@ const legacyAutoBatchSchema = z
 export const autoBatchSchema = z.union([
   autoItemsSchema,
   legacyAutoBatchSchema,
-]);
+]).transform(batch => ({ ...batch, items: batch.items.map(item => item.options.durationMode === "full"
+  ? { ...item, variants: 1, options: { ...item.options, narration: false, versionMode: "moments" as const } }
+  : item) }));

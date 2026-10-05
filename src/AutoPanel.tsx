@@ -29,6 +29,7 @@ import PacingOptions from "./PacingOptions";
 import "./pacing.css";
 import "./auto-panel.css";
 import { AutoViewSwitch, type AutoView } from "./QuickAutoPanel";
+import AutoLengthMode from "./AutoLengthMode";
 
 export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
   "9:16": "TikTok & Reels",
@@ -44,6 +45,8 @@ export default function AutoPanel({
   onSaveStyle,
   options,
   onChange,
+  mixedLength,
+  onLengthChange,
   capabilities,
   variants,
   onVariantsChange,
@@ -66,6 +69,8 @@ export default function AutoPanel({
   onSaveStyle?: () => void;
   options: AutoOptions;
   onChange: (value: AutoOptions) => void;
+  mixedLength: boolean;
+  onLengthChange: (mode: NonNullable<AutoOptions['durationMode']>) => void;
   capabilities: AutoCapabilities | null;
   variants: number;
   onVariantsChange: (value: number) => void;
@@ -89,9 +94,10 @@ export default function AutoPanel({
     : Number(options.aspect.split(":")[0]) / Number(options.aspect.split(":")[1]);
   const keepOriginalCaptions = options.captions === "keep";
   const keepOriginalAudio = isAutoAudioNone(options.audio);
+  const fullLength = options.durationMode === "full";
   const angles = options.versionMode === "angles";
   const maxVersions = angles ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS;
-  const narrationAvailable = !!capabilities?.narration && !keepOriginalCaptions && !keepOriginalAudio && !angles;
+  const narrationAvailable = !fullLength && !!capabilities?.narration && !keepOriginalCaptions && !keepOriginalAudio && !angles;
   const [durationInput, setDurationInput] = useState(String(options.targetDuration));
   useEffect(() => setDurationInput(String(options.targetDuration)), [options.targetDuration, selectedId]);
   const commitDuration = () => {
@@ -171,6 +177,7 @@ export default function AutoPanel({
             </small>
           )}
         </div>
+        <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={onLengthChange} />
         <section className="auto-layout" aria-labelledby="auto-layout-title">
           <h3 id="auto-layout-title">Black bands &amp; text</h3>
           <label className="auto-output-field">
@@ -197,7 +204,8 @@ export default function AutoPanel({
         <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={footageDisabled}
           selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
         <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
-        <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />
+        {fullLength ? <p className="auto-preferences-note">Full video keeps the original order, pauses and voice. One export is made per video; inserted footage adds to its length.</p>
+          : <PacingOptions value={options.pacing} onChange={pacing => onChange({ ...options, pacing })} disabled={libraryBusy} />}
         <div className="auto-output-summary">
           <div>
             <Expand size={14} />
@@ -208,7 +216,7 @@ export default function AutoPanel({
           </div>
           <div>
             <Clapperboard size={14} />
-            <span>Up to {options.targetDuration} seconds</span>
+            <span>{fullLength ? "Full video" : `Up to ${options.targetDuration} seconds`}</span>
             <span className="auto-original-voice">
               {options.narration && narrationAvailable
                 ? "New narration"
@@ -224,8 +232,9 @@ export default function AutoPanel({
             </span>
           </summary>
           <div className="auto-preferences-content">
+            {!fullLength && <>
             <label className="auto-output-field" data-tour="auto-length">
-              Target length (seconds)
+              Maximum excerpt length (seconds)
               <input
                 type="number"
                 inputMode="numeric"
@@ -243,7 +252,7 @@ export default function AutoPanel({
               />
             </label>
             <p id="auto-duration-note" className="auto-preferences-note">
-              Any whole number from 1 second. Auto may choose a shorter excerpt; it never extends the original footage.
+              Any whole number from 1 second. Auto may choose a shorter excerpt. Inserted footage adds to the final length.
             </p>
             <label className="auto-output-field">
               Maximum versions
@@ -287,6 +296,7 @@ export default function AutoPanel({
                 ? `Version 1 is the ${ANGLE_NAMES.classic.toLowerCase()} edit. Later versions reuse its moment: ${VERSION_ANGLES.slice(1).map(angle => ANGLE_NAMES[angle].toLowerCase()).join(", ")}. They keep the original voice and write their on-screen text with DeepSeek.`
                 : "Each version looks for a different moment in this video."}
             </p>
+            </>}
             <label className="auto-output-field" data-tour="auto-captions">
               Captions
               <select value={options.captions ?? "auto"} aria-describedby="auto-captions-note"
@@ -325,17 +335,17 @@ export default function AutoPanel({
             </p>
             <label className="auto-output-field" data-tour="auto-review">
               Editorial review
-              <select value={options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
-                <option value="repair">Check and repair · up to 2 attempts</option>
+              <select value={fullLength && options.editorialMode !== "off" ? "check" : options.editorialMode ?? "repair"} onChange={(event) => onChange({ ...options, editorialMode: event.target.value as AutoOptions["editorialMode"] })}>
+                <option value="repair" disabled={fullLength}>Check and repair · up to 2 attempts</option>
                 <option value="check">Check only</option>
                 <option value="off">Off</option>
               </select>
             </label>
-            <p className="auto-preferences-note">DeepSeek checks the opening, meaning, and ending against the original transcript. Without usable speech, DeepSeek Flash reviews sampled source frames instead. Repair mode can try up to two speech-based corrections, keeping proposals only when the follow-up check reports fewer issues. Models can miss problems; review the finished short.</p>
+            <p className="auto-preferences-note">{fullLength ? "Review checks the video without changing its cuts or timing. Full video keeps the complete original." : "DeepSeek checks the opening, meaning, and ending against the original transcript. Without usable speech, DeepSeek Flash reviews sampled source frames instead. Repair mode can try up to two speech-based corrections, keeping proposals only when the follow-up check reports fewer issues. Models can miss problems; review the finished short."}</p>
             <label className="auto-narration-toggle"><span><strong>Review finished picture &amp; sound</strong><small>Inspect sampled source/export frames and compare captions with the rendered soundtrack. Adds processing time.</small></span><input type="checkbox" checked={options.finishedReview !== false} onChange={event => onChange({ ...options, finishedReview: event.target.checked })} /></label>
             <p className="auto-preferences-note">Finished picture review sends sampled frames and recognized speech to DeepSeek. Audio transcription runs locally. Findings are advisory and never block your download.</p>
             <p className="auto-preferences-note">When available, AI selection, checks, and repairs use {capabilities?.intelligenceModel ? `DeepSeek · ${capabilities.intelligenceModel}` : "DeepSeek"}. Bounded transcript excerpts, captions, headings, and edit metadata are sent to DeepSeek. Transcription and rendering stay on this computer.</p>
-            <label
+            {!fullLength && <label
               className={`auto-narration-toggle ${!narrationAvailable ? "unavailable" : ""}`}
             >
               <span>
@@ -362,7 +372,7 @@ export default function AutoPanel({
                   onChange({ ...options, narration: event.target.checked })
                 }
               />
-            </label>
+            </label>}
             <SupportingVisualsEditor options={options} onChange={patch => onChange({ ...options, ...patch })}
               capabilities={capabilities} selectedId={selectedId} libraryBusy={libraryBusy}
               onBrollSelectionChange={onBrollSelectionChange} onLibraryBusyChange={onLibraryBusyChange}
@@ -372,7 +382,7 @@ export default function AutoPanel({
         <div className="auto-workflow-note">
           <Scissors size={16} />
           <p>
-            {capabilities?.transcription
+            {fullLength ? "Auto keeps the full video and applies your caption, framing and footage preferences. You can refine the result after rendering." : capabilities?.transcription
               ? "Auto selects an excerpt and follows your caption preferences. You can refine the cut, text, and visuals after rendering."
               : "Auto selects and reframes footage. You can refine the cut and visuals after rendering."}
           </p>

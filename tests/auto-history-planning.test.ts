@@ -107,6 +107,37 @@ test("Auto treats previous batches as a preference while preserving same-batch r
       assert.fail("The bounded fixture should exhaust its same-batch alternatives");
     };
 
+    await t.test("full-video mode preserves every spoken section and pause regardless of length, pacing, angles or prior exports", async () => {
+      config.aiEnabled = true;
+      providerCalls = [];
+      try {
+        for (const duration of [15, 30, 50.966667]) {
+          const transcript: Transcript = { language: "en", duration, segments: [
+            speech(1, 3, "Keep the opening explanation."),
+            speech(duration - 4, duration - 1, "Keep the final qualification too."),
+          ] };
+          const source = await sourceFor(transcript);
+          const cuts = [{ start: 0, end: duration }];
+          const sibling = jobFor(source, { status: "completed", settings: { ...DEFAULT_SETTINGS, segments: cuts } });
+          const result = await prepare(source, [{ cuts }], [sibling], { auto: {
+            ...DEFAULT_AUTO_OPTIONS, durationMode: "full", targetDuration: 5, versionMode: "angles",
+            pacing: { mode: "tight", minimumPause: 0.9, keepPause: 0.35, removeFillers: true }, narration: true, captions: "add", audio: "off", supportingVisuals: "off",
+          } });
+          assert.deepEqual(result.settings.segments, cuts);
+          assert.equal(result.settings.speed, 1);
+          assert.equal(result.settings.smoothCuts, false);
+          assert.equal(result.summary.outputDuration, duration);
+          assert.equal(result.summary.narration, false);
+          assert.equal(result.audioPath, undefined);
+          assert.equal(result.summary.usedAI, false);
+          assert.equal(result.settings.hookText, "");
+          const captions = parseCaptionCues(await readFile(result.subtitlePath!, "utf8"));
+          assert.match(captions.map(cue => cue.text).join(" "), /opening explanation.*final qualification/u);
+          assert.ok(captions.at(-1)!.start >= duration - 4, "Captions keep the original pauses and timing");
+          assert.equal(providerCalls.length, 0, "Full-video mode does not request excerpt selection or rewritten speech");
+        }
+      } finally { config.aiEnabled = false; }
+    });
     await t.test("a fully used short source can be edited in a new batch with a visible history advisory", async () => {
       const transcript: Transcript = { language: "en", duration: 20, segments: [
         speech(1, 7, "A faster shutter speed reduces motion blur when photographing a moving subject."),

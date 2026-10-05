@@ -285,7 +285,9 @@ async function run(job: StoredJob, controller: AbortController) {
       job.phase = "Rendering your manual edit";
     }
     if (job.editPlan && job.auto) {
-      const mode = job.auto.editorialMode ?? "repair";
+      const requestedMode = job.auto.editorialMode ?? "repair";
+      // Full-length exports are an explicit timing choice; automatic review must never recut them.
+      const mode = job.auto.durationMode === "full" && requestedMode === "repair" ? "check" : requestedMode;
       job.editorialModeApplied = mode;
       if (mode !== "off") {
         if (mode === "repair" && !savedRepair) {
