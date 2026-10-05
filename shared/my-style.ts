@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { applyAudioLook, audioLookById, AUTO_AUDIO_MODES, DEFAULT_AUDIO_SETTINGS, isAutoAudioNone } from "./audio.js";
 import { applyBandFinish, blackBandFinishSchema } from "./black-bands.js";
-import { CAPTION_PRESETS, captionStyleSchema, type CaptionStyle } from "./caption-style.js";
+import { CAPTION_PRESETS, captionStyleSchema, withoutHighlight, type CaptionStyle } from "./caption-style.js";
 import { pacingOptionsSchema } from "./pacing.js";
 import type { AutoOptions, RemixSettings } from "./types.js";
 
@@ -66,7 +66,7 @@ const PACING_NAMES = { off: "Original pacing", natural: "Natural pacing", tight:
 /** A short, readable summary of what the style changes. */
 export function describeMyStyle(style: MyStyle): string[] {
   const captions = style.captionStyle
-    ? `${CAPTION_PRESETS.find(preset => sameStyle(preset.style, style.captionStyle!))?.name ?? "Custom"} captions` : "Default captions";
+    ? `${CAPTION_PRESETS.find(preset => sameStyle(preset.style, withoutHighlight(style.captionStyle!)))?.name ?? "Custom"} captions${style.captionStyle.wordHighlight ? " · word highlight" : ""}` : "Default captions";
   const bands = style.blackBands?.enabled ? `Black bands ${style.blackBands.topPercent}% / ${style.blackBands.bottomPercent}%` : "No black bands";
   const pacing = style.pacing ? PACING_NAMES[style.pacing.mode] : "Default pacing";
   const sound = !style.audio || style.audio === "auto" ? "Measured sound" : isAutoAudioNone(style.audio) ? "Original sound"

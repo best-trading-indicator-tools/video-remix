@@ -16,6 +16,12 @@ export function transcriptFromPlan(job: StoredJob): Transcript | undefined {
     language: job.sourceTranscript?.language || "auto", duration: plan.outputDuration,
     segments: plan.captions.map(cue => ({ start: cue.start, end: cue.end, text: cue.text, words: [] })),
   };
+  return planSpeech(job);
+}
+
+/** The source's recognized speech on the saved edit's output clock. */
+function planSpeech(job: StoredJob): Transcript | undefined {
+  const plan = job.editPlan!;
   // Original speech does not describe a rewritten narration track.
   if (plan.narration || !job.sourceTranscript) return undefined;
   const transcript = retimeTranscript(job.sourceTranscript, plan.cuts);
@@ -251,5 +257,6 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
     await writeFile(subtitlePath, captionCuesSrt(plan.captions), "utf8");
   }
   return { supportingVisuals, subtitlePath,
+    captionWords: subtitlePath && plan.settings.captionStyle?.wordHighlight ? planSpeech(job)?.segments.flatMap(segment => segment.words) : undefined,
     audioPath: plan.audioMediaId ? planMediaPath(job, plan.audioMediaId) : undefined };
 }

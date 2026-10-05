@@ -20,23 +20,36 @@ export const captionStyleSchema = z.object({
   alignment: z.enum(["left", "center", "right"]).optional(),
   background: z.enum(["none", "box"]).optional(), backgroundColor: color.optional(),
   backgroundOpacity: z.number().finite().min(0).max(100).optional(),
+  /** Light up each word while it is spoken. Off for every existing export and preset. */
+  wordHighlight: z.boolean().optional(), highlightColor: color.optional(),
 }).strict();
 export type CaptionStyle = z.infer<typeof captionStyleSchema>;
 export const DEFAULT_CAPTION_STYLE: Required<CaptionStyle> = {
   fontSize: 20, bottomPercent: 100 / 12, fontFamily: "classic", color: "#ffffff",
   bold: false, italic: false, uppercase: false, outlineWidth: 2, outlineColor: "#151515",
   shadow: 0, letterSpacing: 0, alignment: "center", background: "none", backgroundColor: "#10151c", backgroundOpacity: 80,
+  wordHighlight: false, highlightColor: "#ffe14d",
 };
+/** Looks change the lettering only; the word highlight choice is kept separately. */
+export type CaptionLook = Omit<CaptionStyle, "wordHighlight" | "highlightColor">;
+const { wordHighlight: _wordHighlight, highlightColor: _highlightColor, ...LOOK_BASE } = DEFAULT_CAPTION_STYLE;
+export const withoutHighlight = ({ wordHighlight: _on, highlightColor: _color, ...look }: CaptionStyle): CaptionLook => look;
 export const resolveCaptionStyle = (style?: CaptionStyle): Required<CaptionStyle> => ({ ...DEFAULT_CAPTION_STYLE, ...style });
 export function captionStyleDescription(style?: CaptionStyle): string {
   const s = resolveCaptionStyle(style);
-  return `Caption look: ${CAPTION_FONTS[s.fontFamily].family}, ${s.color}, ${s.bold ? "bold" : "regular"}${s.italic ? ", italic" : ""}${s.uppercase ? ", uppercase" : ""}, ${s.alignment} aligned; ${s.background === "box" ? `${s.backgroundColor} box at ${s.backgroundOpacity}% opacity` : `${s.outlineColor} outline at ${s.outlineWidth}`}; shadow ${s.shadow}, spacing ${s.letterSpacing}.`;
+  return `Caption look: ${CAPTION_FONTS[s.fontFamily].family}, ${s.color}, ${s.bold ? "bold" : "regular"}${s.italic ? ", italic" : ""}${s.uppercase ? ", uppercase" : ""}, ${s.alignment} aligned; ${s.background === "box" ? `${s.backgroundColor} box at ${s.backgroundOpacity}% opacity` : `${s.outlineColor} outline at ${s.outlineWidth}`}; shadow ${s.shadow}, spacing ${s.letterSpacing}${s.wordHighlight ? `; each spoken word highlighted in ${s.highlightColor}` : ""}.`;
 }
-export const CAPTION_PRESETS: { id: string; name: string; description: string; style: CaptionStyle }[] = [
-  { id: "clean", name: "Clean", description: "Crisp, everyday captions", style: { ...DEFAULT_CAPTION_STYLE, fontFamily: "poppins", bold: true, fontSize: 20, outlineWidth: 1.2, shadow: 0.8, bottomPercent: 18 } },
-  { id: "punch", name: "Punch", description: "Big type, bright yellow", style: { ...DEFAULT_CAPTION_STYLE, fontFamily: "anton", fontSize: 24, color: "#ffe66d", uppercase: true, outlineWidth: 1.5, bottomPercent: 18 } },
-  { id: "editorial", name: "Editorial", description: "A softer, magazine feel", style: { ...DEFAULT_CAPTION_STYLE, fontFamily: "serif", fontSize: 22, color: "#fff1dc", outlineWidth: 0.7, shadow: 1, bottomPercent: 18 } },
-  { id: "box", name: "Box", description: "Readable over busy footage", style: { ...DEFAULT_CAPTION_STYLE, fontFamily: "poppins", fontSize: 19, bold: true, background: "box", bottomPercent: 18 } },
+/** A highlight that stays visible against the chosen text color. */
+export function contrastingHighlight(textColor: string): string {
+  const rgb = (hex: string) => [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16));
+  const [a, b] = [rgb(textColor), rgb(DEFAULT_CAPTION_STYLE.highlightColor)];
+  return Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!, a[2]! - b[2]!) < 120 ? "#5ee87d" : DEFAULT_CAPTION_STYLE.highlightColor;
+}
+export const CAPTION_PRESETS: { id: string; name: string; description: string; style: CaptionLook }[] = [
+  { id: "clean", name: "Clean", description: "Crisp, everyday captions", style: { ...LOOK_BASE, fontFamily: "poppins", bold: true, fontSize: 20, outlineWidth: 1.2, shadow: 0.8, bottomPercent: 18 } },
+  { id: "punch", name: "Punch", description: "Big type, bright yellow", style: { ...LOOK_BASE, fontFamily: "anton", fontSize: 24, color: "#ffe66d", uppercase: true, outlineWidth: 1.5, bottomPercent: 18 } },
+  { id: "editorial", name: "Editorial", description: "A softer, magazine feel", style: { ...LOOK_BASE, fontFamily: "serif", fontSize: 22, color: "#fff1dc", outlineWidth: 0.7, shadow: 1, bottomPercent: 18 } },
+  { id: "box", name: "Box", description: "Readable over busy footage", style: { ...LOOK_BASE, fontFamily: "poppins", fontSize: 19, bold: true, background: "box", bottomPercent: 18 } },
 ];
 
 /** ASS uses alpha-BGR, with zero alpha meaning opaque. Inputs are validated before interpolation. */
@@ -55,4 +68,25 @@ export function captionAssStyle(style?: CaptionStyle): string {
     `Alignment=${{ left: 1, center: 2, right: 3 }[s.alignment]}`,
     `MarginV=${Math.round(s.bottomPercent * 288 / 100)}`,
   ].join(",");
+}
+
+/** Words of a caption, line by line, exactly as they will be drawn. */
+export const captionLines = (text: string) => text.split("\n").map(line => line.split(/\s+/u).filter(Boolean));
+
+/**
+ * Start time of each word in a caption. Recognized word timings are used when
+ * they match the caption's words one to one; otherwise, as after a wording
+ * correction or for an uploaded SRT, the caption's span is shared by word length.
+ */
+export function captionWordStarts(text: string, start: number, end: number, words: { start: number; end: number; word: string }[] = []): number[] {
+  const tokens = captionLines(text).flat();
+  if (!tokens.length || !(end > start)) return tokens.map(() => start);
+  const spoken = words.filter(word => word.word.trim() && (word.start + word.end) / 2 >= start - 0.05 && (word.start + word.end) / 2 <= end + 0.05);
+  if (spoken.length === tokens.length) {
+    let previous = start;
+    return spoken.map((word, index) => (previous = index ? Math.min(end, Math.max(previous, word.start)) : start));
+  }
+  const weights = tokens.map(token => token.length + 2), total = weights.reduce((sum, weight) => sum + weight, 0);
+  let elapsed = 0;
+  return weights.map(weight => { const at = start + (end - start) * elapsed / total; elapsed += weight; return at; });
 }

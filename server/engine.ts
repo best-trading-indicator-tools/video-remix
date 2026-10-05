@@ -14,10 +14,11 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
+import { captionsAss, parseCanonicalSrt } from "./caption-ass.js";
 import { blackBandsSchema, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters, audioNormalizationFilters } from "./audio-filters.js";
-import type { CaptionStyle, RemixSettings } from "../shared/types.js";
+import type { CaptionStyle, RemixSettings, TranscriptWord } from "../shared/types.js";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
@@ -552,18 +553,21 @@ async function canonicalSubtitles(filePath: string, uppercase = false): Promise<
   return `${canonical.join("\n\n")}\n`;
 }
 
-async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefined, workDir: string, temporary: string[]) {
-  const filename = `captions-${randomUUID()}.srt`;
+async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefined, workDir: string, temporary: string[], words?: TranscriptWord[]) {
+  // Word highlighting needs inline color changes, which SRT cannot carry.
+  const highlight = style?.wordHighlight === true;
+  const filename = `captions-${randomUUID()}.${highlight ? "ass" : "srt"}`;
   const filePath = path.join(workDir, filename);
   temporary.push(filePath);
-  await writeFile(filePath, await canonicalSubtitles(subtitlePath, style?.uppercase), "utf8");
+  const canonical = await canonicalSubtitles(subtitlePath, style?.uppercase);
+  await writeFile(filePath, highlight ? captionsAss(parseCanonicalSrt(canonical), style, words) : canonical, "utf8");
   const fontsName = await prepareCaptionFonts(workDir, temporary);
   // The SRT decoder uses a 384 × 288 script canvas at every output resolution.
   return `subtitles=filename=${filename}:fontsdir=${fontsName}:charenc=UTF-8:force_style='${captionAssStyle(style)}'`;
 }
 
 /** Caption an already composed MP4. Copy its soundtrack without changing audio or timing. */
-export async function burnOutputCaptions(options: { input: string; output: string; subtitlePath: string; style?: CaptionStyle; workDir: string; signal: AbortSignal }) {
+export async function burnOutputCaptions(options: { input: string; output: string; subtitlePath: string; style?: CaptionStyle; words?: TranscriptWord[]; workDir: string; signal: AbortSignal }) {
   options.signal.throwIfAborted();
   const input = await localFile(options.input), workDir = path.resolve(options.workDir);
   const output = path.resolve(options.output);
@@ -571,7 +575,7 @@ export async function burnOutputCaptions(options: { input: string; output: strin
   await mkdir(workDir, { recursive: true });
   const temporary: string[] = [];
   try {
-    const filter = await subtitleFilter(options.subtitlePath, options.style, workDir, temporary);
+    const filter = await subtitleFilter(options.subtitlePath, options.style, workDir, temporary, options.words);
     await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "2", ...SAFE_INPUT,
       "-i", input, "-map", "0:V:0", "-map", "0:a:0?", "-vf", filter, "-filter_threads", "1", "-filter_complex_threads", "1",
       "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "2",
@@ -593,6 +597,8 @@ export interface RenderOptions {
   source: MediaInfo;
   audioPath?: string;
   subtitlePath?: string;
+  /** Recognized speech on the caption clock, for exact word highlighting. */
+  captionWords?: TranscriptWord[];
   supportingVisuals?: SupportingVisual[];
   workDir: string;
   onProgress: (progress: number) => void;
@@ -835,7 +841,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       }
     }
     if (options.subtitlePath) {
-      const subtitle = await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary);
+      const subtitle = await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary, options.captionWords);
       (s.blackBands?.enabled ? decorations : filters).push(subtitle);
     }
     if (!footageTimes.inserts.length) filters.push(...decorations);

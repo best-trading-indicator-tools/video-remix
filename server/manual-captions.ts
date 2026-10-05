@@ -38,7 +38,8 @@ export async function addManualCaptions(options: {
   await writeFile(subtitlePath, srt, "utf8");
   onPhase("Adding automatic captions", 88);
   const captioned = path.join(workDir, "captioned-output.mp4");
-  await burnOutputCaptions({ input: output, output: captioned, subtitlePath, style: settings.captionStyle, workDir, signal });
+  await burnOutputCaptions({ input: output, output: captioned, subtitlePath, style: settings.captionStyle,
+    words: transcript.segments.flatMap(segment => segment.words), workDir, signal });
   signal.throwIfAborted();
   await rename(captioned, output);
   return { subtitlePath, note: "Automatic captions follow the finished soundtrack, including added clips and speed changes." };

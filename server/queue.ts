@@ -12,7 +12,7 @@ import { prepareManualVisuals } from "./manual-visuals.js";
 import type { SupportingVisual } from "./visuals.js";
 import { saveStore, state, type StoredJob, type StoredSource } from "./store.js";
 import { captureEditPlan, refreshPlanBroll, renderInputsFromPlan, transcriptFromPlan, preservedVisualsOnStockRefresh } from "./plan-storage.js";
-import { DEFAULT_BROLL_COUNT } from "../shared/types.js";
+import { DEFAULT_BROLL_COUNT, type TranscriptWord } from "../shared/types.js";
 import { getVisualSources, VISUAL_SOURCE_LABELS } from "../shared/visual-sources.js";
 import { fingerprintFile, historyEntry, previousEditorialPlans, upsertHistory, relatedHistory } from "./history.js";
 import { historyThumbnailPath, retainHistoryThumbnail, type HistoryThumbnail } from "./history-thumbnails.js";
@@ -186,6 +186,7 @@ async function run(job: StoredJob, controller: AbortController) {
     await mkdir(workDir, { recursive: true });
     let audioPath = audio?.filePath;
     let subtitlePath = subtitle?.filePath;
+    let captionWords: TranscriptWord[] | undefined;
     const automaticManual = !job.auto && !job.editPlan && wantsManualCaptions(job.settings);
     if (automaticManual) subtitlePath = undefined;
     let supportingVisuals: SupportingVisual[] = [];
@@ -223,6 +224,7 @@ async function run(job: StoredJob, controller: AbortController) {
       const saved = await renderInputsFromPlan(job, workDir);
       audioPath = saved.audioPath;
       subtitlePath = saved.subtitlePath;
+      captionWords = saved.captionWords;
       supportingVisuals = saved.supportingVisuals;
     } else if (job.auto) {
       const reservations = state.jobs.filter(other => other.id !== job.id &&
@@ -314,6 +316,7 @@ async function run(job: StoredJob, controller: AbortController) {
       const saved = await renderInputsFromPlan(job, workDir);
       audioPath = saved.audioPath;
       subtitlePath = saved.subtitlePath;
+      captionWords = saved.captionWords;
       supportingVisuals = saved.supportingVisuals;
       if (job.summary && job.editPlan.settings.hookText) job.summary.title = job.editPlan.settings.hookText;
       job.phase = mode === "off" ? "Rendering your saved edit" : "Rendering the reviewed edit";
@@ -344,6 +347,7 @@ async function run(job: StoredJob, controller: AbortController) {
       settings: job.settings,
       audioPath,
       subtitlePath,
+      captionWords,
       supportingVisuals,
       workDir,
       signal: controller.signal,
