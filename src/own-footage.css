@@ -20,4 +20,6 @@
 .own-footage-append strong { display: block; color: var(--text); font-size: 13px; line-height: 1.6; font-weight: 600; }
 .own-footage-append small { display: block; color: var(--subtle); font-size: 12px; line-height: 1.6; margin-top: 5px; }
 .own-footage-error { color: #ffb6ac; margin-top: 12px; font-size: 13px; line-height: 1.7; }
+.own-footage-batch > button { width: 100%; white-space: normal; }
+.own-footage-batch .own-footage-note { margin-bottom: 0; }
 @media (max-width: 580px) { .own-footage-fields { grid-template-columns: 1fr; } .own-footage { padding: 14px; } }

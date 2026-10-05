@@ -5,9 +5,10 @@ import { Film, Plus, RefreshCw, Trash2, Upload, X } from "lucide-react";
 import type { OwnFootageAsset, OwnFootagePlacement } from "../shared/own-footage";
 import "./own-footage.css";
 
-export default function OwnFootagePanel({ value = [], onChange, onApplyAll, savedAssets = [], disabled = false, highlightedId }: {
+export default function OwnFootagePanel({ value = [], onChange, onApplyAll, applyAllLabel = "Use these placements for all videos", applyAllDescription, applyAllDisabled = false, savedAssets = [], disabled = false, highlightedId }: {
   value?: OwnFootagePlacement[]; onChange: (value: OwnFootagePlacement[]) => void;
   onApplyAll?: (value: OwnFootagePlacement[]) => void; savedAssets?: OwnFootageAsset[]; disabled?: boolean;
+  applyAllLabel?: string; applyAllDescription?: string; applyAllDisabled?: boolean;
   highlightedId?: string;
 }) {
   const [assets, setAssets] = useState<OwnFootageAsset[]>([]);
@@ -75,7 +76,10 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, save
         </div>
         {!item.appendToEnd && (item.start >= item.end || (asset && item.end > asset.duration)) && <p className="own-footage-error" role="alert">Choose an end after the start and within this clip.</p>}
       </article>; })}
-      {onApplyAll && value.length > 0 && <button type="button" className="secondary-button" onClick={() => onApplyAll(structuredClone(value))}>Use these placements for all videos</button>}
+      {onApplyAll && value.length > 0 && <div className="own-footage-batch">
+        <button type="button" className="secondary-button" disabled={applyAllDisabled} onClick={() => onApplyAll(structuredClone(value))}>{applyAllLabel}</button>
+        {applyAllDescription && <p className="own-footage-note">{applyAllDescription}</p>}
+      </div>}
     </fieldset>
     {progress !== null && <div className="own-footage-upload" role="status"><span>{progress === 100 ? "Preparing your clip…" : `Uploading ${progress}%`}</span><button className="secondary-button" type="button" onClick={() => uploadRequest.current?.abort()}><X size={14} />Cancel upload</button></div>}
     {error && <ProblemNotice message={error} operation="Manage supporting footage" />}

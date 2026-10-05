@@ -2,6 +2,7 @@ import { SlidersHorizontal, Zap } from "lucide-react";
 import type { AutoOptions } from "../shared/types";
 import { MAX_AUTO_VERSIONS } from "../shared/types";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
+import OwnFootagePanel from "./OwnFootagePanel";
 import "./quick-auto.css";
 
 export type AutoView = "quick" | "all";
@@ -27,9 +28,11 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, mixed, scopeDescription, onChange, onView }: {
+export default function QuickAutoPanel({ options, variants, mixed, scopeDescription, onChange, onView, selectedId, selectedVideoCount, onApplySelectedFootage, disabled }: {
   scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean;
   onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
+  selectedId?: string; selectedVideoCount: number; disabled: boolean;
+  onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
 }) {
   const angles = options.versionMode === "angles";
   const maxClips = angles ? MAX_ANGLE_VERSIONS : MAX_AUTO_VERSIONS;
@@ -76,6 +79,13 @@ export default function QuickAutoPanel({ options, variants, mixed, scopeDescript
         </div>
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
+      <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage}
+        onChange={ownFootage => onChange({ options: { ownFootage } })} disabled={disabled}
+        onApplyAll={onApplySelectedFootage} applyAllDisabled={!selectedVideoCount}
+        applyAllLabel={`Use these placements for selected videos (${selectedVideoCount})`}
+        applyAllDescription={selectedVideoCount
+          ? "Replaces the footage placements on checked videos. Their other settings stay the same. You can undo this batch change."
+          : "Check videos in the source list to apply these placements to them."} />
     </div>
   </aside>;
 }

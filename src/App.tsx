@@ -760,6 +760,16 @@ export default function App() {
     if (!sources.length || futureSettings) setDefaultAuto(merge);
   };
   const updateAuto = (patch: Partial<AutoPreset>) => updateScopedAuto({ ...patch, options: patch.options ? Object.fromEntries(Object.entries(patch.options).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(autoOptions[key as keyof AutoOptions]))) : undefined });
+  const applyFootageToSelected = (ownFootage: NonNullable<AutoOptions['ownFootage']>) => {
+    const targets = sources.filter(source => autoSelectedIds.includes(source.id));
+    if (!targets.length || starting || brollBusy) return;
+    setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
+    setAutoById(current => ({ ...current, ...Object.fromEntries(targets.map(source => {
+      const preset = current[source.id] || defaultAuto;
+      return [source.id, autoPreset({ ...preset, options: { ...preset.options, ownFootage: structuredClone(ownFootage) } })];
+    })) }));
+    notify(`Footage placements applied to ${targets.length} selected video${targets.length === 1 ? '' : 's'}.`, 'success');
+  };
   const applyAutoAll = () => {
     setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
     setAutoById((current) => ({
@@ -1609,6 +1619,10 @@ export default function App() {
                   scopeDescription={scopeDescription}
                   onChange={updateScopedAuto}
                   onView={setAutoView}
+                  selectedId={selected?.id}
+                  selectedVideoCount={sources.filter(source => autoSelectedIds.includes(source.id)).length}
+                  onApplySelectedFootage={applyFootageToSelected}
+                  disabled={starting || brollBusy}
                 />
                 ) : (
                 <AutoPanel
