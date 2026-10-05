@@ -148,6 +148,7 @@ export interface RemixSettings extends SupportingVisualOptions {
   trimEnd: number | null;
   hookText: string;
   hookDuration: number;
+  /** Legacy saved-setting compatibility only. Exports always strip source metadata. */
   stripMetadata: boolean;
   device: string;
   audioId: string | null;

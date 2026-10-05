@@ -2194,14 +2194,10 @@ export default function App() {
                             <option value="30">30 fps</option>
                             <option value="60">60 fps</option>
                           </SelectField>
-                          <Toggle
-                            label="Clean file metadata"
-                            detail="Remove embedded source metadata."
-                            value={settings.stripMetadata}
-                            onChange={(stripMetadata) =>
-                              updateSettings({ stripMetadata })
-                            }
-                          />
+                          <p className="auto-preferences-note">
+                            Source file metadata is always removed from exports.
+                            Watermarks embedded in the picture or sound may remain.
+                          </p>
                         </Section>
                       </>
                     )}

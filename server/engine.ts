@@ -24,6 +24,7 @@ import { wrapEditorialText as wrapHook } from "../shared/framing.js";
 import { footageTimeline, ownFootageSchema, resolveFootagePlacement } from "../shared/own-footage.js";
 import { composeFootage, type ResolvedFootage } from "./footage-composition.js";
 import { prepareConcatSource } from "./concat-source.js";
+import { assertCleanExportMetadata, CLEAN_EXPORT_METADATA_ARGS } from "./export-metadata.js";
 
 export interface MediaInfo {
   duration: number;
@@ -133,13 +134,14 @@ interface ProbeStream {
   avg_frame_rate?: string;
   r_frame_rate?: string;
   sample_aspect_ratio?: string;
-  tags?: { rotate?: string };
+  tags?: Record<string, string>;
   side_data_list?: { rotation?: number }[];
   disposition?: { attached_pic?: number };
 }
 interface ProbeResult {
   streams?: ProbeStream[];
-  format?: { duration?: string };
+  format?: { duration?: string; tags?: Record<string, string> };
+  chapters?: unknown[];
 }
 
 async function probe(filePath: string, signal?: AbortSignal): Promise<ProbeResult> {
@@ -152,6 +154,7 @@ async function probe(filePath: string, signal?: AbortSignal): Promise<ProbeResul
       ...SAFE_INPUT,
       "-show_streams",
       "-show_format",
+      "-show_chapters",
       "-of",
       "json",
       input,
@@ -563,15 +566,21 @@ async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefi
 export async function burnOutputCaptions(options: { input: string; output: string; subtitlePath: string; style?: CaptionStyle; workDir: string; signal: AbortSignal }) {
   options.signal.throwIfAborted();
   const input = await localFile(options.input), workDir = path.resolve(options.workDir);
+  const output = path.resolve(options.output);
+  if (input === output) throw new Error("Output must be different from source");
   await mkdir(workDir, { recursive: true });
   const temporary: string[] = [];
   try {
     const filter = await subtitleFilter(options.subtitlePath, options.style, workDir, temporary);
     await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "2", ...SAFE_INPUT,
-      "-i", input, "-map", "0:v:0", "-map", "0:a:0?", "-vf", filter, "-filter_threads", "1", "-filter_complex_threads", "1",
+      "-i", input, "-map", "0:V:0", "-map", "0:a:0?", "-vf", filter, "-filter_threads", "1", "-filter_complex_threads", "1",
       "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "2",
-      "-c:a", "copy", "-map_metadata", "0", "-map_chapters", "-1", "-movflags", "+faststart+use_metadata_tags", path.resolve(options.output)],
+      "-c:a", "copy", ...CLEAN_EXPORT_METADATA_ARGS, output],
       { cwd: workDir, signal: options.signal });
+    assertCleanExportMetadata(await probe(output, options.signal));
+  } catch (error) {
+    await rm(output, { force: true }).catch(() => {});
+    throw error;
   } finally { await Promise.all(temporary.map(file => rm(file, { recursive: true, force: true }).catch(() => undefined))); }
 }
 
@@ -990,18 +999,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       if (!Number.isFinite(options.maximumOutputDuration) || options.maximumOutputDuration <= 0) throw new Error("Invalid preview duration");
       exportDuration = Math.min(exportDuration, options.maximumOutputDuration);
     }
-    args.push(
-      "-sn",
-      "-dn",
-      "-map_metadata",
-      s.stripMetadata ? "-1" : "0",
-      "-map_chapters",
-      "-1",
-      "-metadata:s:v:0",
-      "rotate=0",
-    );
-    // Legacy saved settings can contain device profiles. Never invent capture
-    // make/model metadata; metadata retention only preserves source information.
+    // Old saved settings cannot disable metadata cleanup or invent camera tags.
+    args.push(...CLEAN_EXPORT_METADATA_ARGS);
     // Disabling encoder lookahead also avoids FFmpeg 8 scheduler stalls when
     // accelerated video needs more decoded frames than its paired audio queue.
     args.push(
@@ -1017,8 +1016,6 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       "yuv420p",
       "-threads",
       "2",
-      "-movflags",
-      "+faststart+use_metadata_tags",
       "-t",
       decimal(exportDuration),
       "-progress",
@@ -1052,6 +1049,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     const outputInfo = await stat(output);
     if (outputInfo.size < 100)
       throw new Error("The export did not produce a valid video");
+    assertCleanExportMetadata(await probe(output, signal));
     options.onProgress(100);
   } catch (error) {
     await rm(output, { force: true }).catch(() => {});

@@ -400,7 +400,7 @@ test("rotation metadata is respected once and stripped from rendered display ori
   assert.deepEqual([info.width, info.height], [180, 320]);
 });
 
-test("metadata stripping works and legacy device profiles never invent camera metadata", async () => {
+test("metadata stripping is mandatory and legacy device profiles never invent camera metadata", async () => {
   const stripped = await render("stripped-metadata", {
     device: "iPhone 17 Pro",
   });
@@ -420,8 +420,8 @@ test("metadata stripping works and legacy device profiles never invent camera me
     "Legacy device profile never injects capture metadata",
   );
   assert.ok(
-    retainedText.includes("title=private source title"),
-    "Keeping metadata retains source title",
+    !retainedText.includes("private source title"),
+    "Old saved settings cannot retain source metadata",
   );
 });
 
