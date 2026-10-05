@@ -44,6 +44,45 @@ test("invalid JSON and empty successful responses explain version and connection
   await assert.rejects(apiRequest("/api/health"), error => { assert.ok(error instanceof ApiError); assert.equal(error.diagnostic.code, "INVALID_RESPONSE"); return true; });
 });
 
+test("automatic workspace reads still reject network, proxy and malformed responses without retaining reports", async t => {
+  let failure = "network";
+  t.mock.method(globalThis, "fetch", async () => {
+    if (failure === "network") throw new TypeError("Failed to fetch");
+    if (failure === "proxy") return new Response("Bad gateway", { status: 502 });
+    return new Response("<html>Server restarting</html>");
+  });
+  for (const endpoint of ["/api/health", "/api/auto/capabilities", "/api/sources", "/api/jobs", "/api/imports"]) {
+    for (failure of ["network", "proxy", "invalid"]) {
+      await assert.rejects(apiRequest(endpoint), error => {
+        assert.ok(error instanceof ApiError);
+        reportProblem(error, { operation: "Another UI catch" });
+        return true;
+      });
+    }
+  }
+  assert.equal(getDiagnostics().length, 0);
+});
+
+test("quiet status reads do not suppress failed user actions or reads for individual resources", async t => {
+  t.mock.method(globalThis, "fetch", async () => { throw new TypeError("Failed to fetch"); });
+  for (const [url, method] of [["/api/jobs", "POST"], ["/api/sources", "DELETE"], ["/api/imports", "POST"], ["/api/jobs/job-id/download", "GET"]]) {
+    await assert.rejects(apiRequest(url!, { method }));
+  }
+  assert.equal(getDiagnostics().length, 4);
+  assert.ok(getDiagnostics().every(issue => issue.code === "ENGINE_UNREACHABLE"));
+});
+
+test("repeated background reports stay quiet beyond the old one-minute deduplication window", () => {
+  for (let i = 0; i < 5; i++) recordDiagnostic(makeDiagnostic("Request failed (502). Please try again.", {
+    operation: "GET /api/jobs", occurredAt: new Date(Date.now() - i * 120000).toISOString(), httpStatus: 502,
+  }));
+  recordDiagnostic(makeDiagnostic("An invalid response was received", { operation: "Automatic capabilities", endpoint: "/api/auto/capabilities", method: "get" }));
+  assert.equal(getDiagnostics().length, 0);
+  clearDiagnostics();
+  recordDiagnostic(makeDiagnostic("Request failed (502). Please try again.", { operation: "GET /api/jobs" }));
+  assert.equal(getDiagnostics().length, 0);
+});
+
 test("streaming errors retain server references after HTTP headers have been sent", () => {
   const diagnostic = makeDiagnostic("The speech model is not ready.", { operation: "Transcribe video", requestId: "stream-request" });
   const error = streamError({ message: diagnostic.message, diagnostic }, "/api/shorts/transcript", "stream-request");

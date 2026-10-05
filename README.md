@@ -983,10 +983,15 @@ step and **Copy error details**. Ask someone experiencing a problem to copy that
 report and send it to you. If clipboard permission is blocked, the app provides
 selectable text to copy manually. Error notifications remain until dismissed.
 
-**Help & errors** keeps the latest 30 errors and warnings for the current browser
+**Help & errors** keeps the latest 30 action reports for the current browser
 tab, including after a refresh. Users can review reports, copy recent details, or
 clear the history. Nothing is sent automatically. Intentional cancellation does
-not create an error report.
+not create an error report. Automatic health, capabilities, library, job and import
+list checks retry quietly: their network, proxy and response errors do not create
+popups or history entries. A reconnecting status clears when the connection returns.
+Previously saved entries from these checks and their old startup notifications are
+removed when the app loads. Failed user actions, including imports and exports
+during an outage, still retain their reports.
 
 Reports include a reference, time, action, error code, relevant HTTP status,
 frontend/server revisions, browser and operating system, and available server

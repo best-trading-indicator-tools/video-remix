@@ -525,24 +525,15 @@ export default function App() {
         setConnected(true);
       } else {
         setConnected(false);
-        notify(
-          "Could not connect to the video engine. Check that the server is running.",
-          "error",
-        );
       }
       if (sourceResult.status === "fulfilled")
         setSources(sourceResult.value.sources);
-      else
-        notify(
-          "Your video library could not be loaded. Refresh to try again.",
-          "error",
-        );
       setLoading(false);
     });
     return () => {
       stopped = true;
     };
-  }, [notify]);
+  }, []);
 
   useEffect(() => {
     let stopped = false;
@@ -1106,7 +1097,7 @@ export default function App() {
               ? "Connecting"
               : engineReady
                 ? "Local engine ready"
-                : "Engine unavailable"}
+                : !connected || !health ? "Reconnecting…" : "Video tools unavailable"}
           </span>
           <button
             className="help-button"
@@ -1174,9 +1165,9 @@ export default function App() {
         </div>
 
         {!loading && !engineReady && (
-          <ProblemNotice operation="Connect to video engine" message={connected
-            ? "FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server."
-            : "Connection to the video engine was lost. Your workspace will reconnect automatically."} />
+          connected && health
+            ? <ProblemNotice operation="Set up video engine" message="FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server." />
+            : <p className="engine-reconnecting" role="status">Reconnecting to the video engine… Your workspace will update automatically.</p>
         )}
         {(manualStorageError || autoStorageError) && <ProblemNotice operation="Save workspace settings"
           message="Browser storage is unavailable. Your latest settings have not been saved; keep this tab open." />}

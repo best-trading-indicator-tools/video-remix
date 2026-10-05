@@ -2,13 +2,34 @@ import { diagnosticSchema, makeDiagnostic, redactDiagnosticText, supportReport, 
 
 const STORAGE = "remix-support-events-v1";
 const savedReviewOperations = new Set(["Editorial check", "Review finished picture", "Review finished audio"]);
+// These GETs refresh workspace state automatically. Their failures belong to the
+// current connection status, not a permanent list of failed user actions.
+const backgroundReads = new Set(["/api/health", "/api/auto/capabilities", "/api/sources", "/api/jobs", "/api/imports"]);
+const oldStartupMessages = new Set([
+  "Could not connect to the video engine. Check that the server is running.",
+  "Your video library could not be loaded. Refresh to try again.",
+]);
+function retainDiagnostic(issue: Diagnostic): boolean {
+  if (savedReviewOperations.has(issue.operation)) return false;
+  const request = /^(GET|HEAD|POST|PUT|PATCH|DELETE)\s+(\S+)$/iu.exec(issue.operation);
+  const method = (issue.method || request?.[1] || "").toUpperCase();
+  const endpoint = (issue.endpoint || request?.[2] || "").split("?")[0]!.replace(/\/$/u, "");
+  if (method === "GET" && backgroundReads.has(endpoint)) return false;
+  // Older builds also registered their startup toast and connection banner.
+  if (issue.operation === "Connect to video engine" && issue.code === "ENGINE_UNREACHABLE") return false;
+  if (issue.operation === "Workspace action" && oldStartupMessages.has(issue.message)) return false;
+  return true;
+}
 const listeners = new Set<() => void>();
 let server: RuntimeInfo | undefined;
 let tools: string | undefined;
 let issues: Diagnostic[] = [];
 try {
   const saved = JSON.parse(sessionStorage.getItem(STORAGE) || "[]");
-  if (Array.isArray(saved)) issues = saved.flatMap(item => { const parsed = diagnosticSchema.safeParse(item); return parsed.success && !savedReviewOperations.has(parsed.data.operation) ? [parsed.data] : []; }).slice(0, 30);
+  if (Array.isArray(saved)) {
+    issues = saved.flatMap(item => { const parsed = diagnosticSchema.safeParse(item); return parsed.success && retainDiagnostic(parsed.data) ? [parsed.data] : []; }).slice(0, 30);
+    if (issues.length !== saved.length) sessionStorage.setItem(STORAGE, JSON.stringify(issues));
+  }
 } catch { /* Diagnostics remain available in memory when storage is blocked. */ }
 const empty: Diagnostic[] = [];
 export const subscribeDiagnostics = (listener: () => void) => { listeners.add(listener); return () => { listeners.delete(listener); }; };
@@ -23,7 +44,7 @@ export function setDiagnosticEnvironment(runtime?: RuntimeInfo, capabilities?: {
   if (capabilities) tools = `FFmpeg ${capabilities.ffmpeg ? "ready" : "missing"}; ffprobe ${capabilities.ffprobe ? "ready" : "missing"}`;
 }
 export function recordDiagnostic(issue: Diagnostic): Diagnostic {
-  if (savedReviewOperations.has(issue.operation)) return issue;
+  if (!retainDiagnostic(issue)) return issue;
   const existing = issues.find(item => item.id === issue.id || (item.code === issue.code && item.operation === issue.operation &&
     item.entityId === issue.entityId && item.message === issue.message && Date.now() - Date.parse(item.occurredAt) < 60_000));
   if (existing) {

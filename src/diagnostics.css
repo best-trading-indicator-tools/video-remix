@@ -22,6 +22,7 @@
 .diagnostics-list { display: grid; gap: 16px; margin-top: 24px; }
 .diagnostics-time { margin: 0; }
 .diagnostics-empty { padding: 24px 0; }
+.engine-reconnecting { margin: 0 0 18px; color: var(--subtle, #c1c8d2); font-size: 13px; line-height: 1.6; }
 .app-error-fallback { max-width: 700px; margin: 60px auto; padding: 20px; }
 .toast-region:has(.problem-notice) { max-height: calc(100dvh - 100px); overflow-y: auto; }
 .toast:has(.problem-notice) { align-items: flex-start; flex-shrink: 0; padding: 8px; max-height: 60dvh; overflow: auto; }
