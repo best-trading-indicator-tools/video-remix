@@ -8,7 +8,7 @@ import { audioWaveform } from './waveform.js';
 import { publishingJobs } from './publishing-lock.js';
 
 const titleSchema = z.object({ title: z.string().trim().min(1).max(90).regex(/^[^\u0000-\u001f\u007f]+$/u) }).strict();
-export const quickReviewSchema = z.object({ verdict: z.enum(['accepted-unchanged', 'accepted-after-correction', 'rejected']).optional(), notes: z.string().trim().max(500).regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]*$/u).optional() }).strict();
+export const quickReviewSchema = z.object({ verdict: z.enum(['accepted-unchanged', 'accepted-after-correction', 'rejected', 'needs-edit']).nullable().optional(), notes: z.string().trim().max(500).regex(/^[^\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]*$/u).optional() }).strict();
 export function installExportTools(app: Express) {
   app.patch('/api/jobs/:id/keep', async (req, res) => {
     const job = state.jobs.find(job => job.id === req.params.id);
@@ -45,7 +45,10 @@ export function installExportTools(app: Express) {
     const entry = historyRecords({ jobId: String(req.params.id) })[0], parsed = quickReviewSchema.safeParse(req.body);
     if (!entry) { res.status(404).json({ error: 'This export has no saved history record.' }); return; }
     if (!parsed.success) { res.status(400).json({ error: 'Choose a review decision and keep notes under 500 characters.' }); return; }
-    entry.measurements = { ...entry.measurements, review: { ...entry.measurements?.review, ...parsed.data } };
+    const { verdict, ...fields } = parsed.data;
+    const review = { ...entry.measurements?.review, ...fields };
+    if (verdict === null) delete review.verdict; else if (verdict) review.verdict = verdict;
+    entry.measurements = { ...entry.measurements, review };
     await saveStore([entry]); res.json(entry.measurements.review);
   });
   app.get('/api/jobs/:id/thumbnail', async (req, res, next) => {

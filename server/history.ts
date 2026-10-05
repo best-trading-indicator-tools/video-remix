@@ -78,6 +78,7 @@ export function historyEntry(source: StoredSource, job: StoredJob): ExportHistor
     jobId: job.id,
     sourceId: source.id,
     sourceFingerprint: source.fingerprint,
+    project: job.project ?? source.project,
     ...(source.picture ? { sourcePicture: source.picture } : {}),
     ...(job.outputPicture ? { outputPicture: job.outputPicture } : {}),
     sourceName: source.name,
@@ -113,7 +114,7 @@ export function upsertHistory(entries: ExportHistoryEntry[], entry: ExportHistor
   const configuration = prior.find(item => item.configuration)?.configuration ?? entry.configuration;
   const thumbnailUrl = entry.thumbnailUrl ?? prior.find(item => item.thumbnailUrl)?.thumbnailUrl;
   const thumbnailKind = entry.thumbnailKind ?? prior.find(item => item.thumbnailUrl)?.thumbnailKind;
-  const updated = structuredClone({ ...entry,
+  const updated = structuredClone({ ...entry, project: entry.project ?? prior.find(item => item.project !== undefined)?.project,
     sourcePicture: entry.sourcePicture ?? prior.find(item => item.sourcePicture)?.sourcePicture,
     outputPicture: entry.outputPicture ?? prior.find(item => item.outputPicture)?.outputPicture, configuration, publications: distinctPublications, ...(measurements ? { measurements } : {}),
     ...(thumbnailUrl ? { thumbnailUrl, ...(thumbnailKind ? { thumbnailKind } : {}) } : {}) });

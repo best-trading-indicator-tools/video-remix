@@ -27,8 +27,8 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, videoCount, mixed, onChange, onView }: {
-  options: AutoOptions; variants: number; videoCount: number; mixed: boolean;
+export default function QuickAutoPanel({ options, variants, mixed, scopeDescription, onChange, onView }: {
+  scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean;
   onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
 }) {
   const angles = options.versionMode === "angles";
@@ -37,9 +37,8 @@ export default function QuickAutoPanel({ options, variants, videoCount, mixed, o
     <div className="panel-heading"><h2><Zap size={16} />Quick setup</h2><AutoViewSwitch view="quick" onView={onView} /></div>
     <div className="auto-panel-body">
       <p className="quick-auto-scope">
-        {videoCount > 1 ? `Choices here apply to all ${videoCount} videos and to new imports.`
-          : videoCount ? "Choices here apply to this video and to new imports." : "Choices here are saved for your next imports."}
-        {mixed && " Some videos had their own Auto settings; a choice here replaces that setting for every video."}
+        {scopeDescription}. Only the setting you change is copied.
+        {mixed && " Videos have different settings; these controls show the current video's values."}
       </p>
       <fieldset className="quick-auto-group">
         <legend>Where will you post?</legend>

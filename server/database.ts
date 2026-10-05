@@ -7,6 +7,7 @@ import type { ExportHistoryEntry } from "../shared/types.js";
 export const collections = ["sources", "attachments", "jobs", "broll"] as const;
 type Collection = typeof collections[number];
 export type WorkspaceSnapshot = Record<Collection, { id: string }[]> & { history: ExportHistoryEntry[] };
+export type HistoryPageOptions = { limit?: number; offset?: number; search?: string; ids?: string[]; review?: string; publication?: string; aspect?: string; project?: string; after?: string; before?: string };
 export type HistoryFilter = { id?: string; jobId?: string; fingerprint?: string; missingPreview?: boolean };
 
 /** One row per record. History is read on demand, never part of routine workspace saves. */
@@ -24,6 +25,7 @@ export class WorkspaceDatabase {
         created_at TEXT NOT NULL, search_text TEXT NOT NULL, data TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS history_date ON history(created_at DESC, id DESC);
       CREATE INDEX IF NOT EXISTS history_job ON history(job_id);
+      CREATE INDEX IF NOT EXISTS publication_job ON publishing(kind,json_extract(data,'$.jobId'));
       CREATE INDEX IF NOT EXISTS history_source ON history(fingerprint, created_at DESC);`);
   }
   async initialize() {
@@ -126,10 +128,23 @@ export class WorkspaceDatabase {
       for (const row of rows) yield JSON.parse(row.data as string);
     }
   }
-  page({ limit = 50, offset = 0, search = "", ids }: { limit?: number; offset?: number; search?: string; ids?: string[] } = {}) {
+  page({ limit = 50, offset = 0, search = "", ids, review, publication, aspect, project, after, before }: HistoryPageOptions = {}) {
     const conditions: string[] = [], args: (string | number)[] = [];
-    if (search) { conditions.push("instr(search_text,?) > 0"); args.push(search.toLocaleLowerCase()); }
+    if (search) { conditions.push("(instr(search_text,?) > 0 OR instr(lower(coalesce(json_extract(data,'$.project'),'')),?) > 0)"); args.push(search.toLocaleLowerCase(), search.toLocaleLowerCase()); }
     if (ids) { conditions.push("id IN (SELECT value FROM json_each(?))"); args.push(JSON.stringify(ids)); }
+    const verdict = "json_extract(data,'$.measurements.review.verdict')";
+    if (review === 'accepted') conditions.push(`${verdict} IN ('accepted-unchanged','accepted-after-correction')`);
+    else if (review === 'unreviewed') conditions.push(`${verdict} IS NULL`);
+    else if (review && review !== 'all') { conditions.push(`${verdict} = ?`); args.push(review); }
+    if (aspect) { conditions.push("json_extract(data,'$.configuration.settings.aspect') = ?"); args.push(aspect); }
+    if (project) { conditions.push("json_extract(data,'$.project') = ?"); args.push(project); }
+    if (after) { conditions.push('substr(created_at,1,10) >= ?'); args.push(after); }
+    if (before) { conditions.push('substr(created_at,1,10) <= ?'); args.push(before); }
+    const published = `(coalesce(json_array_length(history.data,'$.publications'),0) > 0 OR EXISTS (SELECT 1 FROM publishing p WHERE p.kind='publication' AND json_extract(p.data,'$.jobId')=history.job_id AND json_extract(p.data,'$.state')='published'))`;
+    const scheduled = `EXISTS (SELECT 1 FROM publishing p WHERE p.kind='publication' AND json_extract(p.data,'$.jobId')=history.job_id AND json_extract(p.data,'$.state') IN ('scheduled','uploading','submitting','uncertain'))`;
+    if (publication === 'published') conditions.push(published);
+    if (publication === 'scheduled') conditions.push(`NOT ${published} AND ${scheduled}`);
+    if (publication === 'unpublished') conditions.push(`NOT ${published} AND NOT ${scheduled}`);
     const where = conditions.length ? ` WHERE ${conditions.join(" AND ")}` : "";
     const total = Number(this.db.prepare(`SELECT count(*) AS total FROM history${where}`).get(...args)!.total);
     const start = Math.min(offset, Math.max(0, Math.ceil(total / limit) - 1) * limit);
@@ -158,6 +173,12 @@ export class WorkspaceDatabase {
       .all(JSON.stringify(identities)).map(row => [row.identity, Number(row.uses)]));
   }
   close() { this.db.close(); }
+  projects(): string[] {
+    return this.db.prepare("SELECT DISTINCT json_extract(data,'$.project') AS project FROM history WHERE coalesce(json_extract(data,'$.project'),'') != '' ORDER BY project").all().map(row => row.project as string);
+  }
+  publicationsForJob<T>(id: string): T[] {
+    return this.db.prepare("SELECT data FROM publishing WHERE kind='publication' AND json_extract(data,'$.jobId')=?").all(id).map(row => JSON.parse(row.data as string) as T);
+  }
   publishing<T>(kind: string, id?: string): T[] {
     const rows = id === undefined ? this.db.prepare('SELECT data FROM publishing WHERE kind=? ORDER BY rowid DESC').all(kind)
       : this.db.prepare('SELECT data FROM publishing WHERE kind=? AND id=?').all(kind, id);

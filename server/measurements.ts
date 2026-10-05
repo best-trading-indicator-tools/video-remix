@@ -7,7 +7,7 @@ const corrections = z.number().finite().int().min(0).max(100_000);
 const seconds = z.number().finite().min(0).max(86_400);
 const text = (maximum: number) => z.string().trim().max(maximum)
   .refine(value => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value), "Use plain text without control characters");
-const verdictSchema = z.enum(["accepted-unchanged", "accepted-after-correction", "rejected"]);
+const verdictSchema = z.enum(["accepted-unchanged", "accepted-after-correction", "rejected", "needs-edit"]);
 const issueReasonSchema = z.enum(["opening", "ending", "meaning", "hook", "captions", "framing", "broll", "other"]);
 const issueReasonsSchema = z.array(issueReasonSchema).max(8)
   .refine(reasons => new Set(reasons).size === reasons.length, "Record each issue reason once");
@@ -224,7 +224,7 @@ function summarize(entries: ExportHistoryEntry[]): MeasurementStats {
     const review = entry.measurements?.review;
     const verdict = verdictSchema.safeParse(review?.verdict);
     const issues = issueReasonsSchema.safeParse(review?.issueReasons);
-    if (verdict.success) {
+    if (verdict.success && verdict.data !== "needs-edit") {
       stats.verdictReviews++;
       stats.unknownAcceptanceExports--;
       if (verdict.data === "accepted-unchanged") stats.acceptedUnchanged++;

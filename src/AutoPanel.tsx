@@ -39,6 +39,7 @@ export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
 };
 
 export default function AutoPanel({
+  scopeDescription,
   onView,
   onSaveStyle,
   options,
@@ -57,6 +58,7 @@ export default function AutoPanel({
   maxFiles,
   maxFileSize,
 }: {
+  scopeDescription: string;
   onView?: (view: AutoView) => void;
   onSaveStyle?: () => void;
   options: AutoOptions;
@@ -134,7 +136,7 @@ export default function AutoPanel({
           )}
           <p>
             {sources.length
-              ? "These preferences belong to the selected video."
+              ? scopeDescription + ". Only changed settings are copied."
               : "Add footage when you're ready. These preferences will apply to new videos."}
           </p>
           {sources.length > 1 && (
@@ -144,7 +146,7 @@ export default function AutoPanel({
           )}
           {sources.length > 1 && (
             <small>
-              Includes visual sources and version count. Also applies to new imports.
+              Includes visual sources and version count. Future imports change only when selected above.
             </small>
           )}
           {onSaveStyle && (

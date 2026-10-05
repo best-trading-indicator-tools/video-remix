@@ -1,23 +1,26 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, ArrowRight, Check, Compass, X } from "lucide-react";
-import { rememberOnboarding, TOUR_STEPS, type TourDestination } from "./onboarding-steps";
+import { rememberOnboarding, TOUR_STEPS, INTRO_STEPS, type TourDestination } from "./onboarding-steps";
 import "./onboarding.css";
 
 type Rect = { left: number; top: number; width: number; height: number };
-export default function OnboardingTour({ onNavigate, onClose }: {
+export default function OnboardingTour({ onNavigate, onClose, initialTopic }: {
+  initialTopic?: string;
   onNavigate: (destination: TourDestination) => void;
   onClose: () => void;
 }) {
-  const [index, setIndex] = useState(0);
+  const [detailed, setDetailed] = useState(Boolean(initialTopic));
+  const [index, setIndex] = useState(() => initialTopic ? Math.max(0, TOUR_STEPS.findIndex(step => step.id === initialTopic)) : 0);
+  const steps = detailed ? TOUR_STEPS : INTRO_STEPS;
   const [target, setTarget] = useState<Rect | null>(null);
   const [position, setPosition] = useState<CSSProperties>({});
   const card = useRef<HTMLElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const close = useRef(onClose);
   close.current = onClose;
-  const step = TOUR_STEPS[index];
-  const last = index === TOUR_STEPS.length - 1;
+  const step = steps[index];
+  const last = index === steps.length - 1;
 
   useEffect(() => {
     rememberOnboarding();
@@ -154,24 +157,24 @@ export default function OnboardingTour({ onNavigate, onClose }: {
           <button type="button" className="onboarding-close" aria-label="Close tour" onClick={onClose}><X size={18} /></button></div>
       </header>
       <div className="onboarding-content">
-        <div className="onboarding-progress-label"><span>{step.chapter}</span><span role="status">{index + 1} of {TOUR_STEPS.length}</span></div>
-        <progress max={TOUR_STEPS.length} value={index + 1} aria-label="Tour progress" />
+        <div className="onboarding-progress-label"><span>{step.chapter}</span><span role="status">{index + 1} of {steps.length}</span></div>
+        <progress max={steps.length} value={index + 1} aria-label="Tour progress" />
         <h2 ref={heading} id="onboarding-title" tabIndex={-1}>{step.title}</h2>
         <p id="onboarding-description">{step.description}</p>
         <dl>{step.options.map(([label, description]) => <div key={label}><dt>{label}</dt><dd>{description}</dd></div>)}</dl>
-        <label className="onboarding-topics">Jump to topic
+        {detailed ? <label className="onboarding-topics">Jump to topic
           <select value={index} onChange={event => setIndex(Number(event.target.value))}>
             {Array.from(new Set(TOUR_STEPS.map(item => item.chapter))).map(chapter => <optgroup label={chapter} key={chapter}>
               {TOUR_STEPS.map((item, position) => item.chapter === chapter
                 ? <option key={item.id} value={position}>{position + 1}. {item.title}</option> : null)}
             </optgroup>)}
           </select>
-        </label>
+        </label> : <button className="text-button" onClick={() => { setDetailed(true); setIndex(0); }}>Browse all help topics</button>}
       </div>
       <footer className="onboarding-footer">
         <button type="button" className="secondary-button" disabled={index === 0} onClick={() => setIndex(value => value - 1)}><ArrowLeft size={15} />Back</button>
         <button type="button" className="primary-button" onClick={() => last ? onClose() : setIndex(value => value + 1)}>
-          {last ? <>Finish tour<Check size={15} /></> : <>{index === 0 ? "Show me around" : "Next"}<ArrowRight size={15} /></>}
+          {last ? <>Finish tour<Check size={15} /></> : <>Next<ArrowRight size={15} /></>}
         </button>
       </footer>
     </section>

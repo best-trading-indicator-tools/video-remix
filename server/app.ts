@@ -1,3 +1,4 @@
+import { installWorkspaceRoutes } from "./workspace-routes.js";
 import { installExportTools } from "./export-tools.js";
 import { installPublishingRoutes } from "./publishing-routes.js";
 import { publishingJobs } from "./publishing-lock.js";
@@ -159,6 +160,7 @@ export function createApp() {
     next();
   });
   app.use(express.json({ limit: "512kb" }));
+  installWorkspaceRoutes(app);
   installMediaImportRoutes(app);
   installManualPreviewRoutes(app);
   installSpeakerFocusRoutes(app);
@@ -193,7 +195,7 @@ export function createApp() {
     available: state.jobs.some(job => job.id === entry.jobId && job.status === "completed"),
   })).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const pageOptions = (query: Record<string, unknown>) => {
-    if (Object.keys(query).some(key => !["limit", "offset", "search"].includes(key))) throw new HttpError(400, "Unknown history search parameter.");
+    if (Object.keys(query).some(key => !["limit", "offset", "search", "review", "publication", "aspect", "project", "after", "before"].includes(key))) throw new HttpError(400, "Unknown history search parameter.");
     const number = (value: unknown, fallback: number, maximum: number, minimum: number) => {
       if (value === undefined) return fallback;
       if (typeof value !== "string" || !/^\d+$/u.test(value) || !Number.isSafeInteger(Number(value)) || Number(value) < minimum || Number(value) > maximum)
@@ -201,7 +203,9 @@ export function createApp() {
       return Number(value);
     };
     if (query.search !== undefined && (typeof query.search !== "string" || query.search.length > 200)) throw new HttpError(400, "History search must be at most 200 characters.");
-    return { limit: number(query.limit, 50, 100, 1), offset: number(query.offset, 0, Number.MAX_SAFE_INTEGER, 0), search: String(query.search || "").trim() };
+    const filters = z.object({ review: z.enum(['all','unreviewed','accepted','needs-edit','rejected']).optional(), publication: z.enum(['all','unpublished','scheduled','published']).optional(), aspect: z.enum(['','original','9:16','16:9','1:1','4:5']).optional(), project: z.string().max(60).optional(), after: z.string().regex(/^(?:\d{4}-\d{2}-\d{2})?$/u).optional(), before: z.string().regex(/^(?:\d{4}-\d{2}-\d{2})?$/u).optional() }).safeParse(query);
+    if (!filters.success || (filters.data.after && filters.data.before && filters.data.after > filters.data.before)) throw new HttpError(400, 'Choose valid library filters and a date range with From before Through.');
+    return { ...filters.data, limit: number(query.limit, 50, 100, 1), offset: number(query.offset, 0, Number.MAX_SAFE_INTEGER, 0), search: String(query.search || "").trim() };
   };
   app.get("/api/history", (req, res) => {
     const page = historyPage(pageOptions(req.query));
@@ -516,6 +520,8 @@ export function createApp() {
         409,
         "Cancel this video’s active renders before removing it.",
       );
+    if (Object.values(source.draftOwners || {}).some(ids => ids.length)) throw new HttpError(409, "This source is protected by saved short drafts. Remove those drafts before deleting it.");
+    if (state.jobs.some(job => job.sourceId === source.id && job.editorDraft)) throw new HttpError(409, "This source is protected by a saved editing draft. Reset that draft before deleting it.");
     state.sources.splice(state.sources.indexOf(source), 1);
     await saveStore();
     await Promise.all([
@@ -896,7 +902,7 @@ export function createApp() {
         409,
         "Wait for these exports and Postiz uploads to finish before clearing the collection.",
       );
-    const removable = jobs.filter((job) => !job.keptAt);
+    const removable = jobs.filter((job) => !job.keptAt && !job.editorDraft);
     const ids = new Set(removable.map((job) => job.id));
     state.jobs = state.jobs.filter((job) => !ids.has(job.id));
     await saveStore();

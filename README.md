@@ -4,9 +4,19 @@ A private video repurposing workspace with **Auto remix** selected by default. I
 
 ## Interactive tour
 
-An interactive tour opens on the first visit in each browser-tab session. It highlights the actual controls for imports, Auto, Manual, Short clips, Exports and History, with Back, Next and a topic selector. Dismiss it at any point with **Skip tour**, **×**, **Escape**, or a click outside; it stays closed across reloads in that session. **Quick guide** and **How it works** replay it at any time. The tour restores the original view when closed and does not change edit settings or start renders. It works before importing a video, supports keyboard navigation, and adapts to smaller screens.
+A three-step introduction opens once per browser: import footage, choose output settings, and review clips. Dismiss it at any point; completion is remembered across tabs and restarts. **Quick guide** and **How it works** replay it, while **Help with Auto / Manual / Short clips / exports / history** opens detailed help for the current workflow. **Browse all help topics** retains the complete reference tour. Closing help restores the original view without changing edit settings or starting renders.
 
 Topics cover Auto preferences, black bands, captions, sound, reviews and supporting visuals; Manual framing, color, sound modifiers, captions, footage placements, presets, prompt edits and batch exports; the complete long-form-to-short workflow from discovery through sequences, tracking, pacing, approval and rendering; and History's settings, publications, review notes and measured outcomes. Controls that need a source, draft or export are explained beside their containing panel until that item exists. Presets are saved separately for each editing mode.
+
+## Drafts, review queue and library browsing
+
+- **Edit this result** autosaves changes to the workspace with a browser backup while the server is unavailable. Close and reopen to continue. **Resume saved draft** identifies unfinished work. Saving protects the export and its editing files from expiry; **Reset changes** discards the draft, and rendering a revision clears it. Conflicting browser/server drafts require an explicit choice before editing continues.
+- Missing or changed originals open a recovery screen. Import the unchanged original and reconnect a matching source; matching uses its import fingerprint so saved cut timings remain valid. Older exports without fingerprints remain downloadable but need a fresh edit if their original is missing.
+- **Apply changes to** has the same meaning in Quick setup, All settings and Manual. Choose this video, checked videos or all videos; future import defaults have a separate checkbox. Individual control changes preserve each video's other settings. The explicit copy-all controls copy the full configuration, and **Undo batch change** restores the previous state.
+- Exports have human decisions: **Unreviewed**, **Accepted**, **Needs edits**, and **Rejected**. Automated checks remain separate. **Review unreviewed** starts with undecided clips, **E / Edit** marks a clip as needing edits, and **Download accepted** bundles accepted clips matching your filters (up to 300 at a time).
+- Search sources by name/project. Assign a source project to organize its existing exports and future edits; individual History records can be reassigned separately. Exports and History filter by text, project, decision, publication state, format and dates. History filters apply before pagination. Earlier revisions are collapsed; History groups the revisions present on each page.
+- Each export shows its expiry date or protection reason. **Keep collection** protects all completed exports in that collection. Clearing a collection confirms the number of files to delete, including results hidden by filters; kept exports and saved editing drafts are excluded. History records remain after files expire.
+- Short-clip drafts remain in browser storage and pin their original sources on the server. Removing those drafts releases that browser's pins. Keep browser data until those drafts are finished; clearing browser storage loses drafts and leaves their source pins in place to avoid deleting footage unexpectedly. **Source videos → Short-draft file protection → Release protection** can release these stale pins after confirmation.
 
 ## Mobile and tablet layouts
 
@@ -43,12 +53,13 @@ Failed link imports have a **Retry import** button that requests a fresh downloa
 
 ### Quick setup and your style
 
-Auto opens on **Quick setup**, four choices that apply to every video and to new
-imports: **where you will post** (TikTok, Reels & Shorts 9:16, Instagram feed 4:5,
+Auto opens on **Quick setup**, four choices that follow **Apply changes to**.
+Choose this video, selected videos or all videos; future imports have a separate
+checkbox. The choices are: **where you will post** (TikTok, Reels & Shorts 9:16, Instagram feed 4:5,
 square, or YouTube 16:9), **how long each clip can be** (15–90 seconds), **how many
 clips per video**, and **what changes between versions**. **All settings** in the
-panel header switches to every Auto control for the selected video; your choice of
-view is remembered.
+panel header exposes every Auto control with the same settings scope; your choice
+of view is remembered.
 
 **Your style** keeps your caption look, black-band layout, pacing and sound in one
 place. Adjust them in All settings, then choose **Save this look as my style**.
@@ -632,7 +643,7 @@ The queue processes two videos at once by default, including multiple Auto versi
 
 Recoverable failures and backend interruptions retry automatically up to three times, after 5, 15 and 45 seconds by default. Waiting retries release their processing slot. The retry budget and schedule survive restarts; saved edit plans are reused when available. Export cards show the reason, interrupted stage, next retry time and exhausted retry budget. Missing media, invalid inputs, permissions, credentials and full disks require intervention. Pressing **Cancel** stops automatic retries, including after a restart. **Retry** starts a fresh retry budget. Older cancelled records lack a recorded reason and require a manual Retry; they are never silently restarted.
 
-Sources and queue manifests are stored on disk so they survive backend restarts. In Exports, choose **Keep** to retain a finished video, its SRT, saved edit, source and referenced attachments beyond `RETENTION_HOURS`, including across restarts. **Kept** exports stay in the workspace's data directory and are skipped when clearing a collection. Turn off Keep to start a fresh retention window; a source needed by a kept export cannot be removed until Keep is turned off. Download still saves a separate copy wherever your browser chooses. Unkept expired jobs and unreferenced sources are cleaned up automatically. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
+Sources and queue manifests are stored on disk so they survive backend restarts. In Exports, choose **Keep** to retain a finished video, its SRT, saved edit, source and referenced attachments beyond `RETENTION_HOURS`, including across restarts. **Kept** exports stay in the workspace's data directory and are skipped when clearing a collection. Turn off Keep to start a fresh retention window; a source needed by a kept export cannot be removed until Keep is turned off. Download still saves a separate copy wherever your browser chooses. Expired jobs without Keep or a saved editing draft, and unreferenced sources without short drafts, are cleaned up automatically. Speech-model weights remain cached. Large batches need enough disk space for both source and rendered files.
 
 ### App promotion copy and Postiz scheduling
 

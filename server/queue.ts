@@ -555,7 +555,7 @@ export async function cleanupExpired() {
   const expired = (date: string) => new Date(date).getTime() < cutoff;
   const jobs = state.jobs.filter(
     (job) =>
-      !job.keptAt &&
+      !job.keptAt && !job.editorDraft &&
       !publishingJobs.has(job.id) &&
       !isActive(job) &&
       !running.has(job.id) &&
@@ -571,7 +571,7 @@ export async function cleanupExpired() {
     ]),
   );
   const sources = state.sources.filter(
-    (source) => expired(source.createdAt) && !referencedSources.has(source.id),
+    (source) => expired(source.createdAt) && !referencedSources.has(source.id) && !Object.values(source.draftOwners || {}).some(ids => ids.length),
   );
   const attachments = state.attachments.filter(
     (attachment) =>

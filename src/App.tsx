@@ -1,3 +1,9 @@
+import SourceProtection from './SourceProtection';
+import LibraryFilters from './LibraryFilters';
+import ProjectField from './ProjectField';
+import ExportDecision from './ExportDecision';
+import RetentionNotice, { expiryText } from './RetentionNotice';
+import { EMPTY_FILTERS, matchesExport, reviewStatus, revisionFamilies } from '../shared/library';
 import { recordDiagnostic } from "./diagnostics-store";
 import { ExportPreview, ExportName } from "./ExportPreview";
 import ExportKeepButton from "./ExportKeepButton";
@@ -362,6 +368,12 @@ export default function App() {
     });
   };
   const [quickReview, setQuickReview] = useState<RenderJob[] | null>(null);
+  const [libraryFilters, setLibraryFilters] = useState({ ...EMPTY_FILTERS });
+  const [sourceSearch, setSourceSearch] = useState('');
+  const [sourceProject, setSourceProject] = useState('');
+  const [expandedRevisions, setExpandedRevisions] = useState<string[]>([]);
+  const [clearingBatch, setClearingBatch] = useState<string | null>(null);
+  const [batchBusy, setBatchBusy] = useState(false);
   const [reviewRefresh, setReviewRefresh] = useState(0);
   const observedJobDiagnostics = useRef<Set<string> | null>(null);
   const [jobs, setJobs] = useState<RenderJob[]>([]);
@@ -375,7 +387,9 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [showHelp, setShowHelp] = useState(() => shouldShowOnboarding());
   const tourReturn = useRef({ view, mode, tab, autoView, scrollX: 0, scrollY: 0 });
-  const openTour = () => {
+  const [tourTopic, setTourTopic] = useState<string | undefined>();
+  const openTour = (topic?: string) => {
+    setTourTopic(topic);
     tourReturn.current = { view, mode, tab, autoView, scrollX: window.scrollX, scrollY: window.scrollY };
     setShowHelp(true);
   };
@@ -406,12 +420,21 @@ export default function App() {
   const [renderScope, setRenderScope] = useState<"all" | "selected">("all");
   const [autoRenderScope, setAutoRenderScope] = useState<"all" | "current" | "selected">("all");
   const [autoSelectedIds, setAutoSelectedIds] = useState<string[]>([]);
+  const [settingsScope, setSettingsScope] = useState<'current' | 'selected' | 'all'>(() => {
+    try { const value = localStorage.getItem('remix-settings-scope'); return value === 'all' || value === 'selected' ? value : 'current'; } catch { return 'current'; }
+  });
+  const [futureSettings, setFutureSettings] = useState(false);
+  const [scopeUndo, setScopeUndo] = useState<null | { auto: typeof autoById; manual: typeof settingsById; defaultAuto: AutoPreset; defaultSettings: RemixSettings }>(null);
+  useEffect(() => { try { localStorage.setItem('remix-settings-scope', settingsScope); } catch { /* Current scope remains usable. */ } }, [settingsScope]);
   const videoInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const selected =
     sources.find((source) => source.id === selectedId) || sources[0];
+  const settingTargets = settingsScope === 'all' ? sources : settingsScope === 'selected' ? sources.filter(source => autoSelectedIds.includes(source.id)) : selected ? [selected] : [];
+  const scopeDescription = !sources.length ? 'Starting settings for new imports' : settingsScope === 'current' ? `Changing this video: ${selected?.name}` : `Changing ${settingTargets.length} ${settingsScope === 'selected' ? 'selected ' : ''}video${settingTargets.length === 1 ? '' : 's'}`;
+  const rememberScopeChange = () => setScopeUndo(settingTargets.length > 1 || futureSettings ? { auto: autoById, manual: settingsById, defaultAuto, defaultSettings } : null);
   const autoTargets = autoRenderScope === "current" ? (selected ? [selected] : []) :
     autoRenderScope === "selected" ? sources.filter((source) => autoSelectedIds.includes(source.id)) : sources;
   const settings = selected
@@ -694,19 +717,15 @@ export default function App() {
   }, [previewJob]);
 
   const updateSettings = (patch: Partial<RemixSettings>) => {
+    if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
-    if (selected)
-      setSettingsById((current) => ({
-        ...current,
-        [selected.id]: { ...(current[selected.id] || defaultSettings), ...patch },
-      }));
-    else setDefaultSettings((current) => ({ ...current, ...patch }));
+    rememberScopeChange();
+    setSettingsById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, { ...(current[source.id] || defaultSettings), ...patch }])) }));
+    if (!sources.length || futureSettings) setDefaultSettings(current => ({ ...current, ...patch }));
   };
-  const replaceSettings = (value: RemixSettings) => {
-    if (selected) setSettingsById((current) => ({ ...current, [selected.id]: { ...DEFAULT_SETTINGS, ...value } }));
-    else setDefaultSettings({ ...DEFAULT_SETTINGS, ...value });
-  };
+  const replaceSettings = (value: RemixSettings) => updateSettings({ ...DEFAULT_SETTINGS, ...value });
   const applyAll = () => {
+    setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
     setSettingsById((current) =>
       Object.fromEntries(
         sources.map((source) => [
@@ -725,46 +744,35 @@ export default function App() {
         ]),
       ),
     );
-    setDefaultSettings({ ...settings, trimStart: 0, trimEnd: null });
+    if (futureSettings) setDefaultSettings({ ...settings, trimStart: 0, trimEnd: null });
     notify(
       `Settings applied to ${sources.length} video${sources.length === 1 ? "" : "s"}. Each video's trim is kept.`,
       "success",
     );
   };
 
-  const updateAuto = (patch: Partial<AutoPreset>) => {
-    if (selected) {
-      const sourceId = selected.id;
-      setAutoById((current) => ({
-        ...current,
-        [sourceId]: autoPreset({
-          ...(current[sourceId] || defaultAuto),
-          ...patch,
-        }),
-      }));
-    } else setDefaultAuto((current) => autoPreset({ ...current, ...patch }));
+  const updateScopedAuto = (patch: QuickPatch) => {
+    if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
+    rememberScopeChange();
+    const merge = (preset: AutoPreset) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...preset.options, ...patch.options } });
+    setAutoById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto)])) }));
+    if (!sources.length || futureSettings) setDefaultAuto(merge);
   };
+  const updateAuto = (patch: Partial<AutoPreset>) => updateScopedAuto({ ...patch, options: patch.options ? Object.fromEntries(Object.entries(patch.options).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(autoOptions[key as keyof AutoOptions]))) : undefined });
   const applyAutoAll = () => {
+    setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
     setAutoById((current) => ({
       ...current,
       ...Object.fromEntries(
         sources.map((source) => [source.id, autoPreset(selectedAuto)]),
       ),
     }));
-    setDefaultAuto(autoPreset(selectedAuto));
+    if (futureSettings) setDefaultAuto(autoPreset(selectedAuto));
     notify(
-      `Auto settings applied to all ${sources.length} videos and saved for new imports.`,
+      `Auto settings applied to all ${sources.length} videos${futureSettings ? " and new imports" : ""}.`,
       "success",
     );
   };
-  /** Quick setup choices apply to every video and to new imports. */
-  const updateAutoEverywhere = (patch: QuickPatch) => {
-    const merge = (preset: AutoPreset) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }),
-      options: { ...preset.options, ...patch.options } });
-    setAutoById((current) => ({ ...current, ...Object.fromEntries(sources.map((source) => [source.id, merge(current[source.id] || defaultAuto)])) }));
-    setDefaultAuto((current) => merge(current));
-  };
-  /** One look for Auto and Manual. Each video keeps its own cuts, words and band text. */
   const applyStyleEverywhere = (style: MyStyle) => {
     setAutoById((current) => ({ ...current, ...Object.fromEntries(sources.map((source) => {
       const preset = current[source.id] || defaultAuto;
@@ -1000,20 +1008,35 @@ export default function App() {
   };
 
   const clearBatch = async (batchId: string) => {
+    setBatchBusy(true);
     try {
       const result = await api<{ removedIds: string[] }>(`/api/batches/${batchId}`, { method: "DELETE" });
-      setJobs((current) => current.filter((job) => !result.removedIds.includes(job.id)));
+      setJobs((current) => current.filter((job) => !result.removedIds.includes(job.id))); setClearingBatch(null);
       notify(
         "Unkept export files removed. Kept exports, source videos and History records remain.",
         "success",
       );
     } catch (error) {
       notify((error as Error).message, "error");
-    }
+    } finally { setBatchBusy(false); }
   };
 
+  const keepBatch = async (batchId: string) => {
+    setBatchBusy(true);
+    try {
+      const result = await api<{ jobs: RenderJob[] }>(`/api/batches/${batchId}/keep`, { method: 'PATCH' });
+      setJobs(current => current.map(job => result.jobs.find(saved => saved.id === job.id) || job));
+      notify(`${result.jobs.length} exports and their editing files are kept.`, 'success');
+    } catch (error) { notify((error as Error).message, 'error'); } finally { setBatchBusy(false); }
+  };
+  const visibleJobs = jobs.filter(job => matchesExport(job, libraryFilters));
+  const visibleCompleted = visibleJobs.filter(job => job.status === 'completed');
+  const unreviewed = visibleCompleted.filter(job => reviewStatus(job.review) === 'unreviewed');
+  const accepted = visibleCompleted.filter(job => reviewStatus(job.review) === 'accepted');
+  const projects = [...new Set([...sources.map(source => source.project), ...jobs.map(job => job.project)].filter((project): project is string => !!project))].sort();
+  const visibleSources = sources.filter(source => (!sourceSearch.trim() || `${source.name} ${source.project || ''}`.toLocaleLowerCase().includes(sourceSearch.trim().toLocaleLowerCase())) && (!sourceProject || source.project === sourceProject));
   const batchGroups = Object.values(
-    jobs.reduce<Record<string, RenderJob[]>>((groups, job) => {
+    visibleJobs.reduce<Record<string, RenderJob[]>>((groups, job) => {
       (groups[job.batchId] ||= []).push(job);
       return groups;
     }, {}),
@@ -1105,7 +1128,7 @@ export default function App() {
             className="help-button"
             disabled={brollBusy}
             aria-label="Quick guide"
-            onClick={openTour}
+            onClick={() => openTour()}
           >
             <CircleHelp size={17} />
             <span>Quick guide</span>
@@ -1131,6 +1154,7 @@ export default function App() {
           </div>
         </div>
 
+        <button className="text-button contextual-help" onClick={() => openTour(view === 'history' ? 'history' : view === 'exports' ? 'exports' : mode === 'shorts' ? 'shorts-discovery' : mode === 'manual' ? 'modes' : 'quick-setup')}>Help with {view === 'studio' ? mode === 'shorts' ? 'Short clips' : mode === 'auto' ? 'Auto' : 'Manual' : view}</button>
         {!loading && !engineReady && (
           connected && health
             ? <ProblemNotice operation="Set up video engine" message="FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server." />
@@ -1186,6 +1210,14 @@ export default function App() {
                 </div>
               )}
             </div>
+            {mode !== 'shorts' && <section className="settings-scope-bar" aria-label="Settings scope">
+              <label>Apply changes to<select value={settingsScope} disabled={brollBusy} onChange={event => { setSettingsScope(event.target.value as typeof settingsScope); setScopeUndo(null); }}>
+                <option value="current">This video</option><option value="selected">Selected videos ({autoSelectedIds.length})</option><option value="all">All videos ({sources.length})</option>
+              </select></label>
+              <label className="scope-future"><input type="checkbox" checked={futureSettings} onChange={event => setFutureSettings(event.target.checked)} />Also use changes for future imports</label>
+              <span>{scopeDescription}{settingsScope === 'selected' && !settingTargets.length ? ' · Check videos in the source list first.' : ''}</span>
+              {scopeUndo && <button className="secondary-button" onClick={() => { setAutoById(scopeUndo.auto); setSettingsById(scopeUndo.manual); setDefaultAuto(scopeUndo.defaultAuto); setDefaultSettings(scopeUndo.defaultSettings); setScopeUndo(null); notify('Batch settings change undone.', 'info'); }}>Undo batch change</button>}
+            </section>}
             <div
               className={`studio-grid ${mode === "auto" ? "auto-studio" : mode === "shorts" ? "shorts-studio" : tab === "all" ? "manual-all-controls" : ""}`}
             >
@@ -1206,6 +1238,7 @@ export default function App() {
                   <h3><Check size={13} />Ready to edit</h3>
                   <span>{sources.length} video{sources.length === 1 ? "" : "s"}</span>
                 </div>}
+                {!!sources.length && <div className="source-filters"><label>Find a source<input type="search" placeholder="Name or project…" value={sourceSearch} maxLength={200} onChange={event => setSourceSearch(event.target.value)} /></label><label>Project<select value={sourceProject} onChange={event => setSourceProject(event.target.value)}><option value="">All projects</option>{projects.map(project => <option key={project}>{project}</option>)}</select></label><span>{visibleSources.length} of {sources.length} sources</span></div>}
                 <div className="source-list" role="region" aria-label="Imported videos" tabIndex={sources.length ? 0 : undefined}>
                   {loading ? (
                     <div className="source-empty">
@@ -1230,13 +1263,13 @@ export default function App() {
                       </div>
                     </div>
                   ) : (
-                    sources.map((source, index) => (
+                    visibleSources.map((source, index) => (
                       <div
                         className={`source-item ${selected?.id === source.id ? "selected" : ""}`}
                         key={source.id}
                       >
-                        {mode === "auto" && <label className="auto-source-check" title={`Include ${source.name} in selected videos`}>
-                          <input type="checkbox" aria-label={`Select ${source.name} for Auto rendering`} checked={autoSelectedIds.includes(source.id)} disabled={starting || brollBusy}
+                        {mode !== "shorts" && <label className="auto-source-check" title={`Include ${source.name} in selected videos`}>
+                          <input type="checkbox" aria-label={`Select ${source.name} for settings or Auto rendering`} checked={autoSelectedIds.includes(source.id)} disabled={starting || brollBusy}
                             onChange={(event) => {
                               setAutoSelectedIds((current) => event.target.checked ? [...current, source.id] : current.filter((id) => id !== source.id));
                               setAutoRenderScope("selected");
@@ -1252,7 +1285,7 @@ export default function App() {
                           disabled={brollBusy}
                         >
                           <div className="source-thumb">
-                            <img src={source.thumbnailUrl} alt="" />
+                            <img src={source.thumbnailUrl} alt="" loading="lazy" decoding="async" />
                             <span>{duration(source.duration)}</span>
                           </div>
                           <div className="source-info">
@@ -1261,6 +1294,8 @@ export default function App() {
                               {String(sources.length - index).padStart(2, "0")}
                             </span>
                             <strong title={source.name}>{source.name}</strong>
+                            {source.project && <span className="project-tag">{source.project}</span>}
+                            <span className="source-retention">{source.draftProtected ? 'Protected by short drafts' : source.expiresAt ? expiryText(source.expiresAt) : 'Used by exports · retained with them'}</span>
                             <span>
                               {source.width} × {source.height}
                               <span>·</span>
@@ -1303,6 +1338,8 @@ export default function App() {
                     ))
                   )}
                 </div>
+                {!!sources.length && !visibleSources.length && <p className="library-empty">No sources match. <button onClick={() => { setSourceSearch(''); setSourceProject(''); }}>Clear filters</button></p>}
+                {selected && <div className="source-project"><small>Organize {selected.name}</small><ProjectField key={selected.id} value={selected.project} endpoint={`/api/sources/${selected.id}/project`} onSaved={project => { setSources(current => current.map(source => source.id === selected.id ? { ...source, project } : source)); setJobs(current => current.map(job => job.sourceId === selected.id ? { ...job, project } : job)); }} /><SourceProtection key={`protection-${selected.id}`} source={selected} onSaved={saved => setSources(current => current.map(source => source.id === saved.id ? saved : source))} /></div>}
                 {mode === "auto" && selected && ((selected.previousExports || 0) + (selected.similarExports || 0)) > 0 && <button className="source-history-notice" onClick={() => { setHistorySource(selected); setView("history"); }}>
                   <strong>{selected.name}</strong>{(selected.previousExports || 0) > 0 ? `Previously exported ${selected.previousExports} ${selected.previousExports === 1 ? "edit" : "edits"}` : `${selected.similarExports} possible picture ${selected.similarExports === 1 ? "match" : "matches"}`} · See History
                 </button>}
@@ -1562,13 +1599,15 @@ export default function App() {
                 <QuickAutoPanel
                   options={autoOptions}
                   variants={selectedAuto.variants}
-                  videoCount={sources.length}
+
                   mixed={!uniformAuto}
-                  onChange={updateAutoEverywhere}
+                  scopeDescription={scopeDescription}
+                  onChange={updateScopedAuto}
                   onView={setAutoView}
                 />
                 ) : (
                 <AutoPanel
+                  scopeDescription={scopeDescription}
                   onView={setAutoView}
                   onSaveStyle={saveMyStyle}
                   options={autoOptions}
@@ -2322,7 +2361,7 @@ export default function App() {
                 </p>
                 <p className="retention-note">
                   Choose Keep to save an export and its editing files in this workspace.
-                  Unkept exports are cleared after {health?.retentionHours || 24} hours.
+                  Exports without Keep or a saved editing draft expire after {health?.retentionHours || 24} hours. History records remain. Short drafts protect their source videos; unused imported videos expire after the same period.
                 </p>
               </div>
               <button
@@ -2333,18 +2372,24 @@ export default function App() {
                 Back to workspace
               </button>
             </div>
+            <LibraryFilters value={libraryFilters} onChange={setLibraryFilters} projects={projects} />
+            <p className="library-result-count" role="status">{visibleJobs.length} of {jobs.length} exports · {unreviewed.length} unreviewed · {accepted.length} accepted</p>
             <div className="publishing-actions">
-              {completed.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...completed])}><MonitorPlay size={16} />Quick review · {completed.length} {completed.length === 1 ? 'export' : 'exports'}</button>}
+              {unreviewed.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...unreviewed])}><MonitorPlay size={16} />Review unreviewed · {unreviewed.length}</button>}
+              {visibleCompleted.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...visibleCompleted])}>Review filtered exports · {visibleCompleted.length}</button>}
+              {accepted.length > 0 && accepted.length <= 300 && <a className="secondary-button" href={`/api/exports/accepted.zip?ids=${encodeURIComponent(accepted.map(job => job.id).join(','))}`} download><Download size={16} />Download accepted · {accepted.length}</a>}
+              {accepted.length > 300 && <span>Narrow your filters to download up to 300 accepted exports at once.</span>}
               <button className="secondary-button" onClick={() => setPublishing({ job: null })}>App profiles &amp; scheduled posts</button>
             </div>
-            {completed.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>
-              <summary>Review flagged moments · {completed.reduce((sum, job) => sum + (job.finishedReviewReport?.issues.length || 0), 0)} findings</summary>
+            {visibleCompleted.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>
+              <summary>Review flagged moments · {visibleCompleted.reduce((sum, job) => sum + (job.finishedReviewReport?.issues.length || 0), 0)} findings</summary>
               <p>Open a timestamp to review its picture and sound. Use Edit this moment to make a correction.</p>
-              <ul>{completed.filter(job => job.finishedReviewReport?.issues.length).map(job => <li key={job.id}>
+              <ul>{visibleCompleted.filter(job => job.finishedReviewReport?.issues.length).map(job => <li key={job.id}>
                 <strong>{job.summary?.title || job.sourceName}</strong>
                 {job.finishedReviewReport!.issues.map((issue, index) => <button type="button" className="secondary-button" key={index} onClick={() => { pendingExportSeek.current = issue.start; setPreviewJob(job); }}>{duration(issue.start)} · {issue.message}</button>)}
               </li>)}</ul>
             </details>}
+            {!!jobs.length && !visibleJobs.length && <div className="library-empty"><h3>No matching exports</h3><p>Change the filters to see more of your library.</p><button className="secondary-button" onClick={() => setLibraryFilters({ ...EMPTY_FILTERS })}>Clear filters</button></div>}
             {!jobs.length ? (
               <div className="exports-empty">
                 <span className="large-icon-box">
@@ -2367,10 +2412,13 @@ export default function App() {
               </div>
             ) : (
               batchGroups.map((batch) => {
-                const batchCompleted = batch.filter(
+                const allBatch = jobs.filter(job => job.batchId === batch[0].batchId);
+                const removable = allBatch.filter(job => !job.keptAt && !job.draftSavedAt);
+                const families = revisionFamilies(batch).map(family => family.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+                const batchCompleted = allBatch.filter(
                   (job) => job.status === "completed",
                 );
-                const batchActive = batch.some((job) =>
+                const batchActive = allBatch.some((job) =>
                   ["queued", "processing"].includes(job.status),
                 );
                 return (
@@ -2404,21 +2452,25 @@ export default function App() {
                           <Download size={14} />
                           {batchActive
                             ? `Download ${batchCompleted.length} ready`
-                            : "Download collection"}
+                            : `Download collection · ${batchCompleted.length}`}
                           <span className="zip-tag">ZIP</span>
                         </a>
                       )}
-                      {!batchActive && batch.some(job => !job.keptAt) && (
+                      {batchCompleted.some(job => !job.keptAt) && <button className="secondary-button" disabled={batchBusy} onClick={() => void keepBatch(batch[0].batchId)}>Keep collection · {batchCompleted.length}</button>}
+                      {!batchActive && removable.length > 0 && (
                         <IconButton
                           title="Clear unkept export files; kept exports, source videos and History remain"
-                          onClick={() => void clearBatch(batch[0].batchId)}
+                          onClick={() => setClearingBatch(batch[0].batchId)}
                         >
                           <Trash2 size={15} />
                         </IconButton>
                       )}
                     </div>
+                    {clearingBatch === batch[0].batchId && <div className="batch-delete-confirm" role="alert"><p>Delete files for {removable.length} exports in this collection? {allBatch.length - removable.length} kept exports or saved drafts are protected. This includes exports hidden by filters. Source videos and History records remain. File deletion cannot be undone.</p><button className="secondary-button" disabled={batchBusy} onClick={() => setClearingBatch(null)}>Cancel</button><button className="secondary-button" disabled={batchBusy} onClick={() => void clearBatch(batch[0].batchId)}>{batchBusy ? 'Deleting…' : `Delete ${removable.length} exports`}</button></div>}
                     <div className="job-list">
-                      {batch.map((job) => {
+                      {families.flatMap(family => {
+                        const latest = family[0], expanded = expandedRevisions.includes(latest.id);
+                        return [<div key={`family-${latest.id}`} className="revision-family-heading">{family.length > 1 && <button className="secondary-button" aria-expanded={expanded} onClick={() => setExpandedRevisions(current => expanded ? current.filter(id => id !== latest.id) : [...current, latest.id])}>{expanded ? 'Hide' : 'Show'} {family.length - 1} earlier {family.length === 2 ? 'revision' : 'revisions'} · {latest.exportName || latest.summary?.title || latest.sourceName}</button>}</div>, ...(expanded ? family : [latest]).map((job) => {
                         const source = sources.find(
                           (source) => source.id === job.sourceId,
                         );
@@ -2434,7 +2486,7 @@ export default function App() {
                             className={`job-card status-${job.status}`}
                             key={job.id}
                           >
-                            {job.status === "completed" ? <ExportPreview job={job} onOpen={() => setPreviewJob(job)} /> : <div className="job-thumb">{source ? <img src={source.thumbnailUrl} alt="" /> : <Film size={21} />}{job.status === "processing" && <LoaderCircle className="spin" size={18} />}</div>}
+                            {job.status === "completed" ? <ExportPreview job={job} onOpen={() => setPreviewJob(job)} /> : <div className="job-thumb">{source ? <img src={source.thumbnailUrl} alt="" loading="lazy" decoding="async" /> : <Film size={21} />}{job.status === "processing" && <LoaderCircle className="spin" size={18} />}</div>}
                             <div className="job-main">
                               <div className="job-title">
                                 <ExportName job={job} onSaved={updated => setJobs(current => current.map(item => item.id === updated.id ? updated : item))} />
@@ -2547,13 +2599,16 @@ export default function App() {
                                 The source video is no longer available. Import it again to start a new edit.
                               </p>}
                               </details>
+                              <RetentionNotice job={job} />
+                              {job.project && <span className="project-tag">{job.project}</span>}
+                              {job.status === 'completed' && <ExportDecision job={job} onSaved={saved => { setJobs(current => current.map(item => item.id === saved.id ? saved : item)); setReviewRefresh(value => value + 1); }} />}
                               <JobRecoveryNotice job={job} />
                               {job.error && !job.retry && (
                                 <ProblemNotice register={false} message={job.error} diagnostic={job.diagnostic} operation="Export video" entityId={job.id} />
                               )}
                             </div>
                             <div className={`job-status export-verdict ${exportStatus(job).kind}`}>
-                              {job.status === "processing" ? jobProgressLabel(job) : exportStatus(job).label}
+                              {job.status === "processing" ? jobProgressLabel(job) : job.status === "completed" ? `Auto checks: ${exportStatus(job).label}` : exportStatus(job).label}
                             </div>
                             <div className="job-actions">
                               {job.status === "completed" && job.downloadUrl ? (
@@ -2562,7 +2617,7 @@ export default function App() {
                                     onSaved={saved => setJobs(current => current.map(item => item.id === saved.id ? saved : item))} />
                                   <button className="secondary-button" onClick={() => setPublishing({ job })}>Post copy &amp; schedule</button>
                                   {job.editable && <button className="secondary-button job-edit-button" onClick={() => { setEditingIssue(undefined); setEditingJob(job); }}>
-                                    <Scissors size={13} />Edit this result
+                                    <Scissors size={13} />{job.draftSavedAt ? 'Resume saved draft' : job.sourceAvailable === false ? 'Reconnect source to edit' : 'Edit this result'}
                                   </button>}
                                   {job.captionUrl && (
                                     <a
@@ -2613,7 +2668,7 @@ export default function App() {
                             </div>
                           </article>
                         );
-                      })}
+                      })]; })}
                     </div>
                   </div>
                 );
@@ -2630,7 +2685,7 @@ export default function App() {
           <span>
             Made for your own & licensed footage
             <span className="footer-dot">·</span>
-            <button disabled={brollBusy} onClick={openTour}>
+            <button disabled={brollBusy} onClick={() => openTour()}>
               How it works
               <ArrowRight size={12} />
             </button>
@@ -2659,9 +2714,11 @@ export default function App() {
           </div>
         ))}
       </div>
-      {quickReview && <QuickReview jobs={quickReview} paused={!!editingJob} onClose={() => setQuickReview(null)} onEdit={job => { setEditingIssue(undefined); setEditingJob(job); }} onSaved={() => setReviewRefresh(value => value + 1)} />}
+      {quickReview && <QuickReview jobs={quickReview} paused={!!editingJob} onClose={() => setQuickReview(null)} onEdit={job => { setEditingIssue(undefined); setEditingJob(job); }} onSaved={(id, review) => { setJobs(current => current.map(job => job.id === id ? { ...job, review } : job)); setReviewRefresh(value => value + 1); }} />}
       {publishing && <PublishingPanel job={publishing.job} onClose={() => { setPublishing(null); setReviewRefresh(value => value + 1); }} onJobSaved={saved => setJobs(current => current.map(item => item.id === saved.id ? saved : item))} />}
-      {editingJob && <EditPlanEditor key={editingJob.id} job={editingJob} initialIssue={editingIssue} sourceFps={sources.find(source => source.id === editingJob.sourceId)?.fps} onClose={() => setEditingJob(null)} onCreated={(created) => {
+      {editingJob && <EditPlanEditor key={editingJob.id} job={editingJob} initialIssue={editingIssue} sourceFps={sources.find(source => source.id === editingJob.sourceId)?.fps}
+        onImport={() => { setEditingJob(null); setQuickReview(null); setView('studio'); setTimeout(() => videoInput.current?.click(), 0); }}
+        onRecovered={saved => { setEditingJob(saved); setJobs(current => current.map(job => job.id === saved.id ? saved : job)); }} onClose={() => setEditingJob(null)} onCreated={(created) => {
         setJobs((current) => [created, ...current.filter((job) => job.id !== created.id)]);
         setEditingJob(null);
         setView("exports");
@@ -2759,7 +2816,7 @@ export default function App() {
           </section>
         </div>
       )}
-      {showHelp && <OnboardingTour onNavigate={navigateTour} onClose={closeTour} />}
+      {showHelp && <OnboardingTour initialTopic={tourTopic} onNavigate={navigateTour} onClose={closeTour} />}
     </div>
   );
 }

@@ -1,11 +1,11 @@
-export const ONBOARDING_SESSION_KEY = "remix-onboarding-session-v1";
+export const ONBOARDING_SESSION_KEY = "remix-onboarding-seen-v2";
 type SessionStorage = Pick<Storage, "getItem" | "setItem">;
 export function shouldShowOnboarding(storage?: SessionStorage) {
-  try { return (storage ?? window.sessionStorage).getItem(ONBOARDING_SESSION_KEY) !== "seen"; }
+  try { return (storage ?? window.localStorage).getItem(ONBOARDING_SESSION_KEY) !== "seen"; }
   catch { return true; }
 }
 export function rememberOnboarding(storage?: SessionStorage) {
-  try { (storage ?? window.sessionStorage).setItem(ONBOARDING_SESSION_KEY, "seen"); }
+  try { (storage ?? window.localStorage).setItem(ONBOARDING_SESSION_KEY, "seen"); }
   catch { /* The tour still works when browser storage is unavailable. */ }
 }
 
@@ -64,15 +64,15 @@ export const TOUR_STEPS: readonly TourStep[] = [
       ["Short clips", "Build named shorts from exact timestamps, including multiple sequences from a long recording."]],
   },
   { id: "quick-setup", chapter: "Auto", title: "Set up a batch in four choices", target: ".quick-auto", destination: autoQuick,
-    description: "Quick setup is the everyday Auto panel. Its choices apply to every video and to new imports; All settings keeps every control.",
+    description: "Quick setup is the everyday Auto panel. Its choices follow Apply changes to, just like All settings. Future imports have their own checkbox.",
     options: [["Where and how long", "Pick where you will post and the longest a clip may be. Auto still keeps a complete idea shorter when it fits."],
       ["Clips per video", "Choose how many clips each video gets, and whether each clip is a different moment or a new angle on one moment."],
       ["All settings", "Open All settings to adjust captions, black bands, pacing and sound, and save your look as a style."]],
   },
   { id: "auto-scope", chapter: "Auto", title: "Choose which video you are changing", target: ".auto-scope", destination: autoAll,
-    description: "Select a source card or use Editing preferences for to change that video's Auto settings.",
-    options: [["Per-video preferences", "Format, length, text, sound, visuals and version count belong to the selected source."],
-      ["Use for all videos", "With multiple sources, copy these preferences to the other videos and future imports."],
+    description: "Choose This video, Selected videos or All videos in Apply changes to. The same scope applies in Quick setup and All settings.",
+    options: [["Per-video preferences", "Change only the controls you intend to copy; each video keeps its other preferences."],
+      ["Use for all videos", "Copy preferences to all imported videos. Future imports change only when their checkbox is enabled. Undo batch change restores the previous settings."],
       ["Starting preferences", "Before importing, your choices become the defaults for new videos."]],
   },
   { id: "black-bands", chapter: "Auto", title: "Frame your video with black bands", target: ".auto-layout", destination: autoAll,
@@ -302,6 +302,15 @@ export const TOUR_STEPS: readonly TourStep[] = [
     description: "Import a video, choose a mode, then review your settings before rendering.",
     options: [["Come back whenever you need", "Quick guide and How it works reopen this tour. Jump to topic goes straight to a particular option."],
       ["Your work stays yours", "The tour only moves between views. Your settings, footage and exports are unchanged."],
-      ["Once per session", "This guide opens automatically once per browser-tab session. Reloading after you finish or dismiss it keeps it closed."]],
+      ["Once per browser", "The three-step introduction opens on your first visit. Completion is remembered across tabs and restarts; open help whenever you need it."]],
   },
+];
+
+export const INTRO_STEPS: readonly TourStep[] = [
+  { id: 'intro-import', chapter: 'Get started', title: '1. Bring a video', description: 'Browse files, drop footage, or paste a video link.', target: '.import-panel', destination: autoQuick,
+    options: [['Your originals', 'Import one recording or a batch. Follow progress in Source videos.']] },
+  { id: 'intro-output', chapter: 'Get started', title: '2. Choose your output', description: 'Pick a format, maximum length, and number of clips. Check which videos your settings affect.', target: '.quick-auto', destination: autoQuick,
+    options: [['Start with Auto', 'Use Quick setup, then Auto remix. Open All settings when you need more control.']] },
+  { id: 'intro-review', chapter: 'Get started', title: '3. Review your clips', description: 'Preview, accept, request edits, or reject. Download accepted clips when you are ready.', target: '.exports-panel', destination: {view: 'exports'},
+    options: [['Keep your work', 'Editing drafts save automatically. Keep finished exports to protect them from expiry.'], ['Help when you need it', 'Use Help with this workflow or Quick guide to explore detailed topics.']] },
 ];

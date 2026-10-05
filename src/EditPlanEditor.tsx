@@ -1,3 +1,5 @@
+import SourceRecovery, { type SourceStatus } from "./SourceRecovery";
+import { DraftWriter, draftKey as resultDraftKey, parseDraft, type SavedDraft, type DraftBackup, type ResultDraft } from "./result-drafts";
 import { exportTitle } from "../shared/export-presentation";
 import EditTimeline from "./EditTimeline";
 import { mainTimeAt, outputTimeAt, storyClips, storyTiming } from "../shared/edit-timeline";
@@ -146,8 +148,10 @@ function FootagePreview({ url, label, start, end, aspect, focalPoint, fit = "cro
   </div>;
 }
 
-export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, sourceFps }: {
+export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, sourceFps, onImport, onRecovered }: {
   job: RenderJob;
+  onImport: () => void;
+  onRecovered: (job: RenderJob) => void;
   initialIssue?: FinishedIssue;
   sourceFps?: number;
   onClose: () => void;
@@ -157,6 +161,11 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
   const savedCoverage = job.auto?.brollMaxCoverage ?? DEFAULT_BROLL_MAX_COVERAGE;
   const [brollMaxCoverage, setBrollMaxCoverage] = useState(savedCoverage);
   const [coverageInput, setCoverageInput] = useState(String(savedCoverage));
+  const [sourceProblem, setSourceProblem] = useState<SourceStatus | null>(null);
+  const [saveState, setSaveState] = useState({ message: 'No unsaved changes', failed: false });
+  const writer = useRef<DraftWriter | null>(null);
+  const [draftChoice, setDraftChoice] = useState<{ backup: ResultDraft | null; valid: boolean } | null>(null);
+  const finished = useRef(false);
   const [plan, setPlan] = useState<EditPlan | null>(null);
   const [draft, setDraft] = useState<EditPlan | null>(null);
   const [timelineFootage, setTimelineFootage] = useState(job.footageAssets ?? []);
@@ -202,7 +211,11 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
   const correctionClock = useRef({ totalMs: 0, lastTick: 0, lastInteraction: 0, visible: false });
   const updateCorrectionClock = useRef<() => void>(() => {});
   const closeRef = useRef(onClose);
-  closeRef.current = onClose;
+  const closeEditor = () => {
+    if (writer.current && !writer.current.localSafe) { void writer.current.flush(); setError('Your draft is not saved yet. Retry saving before closing.'); return; }
+    void writer.current?.flush(); onClose();
+  };
+  closeRef.current = closeEditor;
   savingRef.current = saving;
 
   useEffect(() => {
@@ -218,20 +231,43 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
     return () => controller.abort();
   }, [footageIds, job.id]);
 
+  const restoreDraft = (restored: ResultDraft | null, original: EditPlan) => {
+    setDraft(restored?.draft ?? structuredClone(original)); setRefreshBroll(restored?.refreshBroll ?? false);
+    setPromptAnchor(restored?.promptAnchor ?? null); setPromptUndo(null);
+    setBrollCount(restored?.brollCount ?? savedBrollCount); setBrollCountInput(String(restored?.brollCount ?? savedBrollCount));
+    setBrollMaxCoverage(restored?.brollMaxCoverage ?? savedCoverage); setCoverageInput(String(restored?.brollMaxCoverage ?? savedCoverage));
+    setReviewTime(restored?.reviewTime ?? 0);
+  };
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
     setError("");
-    void request<EditPlan>(`/api/jobs/${job.id}/plan`, { signal: controller.signal })
-      .then((value) => {
-        if (!controller.signal.aborted) {
-          setPlan(value); setDraft(structuredClone(value)); setRefreshBroll(false); setPromptAnchor(null); setPromptUndo(null);
-        }
-      })
+    setSourceProblem(null);
+    void (async () => {
+      const status = await request<SourceStatus>(`/api/jobs/${job.id}/source-status`, { signal: controller.signal });
+      if (!status.available) { if (!controller.signal.aborted) setSourceProblem(status); return; }
+      const [value, saved] = await Promise.all([
+        request<EditPlan>(`/api/jobs/${job.id}/plan`, { signal: controller.signal }),
+        request<{ draft: SavedDraft | null }>(`/api/jobs/${job.id}/draft`, { signal: controller.signal }),
+      ]);
+      if (controller.signal.aborted) return;
+      let backup: DraftBackup | null = null;
+      try { backup = JSON.parse(localStorage.getItem(resultDraftKey(job.id)) || 'null'); } catch { /* Server copy remains usable. */ }
+      const backupValue = backup?.content ? parseDraft(backup.content, value) : null;
+      const validBackup = !!backup && backup.revision === value.revision && (backup.content === null || !!backupValue);
+      const conflict = !!backup && (!validBackup || (backup.token !== (saved.draft?.token ?? null) && backup.content !== saved.draft?.content));
+      setDraftChoice(conflict ? { backup: backupValue, valid: validBackup } : null);
+      const candidate = !conflict && backup ? backup : saved.draft;
+      const restored = candidate?.content && candidate.revision === value.revision ? parseDraft(candidate.content, value) : null;
+      writer.current = new DraftWriter(job.id, value.revision, saved.draft, (message, failed) => setSaveState({ message, failed }));
+      finished.current = false;
+      setPlan(value); restoreDraft(restored || null, value);
+      setSaveState({ message: restored ? 'Draft restored · continue where you left off' : 'No unsaved changes', failed: false });
+    })()
       .catch((reason: Error) => { if (!controller.signal.aborted) setError(reason.message); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [job.id, reload]);
+  }, [job.id, job.sourceId, reload]);
 
   useEffect(() => {
     if (!plan || loading || !initialIssue) return;
@@ -311,6 +347,15 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
   const draftChanges = useMemo(() => plan && draft ? collectDraftChanges(plan, draft, refreshBroll, promptAnchor) : null, [plan, draft, refreshBroll, promptAnchor]);
   const changed = !!draftChanges && Object.keys(draftChanges).length > 1;
   const draftKey = useMemo(() => draft ? draftIdentity(draft, refreshBroll, brollCount, brollMaxCoverage) : "", [draft, refreshBroll, brollCount, brollMaxCoverage]);
+  const draftSnapshot = useMemo(() => !draft || !plan ? null : changed || brollCount !== savedBrollCount || brollMaxCoverage !== savedCoverage
+    ? JSON.stringify({ draft, refreshBroll, brollCount, brollMaxCoverage, promptAnchor, reviewTime }) : null,
+    [draft, plan, changed, refreshBroll, brollCount, brollMaxCoverage, promptAnchor]);
+  useEffect(() => { if (!loading && !sourceProblem && !draftChoice && !finished.current && writer.current) writer.current.schedule(draftSnapshot); }, [loading, sourceProblem, draftChoice, draftSnapshot]);
+  useEffect(() => {
+    const unload = (event: BeforeUnloadEvent) => { if (writer.current && !writer.current.localSafe) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', unload);
+    return () => { window.removeEventListener('beforeunload', unload); void writer.current?.flush(); };
+  }, []);
   const explicitVisualChanges = draftChanges?.visuals !== undefined;
   const layoutIssues = useMemo(() => draft ? textLayoutIssues(draft, knownOutputAspect) : [], [draft, knownOutputAspect]);
   const timelineFps = draft?.settings.fps === "source" ? sourceFps || 30 : Number(draft?.settings.fps) || 30;
@@ -450,20 +495,24 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
       const created = await request<RenderJob>(`/api/jobs/${job.id}/revisions`, {
         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(changes),
       });
+      finished.current = true; writer.current?.schedule(null); await writer.current?.flush();
       onCreated(created);
     } catch (reason) { setError((reason as Error).message); }
     finally { savingRef.current = false; setSaving(false); }
   };
 
-  return <div className="modal-backdrop edit-plan-backdrop" onClick={() => { if (!savingRef.current) onClose(); }}>
+  return <div className="modal-backdrop edit-plan-backdrop" onClick={() => { if (!savingRef.current) closeEditor(); }}>
     <section ref={dialog} className="edit-plan-modal timeline-editor" role="dialog" tabIndex={-1} aria-modal="true" aria-labelledby="edit-plan-title" onClick={(event) => event.stopPropagation()}>
       <header className="edit-plan-heading">
         <div><span className="eyebrow">VIDEO EDITOR{plan ? ` · REVISION ${plan.revision}` : ""}</span>
-          <h2 id="edit-plan-title">{exportTitle(job)}</h2><p>Arrange your clips below, then render a new revision.</p></div>
-        <button type="button" className="icon-button" aria-label="Close result editor" onClick={onClose} disabled={saving}><X size={20} /></button>
+          <h2 id="edit-plan-title">{exportTitle(job)}</h2><p>Arrange your clips below, then render a new revision.</p>
+          <p role="status" className={saveState.failed ? 'draft-save-warning' : 'draft-save-state'}>{saveState.message}</p>
+          {saveState.failed && <button className="secondary-button" onClick={() => void writer.current?.flush()}>Retry saving draft</button>}</div>
+        <button type="button" className="icon-button" aria-label="Close result editor" onClick={closeEditor} disabled={saving}><X size={20} /></button>
       </header>
       {loading ? <div className="edit-plan-loading" role="status"><LoaderCircle className="spin" size={22} /> Loading your edit…</div> :
-        plan && draft ? <form ref={form} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
+        draftChoice ? <div className="draft-conflict"><h3>Choose the draft to continue</h3><p>{draftChoice.valid ? 'This browser has changes that differ from the draft saved in another window. Both copies are preserved until you choose.' : 'The browser backup no longer matches this edit. Your server draft is still available.'}</p><button className="secondary-button" onClick={() => { try { localStorage.removeItem(resultDraftKey(job.id)); } catch { /* Schedule retries cleanup. */ } setDraftChoice(null); }}>Use server draft</button>{draftChoice.valid && <button className="secondary-button" onClick={() => { restoreDraft(draftChoice.backup, plan!); setDraftChoice(null); }}>Use browser draft</button>}</div> :
+        sourceProblem ? <SourceRecovery job={job} initial={sourceProblem} onImport={onImport} onRecovered={saved => { onRecovered(saved); setReload(value => value + 1); }} /> : plan && draft ? <form ref={form} onSubmit={(event) => { event.preventDefault(); void submit(); }}>
           <div className="edit-plan-body">
             <aside ref={playbackPane} className="edit-plan-playback" aria-label="Video preview and checks" tabIndex={0}>
               <div className="edit-preview-tabs" aria-label="Preview view">

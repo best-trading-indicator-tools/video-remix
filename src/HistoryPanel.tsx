@@ -1,9 +1,12 @@
+import LibraryFilters from './LibraryFilters';
+import ProjectField from './ProjectField';
+import { EMPTY_FILTERS, revisionFamilies } from '../shared/library';
 import { apiRequest as request } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
 import { useEffect, useState, type FormEvent } from "react";
 import FinishedReviewSummary from "./FinishedReviewSummary";
 import EditorialReportSummary from "./EditorialReportSummary";
-import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, Image, LoaderCircle, Play, Plus, RefreshCw, Search, X } from "lucide-react";
+import { ArrowLeft, CalendarDays, Check, Clock3, Download, ExternalLink, Film, Image, LoaderCircle, Play, Plus, RefreshCw, X } from "lucide-react";
 import type { ExportHistoryEntry, ExportMeasurements, ExportReview, PostMetrics, VideoSource, RenderJob } from "../shared/types";
 import "./history.css";
 import { PLATFORM_NAMES, REACH_LABELS, latestPostObservations, validPublicationUrl } from "../shared/publishing";
@@ -25,6 +28,7 @@ const verdictLabels = {
   "accepted-unchanged": "Accepted unchanged",
   "accepted-after-correction": "Accepted after correction",
   rejected: "Rejected",
+  "needs-edit": "Needs edits",
 } satisfies Record<NonNullable<ExportReview["verdict"]>, string>;
 const issueLabels = {
   opening: "Opening lacks context", ending: "Ending is incomplete", meaning: "Meaning changed or misleading",
@@ -292,6 +296,7 @@ function HistoryCard({ entry, stockUses, onSaved }: {
     <FinishedReviewSummary report={entry.finishedReviewReport} compact videoUrl={entry.available ? `/api/jobs/${encodeURIComponent(entry.jobId)}/video` : undefined}
       onRetry={entry.available ? () => void recheckFinished() : undefined} retrying={reviewing} retryError={reviewError} />
     <EditorialReportSummary report={entry.editorialReport} repair={entry.editorialRepair} compact />
+    <ProjectField value={entry.project} endpoint={`/api/history/${entry.id}/project`} onSaved={project => onSaved({ ...entry, project })} />
     <SettingsSnapshot entry={entry} />
     <MeasurementEditor entry={entry} onSaved={onSaved} />
     <div className="history-publications" aria-label="Recorded publications">
@@ -336,14 +341,16 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
   const [entries, setEntries] = useState<ExportHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS });
+  const [projects, setProjects] = useState<string[]>([]);
+  const search = filters.search;
   const [reload, setReload] = useState(0);
   const [measurementGroups, setMeasurementGroups] = useState<MeasurementGroup[] | null>(null);
   const [total, setTotal] = useState(0);
   const [stockUses, setStockUses] = useState(new Map<string, number>());
   const [page, setPage] = useState({ key: "", offset: 0 });
   const [loadComparisons, setLoadComparisons] = useState(false);
-  const filterKey = `${source?.id || ""}:${search}`;
+  const filterKey = `${source?.id || ""}:${JSON.stringify(filters)}`;
   const offset = page.key === filterKey ? page.offset : 0;
   const pageSize = 50;
   useEffect(() => {
@@ -351,7 +358,7 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
     setLoading(true);
     setError("");
     const endpoint = source ? `/api/sources/${encodeURIComponent(source.id)}/history` : "/api/history";
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset), search: search.trim() });
+    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset), ...filters, search: search.trim() });
     const timer = setTimeout(() => {
       void request<{ entries: ExportHistoryEntry[]; total: number; offset: number; stockUses: Record<string, number> }>(`${endpoint}?${params}`, { signal: controller.signal })
         .then((result) => { if (!controller.signal.aborted) {
@@ -362,7 +369,7 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
         .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     }, search ? 250 : 0);
     return () => { clearTimeout(timer); controller.abort(); };
-  }, [source?.id, refreshKey, reload, offset, search]);
+  }, [source?.id, refreshKey, reload, offset, filters]);
   useEffect(() => {
     const controller = new AbortController();
     if (!loadComparisons) return;
@@ -371,15 +378,16 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
       .catch(() => { if (!controller.signal.aborted) setMeasurementGroups(null); });
     return () => controller.abort();
   }, [refreshKey, reload, loadComparisons]);
-  const query = search.trim().toLocaleLowerCase();
+  useEffect(() => { const controller = new AbortController(); void request<{ projects: string[] }>('/api/library/projects', { signal: controller.signal }).then(result => setProjects(result.projects)).catch(() => {}); return () => controller.abort(); }, [refreshKey, reload]);
+  const query = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
   const visible = entries;
   return <section className="history-panel panel" aria-labelledby="history-title">
     <header className="history-heading"><div><h2 id="history-title">Export history <span className="count-pill">{total}</span></h2><p>History stays available after video files expire. Review earlier excerpts and keep a record of your posts.</p></div>
       <button className="secondary-button" onClick={onBack}><ArrowLeft size={14} />Workspace</button>
     </header>
     {source && <div className="history-source-filter"><div><strong>Earlier exports & possible picture matches</strong><span>{source.name}</span></div><button className="secondary-button" onClick={onClearSource}><X size={13} />Show all history</button></div>}
-    <div className="history-toolbar"><label className="history-search"><Search size={16} /><span className="visually-hidden">Search history by title or source</span><input type="search" placeholder="Search by title or source…" value={search} maxLength={200} onChange={(event) => setSearch(event.target.value)} /></label>
-      <button className="secondary-button" disabled={loading} onClick={() => setReload((value) => value + 1)}><RefreshCw className={loading ? "spin" : ""} size={14} />Refresh</button></div>
+    <LibraryFilters value={filters} onChange={setFilters} projects={projects} />
+    <div className="history-toolbar"><button className="secondary-button" disabled={loading} onClick={() => setReload(value => value + 1)}><RefreshCw className={loading ? 'spin' : ''} size={14} />Refresh</button></div>
     <ConfigurationHistory entries={visible} scope="this page" />
     <MeasurementComparison groups={measurementGroups} entries={visible} onOpen={() => setLoadComparisons(true)} />
     <nav className="history-pagination" aria-label="History pages">
@@ -389,10 +397,10 @@ export default function HistoryPanel({ source, refreshKey, onClearSource, onBack
     </nav>
     {error && <ProblemNotice message={error} operation="Update history" />}
     {loading && !entries.length ? <div className="history-empty" role="status"><LoaderCircle className="spin" size={24} /><p>Loading export history…</p></div> :
-      !visible.length ? <div className="history-empty"><Clock3 size={30} /><h3>{query ? "No matching exports" : "Your export history starts here"}</h3><p>{query ? "Try another title or source name." : "Finished Auto edits will appear here, including future revisions."}</p></div> :
-        <div className="history-list" aria-busy={loading}>{visible.map((entry) => <HistoryCard key={entry.id} entry={entry} stockUses={stockUses} onSaved={(updated) => {
-          setEntries((current) => current.map((item) => item.id === updated.id ? updated : item));
-          setReload((value) => value + 1);
-        }} />)}</div>}
+      !visible.length ? <div className="history-empty"><Clock3 size={30} /><h3>{query ? "No matching exports" : "Your export history starts here"}</h3><p>{query ? "Try another search, project, decision, format or date range." : "Finished Auto edits will appear here, including future revisions."}</p></div> :
+        <div className="history-list" aria-busy={loading}>{revisionFamilies(visible.map(entry => ({ ...entry, id: entry.jobId, historyId: entry.id }))).map(family => {
+          const cards = family.map(item => <HistoryCard key={item.historyId} entry={{ ...item, id: item.historyId }} stockUses={stockUses} onSaved={updated => { setEntries(current => current.map(entry => entry.id === updated.id ? updated : entry)); setReload(value => value + 1); }} />);
+          return <div className="history-revision-family" key={family[0].id}>{cards[0]}{cards.length > 1 && <details><summary>{cards.length - 1} earlier revisions on this page</summary>{cards.slice(1)}</details>}</div>;
+        })}</div>}
   </section>;
 }

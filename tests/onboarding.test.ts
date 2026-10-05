@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ONBOARDING_SESSION_KEY, rememberOnboarding, shouldShowOnboarding, TOUR_STEPS } from "../src/onboarding-steps.js";
+import { ONBOARDING_SESSION_KEY, rememberOnboarding, shouldShowOnboarding, TOUR_STEPS, INTRO_STEPS } from "../src/onboarding-steps.js";
 
-test("the tour appears once per tab session and remains closed across reloads", () => {
+test("the tour appears once per browser and remains closed across reloads", () => {
   const values = new Map<string, string>();
   const session = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
   assert.equal(shouldShowOnboarding(session), true);
@@ -31,4 +31,10 @@ test("every topic has a stable unique identity and destinations cover all editin
     assert.ok(step.target, step.id);
     assert.ok(step.destination, step.id);
   }
+});
+
+test("first-use introduction is three steps with contextual detailed help retained", () => {
+  assert.equal(INTRO_STEPS.length, 3);
+  assert.deepEqual(INTRO_STEPS.map(step => step.destination?.view), ["studio", "studio", "exports"]);
+  assert.ok(TOUR_STEPS.length > INTRO_STEPS.length);
 });

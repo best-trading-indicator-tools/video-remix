@@ -18,6 +18,7 @@ import type { VisualIdentity } from "../shared/visual-identity.js";
 import { visualIdentity } from "./visual-identity.js";
 import { WorkspaceDatabase, type HistoryFilter } from "./database.js";
 export interface StoredSource extends VideoSource {
+  draftOwners?: Record<string, string[]>;
   picture?: VisualIdentity;
   filePath: string;
   thumbnailPath: string;
@@ -34,6 +35,7 @@ export interface StoredAttachment extends Attachment {
   createdAt: string;
 }
 export interface StoredJob extends RenderJob {
+  editorDraft?: { revision: number; content: string; savedAt: string; token: string };
   outputPicture?: VisualIdentity;
   footageFiles?: Record<string, { filename: string; name: string; duration: number; hasAudio: boolean }>;
   /** An explicit retry of a skipped Auto version can reuse this batch's footage. */
@@ -94,10 +96,11 @@ export function historyMatches(source: Pick<StoredSource, "fingerprint" | "pictu
   matchCache.set(key, matches);
   return matches;
 }
-export function historyPage(options: { limit: number; offset: number; search: string; ids?: string[] }) {
+export function historyPage(options: import("./database.js").HistoryPageOptions) {
   if (!database) throw new Error("Workspace database is not initialized");
   return database.page(options);
 }
+export function historyProjects() { return database?.projects() ?? []; }
 export function historyStockUses(entries: ExportHistoryEntry[]) {
   return database?.stockUses([...new Set(entries.flatMap(entry => entry.stockShots.map(shot => shot.identity)))]) ?? {};
 }
@@ -186,19 +189,27 @@ export function publicSource(source: StoredSource): VideoSource {
   const {
     filePath: _filePath,
     thumbnailPath: _thumbnailPath,
+    draftOwners: _draftOwners,
     fileSignature: _fileSignature,
     picture: _picture,
     ...value
   } = source;
-  return { ...value, ...(source.fingerprint ? { previousExports: historyMatches(source).filter(entry => entry.match?.kind === "exact").length,
+  return { ...value, draftProtected: Object.values(source.draftOwners || {}).some(ids => ids.length > 0), expiresAt: state.jobs.some(job => job.sourceId === source.id) || Object.values(source.draftOwners || {}).some(ids => ids.length) ? undefined : new Date(Date.parse(source.createdAt) + config.retentionMs).toISOString(), ...(source.fingerprint ? { previousExports: historyMatches(source).filter(entry => entry.match?.kind === "exact").length,
     similarExports: historyMatches(source).filter(entry => entry.match?.kind !== "exact").length } : {}) };
 }
 export function publicJob(job: StoredJob): RenderJob {
-  const { outputPicture: _outputPicture, outputPath: _outputPath, captionPath: _captionPath, footageFiles: _footageFiles,
+  const { editorDraft: _editorDraft, outputPicture: _outputPicture, outputPath: _outputPath, captionPath: _captionPath, footageFiles: _footageFiles,
     editPlan: _editPlan, planFiles: _planFiles, sourceTranscript: _transcript,
     brollCandidates: _candidates, refreshBroll: _refreshBroll, preserveBroll: _preserveBroll,
     allowRepeatedFootage: _allowRepeatedFootage, ...value } = job;
-  return { ...value, ...(job.footageFiles ? { footageAssets: Object.entries(job.footageFiles).map(([id, media]) => ({ id, name: media.name, duration: media.duration, hasAudio: media.hasAudio, url: `/api/jobs/${job.id}/footage/${id}` })) } : {}), ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
+  const entry = historyRecords({ jobId: job.id })[0];
+  const source = state.sources.find(source => source.id === job.sourceId);
+  const scheduled = database?.publicationsForJob<import('../shared/publishing.js').Publication>(job.id) ?? [];
+  return { ...value, project: job.project ?? source?.project ?? entry?.project, review: entry?.measurements?.review,
+    sourceAvailable: Boolean(source), draftSavedAt: job.editorDraft?.savedAt,
+    publicationStatus: entry?.publications.length || scheduled.some(post => post.state === 'published') ? 'published' : scheduled.some(post => ['scheduled','uploading','submitting','uncertain'].includes(post.state)) ? 'scheduled' : 'unpublished',
+    expiresAt: job.keptAt || job.editorDraft || ['queued','processing'].includes(job.status) ? undefined : new Date(Date.parse(job.retentionResetAt || job.finishedAt || job.createdAt) + config.retentionMs).toISOString(),
+    ...(job.footageFiles ? { footageAssets: Object.entries(job.footageFiles).map(([id, media]) => ({ id, name: media.name, duration: media.duration, hasAudio: media.hasAudio, url: `/api/jobs/${job.id}/footage/${id}` })) } : {}), ...(job.editPlan ? { editable: true, revision: job.editPlan.revision } : {}) };
 }
 export function publicBroll(asset: StoredBroll): BrollAsset {
   const {

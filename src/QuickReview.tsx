@@ -5,11 +5,11 @@ import { apiRequest } from './api-client';
 import ProblemNotice from './ProblemNotice';
 import './export-review.css';
 
-export default function QuickReview({ jobs, paused, onClose, onEdit, onSaved }: { jobs: RenderJob[]; paused: boolean; onClose: () => void; onEdit: (job: RenderJob) => void; onSaved: () => void }) {
+export default function QuickReview({ jobs, paused, onClose, onEdit, onSaved }: { jobs: RenderJob[]; paused: boolean; onClose: () => void; onEdit: (job: RenderJob) => void; onSaved: (id: string, review: ExportReview) => void }) {
   const dialog = useRef<HTMLDialogElement>(null), video = useRef<HTMLVideoElement>(null), busyRef = useRef(false);
   const [index, setIndex] = useState(0), [notes, setNotes] = useState(''), [originalNotes, setOriginalNotes] = useState('');
   const [review, setReview] = useState<ExportReview>({}), [loaded, setLoaded] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const [advance, setAdvance] = useState(true), [reload, setReload] = useState(0);
+  const [advance, setAdvance] = useState(false), [reload, setReload] = useState(0);
   const job = jobs[index];
   useEffect(() => { const element = dialog.current!; if (!paused) { element.showModal(); void video.current?.play().catch(() => {}); } else { element.close(); video.current?.pause(); } return () => element.close(); }, [paused]);
   useEffect(() => {
@@ -26,13 +26,13 @@ export default function QuickReview({ jobs, paused, onClose, onEdit, onSaved }: 
     busyRef.current = true; setBusy(true); setError('');
     try {
       const updated = await apiRequest<ExportReview>(`/api/jobs/${job.id}/review`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(verdict ? { verdict } : {}), notes }) });
-      setReview(updated); setOriginalNotes(notes); onSaved(); return true;
+      setReview(updated); setOriginalNotes(notes); onSaved(job.id, updated); return true;
     } catch (e) { setError((e as Error).message); return false; }
     finally { busyRef.current = false; setBusy(false); }
   };
   const move = async (direction: number, verdict?: ExportReview['verdict']) => { if (await save(verdict)) { video.current?.pause(); setIndex(value => Math.max(0, Math.min(jobs.length, value + direction))); } };
   const close = async () => { if ((!loaded && !notes) || !job || await save()) onClose(); };
-  const edit = async () => { if (job.editable && await save()) { video.current?.pause(); onEdit(job); } };
+  const edit = async () => { if (job.editable && await save('needs-edit')) { video.current?.pause(); onEdit(job); } };
   const accept = () => void move(1, job.parentJobId ? 'accepted-after-correction' : 'accepted-unchanged');
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -49,7 +49,7 @@ export default function QuickReview({ jobs, paused, onClose, onEdit, onSaved }: 
     <header><div><small>QUICK REVIEW · {Math.min(index + 1, jobs.length)} / {jobs.length}</small><h2 id="quick-review-title">{job ? exportTitle(job) : 'Review complete'}</h2></div><button type="button" onClick={() => void close()} disabled={busy}>Close · Esc</button></header>
     {job ? <div className="quick-review-body"><div className="quick-review-screen"><video key={job.id} ref={video} src={`/api/jobs/${job.id}/video`} poster={`/api/jobs/${job.id}/thumbnail`} controls playsInline autoPlay={!paused} onEnded={() => { if (advance) void move(1); }} /></div>
       <aside><span className={`export-verdict ${exportStatus(job).kind}`}>{exportStatus(job).label}</span>
-        <p>{review.verdict ? { 'accepted-unchanged': 'Accepted unchanged', 'accepted-after-correction': 'Accepted after correction', rejected: 'Rejected' }[review.verdict] : 'No decision yet'}</p>
+        <p>{review.verdict ? { 'accepted-unchanged': 'Accepted unchanged', 'accepted-after-correction': 'Accepted after correction', rejected: 'Rejected', 'needs-edit': 'Needs edits' }[review.verdict] : 'No decision yet'}</p>
         <label>Review notes<textarea rows={5} maxLength={500} value={notes} disabled={!loaded || busy} onChange={event => setNotes(event.target.value)} placeholder="What worked? What needs changing?" /></label>
         <div className="quick-review-decisions"><button disabled={!loaded || busy} onClick={accept}><kbd>A</kbd> Accept</button><button disabled={!loaded || busy || !job.editable} onClick={() => void edit()}><kbd>E</kbd> Edit</button><button disabled={!loaded || busy} onClick={() => void move(1, 'rejected')}><kbd>R</kbd> Reject</button></div>
         <p>Decisions and notes are saved in History. Rejected exports remain available.</p>

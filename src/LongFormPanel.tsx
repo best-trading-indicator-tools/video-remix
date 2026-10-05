@@ -53,6 +53,26 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
   const [clockEditing, setClockEditing] = useState(false);
   const [codecError, setCodecError] = useState(false);
   const [savingError, setSavingError] = useState(false);
+  const [pinError, setPinError] = useState('');
+  const [pinSaving, setPinSaving] = useState(true);
+  const [pinRetry, setPinRetry] = useState(0);
+  const pinWrites = useRef(Promise.resolve());
+  const pinnedSources = [...new Set(drafts.map(draft => draft.sourceId))].sort().join(',');
+  useEffect(() => {
+    setPinSaving(true);
+    let owner: string;
+    try { owner = localStorage.getItem('remix-short-draft-owner') || crypto.randomUUID(); localStorage.setItem('remix-short-draft-owner', owner); }
+    catch { setPinSaving(false); setPinError('Browser storage is unavailable. Use Keep on related exports to protect editing files.'); return; }
+    let active = true;
+    const timer = setTimeout(() => {
+      pinWrites.current = pinWrites.current.catch(() => {}).then(async () => {
+        try { await apiRequest(`/api/draft-sources/${owner}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceIds: pinnedSources ? pinnedSources.split(',') : [] }) }); if (active) setPinError(''); }
+        catch (error) { if (active) setPinError(`Source protection could not be saved. ${(error as Error).message}`); }
+        finally { if (active) setPinSaving(false); }
+      });
+    }, 200);
+    return () => { active = false; clearTimeout(timer); };
+  }, [pinnedSources, pinRetry]);
   const [rendering, setRendering] = useState(false);
   const [error, setError] = useState("");
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -410,8 +430,9 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
     </section>
 
     <section className="shorts-collection panel">
+      {pinError && <><ProblemNotice operation="Protect draft sources" message={pinError} /><button className="secondary-button" onClick={() => setPinRetry(value => value + 1)}>Retry source protection</button></>}
       {savingError && <ProblemNotice operation="Save short drafts" message="Browser storage is unavailable. Your latest edits have not been saved." />}
-      <div className="panel-heading"><h2><Clapperboard size={16} />Your short clips<span className="count-pill">{drafts.length}</span></h2><span className={`shorts-save-state ${savingError ? "shorts-error" : ""}`}>{savingError ? "Browser storage full · keep this tab open" : <><Check size={13} />Saved in this browser</>}</span></div>
+      <div className="panel-heading"><h2><Clapperboard size={16} />Your short clips<span className="count-pill">{drafts.length}</span></h2><span className={`shorts-save-state ${savingError ? "shorts-error" : ""}`}>{savingError ? "Browser storage full · keep this tab open" : <><Check size={13} />Saved in this browser{pinSaving ? " · protecting sources…" : pinError ? " · source protection failed" : ""}</>}</span></div>
       <div className="shorts-collection-body">
         {drafts.length ? <DraftReviewQueue active={active} drafts={drafts} sources={sources} activeId={draft?.id} selectedIds={selectedIds} disabled={rendering}
           onSelect={selectDraft} onSelection={setSelectedIds}

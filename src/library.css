@@ -1,0 +1,50 @@
+.settings-scope-bar { display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; padding:14px 18px; margin:0 0 18px; border:1px solid var(--line); border-radius:12px; background:var(--surface); }
+.settings-scope-bar > span { color:var(--subtle); font-size:12px; overflow-wrap:anywhere; }
+.settings-scope-bar label, .library-filters label, .source-filters label, .project-field label, .export-decision label { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--subtle); min-width:0; }
+.settings-scope-bar input, .settings-scope-bar select, .library-filters input, .library-filters select, .source-filters input, .source-filters select, .project-field input, .export-decision select { padding:8px 10px; min-height:36px; border:1px solid var(--line-strong); background:var(--field); color:var(--text); border-radius:7px; max-width:100%; min-width:0; }
+.settings-scope-bar .scope-future { flex-direction:row; align-items:center; }
+.scope-future input { min-height:18px; accent-color:var(--accent); }
+.contextual-help { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.library-filters { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:20px 0 12px; padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--surface-raised); }
+.library-filters .library-search { flex:1 1 240px; }
+.library-result-count { color:var(--subtle); font-size:12px; }
+.source-filters { display:grid; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line); }
+.source-filters > span, .source-project > small { color:var(--muted); font-size:11px; overflow-wrap:anywhere; }
+.source-project { padding:12px 14px; border-top:1px solid var(--line); }
+.project-field { display:flex; align-items:end; flex-wrap:wrap; gap:8px; margin:10px 0; }
+.project-field label { flex:1 1 140px; }
+.project-field input { width:100%; }
+.project-tag { display:inline-block; width:fit-content; padding:3px 7px; border-radius:5px; background:var(--surface-raised); color:var(--accent); font-size:11px; overflow-wrap:anywhere; }
+.source-info .source-retention { font-size:10px; line-height:1.5; white-space:normal; color:var(--muted); }
+.file-retention { margin:9px 0; font-size:11px; color:var(--warning); line-height:1.5; }
+.file-retention.is-protected { color:var(--green); }
+.export-decision { margin:10px 0; max-width:280px; }
+.export-decision.decision-accepted select { border-color:var(--green); }
+.export-decision.decision-needs-edit select { border-color:var(--warning); }
+.export-decision.decision-rejected select { border-color:var(--danger); }
+.batch-heading { flex-wrap:wrap; }
+.batch-delete-confirm { padding:16px; margin-bottom:12px; border:1px solid var(--danger); border-radius:10px; line-height:1.6; }
+.batch-delete-confirm button + button, .draft-conflict button + button { margin-left:10px; }
+.revision-family-heading:empty { display:none; }
+.revision-family-heading { padding-top:10px; }
+.history-revision-family { display:grid; gap:10px; }
+.history-revision-family > details > summary { color:var(--subtle); cursor:pointer; padding:12px; }
+.history-revision-family > details > .history-card { margin-top:12px; }
+.library-empty { padding:24px 16px; color:var(--subtle); line-height:1.6; }
+.library-empty button { color:var(--text); background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:6px 10px; }
+.draft-save-state { color:var(--green) !important; }
+.draft-save-warning { color:var(--warning) !important; }
+.source-recovery, .draft-conflict { max-width:760px; margin:20px auto; padding:24px; line-height:1.7; }
+.source-recovery button { margin:6px 8px 6px 0; }
+@media (max-width:640px) { .library-filters { padding:12px; } .library-filters label { flex:1 1 135px; } .settings-scope-bar { padding:12px; } .settings-scope-bar > label:first-child { width:100%; } .export-decision { max-width:none; } }
+
+.source-protection { font-size:11px; color:var(--subtle); line-height:1.6; }
+.source-protection summary { cursor:pointer; padding:8px 0; }
+.source-protection button { margin:4px 6px 4px 0; }
+@media (min-width:981px) {
+  .job-card { display:grid; grid-template-columns:110px minmax(0,1fr) max-content; align-items:start; gap:16px 22px; }
+  .job-card > .export-preview, .job-card > .job-thumb { grid-column:1; grid-row:1 / 3; align-self:start; }
+  .job-card > .job-main { grid-column:2; grid-row:1; }
+  .job-card > .job-status { grid-column:3; grid-row:1; }
+  .job-card > .job-actions { grid-column:2 / -1; grid-row:2; justify-content:flex-start; }
+}

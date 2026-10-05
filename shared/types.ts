@@ -212,6 +212,9 @@ export const DEFAULT_SETTINGS: RemixSettings = {
   subtitleId: null,
 };
 export interface VideoSource {
+  project?: string;
+  draftProtected?: boolean;
+  expiresAt?: string;
   id: string;
   name: string;
   size: number;
@@ -328,7 +331,7 @@ export interface ManualPromptEditRequest { prompt: string; settings: RemixSettin
 export interface ManualPromptEditResponse { settings: RemixSettings; summary: string[]; clarification?: string }
 export interface ExportReview {
   /** Human judgment of the whole short; absence means no acceptance decision was recorded. */
-  verdict?: "accepted-unchanged" | "accepted-after-correction" | "rejected";
+  verdict?: "accepted-unchanged" | "accepted-after-correction" | "rejected" | "needs-edit";
   issueReasons?: ("opening" | "ending" | "meaning" | "hook" | "captions" | "framing" | "broll" | "other")[];
   benchmarkCase?: string;
   approach?: string;
@@ -376,6 +379,7 @@ export interface ExportMeasurements {
 }
 export interface CorrectionRecord { captionCorrections: number; brollChanges: number; seconds?: number }
 export interface ExportHistoryEntry {
+  project?: string;
   draftReview?: DraftReview;
   finishedReviewReport?: FinishedReviewReport;
   sourcePicture?: VisualIdentity;
@@ -415,6 +419,12 @@ export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  project?: string;
+  review?: ExportReview;
+  publicationStatus?: "unpublished" | "scheduled" | "published";
+  sourceAvailable?: boolean;
+  draftSavedAt?: string;
+  expiresAt?: string;
   exportName?: string;
   /** User-kept exports and their editing files are exempt from automatic expiry. */
   keptAt?: string;
