@@ -826,7 +826,16 @@ export default function App() {
   };
 
   const importedSources = (added: VideoSource[]) => {
-    setSources(current => [...added, ...current.filter(source => !added.some(item => item.id === source.id))]);
+    setSources(current => {
+      const incoming = new Map(added.map(source => [source.id, source]));
+      const existing = current.map(source => {
+        const updated = incoming.get(source.id) ?? source;
+        incoming.delete(source.id);
+        return updated;
+      });
+      // Keep the library in place while uploads finish; new videos join the end.
+      return [...existing, ...incoming.values()];
+    });
     setSettingsById(current => ({ ...current, ...Object.fromEntries(added.filter(source => !current[source.id]).map(source => [source.id, { ...defaultSettings }])) }));
     setAutoById(current => ({ ...current, ...Object.fromEntries(added.filter(source => !current[source.id]).map(source => [source.id, autoPreset(defaultAuto)])) }));
     if (added.length) setSelectedId(current => current || added[0].id);

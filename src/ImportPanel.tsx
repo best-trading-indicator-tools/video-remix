@@ -1,6 +1,7 @@
 import ProblemNotice from "./ProblemNotice";
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
-import { Check, ChevronDown, FolderOpen, Link2, LoaderCircle, Pause, Play, RotateCcw, Upload, X } from "lucide-react";
+import { createPortal } from "react-dom";
+import { Check, ChevronDown, FolderOpen, Link2, ListVideo, LoaderCircle, Pause, Play, RotateCcw, Upload, X } from "lucide-react";
 import type { Health, VideoSource } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
@@ -52,23 +53,36 @@ export default function ImportPanel(props: Props) {
   const loopBusy = useRef(false);
   const resumeId = useRef<string | null>(null);
   const resumeInput = useRef<HTMLInputElement>(null);
-  const importOptions = useRef<HTMLDetailsElement>(null);
+  const importDialog = useRef<HTMLDialogElement>(null);
+  const dialogTitle = useRef<HTMLHeadingElement>(null);
+  const addButton = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const backdropPressed = useRef(false);
+  const [importView, setImportView] = useState<"add" | "activity">("add");
   const pending = sessions.filter(session => session.status !== "completed");
   const completed = sessions.filter(session => session.status === "completed");
   const failedCount = pending.filter(session => session.status === "failed" || errors[session.id]).length;
   const pausedCount = pending.filter(session => session.status === "uploading" && active !== session.id && !files.current.has(session.id) && !errors[session.id]).length;
   const importingCount = pending.length - failedCount - pausedCount;
+  const issueCount = failedCount + preparationProblems.length + selectionErrors.length;
+  const activitySummary = [
+    choosing ? "Preparing videos" : "",
+    importingCount ? `${importingCount} importing` : "",
+    pausedCount ? `${pausedCount} paused` : "",
+    issueCount ? `${issueCount} need attention` : "",
+  ].filter(Boolean).join(" · ") || (completed.length ? `${completed.length} completed` : "No imports yet");
 
-  const closeImportOptions = () => {
-    if (!importOptions.current?.open) return;
-    // A submit button can lose focus when it becomes disabled during the request.
-    const hadFocus = importOptions.current.contains(document.activeElement) || document.activeElement === document.body;
-    importOptions.current.open = false;
-    if (hadFocus) {
-      importOptions.current.querySelector("summary")?.focus({ preventScroll: true });
-      // Wait for the new progress cards and collapsed form to finish laying out.
-      requestAnimationFrame(() => importOptions.current?.closest(".import-panel")?.scrollIntoView({ block: "nearest" }));
-    }
+  const openImportDialog = (view: "add" | "activity") => {
+    setImportView(view);
+    if (importDialog.current?.open) return;
+    returnFocus.current = document.activeElement instanceof HTMLElement && document.activeElement !== document.body
+      ? document.activeElement : addButton.current;
+    importDialog.current?.showModal();
+    dialogTitle.current?.focus({ preventScroll: true });
+  };
+
+  const closeImportDialog = () => {
+    importDialog.current?.close();
   };
 
   const update = useCallback((incoming: ImportSession[]) => {
@@ -158,7 +172,8 @@ export default function ImportPanel(props: Props) {
     if (!selected.length || preparation.current) return;
     const maximum = props.health?.maxLargeFileSize || 50 * 1024 ** 3;
     if (selected.length > (props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE)) {
-      props.onError(`Choose up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`);
+      const message = `Choose up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`;
+      setSelectionErrors([message]); props.onError(message);
       return;
     }
     setChoosing(true);
@@ -186,7 +201,6 @@ export default function ImportPanel(props: Props) {
           if (!mounted.current) return;
           setErrors(current => { const next = { ...current }; delete next[session.id]; return next; });
           update([session]);
-          closeImportOptions();
           files.current.set(session.id, file);
           void runQueue();
         } catch (error) {
@@ -205,6 +219,8 @@ export default function ImportPanel(props: Props) {
         // The toast's copied report must carry the file's own code, not a generic summary.
         const summary = preparationSummary(failures);
         props.onError(summary.message, summary);
+      } else if (mounted.current && !controller.signal.aborted) {
+        closeImportDialog();
       }
       void runQueue();
     } finally {
@@ -227,7 +243,8 @@ export default function ImportPanel(props: Props) {
       setSessions(sessionsRef.current);
     } catch (error) {
       removed.current.delete(session.id);
-      props.onError(error instanceof Error ? error.message : "Unable to cancel import.");
+      const message = error instanceof Error ? error.message : "Unable to cancel import.";
+      setSelectionErrors([message]); props.onError(message);
     }
   };
 
@@ -235,7 +252,8 @@ export default function ImportPanel(props: Props) {
     const paths = localPaths.split(/\r?\n/u).map(value => value.trim().replace(/^["']|["']$/gu, "")).filter(Boolean);
     if (!paths.length || localBusy) return;
     if (paths.length > (props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE)) {
-      props.onError(`Link up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`);
+      const message = `Link up to ${props.health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE} videos at once.`;
+      setSelectionErrors([message]); props.onError(message);
       return;
     }
     setLocalBusy(true);
@@ -249,8 +267,8 @@ export default function ImportPanel(props: Props) {
         setSelectionErrors(result.errors.map(item => `${item.name}: ${item.error}`));
         props.onError(`${result.errors.length} video${result.errors.length === 1 ? "" : "s"} could not be linked. See the import details.`);
       }
-      if (!result.errors?.length) { setLocalPaths(""); setLocalOpen(false); closeImportOptions(); }
-    } catch (error) { props.onError(error instanceof Error ? error.message : "Unable to link these videos."); }
+      if (!result.errors?.length) { setLocalPaths(""); setLocalOpen(false); closeImportDialog(); }
+    } catch (error) { const message = error instanceof Error ? error.message : "Unable to link these videos."; setSelectionErrors([message]); props.onError(message); }
     finally { setLocalBusy(false); }
   };
 
@@ -282,17 +300,43 @@ export default function ImportPanel(props: Props) {
       setSelectionErrors(rejected.map(item => `${item.name}: ${item.error}`));
       setVideoLinks([...invalid.map(item => item.input), ...links.filter(link => rejected.some(item => item.name === link.slice(0, 180)))].join("\n"));
       setLinksNotice(`${result.imports.length} video${result.imports.length === 1 ? "" : "s"} added to the import queue.${duplicates ? ` ${duplicates} duplicate${duplicates === 1 ? "" : "s"} skipped.` : ""}`);
-      if (result.imports.length && !rejected.length && !invalid.length) closeImportOptions();
+      if (result.imports.length && !rejected.length && !invalid.length) closeImportDialog();
     } catch (error) {
       if (mounted.current) setSelectionErrors([error instanceof Error ? error.message : "Could not import these video links."]);
     } finally { if (mounted.current) setLinksBusy(false); }
   }
 
   return <div className="import-panel">
-    <input ref={props.inputRef} className="visually-hidden" type="file" multiple accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.mpeg,.mpg" aria-label="Upload videos"
-      onChange={event => { void selectFiles(Array.from(event.target.files || [])); event.target.value = ""; }} />
-    <input ref={resumeInput} className="visually-hidden" type="file" accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.mpeg,.mpg" aria-label="Resume video import"
+    <div className="import-launcher">
+      <button ref={addButton} type="button" className={`import-open ${dragging ? "dragging" : ""}`} aria-haspopup="dialog" onClick={() => openImportDialog("add")}
+        onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
+        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) { openImportDialog("activity"); void selectFiles(Array.from(event.dataTransfer.files)); } }}>
+        <Upload size={15} />Add videos
+      </button>
+      <button type="button" className={`import-activity-toggle ${issueCount ? "has-issues" : ""}`} aria-label="View import activity" aria-describedby="import-status-summary" aria-haspopup="dialog" title={activitySummary} onClick={() => openImportDialog("activity")}>
+        {choosing || importingCount ? <LoaderCircle size={14} className="spin" /> : <ListVideo size={14} />}Activity
+        <span className="import-activity-count" aria-hidden="true">{issueCount ? "!" : pending.length || ""}</span>
+      </button>
+    </div>
+    <span id="import-status-summary" className="visually-hidden" role="status">{activitySummary}</span>
+    {createPortal(<dialog ref={importDialog} className="import-dialog" aria-labelledby="import-dialog-title"
+      onCancel={event => { event.preventDefault(); closeImportDialog(); }}
+      onClose={() => { setDragging(false); const target = returnFocus.current?.isConnected ? returnFocus.current : addButton.current; target?.focus({ preventScroll: true }); }}
+      onPointerDown={event => { const rect = event.currentTarget.getBoundingClientRect(); backdropPressed.current = event.target === event.currentTarget && (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom); }}
+      onClick={event => { if (backdropPressed.current && event.target === event.currentTarget) closeImportDialog(); backdropPressed.current = false; }}>
+    <input ref={props.inputRef} className="visually-hidden" tabIndex={-1} type="file" multiple accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.mpeg,.mpg" aria-label="Upload videos"
+      onChange={event => { const files = Array.from(event.target.files || []); event.target.value = ""; if (files.length) { openImportDialog("activity"); void selectFiles(files); } }} />
+    <input ref={resumeInput} className="visually-hidden" tabIndex={-1} type="file" accept="video/*,.mkv,.avi,.mov,.mp4,.webm,.m4v,.mpeg,.mpg" aria-label="Resume video import"
       onChange={event => { const requested = resumeId.current; resumeId.current = null; void selectFiles(Array.from(event.target.files || []), requested); event.target.value = ""; }} />
+    <header className="import-dialog-header">
+      <div><h2 id="import-dialog-title" ref={dialogTitle} tabIndex={-1}>{importView === "add" ? "Add videos" : "Import activity"}</h2><p>Upload files, paste video links, or link videos on this computer.</p></div>
+      <button type="button" className="icon-button" aria-label="Close imports" onClick={closeImportDialog}><X size={20} /></button>
+    </header>
+    <div className="import-view-switch" role="group" aria-label="Import view">
+      <button type="button" aria-pressed={importView === "add"} onClick={() => setImportView("add")}><Upload size={15} />Add videos</button>
+      <button type="button" aria-pressed={importView === "activity"} onClick={() => setImportView("activity")}><ListVideo size={15} />Activity{pending.length > 0 ? ` (${pending.length})` : ""}</button>
+    </div>
+    <div className="import-dialog-body">
     {choosing && preparingFile && <div className="import-preparation">
       <p role="status">{preparingFile.index} of {preparingFile.total} · {preparingFile.name}<br />{preparingFile.stage === "reading"
         ? "Checking a small file sample before upload. This step stops after 30 seconds if it cannot finish."
@@ -308,6 +352,8 @@ export default function ImportPanel(props: Props) {
       <ul>{selectionErrors.map((message, index) => <li key={index}><ProblemNotice message={message} operation="Import videos" /></li>)}</ul>
       <p>Other videos continue importing. Correct these files or links, then try again.</p>
     </details>}
+    {importView === "activity" && <>
+    {!sessions.length && !choosing && !issueCount && <div className="import-activity-empty"><ListVideo size={28} /><h3>No imports yet</h3><p>Uploads, progress and completed imports will appear here.</p><button type="button" className="secondary-button" onClick={() => setImportView("add")}>Choose videos to import</button></div>}
     {!!pending.length && <section className="import-activity" aria-label="Import activity">
       {!!pending.length && <div className="import-overview">
         <strong>Import activity</strong>
@@ -347,13 +393,21 @@ export default function ImportPanel(props: Props) {
         {sessions.some(item => item.status === "uploading") && <p className="import-keep-open">Keep this browser tab open while uploading. Resume later by selecting the same file.</p>}
       </div>
     </section>}
-    <details className="import-tools" ref={importOptions}>
-      <summary onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
-        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) void selectFiles(Array.from(event.dataTransfer.files)); }}
-        className={dragging ? "dragging" : undefined}><Upload size={15} /> Add videos <ChevronDown size={14} /></summary>
+    {!!completed.length && <details className="import-history" open={!pending.length}>
+      <summary className="import-completed-toggle">{completed.length} completed import{completed.length === 1 ? "" : "s"}<ChevronDown size={13} /></summary>
+      <div className="import-list" role="region" aria-label="Completed video imports" tabIndex={0}>
+        {completed.map(session => <div className="import-item complete" key={session.id}>
+          <div className="import-item-heading"><strong title={session.name}>{session.name}</strong>
+            <button className="icon-button" aria-label={`Dismiss import ${session.name}`} onClick={() => void remove(session)}><X size={14} /></button></div>
+          <div className="import-item-status"><Check size={13} /><span>Ready in your workspace</span></div>
+        </div>)}
+      </div>
+    </details>}
+    </>}
+    {importView === "add" && <div className="import-add-content">
       <button className={`dropzone import-dropzone ${dragging ? "dragging" : ""}`} disabled={!props.connected || choosing} onClick={() => props.inputRef.current?.click()}
         onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
-        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) void selectFiles(Array.from(event.dataTransfer.files)); }}>
+        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) { setImportView("activity"); void selectFiles(Array.from(event.dataTransfer.files)); } }}>
         <span className="upload-icon">{choosing ? <LoaderCircle size={18} className="spin" /> : <Upload size={18} />}</span>
         <strong>{choosing ? preparingFile?.stage === "queueing" ? "Queueing videos…" : "Reading videos…" : "Browse files"}</strong>
         <span>{choosing ? "Preparing your import" : "or drop videos here"}</span>
@@ -394,16 +448,9 @@ export default function ImportPanel(props: Props) {
           </button>
         </div>}
       </div>
-      {!!completed.length && <details className="import-history">
-        <summary className="import-completed-toggle">{completed.length} completed import{completed.length === 1 ? "" : "s"}<ChevronDown size={13} /></summary>
-        <div className="import-list" role="region" aria-label="Completed video imports" tabIndex={0}>
-          {completed.map(session => <div className="import-item complete" key={session.id}>
-            <div className="import-item-heading"><strong title={session.name}>{session.name}</strong>
-              <button className="icon-button" aria-label={`Dismiss import ${session.name}`} onClick={() => void remove(session)}><X size={14} /></button></div>
-            <div className="import-item-status"><Check size={13} /><span>Ready in your workspace</span></div>
-          </div>)}
-        </div>
-      </details>}
-    </details>
+    </div>}
+    </div>
+    <footer className="import-dialog-footer"><p>{choosing || pending.some(session => session.status === "uploading") ? "You can close this window. Keep this browser tab open while files upload." : "Your selected videos stay selected when you return to the workspace."}</p><button type="button" className="secondary-button" onClick={closeImportDialog}>Done</button></footer>
+    </dialog>, document.body)}
   </div>;
 }
