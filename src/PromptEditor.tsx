@@ -6,7 +6,7 @@ import PromptHint from "./PromptHint";
 import "./prompt-editor.css";
 
 export type PromptProposal = PromptEditResponse;
-export interface ReviewablePrompt { summary: string[]; clarification?: string }
+export interface ReviewablePrompt { summary: string[]; clarification?: string; reviewGroups?: { title: string; summary: string[] }[] }
 export interface PromptExample { label: string; prompt: string }
 
 export function savedEditExamples(plan: EditPlan): PromptExample[] {
@@ -35,6 +35,7 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
   placeholder = "Describe what you’d like to change…", description = "Describe a change. Review it before rendering.",
   appliedMessage = "Prompt applied to your draft. Render this revision when ready.",
   undoBlockedMessage = "Your manual changes are newer. Reset changes to return to the saved export.",
+  applyLabel = "Apply to draft", loadingMessage = "Working out your changes…",
 }: {
   title?: string;
   contextKey: string;
@@ -50,6 +51,8 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
   description?: string;
   appliedMessage?: string;
   undoBlockedMessage?: string;
+  applyLabel?: string;
+  loadingMessage?: string;
 }) {
   const id = useId();
   const [prompt, setPrompt] = useState("");
@@ -153,19 +156,20 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
         onClick={() => void suggest()}><ArrowUp size={15} />Suggest edits</button>}
     </div>
     <p id={`${id}-scope`} className="prompt-editor-scope">{scope}</p>
-    {loading && <p className="prompt-editor-status" role="status"><LoaderCircle className="spin" size={15} />Working out your changes…</p>}
+    {loading && <p className="prompt-editor-status" role="status"><LoaderCircle className="spin" size={15} />{loadingMessage}</p>}
     {error && <ProblemNotice message={error} operation="Suggest edits" />}
     {notice && <p className="prompt-editor-status" role="status">{notice}</p>}
     {currentProposal && <div className={`prompt-editor-proposal ${currentProposal.clarification ? "needs-detail" : ""}`} aria-live="polite">
       <div className="prompt-editor-proposal-heading"><strong>{currentProposal.clarification ? "A little more detail" : "Proposed changes"}</strong>
         {!currentProposal.clarification && <span>Ready to review</span>}</div>
       {currentProposal.clarification ? <p>{currentProposal.clarification}</p> : <ul>{currentProposal.summary.map((item, index) => <li key={`${index}-${item}`}><Check size={14} aria-hidden="true" /><span>{item}</span></li>)}</ul>}
+      {!currentProposal.clarification && currentProposal.reviewGroups?.map((group, index) => <div key={index} className="prompt-editor-review-group"><strong>{group.title}</strong><ul>{group.summary.map((item, itemIndex) => <li key={itemIndex}><Check size={14} aria-hidden="true" /><span>{item}</span></li>)}</ul></div>)}
       <div className="prompt-editor-review-actions">
         {canApply && <button type="button" className="primary-button" disabled={disabled} onClick={() => {
           if (currentProposal && currentContext.current === proposal?.context && currentPrompt.current === proposal?.prompt) {
             onApply(currentProposal); setProposal(null); setNotice("");
           }
-        }}><Check size={15} />Apply to draft</button>}
+        }}><Check size={15} />{applyLabel}</button>}
         <button type="button" className="secondary-button" disabled={disabled} onClick={() => { setProposal(null); textarea.current?.focus(); }}>Discard</button>
       </div>
     </div>}

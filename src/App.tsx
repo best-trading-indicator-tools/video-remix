@@ -95,6 +95,8 @@ import ImportPanel from "./ImportPanel";
 import SourceList from "./SourceList";
 import LongFormPanel from "./LongFormPanel";
 import ManualPromptEditor from "./ManualPromptEditor";
+import AutoPromptEditor from "./AutoPromptEditor";
+import { applyAutoFootage, type AutoBatchProposal } from "../shared/auto-batch";
 import FinishingPresets from "./FinishingPresets";
 import { useDialogViewport } from "./useDialogViewport";
 import { compactBrollNotes } from "../shared/broll-notes";
@@ -114,6 +116,7 @@ import FootageSequencePreview, { type FootagePreviewJump } from './FootageSequen
 import { footageForSource, mergeSourceSettings, type OwnFootagePlacement } from "../shared/own-footage";
 
 type AutoPreset = { options: AutoOptions; variants: number };
+type WorkspaceSettingsSnapshot = { auto: Record<string, AutoPreset>; manual: Record<string, RemixSettings>; defaultAuto: AutoPreset; defaultSettings: RemixSettings };
 function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
   const options = value?.options;
   const versionMode = options?.versionMode === "angles" ? "angles" : "moments";
@@ -441,7 +444,8 @@ export default function App() {
     try { const value = localStorage.getItem('remix-settings-scope'); return value === 'all' || value === 'selected' ? value : 'current'; } catch { return 'current'; }
   });
   const [futureSettings, setFutureSettings] = useState(false);
-  const [scopeUndo, setScopeUndo] = useState<null | { auto: typeof autoById; manual: typeof settingsById; defaultAuto: AutoPreset; defaultSettings: RemixSettings }>(null);
+  const [scopeUndo, setScopeUndo] = useState<WorkspaceSettingsSnapshot | null>(null);
+  const [autoPromptUndo, setAutoPromptUndo] = useState<{ before: WorkspaceSettingsSnapshot; after: WorkspaceSettingsSnapshot; count: number } | null>(null);
   useEffect(() => { try { localStorage.setItem('remix-settings-scope', settingsScope); } catch { /* Current scope remains usable. */ } }, [settingsScope]);
   const videoInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
@@ -463,6 +467,10 @@ export default function App() {
     ? autoById[selected.id] || defaultAuto
     : defaultAuto;
   const autoOptions = selectedAuto.options;
+  const footageSource = settingTargets.find(source => source.id === selected?.id) || settingTargets[0];
+  const scopedFootage = footageSource ? (autoById[footageSource.id] || defaultAuto).options.ownFootage : autoOptions.ownFootage;
+  const footageScope = !footageSource ? 'Check videos in the source list, or change Apply changes to.'
+    : `${scopeDescription}. Showing placements from ${footageSource.name}. Changes replace the footage placements on ${settingTargets.length === 1 ? 'this target video' : 'these target videos'}; other settings stay the same. Footage is not saved for future imports.`;
   const watermark = useWatermarkRemoval({ source: selected, workspaceKey: `${mode}:${view}:${autoView}`,
     value: (mode === "auto" ? autoOptions : settings).watermarkRemoval,
     onChange: watermarkRemoval => {
@@ -817,17 +825,45 @@ export default function App() {
     });
     else setSettingsById(current => ({ ...current, [selected.id]: { ...(current[selected.id] || defaultSettings), ownFootage, ownFootageSourceId: selected.id } }));
   };
+  const updateScopedFootage = (ownFootage: OwnFootagePlacement[]) => {
+    if (!settingTargets.length || starting || brollBusy) return;
+    setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
+    setAutoById(current => applyAutoFootage(current, defaultAuto, settingTargets.map(source => source.id), ownFootage));
+  };
   const updateAuto = (patch: Partial<AutoPreset>) => updateScopedAuto({ ...patch, options: patch.options ? Object.fromEntries(Object.entries(patch.options).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(autoOptions[key as keyof AutoOptions]))) : undefined });
   const applyFootageToSelected = (ownFootage: NonNullable<AutoOptions['ownFootage']>) => {
     const targets = sources.filter(source => autoSelectedIds.includes(source.id));
     if (!targets.length || starting || brollBusy) return;
     setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
-    setAutoById(current => ({ ...current, ...Object.fromEntries(targets.map(source => {
-      const preset = current[source.id] || defaultAuto;
-      return [source.id, autoPreset({ ...preset, options: { ...preset.options, ownFootage: structuredClone(ownFootage), ownFootageSourceId: source.id } })];
-    })) }));
+    setAutoById(current => applyAutoFootage(current, defaultAuto, targets.map(source => source.id), ownFootage));
     notify(`Footage placements applied to ${targets.length} selected video${targets.length === 1 ? '' : 's'}.`, 'success');
   };
+  const canUndoAutoPrompt = !!autoPromptUndo && autoById === autoPromptUndo.after.auto && settingsById === autoPromptUndo.after.manual
+    && defaultAuto === autoPromptUndo.after.defaultAuto && defaultSettings === autoPromptUndo.after.defaultSettings;
+  const applyAutoPrompt = (value: AutoBatchProposal) => {
+    if (value.clarification || !value.changes.length || starting || brollBusy || value.changes.some(change => !settingTargets.some(source => source.id === change.id))) return;
+    const before = { auto: autoById, manual: settingsById, defaultAuto, defaultSettings };
+    const nextAuto = { ...autoById }, nextManual = { ...settingsById };
+    const manual = value.changes.every(change => !!change.proposal.manual);
+    for (const { id, proposal } of value.changes) {
+      if (manual && proposal.manual) nextManual[id] = { ...structuredClone(proposal.manual), ownFootageSourceId: id };
+      else nextAuto[id] = autoPreset({ variants: proposal.variants, options: { ...structuredClone(proposal.options), ownFootageSourceId: id } });
+    }
+    setAutoById(nextAuto); setSettingsById(nextManual); setScopeUndo(before);
+    setAutoPromptUndo({ before, after: { auto: nextAuto, manual: nextManual, defaultAuto, defaultSettings }, count: value.changes.length });
+    if (manual) setMode('manual');
+    notify(`Prompt applied to ${value.changes.length} video${value.changes.length === 1 ? '' : 's'}${manual ? ' in Manual' : ''}. Review the drafts and render when ready.`, 'success');
+  };
+  const autoPromptEditor = <AutoPromptEditor scopeKey={settingsScope}
+    targets={settingTargets.map(source => ({ id: source.id, name: source.name, draft: autoById[source.id] || defaultAuto }))}
+    disabled={starting || brollBusy} onApply={applyAutoPrompt} appliedCount={autoPromptUndo?.count || 0} canUndo={canUndoAutoPrompt}
+    onUndo={() => {
+      if (!canUndoAutoPrompt || !autoPromptUndo) return;
+      const before = autoPromptUndo.before;
+      setAutoById(before.auto); setSettingsById(before.manual); setDefaultAuto(before.defaultAuto); setDefaultSettings(before.defaultSettings);
+      setScopeUndo(null); setAutoPromptUndo(null);
+      notify('Prompt changes undone for every target video.', 'info');
+    }} />;
   const applyAutoAll = () => {
     setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
     setAutoById((current) => ({
@@ -1324,7 +1360,7 @@ export default function App() {
               </select></label>
               <label className="scope-future"><input type="checkbox" checked={futureSettings} onChange={event => setFutureSettings(event.target.checked)} />Also use changes for future imports</label>
               <span>{scopeDescription}{settingsScope === 'selected' && !settingTargets.length ? ' · Check videos in the source list first.' : ''}</span>
-              {scopeUndo && <button className="secondary-button" onClick={() => { setAutoById(scopeUndo.auto); setSettingsById(scopeUndo.manual); setDefaultAuto(scopeUndo.defaultAuto); setDefaultSettings(scopeUndo.defaultSettings); setScopeUndo(null); notify('Batch settings change undone.', 'info'); }}>Undo batch change</button>}
+              {scopeUndo && <button className="secondary-button" onClick={() => { setAutoById(scopeUndo.auto); setSettingsById(scopeUndo.manual); setDefaultAuto(scopeUndo.defaultAuto); setDefaultSettings(scopeUndo.defaultSettings); setScopeUndo(null); setAutoPromptUndo(null); notify('Batch settings change undone.', 'info'); }}>Undo batch change</button>}
             </section>}
             <div
               className={`studio-grid ${mode === "auto" ? "auto-studio" : mode === "shorts" ? "shorts-studio" : tab === "all" ? "manual-all-controls" : ""}`}
@@ -1718,18 +1754,24 @@ export default function App() {
                   mixed={!uniformAuto}
                   mixedLength={mixedAutoLength}
                   scopeDescription={scopeDescription}
+                  promptEditor={autoPromptEditor}
+                  footageValue={scopedFootage}
+                  footageScope={footageScope}
                   onChange={updateScopedAuto}
                   onView={setAutoView}
                   selectedId={selected?.id}
                   selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
                   onApplySelectedFootage={applyFootageToSelected}
-                  onFootageChange={updateCurrentFootage}
-                  disabled={starting || brollBusy}
+                  onFootageChange={updateScopedFootage}
+                  disabled={starting || brollBusy || !settingTargets.length}
                 />
                 ) : (
                 <AutoPanel
                   watermarkControls={watermark.controls}
                   scopeDescription={scopeDescription}
+                  promptEditor={autoPromptEditor}
+                  footageValue={scopedFootage}
+                  footageScope={footageScope}
                   onView={setAutoView}
                   onSaveStyle={saveMyStyle}
                   options={autoOptions}
@@ -1742,14 +1784,12 @@ export default function App() {
                   onApplyAll={applyAutoAll}
                   selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
                   onApplySelectedFootage={applyFootageToSelected}
-                  onFootageChange={updateCurrentFootage}
-                  footageDisabled={starting || brollBusy}
+                  onFootageChange={updateScopedFootage}
+                  footageDisabled={starting || brollBusy || !settingTargets.length}
                   libraryBusy={brollBusy}
                   capabilities={autoCapabilities}
                   variants={selectedAuto.variants}
                   onVariantsChange={(variants) => updateAuto({ variants })}
-                  onPromptManual={value => { if (selected) { setSettingsById(current => ({ ...current, [selected.id]: { ...value, ownFootageSourceId: selected.id } })); setMode("manual"); notify("Prompt applied in Manual. Review the draft and render when ready.", "success"); } }}
-                  onPromptApply={value => { if (selected) setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...value, options: { ...value.options, ownFootageSourceId: selected.id } }) })); }}
                   onBrollSelectionChange={(ids) =>
                     updateAuto({ options: { ...autoOptions, brollIds: ids } })
                   }

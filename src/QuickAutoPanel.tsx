@@ -1,4 +1,5 @@
 import { SlidersHorizontal, Zap } from "lucide-react";
+import type { ReactNode } from "react";
 import type { AutoOptions } from "../shared/types";
 import { MAX_AUTO_VERSIONS } from "../shared/types";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
@@ -29,8 +30,9 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, onFootageChange, disabled }: {
+export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, promptEditor, footageValue, footageScope, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, onFootageChange, disabled }: {
   scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean; mixedLength: boolean;
+  promptEditor: ReactNode; footageValue: AutoOptions['ownFootage']; footageScope: string;
   onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
   selectedId?: string; selectedVideos: FootageTarget[]; disabled: boolean;
   onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
@@ -46,6 +48,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         {scopeDescription}. Only the setting you change is copied.
         {mixed && " Videos have different settings; these controls show the current video's values."}
       </p>
+      {promptEditor}
       <fieldset className="quick-auto-group">
         <legend>Where will you post?</legend>
         <div className="quick-auto-options">{PLATFORMS.map(platform =>
@@ -85,7 +88,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
       </>}
-      <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage}
+      <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope}
         onChange={onFootageChange} disabled={disabled || !selectedId}
         selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
     </div>

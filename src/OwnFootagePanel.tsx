@@ -7,11 +7,12 @@ import "./own-footage.css";
 
 export type FootageTarget = { id: string; name: string };
 
-export default function OwnFootagePanel({ value = [], onChange, onApplyAll, selectedVideos = [], onApplySelected, savedAssets = [], disabled = false, highlightedId }: {
+export default function OwnFootagePanel({ value = [], onChange, onApplyAll, selectedVideos = [], onApplySelected, savedAssets = [], disabled = false, highlightedId, scopeDescription }: {
   value?: OwnFootagePlacement[]; onChange: (value: OwnFootagePlacement[]) => void;
   onApplyAll?: (value: OwnFootagePlacement[]) => void; savedAssets?: OwnFootageAsset[]; disabled?: boolean;
   selectedVideos?: FootageTarget[]; onApplySelected?: (value: OwnFootagePlacement[]) => void;
   highlightedId?: string;
+  scopeDescription?: string;
 }) {
   const [assets, setAssets] = useState<OwnFootageAsset[]>([]);
   const [selected, setSelected] = useState("");
@@ -47,7 +48,7 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, sele
     xhr.send(data);
   };
   return <details ref={details} className="own-footage"><summary><Film size={16} />Add my own footage <span>{value.length ? `On · ${value.length} added clip${value.length === 1 ? "" : "s"}` : "Off"}</span></summary>
-    <p className="own-footage-note">Clips placed here apply only to this video. Add your whole clip at the end, or place a selected part at a precise time. “Insert” adds duration. “Cover” replaces the picture while the original speech continues.</p>
+    <p className="own-footage-note">{scopeDescription || 'Clips placed here apply only to this video.'} Add your whole clip at the end, or place a selected part at a precise time. “Insert” adds duration. “Cover” replaces the picture while the original speech continues.</p>
     <fieldset disabled={disabled || progress !== null}>
       <legend className="visually-hidden">Your footage placements</legend>
       <input ref={input} hidden type="file" accept="video/*,.mkv,.avi" onChange={event => { upload(event.target.files?.[0]); event.target.value = ""; }} />

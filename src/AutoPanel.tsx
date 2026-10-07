@@ -1,4 +1,3 @@
-import AutoPromptEditor from "./AutoPromptEditor";
 import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
@@ -18,7 +17,6 @@ import {
 import type {
   AutoCapabilities,
   AutoOptions,
-  RemixSettings,
   VideoSource,
 } from "../shared/types";
 import { MAX_AUTO_VERSIONS, isAutoTargetDuration } from "../shared/types";
@@ -53,8 +51,9 @@ export default function AutoPanel({
   capabilities,
   variants,
   onVariantsChange,
-  onPromptApply,
-  onPromptManual,
+  promptEditor,
+  footageValue,
+  footageScope,
   onBrollSelectionChange,
   onLibraryBusyChange,
   onBrollRemoved,
@@ -81,8 +80,9 @@ export default function AutoPanel({
   capabilities: AutoCapabilities | null;
   variants: number;
   onVariantsChange: (value: number) => void;
-  onPromptManual: (settings: RemixSettings) => void;
-  onPromptApply: (value: { options: AutoOptions; variants: number }) => void;
+  promptEditor: ReactNode;
+  footageValue: AutoOptions['ownFootage'];
+  footageScope: string;
   onBrollSelectionChange: (ids: string[]) => void;
   onLibraryBusyChange: (busy: boolean) => void;
   onBrollRemoved: (id: string) => void;
@@ -185,8 +185,7 @@ export default function AutoPanel({
             </small>
           )}
         </div>
-        {selectedSource && <AutoPromptEditor key={selectedSource.id} sourceId={selectedSource.id} options={options} variants={variants}
-          disabled={footageDisabled || libraryBusy} onApply={onPromptApply} onSwitchManual={onPromptManual} />}
+        {promptEditor}
         <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={onLengthChange} />
         <section className="auto-layout" aria-labelledby="auto-layout-title">
           <h3 id="auto-layout-title">Black bands &amp; text</h3>
@@ -211,7 +210,7 @@ export default function AutoPanel({
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
         {watermarkControls}
-        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={onFootageChange} disabled={footageDisabled || !selectedId}
+        <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope} onChange={onFootageChange} disabled={footageDisabled || !selectedId}
           selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
         <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
         {fullLength ? <p className="auto-preferences-note">Full video keeps the original order, pauses and voice. One export is made per video; inserted footage adds to its length.</p>

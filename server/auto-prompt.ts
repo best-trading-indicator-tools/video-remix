@@ -28,7 +28,7 @@ ${sourcePromptInstructions}`;
 export async function proposeAutoPrompt({ options, variants, source, prompt, signal, assets = EMPTY_PROMPT_ASSETS }: {
   options: AutoOptions; variants: number; source: { duration: number; width: number; height: number; hasAudio: boolean };
   prompt: string; signal: AbortSignal; assets?: PromptAssets;
-}): Promise<{ options: AutoOptions; variants: number; summary: string[]; clarification?: string; switchTo?: "manual" }> {
+}): Promise<{ options: AutoOptions; variants: number; summary: string[]; clarification?: string; unchanged?: boolean; switchTo?: "manual" }> {
   signal.throwIfAborted();
   if (!prompt.trim() || prompt.length > 2000 || /[\u0000-\u0008\u000b-\u001f\u007f]/u.test(prompt)) throw new PromptEditError(400, 'Describe the changes in 1–2,000 characters of plain text.');
   if (!autoOptionsSchema.safeParse(options).success || !Number.isInteger(variants) || variants < 1 || variants > MAX_AUTO_VERSIONS)
@@ -85,7 +85,8 @@ export async function proposeAutoPrompt({ options, variants, source, prompt, sig
     if (nextVariants !== variants) summary.push(`Maximum versions per video: ${nextVariants}.`);
     if (!same(options.captionStyle, next.captionStyle)) summary.push(`Caption size: ${next.captionStyle!.fontSize}; position: ${next.captionStyle!.bottomPercent}% from the bottom.`, captionStyleDescription(next.captionStyle));
     if (!same(options.pacing, next.pacing) && next.pacing) summary.push(`Pacing: ${next.pacing.mode}; pause threshold ${next.pacing.minimumPause}s, keep ${next.pacing.keepPause}s; filler removal ${next.pacing.removeFillers ? 'on' : 'off'}.`);
-    return summary.length ? { options: next, variants: nextVariants, summary } : unchanged('Those settings already match this video. Try a more specific request.');
+    if (summary.length) return { options: next, variants: nextVariants, summary };
+    return { options: next, variants: nextVariants, summary: [], unchanged: true };
   } catch (error) {
     if (error instanceof PromptEditError) throw error;
     throw new PromptEditError(422, 'The proposed settings do not form a valid remix. Check the requested values; nothing was changed.');

@@ -104,7 +104,9 @@ test('source prompts expose supported editing controls and preserve reviewable d
       const result = await auto({ captions: 'add' }, options, 3);
       assert.deepEqual(result.options, { ...options, captions: 'add' }); assert.equal(result.variants, 3);
       assert.deepEqual(result.summary, ['Captions: add new captions.']);
-      assert.ok((await auto({}, options, 3)).clarification);
+      assert.equal((await auto({}, options, 3)).unchanged, true);
+      const matching = await auto({ captions: 'add' }, { ...options, captions: 'add' }, 3);
+      assert.equal(matching.unchanged, true); assert.equal(matching.clarification, undefined);
     });
     await t.test('full video and narration dependencies are explicit and contradictory requests stay unchanged', async () => {
       const options: AutoOptions = { ...DEFAULT_AUTO_OPTIONS, narration: true, versionMode: 'angles' };
