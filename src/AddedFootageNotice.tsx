@@ -4,11 +4,9 @@ import { footagePlacementLabel, type OwnFootageAsset, type OwnFootagePlacement }
 import { apiRequest } from "./api-client";
 import "./own-footage.css";
 
-export type AddedFootagePreview = { asset: OwnFootageAsset; placement: OwnFootagePlacement };
-
 /** Keep active inserts visible alongside the source, even with collapsed settings. */
 export default function AddedFootageNotice({ value, onPreview, onRemove, disabled, previewDisabled }: {
-  value: OwnFootagePlacement[]; onPreview: (preview: AddedFootagePreview) => void;
+  value: OwnFootagePlacement[]; onPreview: (id: string) => void;
   onRemove: (id: string) => void; disabled: boolean; previewDisabled: boolean;
 }) {
   const [assets, setAssets] = useState<OwnFootageAsset[]>([]);
@@ -21,12 +19,12 @@ export default function AddedFootageNotice({ value, onPreview, onRemove, disable
   }, [assetIds]);
   return <section className="added-footage-notice" aria-label="Added footage in this export">
     <strong><Film size={15} />This export includes added footage</strong>
-    <p>These clips are included in addition to this video’s source footage.</p>
+    <p>Live preview plays these clips in your edit. Jump to an added clip to check its timing and framing.</p>
     <ul>{value.map(item => {
       const asset = assets.find(asset => asset.id === item.assetId);
       return <li key={item.id}>
         <div><strong>{asset?.name || "Uploaded clip"}</strong><span>{footagePlacementLabel(item)}</span></div>
-        <button type="button" className="secondary-button" disabled={!asset || previewDisabled} aria-label={`Preview added clip ${asset?.name || ""}`} onClick={() => { if (asset) onPreview({ asset, placement: item }); }}><Play size={13} />Preview</button>
+        <button type="button" className="secondary-button" disabled={!asset || previewDisabled} aria-label={`Watch added clip in edit: ${asset?.name || ""}`} onClick={() => onPreview(item.id)}><Play size={13} />Watch in edit</button>
         <button type="button" className="secondary-button" disabled={disabled} aria-label={`Remove ${asset?.name || "added clip"} from this video`} onClick={() => onRemove(item.id)}><Trash2 size={13} />Remove</button>
       </li>;
     })}</ul>

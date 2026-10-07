@@ -61,7 +61,7 @@
   .manual-all-controls .settings-content > .full-width { margin-top: 20px; }
   .manual-all-controls .settings-footer button { max-width: none; }
   .manual-preview-actions { align-items: stretch; }
-  .manual-preview-actions .secondary-button { flex: 1; }
+  .manual-preview-actions .secondary-button { flex: 1 1 150px; }
 }
 
 /* Shared tools stay mounted below the category so switching tabs is immediate. */

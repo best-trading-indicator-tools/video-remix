@@ -86,6 +86,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     options: [["Insert or cover", "Insert adds time to the edit. Cover replaces the picture while the original speech continues."],
       ["Apply footage to selected videos", "In Quick setup or All settings, check the imported videos and configure your footage. The footage panel lists the target videos above the placements. Apply footage copies their clips, timing, audio and framing, with Undo batch change available."],
       ["Choose the timing", "Position is measured in the edit; clip start and end select part of the uploaded footage. Add whole clip at end follows the end automatically."],
+      ["Watch it in the edit", "The center Live preview plays the source and your added clips in sequence. Its scrubber includes added duration. Use Watch in edit or the clip buttons to jump to a placement; framing changes appear there immediately. Auto previews use the full source until final cuts are chosen."],
       ["Sound and framing", "For inserted footage, keep its audio or mute it. Fit the whole clip or crop it to fill the frame; remove a placement to leave it out."]],
   },
   { id: "auto-presets", chapter: "Auto", title: "Save an Auto finishing preset", target: ".auto-panel .finishing-presets", destination: autoAll,

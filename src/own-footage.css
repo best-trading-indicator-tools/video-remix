@@ -37,7 +37,10 @@
 .added-footage-notice li > div { display: grid; gap: 4px; flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
 .added-footage-notice li strong { font-size: 12px; }
 .added-footage-notice .secondary-button { padding: 7px 9px; font-size: 11px; min-height: 32px; }
-.added-footage-player { width: 100%; display: grid; justify-items: center; gap: 12px; }
 .render-info .render-source-target { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .render-info .render-footage-summary { color: var(--accent); }
 @media (max-width: 580px) { .render-info .render-source-target { max-width: 230px; } }
+@media (max-width: 580px) {
+  .added-footage-notice li > div { flex-basis: 100%; }
+  .added-footage-notice li > button { flex: 1; justify-content: center; }
+}

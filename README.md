@@ -1045,8 +1045,16 @@ source binding are cleared from workspace preferences and excluded by the export
 API; uploaded files and existing exports remain available.
 
 Active clips from **Add my own footage** are listed beside the main preview,
-with their filename and intro, outro, insert or cover timing. **Preview** shows
-the added clip in the main player. **Remove** there removes only that placement
+with their filename and intro, outro, insert or cover timing. **Live** plays the
+source and added clips together on one scrubber, including the added duration.
+**Watch in edit** and the clip buttons below the player jump to each placement.
+Changing a placement or its framing jumps to that clip so the change is visible.
+Inserted clips use their selected trim, audio and crop/contain setting; covers
+retain source audio. Manual preview follows the source cuts and speed; Auto
+preview uses the full source until Auto chooses its final cuts during remixing.
+Generated captions, watermark cleanup and final sound effects still require
+a rendered sample or export. **Original** plays the unchanged source.
+**Remove** there removes only that placement
 from the current video, regardless of the batch settings scope. Source cards and
 the render bar include added clips in their summaries; turning off automatic
 supporting shots does not remove explicit footage placements.
