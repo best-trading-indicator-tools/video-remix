@@ -2,7 +2,7 @@ import SourceRecovery, { type SourceStatus } from "./SourceRecovery";
 import { DraftWriter, draftKey as resultDraftKey, parseDraft, type SavedDraft, type DraftBackup, type ResultDraft } from "./result-drafts";
 import { exportTitle } from "../shared/export-presentation";
 import EditTimeline from "./EditTimeline";
-import { mainTimeAt, outputTimeAt, storyClips, storyTiming } from "../shared/edit-timeline";
+import { outputTimeAt, storyClips, storyTiming } from "../shared/edit-timeline";
 import TimelinePreview from "./TimelinePreview";
 import { useEditHistory } from "./useEditHistory";
 import { apiRequest as request } from "./api-client";
@@ -361,8 +361,6 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
   const timelineFps = draft?.settings.fps === "source" ? sourceFps || 30 : Number(draft?.settings.fps) || 30;
   const story = useMemo(() => draft ? storyClips(draft, timelineFps) : [], [draft, timelineFps]);
   const timelineDuration = draft ? storyTiming(story, draft.settings.speed).at(-1)?.outputEnd ?? draft.outputDuration : 0;
-  const previewOutputTime = draft ? mainTimeAt(story, draft.settings.speed, reviewTime) : 0;
-  const activeCaption = draft?.captions.find((cue) => cue.start <= previewOutputTime && cue.end > previewOutputTime);
   const focalPoint = draft?.settings.focalPoint || CENTER;
   const commitBrollCount = () => {
     const parsed = Number(brollCountInput);
@@ -547,8 +545,7 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                     <label className="edit-framing-slider"><span>Right occupied area<output>{guideRight}%</output></span><input type="range" min={5} max={30} value={guideRight} onChange={event => setGuideRight(event.target.valueAsNumber)} /></label>
                     <p className="edit-plan-note">Preview guides only. Platform controls vary by device.</p>
                   </div>}
-                  <BlackBandsEditor value={draft.settings.blackBands} onChange={blackBands => updateFraming({ blackBands })}
-                    aspect={draft.settings.aspect === "original" ? knownOutputAspect || 9 / 16 : Number(draft.settings.aspect.split(":")[0]) / Number(draft.settings.aspect.split(":")[1])} />
+                  <BlackBandsEditor value={draft.settings.blackBands} onChange={blackBands => updateFraming({ blackBands })} />
                   {!draft.settings.blackBands?.enabled && <label className="edit-plan-field">Fit source footage
                     <select value={draft.settings.fit} onChange={(event) => updateFraming({ fit: event.target.value as RemixSettings["fit"] })}>
                       <option value="crop">Fill frame with a crop</option><option value="contain">Keep the whole video</option><option value="blur">Keep whole video with blurred background</option>
@@ -571,7 +568,7 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                 {cutTimingsChanged && <p className="edit-plan-note">Render your new cut points first. Caption and B-roll timings will follow the revised cuts automatically.</p>}
                 <fieldset disabled={saving || cutTimingsChanged}>
                   <legend className="visually-hidden">Caption corrections</legend>
-                  <CaptionStyleEditor value={draft.settings.captionStyle} sample={activeCaption?.text || draft.captions[0]?.text} onChange={captionStyle => updateFraming({ captionStyle })} />
+                  <CaptionStyleEditor value={draft.settings.captionStyle} showPreview={false} onChange={captionStyle => updateFraming({ captionStyle })} />
                   {!!draft.captions.length && <button type="button" className="secondary-button edit-plan-remove-all-captions" onClick={() => {
                     setDraft({ ...draft, captions: [] }); setPreviewMode("framing"); setError("");
                   }}><X size={14} />Remove added captions</button>}

@@ -96,8 +96,6 @@ export default function AutoPanel({
 }) {
   const formatName = AUTO_FORMAT_NAMES[options.aspect];
   const selectedSource = sources.find(source => source.id === selectedId);
-  const outputAspect = options.aspect === "original" ? (selectedSource ? selectedSource.width / selectedSource.height : 9 / 16)
-    : Number(options.aspect.split(":")[0]) / Number(options.aspect.split(":")[1]);
   const keepOriginalCaptions = options.captions === "keep";
   const keepOriginalAudio = isAutoAudioNone(options.audio);
   const fullLength = options.durationMode === "full";
@@ -206,8 +204,7 @@ export default function AutoPanel({
               ))}
             </select>
           </label>
-          <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })}
-            source={selectedSource} aspect={outputAspect} />
+          <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
         <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={footageDisabled}
           selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
@@ -321,7 +318,7 @@ export default function AutoPanel({
                   ? "Adds captions from speech. Any captions already in the original picture remain visible."
                   : "Auto checks for captions baked into the selected footage. If found or uncertain, it keeps the original voice and adds no captions, hook or callouts."}
             </p>
-            {options.captions !== "keep" && <CaptionAppearance value={options.captionStyle} onChange={captionStyle => onChange({ ...options, captionStyle })} />}
+            {options.captions !== "keep" && <CaptionAppearance value={options.captionStyle} showPreview={false} onChange={captionStyle => onChange({ ...options, captionStyle })} />}
             <label className="auto-output-field" data-tour="auto-sound">
               Sound
               <select value={keepOriginalAudio ? "off" : options.audio ?? "auto"} aria-describedby="auto-audio-note"

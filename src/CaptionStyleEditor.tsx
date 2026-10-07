@@ -87,11 +87,8 @@ function ColorControl({ label, value, onChange }: { label: string; value: string
   </span></label>;
 }
 
-export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true }: {
-  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean;
-}) {
-  const s = resolveCaptionStyle(value);
-  const patch = (change: Partial<CaptionStyle>) => onChange({ ...s, ...change });
+export function SampleCaptionOverlay({ style, height, sample = "Caption style preview" }: { style?: CaptionStyle; height: number; sample?: string }) {
+  const s = resolveCaptionStyle(style);
   const previewText = sample.trim().slice(0, 120) || "Make every word count.";
   const wordCount = captionLines(previewText).flat().length;
   const [tick, setTick] = useState(0);
@@ -100,6 +97,14 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
     const timer = window.setInterval(() => setTick(value => value + 1), 450);
     return () => clearInterval(timer);
   }, [s.wordHighlight]);
+  return <CaptionOverlay style={s} height={height} text={previewText} activeWord={wordCount ? tick % wordCount : undefined} />;
+}
+
+export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true, showPreview = true }: {
+  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean; showPreview?: boolean;
+}) {
+  const s = resolveCaptionStyle(value);
+  const patch = (change: Partial<CaptionStyle>) => onChange({ ...s, ...change });
   return <section className="caption-styler" aria-label="Caption styling">
     <header><div><h4>Caption look</h4><p>One style for all added captions.</p></div>
       <button type="button" className="caption-reset" aria-label="Reset caption style" onClick={() => onChange({ ...DEFAULT_CAPTION_STYLE })}><RotateCcw size={14} />Reset</button></header>
@@ -114,10 +119,10 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
         </button>;
       })}
     </div>
-    <div className="caption-type-preview" aria-label="Live caption style preview">
+    {showPreview && <div className="caption-type-preview" aria-label="Live caption style preview">
       <span className="caption-preview-label">Type preview</span>
-      <CaptionOverlay style={{ ...s, bottomPercent: 26 }} height={360} text={previewText} activeWord={wordCount ? tick % wordCount : undefined} />
-    </div>
+      <SampleCaptionOverlay style={{ ...s, bottomPercent: 26 }} height={360} sample={sample} />
+    </div>}
     <div className="caption-style-grid">
       <label className="caption-field">Font family<select value={s.fontFamily} onChange={event => patch({ fontFamily: event.target.value as CaptionStyle["fontFamily"] })}>
         {Object.entries(CAPTION_FONTS).map(([id, font]) => <option key={id} value={id}>{font.label}</option>)}

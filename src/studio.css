@@ -86,6 +86,12 @@ h1, .page-heading h1 { font-size: clamp(28px, 2.3vw, 34px); line-height: 1.2; le
 .preview-note { font-size: 12px; color: var(--muted); line-height: 1.65; }
 .preview-label, .preview-ratio { font-size: 10px; color: var(--subtle); }
 .preview-stage.has-video { min-height: 452px; max-height: 600px; padding: 42px 20px 32px; }
+.preview-panel .video-frame { height: auto; max-height: none; flex-shrink: 0; background: black; }
+.preview-panel .video-frame > video { position: absolute; inset: 0; }
+.preview-panel .video-frame > .preview-blur-background { object-fit: cover; transform: scale(1.12); pointer-events: none; }
+@media (max-width: 980px) {
+  .preview-panel .video-frame { --live-preview-height: 320px; }
+}
 .settings-tabs { height: 50px; padding: 0 20px; gap: 20px; }
 .settings-tabs button { font-size: 12px; color: var(--subtle); }
 .settings-tabs button.active { color: var(--accent); border-bottom-color: var(--accent); }

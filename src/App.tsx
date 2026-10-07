@@ -18,7 +18,8 @@ import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OnboardingTour from "./OnboardingTour";
 import { shouldShowOnboarding, type TourDestination } from "./onboarding-steps";
 import OwnFootagePanel from "./OwnFootagePanel";
-import { CaptionAppearance } from "./CaptionStyleEditor";
+import { CaptionAppearance, SampleCaptionOverlay } from "./CaptionStyleEditor";
+import PreviewBackground from "./PreviewBackground";
 import { captionStyleSchema } from "../shared/caption-style";
 import {
   useCallback,
@@ -433,6 +434,8 @@ export default function App() {
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewFrameRef = useRef<HTMLDivElement>(null);
+  const [previewHeight, setPreviewHeight] = useState(465);
   const selected =
     sources.find((source) => source.id === selectedId) || sources[0];
   const settingTargets = settingsScope === 'all' ? sources : settingsScope === 'selected' ? sources.filter(source => autoSelectedIds.includes(source.id)) : selected ? [selected] : [];
@@ -455,10 +458,24 @@ export default function App() {
   const uniformAuto = autoPresets.every((preset) =>
     sameAutoPreset(preset, selectedAuto),
   );
-  const sourcePreview = mode === "auto" || original;
+  const sourcePreview = original;
   const previewSignature = JSON.stringify({ sourceId: selected?.id, settings });
   const previewCurrent = renderedPreview?.signature === previewSignature;
   const usingRendered = mode === "manual" && !original && showRendered && previewCurrent;
+  const manualLive = mode === "manual" && !sourcePreview && !usingRendered;
+  const activePreviewSettings = mode === "auto" ? autoOptions : settings;
+  const livePreviewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: activePreviewSettings });
+  useEffect(() => {
+    setOriginal(false);
+    setShowRendered(false);
+  }, [livePreviewSignature]);
+  useEffect(() => {
+    const frame = previewFrameRef.current;
+    if (!frame) return;
+    const observer = new ResizeObserver(([entry]) => { if (entry) setPreviewHeight(entry.contentRect.height); });
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [selected?.id, mode, view]);
   const sequencePreview = selected ? manualSequencePreview(settings, selected.duration) : null;
   const liveInterval = sequencePreview?.first ?? (selected && (settings.trimEnd === null || settings.trimEnd <= selected.duration)
     ? manualPreviewInterval(settings, selected.duration) : null);
@@ -664,23 +681,22 @@ export default function App() {
 
   useEffect(() => {
     if (!videoRef.current) return;
-    videoRef.current.playbackRate = sourcePreview || usingRendered ? 1 : settings.speed;
-    videoRef.current.volume = sourcePreview || usingRendered ? 1 : Math.min(1, settings.volume);
-    videoRef.current.muted = !sourcePreview && !usingRendered && settings.muted;
+    videoRef.current.playbackRate = manualLive ? settings.speed : 1;
+    videoRef.current.volume = manualLive ? Math.min(1, settings.volume) : 1;
+    videoRef.current.muted = manualLive && settings.muted;
   }, [
     settings.speed,
     settings.volume,
     settings.muted,
-    sourcePreview,
-    usingRendered,
+    manualLive,
     selected?.id,
   ]);
 
   useEffect(() => {
-    if (!videoRef.current || usingRendered || sourcePreview || !liveInterval) return;
+    if (!videoRef.current || !manualLive || !liveInterval) return;
     videoRef.current.currentTime = liveInterval.start;
     setLiveOutputTime(0);
-  }, [liveInterval?.start, liveInterval?.end, usingRendered, sourcePreview, selected?.id]);
+  }, [liveInterval?.start, liveInterval?.end, manualLive, selected?.id]);
 
 
   useEffect(() => {
@@ -1072,17 +1088,18 @@ export default function App() {
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length;
   const edited = adjustedCount > 0;
-  const previewFilter = sourcePreview
-    ? "none"
-    : `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`;
-  const liveBands = !sourcePreview && !usingRendered && settings.blackBands?.enabled ? settings.blackBands : undefined;
-  const previewAspect = settings.aspect === "original" ? (selected ? selected.width / selected.height : 9 / 16) : Number(settings.aspect.split(":")[0]) / Number(settings.aspect.split(":")[1]);
-  const targetAspect =
-    settings.aspect === "original"
-      ? selected
-        ? `${selected.width} / ${selected.height}`
-        : "9 / 16"
-      : settings.aspect.replace(":", " / ");
+  const previewFilter = manualLive
+    ? `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`
+    : "none";
+  const liveBands = !sourcePreview && !usingRendered && activePreviewSettings.blackBands?.enabled ? activePreviewSettings.blackBands : undefined;
+  const sourceAspect = selected ? selected.width / selected.height : 9 / 16;
+  const previewAspect = sourcePreview || activePreviewSettings.aspect === "original" ? sourceAspect
+    : Number(activePreviewSettings.aspect.split(":")[0]) / Number(activePreviewSettings.aspect.split(":")[1]);
+  const previewFit = sourcePreview || usingRendered ? "contain" : liveBands?.fit
+    ?? (mode === "auto" ? (Math.abs(sourceAspect - previewAspect) > 0.12 ? "blur" : "crop") : settings.fit);
+  const sampleCaptions = !sourcePreview && !usingRendered && (mode === "auto"
+    ? autoOptions.captions !== "keep"
+    : !!settings.subtitleId || (!!settings.automaticCaptions && settings.automaticCaptions !== "off"));
   const exportCount =
     mode === "auto"
       ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
@@ -1414,12 +1431,12 @@ export default function App() {
                 <div className="panel-heading">
                   <h2>
                     <MonitorPlay size={16} />
-                    {mode === "auto" ? "Your footage" : "Preview"}
+                    Preview
                   </h2>
-                  {mode === "manual" && (
-                    <div className="preview-switch">
+                    <div className="preview-switch" role="group" aria-label="Video preview mode">
                       <button
                         disabled={!selected}
+                        aria-pressed={!original && !usingRendered}
                         className={!original && !usingRendered ? "active" : ""}
                         onClick={() => { setOriginal(false); setShowRendered(false); }}
                       >
@@ -1427,33 +1444,31 @@ export default function App() {
                       </button>
                       <button
                         disabled={!selected}
+                        aria-pressed={original}
                         className={original ? "active" : ""}
                         onClick={() => setOriginal(true)}
                       >
                         Original
                       </button>
-                      {previewCurrent && <button className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>Rendered</button>}
+                      {mode === "manual" && previewCurrent && <button aria-pressed={usingRendered} className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>Rendered</button>}
                     </div>
-                  )}
                 </div>
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
                   {selected ? (
                     <>
                       <div className="preview-label">
                         <span />
-                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
+                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : manualLive && sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
                       </div>
                       <div
+                        ref={previewFrameRef}
                         className={`video-frame ${liveBands ? "has-black-bands" : ""}`}
                         style={{
-                          background: liveBands ? "black" : undefined,
-                          width: liveBands ? `min(100%, calc(var(--band-preview-height, 465px) * ${previewAspect}))` : undefined,
-                          height: liveBands ? "auto" : undefined,
-                          aspectRatio: sourcePreview
-                            ? `${selected.width} / ${selected.height}`
-                            : targetAspect,
+                          width: `min(100%, calc(var(--live-preview-height, 465px) * ${previewAspect}))`,
+                          aspectRatio: previewAspect,
                         }}
                       >
+                        {previewFit === "blur" && <PreviewBackground source={selected.url} videoRef={videoRef} filter={previewFilter} />}
                         <video
                           key={usingRendered ? renderedPreview!.id : selected.id}
                           ref={videoRef}
@@ -1462,31 +1477,28 @@ export default function App() {
                           controls
                           playsInline
                           preload="metadata"
+                          aria-label="Main video preview"
                           onLoadedMetadata={() => {
                             if (videoRef.current) {
-                              videoRef.current.playbackRate = sourcePreview || usingRendered
-                                ? 1
-                                : settings.speed;
-                              videoRef.current.volume = sourcePreview || usingRendered ? 1 : Math.min(1, settings.volume);
-                              videoRef.current.muted = !sourcePreview && !usingRendered && settings.muted;
-                              videoRef.current.currentTime = sourcePreview || usingRendered
-                                ? 0
-                                : liveInterval?.start ?? 0;
+                              videoRef.current.playbackRate = manualLive ? settings.speed : 1;
+                              videoRef.current.volume = manualLive ? Math.min(1, settings.volume) : 1;
+                              videoRef.current.muted = manualLive && settings.muted;
+                              videoRef.current.currentTime = manualLive ? liveInterval?.start ?? 0 : 0;
                             }
                           }}
                           onPlay={(event) => {
-                            if (!sourcePreview && !usingRendered && liveInterval && event.currentTarget.currentTime >= liveInterval.end - 0.04)
+                            if (manualLive && liveInterval && event.currentTarget.currentTime >= liveInterval.end - 0.04)
                               event.currentTarget.currentTime = liveInterval.start;
                           }}
                           onSeeking={(event) => {
-                            if (!sourcePreview && !usingRendered && liveInterval) {
+                            if (manualLive && liveInterval) {
                               const video = event.currentTarget;
                               if (video.currentTime < liveInterval.start) video.currentTime = liveInterval.start;
                               if (video.currentTime > liveInterval.end) video.currentTime = liveInterval.end;
                             }
                           }}
                           onTimeUpdate={(event) => {
-                            if (!sourcePreview && !usingRendered && liveInterval) {
+                            if (manualLive && liveInterval) {
                               const video = event.currentTarget;
                               setLiveOutputTime(Math.max(0, video.currentTime - liveInterval.start) / settings.speed);
                               if (video.currentTime >= liveInterval.end - 0.025 && !video.paused) { video.pause(); video.currentTime = liveInterval.end; }
@@ -1494,35 +1506,32 @@ export default function App() {
                           }}
                           onError={() => {
                             if (usingRendered) { setShowRendered(false); setRenderedPreview(null); setManualPreviewError("This preview is no longer available. Render a fresh sample."); }
-                            else setManualPreviewError("The browser could not play this video. Try rendering a preview sample.");
+                            else setManualPreviewError(mode === "manual" ? "The browser could not play this video. Try rendering a preview sample." : "The browser could not play this video. Try reloading or importing it again.");
                           }}
                           style={{
-                            objectFit: sourcePreview || usingRendered
-                              ? "contain"
-                              : settings.fit === "crop"
-                                ? "cover"
-                                : "contain",
-                            objectPosition: sourcePreview || usingRendered || (liveBands?.fit ?? settings.fit) !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, previewAspect / (liveBands ? 1 - (liveBands.topPercent + liveBands.bottomPercent) / 100 : 1), sequencePreview?.cuts[0]?.focalPoint ?? settings.focalPoint ?? { x: 0.5, y: 0.5 }),
-                            filter: usingRendered ? "none" : previewFilter,
-                            transform: sourcePreview || usingRendered
+                            objectFit: previewFit === "crop" ? "cover" : "contain",
+                            objectPosition: !manualLive || previewFit !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, previewAspect / (liveBands ? 1 - (liveBands.topPercent + liveBands.bottomPercent) / 100 : 1), sequencePreview?.cuts[0]?.focalPoint ?? settings.focalPoint ?? { x: 0.5, y: 0.5 }),
+                            filter: previewFilter,
+                            transform: !manualLive
                               ? "none"
                               : `scale(${settings.mirror ? -settings.zoom : settings.zoom}, ${settings.zoom})`,
                             ...bandVideoStyle(liveBands),
                           }}
                         />
-                        {!sourcePreview && !usingRendered && settings.hookText && liveOutputTime < settings.hookDuration && (
+                        {manualLive && settings.hookText && liveOutputTime < settings.hookDuration && (
                           <div className="hook-preview" style={liveBands ? { top: `${liveBands.topPercent + (100 - liveBands.topPercent - liveBands.bottomPercent) * 0.08}%` } : undefined}>
                             {settings.hookText}
                           </div>
                         )}
                         <BlackBandsOverlay value={liveBands} aspect={previewAspect} />
+                        {sampleCaptions && <SampleCaptionOverlay style={activePreviewSettings.captionStyle} height={previewHeight} />}
                       </div>
                       <span className="preview-ratio">
                         {sourcePreview
                           ? `${selected.width} × ${selected.height}`
-                          : settings.aspect === "original"
+                          : activePreviewSettings.aspect === "original"
                             ? "ORIGINAL RATIO"
-                            : `${settings.aspect} FORMAT`}
+                            : `${activePreviewSettings.aspect} FORMAT`}
                       </span>
                     </>
                   ) : (
@@ -1589,11 +1598,13 @@ export default function App() {
                       <div className="preview-note">
                         <CircleHelp size={12} />
                         <span>
-                          {mode === "auto"
-                            ? "Your original source. The finished remix will be ready to preview in Exports."
+                          {sourcePreview ? "Your original footage. Switch to Live to see your changes."
+                            : mode === "auto"
+                            ? "Live format, black bands and text. Auto cuts, generated captions and sound are ready after export."
                             : usingRendered ? "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
-                            : "Live framing and basic color. Render a short sample to see every effect, text and audio."}
+                            : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
+                          {sampleCaptions && " Sample caption text shows the selected style and placement."}
                         </span>
                       </div>
                       {mode === "manual" && <>
@@ -1601,8 +1612,8 @@ export default function App() {
                           <p>{previewBusy ? "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of this edit` : "Review the first five seconds before exporting."}</p>
                           {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || !liveInterval} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />Render 5s preview</button>}
                         </div>
-                        {manualPreviewError && <ProblemNotice message={manualPreviewError} operation="Preview video" />}
                       </>}
+                      {manualPreviewError && <ProblemNotice message={manualPreviewError} operation="Preview video" />}
                     </>
                   ) : (
                     <>
@@ -1814,7 +1825,7 @@ export default function App() {
                               <option value="720">720p</option>
                             </SelectField>
                           </div>
-                          <BlackBandsEditor value={settings.blackBands} onChange={blackBands => updateSettings({ blackBands })} aspect={previewAspect} source={selected ?? undefined} />
+                          <BlackBandsEditor value={settings.blackBands} onChange={blackBands => updateSettings({ blackBands })} />
                           <Slider
                             label="Zoom"
                             value={settings.zoom}
@@ -2236,7 +2247,7 @@ export default function App() {
                             edited video.
                           </p>
                           </>}
-                          <CaptionAppearance value={settings.captionStyle} onChange={captionStyle => updateSettings({ captionStyle })} />
+                          <CaptionAppearance value={settings.captionStyle} showPreview={false} onChange={captionStyle => updateSettings({ captionStyle })} />
                           {attachmentError && (
                             <ProblemNotice message={attachmentError} operation="Attach audio or subtitles" />
                           )}

@@ -38,9 +38,8 @@ export function BlackBandsOverlay({ value, aspect }: { value?: BlackBands; aspec
   </svg>;
 }
 
-export default function BlackBandsEditor({ value, onChange, aspect = 9 / 16, source }: {
-  value?: BlackBands; onChange: (value: BlackBands) => void; aspect?: number;
-  source?: { thumbnailUrl: string; width: number; height: number };
+export default function BlackBandsEditor({ value, onChange }: {
+  value?: BlackBands; onChange: (value: BlackBands) => void;
 }) {
   const bands = value ?? DEFAULT_BLACK_BANDS;
   const update = (patch: Partial<BlackBands>) => onChange({ ...bands, ...patch });
@@ -49,11 +48,6 @@ export default function BlackBandsEditor({ value, onChange, aspect = 9 / 16, sou
       <span><strong>Black bands</strong><small>Make room above and below the video for your words.</small></span>
     </label>
     {bands.enabled && <>
-      <div className="black-bands-sample" style={{ aspectRatio: aspect, width: `min(100%, ${200 * aspect}px)` }} aria-label="Black bands layout preview">
-        {source ? <img src={source.thumbnailUrl} alt="Source video in the selected layout" style={bandVideoStyle(bands)} />
-          : <div className="black-bands-placeholder" style={bandVideoStyle(bands)}>Your video</div>}
-        <BlackBandsOverlay value={bands} aspect={aspect} />
-      </div>
       <label>Video inside the bands
         <select value={bands.fit} onChange={event => update({ fit: event.target.value as BlackBands["fit"] })}>
           <option value="contain">Keep the whole picture</option>
