@@ -114,6 +114,17 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
       assert.match(result.summary.join(" "), /6\.2–7\.1s “Micrograms are smaller than milligrams\.”/);
     });
 
+    await t.test("Cyrillic prompt styling keeps saved caption content and timing unchanged", async () => {
+      const plan = makePlan();
+      reply = { operations: [{ op: "caption_style", cyrillicMode: "words", cyrillicWords: ["phrase"] }] };
+      const result = await propose(plan, "Use Cyrillic lookalikes for phrase in captions");
+      const next = applyEditPlanChanges(plan, result.changes);
+      assert.deepEqual(next.captions, plan.captions);
+      assert.equal(next.settings.captionStyle?.cyrillicMode, "words");
+      assert.deepEqual(next.settings.captionStyle?.cyrillicWords, ["phrase"]);
+      assert.match(result.summary.join(" "), /Cyrillic lookalikes for phrase/);
+    });
+
     await t.test("global framing updates source-cut overrides while preserving supporting shots", async () => {
       reply = { operations: [{ op: "framing", focalPoint: { x: 0.8, y: 0.4 } }] };
       const plan = makePlan(), result = await propose(plan);

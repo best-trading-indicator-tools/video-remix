@@ -15,6 +15,9 @@ export const captionStyleSchema = z.object({
   fontFamily: z.enum(["classic", "tiktok-sans", "poppins", "anton", "serif"]).optional(),
   color: color.optional(), bold: z.boolean().optional(), italic: z.boolean().optional(),
   uppercase: z.boolean().optional(),
+  /** Display-only spelling; the transcript and speech timings stay unchanged. */
+  cyrillicMode: z.enum(["off", "words", "all"]).optional(),
+  cyrillicWords: z.array(z.string().trim().min(1).max(80).regex(/^[^\r\n]+$/u)).max(50).optional(),
   outlineWidth: z.number().finite().min(0).max(5).optional(), outlineColor: color.optional(),
   shadow: z.number().finite().min(0).max(5).optional(),
   letterSpacing: z.number().finite().min(0).max(4).optional(),
@@ -30,15 +33,16 @@ export const DEFAULT_CAPTION_STYLE: Required<CaptionStyle> = {
   bold: false, italic: false, uppercase: false, outlineWidth: 2, outlineColor: "#151515",
   shadow: 0, letterSpacing: 0, alignment: "center", background: "none", backgroundColor: "#10151c", backgroundOpacity: 80,
   wordHighlight: false, highlightColor: "#ffe14d",
+  cyrillicMode: "off", cyrillicWords: [],
 };
-/** Looks change the lettering only; the word highlight choice is kept separately. */
-export type CaptionLook = Omit<CaptionStyle, "wordHighlight" | "highlightColor">;
-const { wordHighlight: _wordHighlight, highlightColor: _highlightColor, ...LOOK_BASE } = DEFAULT_CAPTION_STYLE;
-export const withoutHighlight = ({ wordHighlight: _on, highlightColor: _color, ...look }: CaptionStyle): CaptionLook => look;
+/** Built-in looks keep highlighting and spelling choices separate. */
+export type CaptionLook = Omit<CaptionStyle, "wordHighlight" | "highlightColor" | "cyrillicMode" | "cyrillicWords">;
+const { wordHighlight: _wordHighlight, highlightColor: _highlightColor, cyrillicMode: _mode, cyrillicWords: _words, ...LOOK_BASE } = DEFAULT_CAPTION_STYLE;
+export const captionLook = ({ wordHighlight: _on, highlightColor: _color, cyrillicMode: _mode, cyrillicWords: _words, ...look }: CaptionStyle): CaptionLook => look;
 export const resolveCaptionStyle = (style?: CaptionStyle): Required<CaptionStyle> => ({ ...DEFAULT_CAPTION_STYLE, ...style });
 export function captionStyleDescription(style?: CaptionStyle): string {
   const s = resolveCaptionStyle(style);
-  return `Caption look: ${CAPTION_FONTS[s.fontFamily].family}, ${s.color}, ${s.bold ? "bold" : "regular"}${s.italic ? ", italic" : ""}${s.uppercase ? ", uppercase" : ""}, ${s.alignment} aligned; ${s.background === "box" ? `${s.backgroundColor} box at ${s.backgroundOpacity}% opacity` : `${s.outlineColor} outline at ${s.outlineWidth}`}; shadow ${s.shadow}, spacing ${s.letterSpacing}${s.wordHighlight ? `; each spoken word highlighted in ${s.highlightColor}` : ""}.`;
+  return `Caption look: ${CAPTION_FONTS[s.fontFamily].family}, ${s.color}, ${s.bold ? "bold" : "regular"}${s.italic ? ", italic" : ""}${s.uppercase ? ", uppercase" : ""}, ${s.alignment} aligned; ${s.background === "box" ? `${s.backgroundColor} box at ${s.backgroundOpacity}% opacity` : `${s.outlineColor} outline at ${s.outlineWidth}`}; shadow ${s.shadow}, spacing ${s.letterSpacing}${s.wordHighlight ? `; each spoken word highlighted in ${s.highlightColor}` : ""}; Cyrillic lookalikes ${s.cyrillicMode === "off" ? "off" : s.cyrillicMode === "all" ? "in all caption text" : `for ${s.cyrillicWords.length ? s.cyrillicWords.join(", ") : "no listed words yet"}`}.`;
 }
 /** A highlight that stays visible against the chosen text color. */
 export function contrastingHighlight(textColor: string): string {

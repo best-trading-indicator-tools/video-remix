@@ -26,9 +26,9 @@ test('source prompts expose supported editing controls and preserve reviewable d
   const manual = (patch: unknown, settings = DEFAULT_SETTINGS, prompt = 'Add captions, black bands and B-roll') => {
     reply = { patch }; return proposeManualPrompt({ settings, source, signal, prompt, assets });
   };
-  const auto = (patch: unknown, options: AutoOptions = DEFAULT_AUTO_OPTIONS, variants = 1, requestedVariants?: number) => {
+  const auto = (patch: unknown, options: AutoOptions = DEFAULT_AUTO_OPTIONS, variants = 1, requestedVariants?: number, prompt = 'Remix with captions, black bands and B-roll') => {
     reply = { patch, ...(requestedVariants === undefined ? {} : { variants: requestedVariants }) };
-    return proposeAutoPrompt({ options, variants, source, signal, prompt: 'Remix with captions, black bands and B-roll', assets });
+    return proposeAutoPrompt({ options, variants, source, signal, prompt, assets });
   };
   try {
     await t.test('text edits preserve painted masks without sending or inventing source coordinates', async () => {
@@ -116,6 +116,21 @@ test('source prompts expose supported editing controls and preserve reviewable d
       const manualResult = await manual(patch);
       assert.equal(manualResult.settings.captionStyle?.fontFamily, 'tiktok-sans');
       assert.match(manualResult.summary.join(' '), /TikTok Sans/);
+    });
+    await t.test('Cyrillic spelling rules round-trip through Auto and Manual proposals and can be switched off', async () => {
+      const captionStyle = { cyrillicMode: 'words' as const, cyrillicWords: ['Sample-12'] };
+      const prompt = 'Use Cyrillic lookalikes only for Sample-12 in captions';
+      const automatic = await auto({ captionStyle }, DEFAULT_AUTO_OPTIONS, 1, undefined, prompt);
+      assert.equal(automatic.options.captionStyle?.cyrillicMode, 'words');
+      assert.deepEqual(automatic.options.captionStyle?.cyrillicWords, ['Sample-12']);
+      assert.match(automatic.summary.join(' '), /Cyrillic lookalikes for Sample-12/);
+      const manualResult = await manual({ captionStyle }, DEFAULT_SETTINGS, prompt);
+      assert.equal(manualResult.settings.captionStyle?.cyrillicMode, 'words');
+      assert.deepEqual(manualResult.settings.captionStyle?.cyrillicWords, ['Sample-12']);
+      const off = await manual({ captionStyle: { cyrillicMode: 'off' } }, manualResult.settings, 'Turn off Cyrillic lookalikes');
+      assert.equal(off.settings.captionStyle?.cyrillicMode, 'off');
+      assert.deepEqual(off.settings.captionStyle?.cyrillicWords, ['Sample-12']);
+      assert.match(off.summary.join(' '), /Cyrillic lookalikes off/);
     });
     await t.test('full video and narration dependencies are explicit and contradictory requests stay unchanged', async () => {
       const options: AutoOptions = { ...DEFAULT_AUTO_OPTIONS, narration: true, versionMode: 'angles' };

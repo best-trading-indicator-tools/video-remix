@@ -37,6 +37,14 @@ test("applying your style to Auto keeps each video's band text, length, versions
   assert.notEqual(result.captionStyle, style.captionStyle, "The saved style is copied, not shared");
 });
 
+test("saved styles retain Cyrillic spelling rules without treating them as a different built-in look", () => {
+  const options = { ...styled, captionStyle: { ...punch, cyrillicMode: "words" as const, cyrillicWords: ["Sample-12"] } };
+  const style = restoreMyStyle(JSON.parse(JSON.stringify(captureMyStyle(options))))!;
+  assert.equal(describeMyStyle(style)[0], "Punch captions · Cyrillic lookalikes");
+  assert.deepEqual(styleAuto(DEFAULT_AUTO_OPTIONS, style).captionStyle, options.captionStyle);
+  assert.deepEqual(styleManual(DEFAULT_SETTINGS, style).captionStyle, options.captionStyle);
+});
+
 test("applying your style to Manual keeps cuts, color and text, and maps only pinned sound looks", () => {
   const manual: RemixSettings = { ...DEFAULT_SETTINGS, speed: 1.2, saturation: 1.4, segments: [{ start: 2, end: 9 }],
     blackBands: { ...bands, topText: "Manual headline", enabled: false }, denoise: 0.9 };

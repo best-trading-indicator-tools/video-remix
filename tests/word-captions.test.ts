@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { captionWordStarts, DEFAULT_CAPTION_STYLE } from '../shared/caption-style.js';
@@ -21,7 +21,7 @@ test('word highlighting moves across actual MP4 pixels in exports, final caption
     const input = path.join(dir,'source.mp4'), subtitlePath = path.join(dir,'captions.srt');
     await ffmpeg('-f','lavfi','-i','color=black:s=640x360:r=24:d=2.2','-c:v','libx264','-threads','1',input);
     await writeFile(subtitlePath,'1\n00:00:00,000 --> 00:00:02,000\nONE TWO THREE\n');
-    const source = await probeMedia(input), style = {...DEFAULT_CAPTION_STYLE,wordHighlight:true,fontSize:28};
+    const source = await probeMedia(input), style = {...DEFAULT_CAPTION_STYLE,wordHighlight:true,fontSize:28,fontFamily:'tiktok-sans' as const,cyrillicMode:'words' as const,cyrillicWords:['ONE','THREE']};
     for (const mode of ['render','caption-pass','uploaded-srt']) {
       const output = path.join(dir,`${mode}.mp4`), common = {input,output,subtitlePath,workDir:dir,signal:new AbortController().signal};
       if (mode === 'caption-pass') await burnOutputCaptions({...common,style,words});
@@ -35,5 +35,32 @@ test('word highlighting moves across actual MP4 pixels in exports, final caption
       }
       assert.ok(positions[0]!<positions[1]! && positions[1]!<positions[2]!,`${mode}: highlight moves word by word`);
     }
+  } finally { await rm(dir,{recursive:true,force:true}); }
+});
+
+test('plain SRT exports draw Cyrillic spelling without modifying the original caption file', {timeout:30000}, async () => {
+  const exec = promisify(execFile), dir = await mkdtemp(path.join(tmpdir(),'cyrillic-caption-test-'));
+  const ffmpeg = (...args: string[]) => exec('ffmpeg',['-v','error','-nostdin','-y',...args],{encoding:'buffer',maxBuffer:8*1024*1024});
+  try {
+    const input = path.join(dir,'source.mp4'), subtitlePath = path.join(dir,'captions.srt'), expectedPath = path.join(dir,'expected.srt');
+    const original = '1\n00:00:00,000 --> 00:00:01,000\nSample-12 comes next\n';
+    await ffmpeg('-f','lavfi','-i','color=black:s=640x360:r=24:d=1','-c:v','libx264','-threads','1',input);
+    await writeFile(subtitlePath, original);
+    await writeFile(expectedPath, '1\n00:00:00,000 --> 00:00:01,000\nЅаmрlе-12 comes next\n');
+    const source = await probeMedia(input), base = {...DEFAULT_CAPTION_STYLE,fontFamily:'tiktok-sans' as const,fontSize:28};
+    const style = {...base,cyrillicMode:'words' as const,cyrillicWords:['Sample-12']};
+    for (const mode of ['render','caption-pass']) {
+      const pixels: Buffer[] = [];
+      for (const reference of [false,true]) {
+        const output = path.join(dir,`${mode}-${reference}.mp4`);
+        const common = {input,output,subtitlePath:reference?expectedPath:subtitlePath,workDir:dir,signal:new AbortController().signal};
+        if (mode === 'caption-pass') await burnOutputCaptions({...common,style:reference?base:style});
+        else await renderVideo({...common,source,settings:{...DEFAULT_SETTINGS,captionStyle:reference?base:style},onProgress() {}});
+        pixels.push((await ffmpeg('-ss','0.4','-i',output,'-frames:v','1','-f','rawvideo','-pix_fmt','rgb24','pipe:1')).stdout);
+      }
+      assert.ok(pixels[0]!.some(value=>value>150), `${mode}: visible captions`);
+      assert.deepEqual(pixels[0],pixels[1],`${mode}: matches literal Cyrillic reference`);
+    }
+    assert.equal(await readFile(subtitlePath,'utf8'),original);
   } finally { await rm(dir,{recursive:true,force:true}); }
 });

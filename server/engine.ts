@@ -14,6 +14,7 @@ import {
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
+import { captionDisplayText } from "../shared/caption-text.js";
 import { captionsAss, parseCanonicalSrt } from "./caption-ass.js";
 import { blackBandsSchema, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
 import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
@@ -511,7 +512,7 @@ async function prepareCaptionFonts(workDir: string, temporary: string[]) {
   return name;
 }
 
-async function canonicalSubtitles(filePath: string, uppercase = false): Promise<string> {
+async function canonicalSubtitles(filePath: string, displayStyle?: CaptionStyle): Promise<string> {
   const local = await localFile(filePath);
   if ((await stat(local)).size > 2 * 1024 * 1024)
     throw new Error("Subtitles must be smaller than 2 MB");
@@ -547,10 +548,10 @@ async function canonicalSubtitles(filePath: string, uppercase = false): Promise<
     const beginStamp = `${match[1]}:${match[2]}:${match[3]},${match[4]}`;
     const endStamp = `${match[5]}:${match[6]}:${match[7]},${match[8]}`;
     // The chosen caption style applies to every cue, including imported SRTs.
-    // Remove embedded styling before case conversion; timings and source text stay saved unchanged.
+    // Remove embedded styling before display conversion; timings and source text stay saved unchanged.
     const plain = lines.join("\n").replace(/<\/?(?:b|i|u|s|font)(?:\s[^>]*)?>/giu, "")
       .replace(/\{\\[^}]*\}/gu, "");
-    canonical.push(`${canonical.length + 1}\n${beginStamp} --> ${endStamp}\n${uppercase ? plain.toUpperCase() : plain}`);
+    canonical.push(`${canonical.length + 1}\n${beginStamp} --> ${endStamp}\n${captionDisplayText(plain, displayStyle)}`);
   }
   // A canonical numeric cue header ensures the subtitle filter's independent
   // demuxer cannot interpret an uploaded file as a playlist or another format.
@@ -563,7 +564,8 @@ async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefi
   const filename = `captions-${randomUUID()}.${highlight ? "ass" : "srt"}`;
   const filePath = path.join(workDir, filename);
   temporary.push(filePath);
-  const canonical = await canonicalSubtitles(subtitlePath, style?.uppercase);
+  // ASS matches speech timings against original words, then changes only drawn text.
+  const canonical = await canonicalSubtitles(subtitlePath, highlight ? undefined : style);
   await writeFile(filePath, highlight ? captionsAss(parseCanonicalSrt(canonical), style, words) : canonical, "utf8");
   const fontsName = await prepareCaptionFonts(workDir, temporary);
   // The SRT decoder uses a 384 × 288 script canvas at every output resolution.

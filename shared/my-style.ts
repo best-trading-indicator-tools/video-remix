@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { applyAudioLook, audioLookById, AUTO_AUDIO_MODES, DEFAULT_AUDIO_SETTINGS, isAutoAudioNone } from "./audio.js";
 import { applyBandFinish, blackBandFinishSchema } from "./black-bands.js";
-import { CAPTION_PRESETS, captionStyleSchema, withoutHighlight, type CaptionStyle } from "./caption-style.js";
+import { CAPTION_PRESETS, captionStyleSchema, captionLook, type CaptionStyle } from "./caption-style.js";
 import { pacingOptionsSchema } from "./pacing.js";
 import type { AutoOptions, RemixSettings } from "./types.js";
 
 /**
- * One look for every workflow: caption appearance, black-band layout, pacing and sound. Words,
+ * One look for every workflow: caption appearance (including spelling rules), black-band layout, pacing and sound. Caption content,
  * timing, footage and per-video text never belong to it, so applying it keeps each video's content.
  */
 export const MY_STYLE_STORAGE = "remix-my-style-v1";
@@ -66,7 +66,7 @@ const PACING_NAMES = { off: "Original pacing", natural: "Natural pacing", tight:
 /** A short, readable summary of what the style changes. */
 export function describeMyStyle(style: MyStyle): string[] {
   const captions = style.captionStyle
-    ? `${CAPTION_PRESETS.find(preset => sameStyle(preset.style, withoutHighlight(style.captionStyle!)))?.name ?? "Custom"} captions${style.captionStyle.wordHighlight ? " · word highlight" : ""}` : "Default captions";
+    ? `${CAPTION_PRESETS.find(preset => sameStyle(preset.style, captionLook(style.captionStyle!)))?.name ?? "Custom"} captions${style.captionStyle.wordHighlight ? " · word highlight" : ""}${style.captionStyle.cyrillicMode && style.captionStyle.cyrillicMode !== "off" ? " · Cyrillic lookalikes" : ""}` : "Default captions";
   const bands = style.blackBands?.enabled ? `Black bands ${style.blackBands.topPercent}% / ${style.blackBands.bottomPercent}%` : "No black bands";
   const pacing = style.pacing ? PACING_NAMES[style.pacing.mode] : "Default pacing";
   const sound = !style.audio || style.audio === "auto" ? "Measured sound" : isAutoAudioNone(style.audio) ? "Original sound"

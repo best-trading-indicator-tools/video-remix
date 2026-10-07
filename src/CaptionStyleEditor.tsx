@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { RotateCcw, Check, ChevronDown, Type } from "lucide-react";
-import { CAPTION_FONTS, CAPTION_PRESETS, DEFAULT_CAPTION_STYLE, captionLines, captionWordStarts, contrastingHighlight, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
+import { CAPTION_FONTS, CAPTION_PRESETS, DEFAULT_CAPTION_STYLE, captionLines, captionWordStarts, captionStyleSchema, contrastingHighlight, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
+import { captionDisplayText } from "../shared/caption-text";
 import "./caption-style.css";
 
 export function CaptionAppearance(props: Parameters<typeof CaptionStyleEditor>[0]) {
@@ -11,7 +12,7 @@ export function CaptionAppearance(props: Parameters<typeof CaptionStyleEditor>[0
         <Type size={20} className="caption-appearance-icon" aria-hidden="true" />
         <span className="caption-appearance-copy">
           <strong>Caption appearance</strong>
-          <small>Font, size, color &amp; effects</small>
+          <small>Font, size, color, effects &amp; Cyrillic lookalikes</small>
         </span>
         <ChevronDown size={20} className="caption-appearance-chevron" aria-hidden="true" />
       </summary>
@@ -55,7 +56,7 @@ export function CaptionOverlay({ style, height, text, activeWord }: { style?: Ca
     textShadow: s.shadow ? `${s.shadow * scale}px ${s.shadow * scale}px 0 #000` : "none",
     ...(box ? { backgroundColor: background, padding: `${3 * scale}px`, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" } : {}),
   };
-  const shown = s.uppercase ? text.toUpperCase() : text;
+  const shown = captionDisplayText(text, s);
   let index = 0;
   const words = s.wordHighlight && activeWord !== undefined ? captionLines(shown).map((row, rowIndex) => <Fragment key={rowIndex}>
     {rowIndex > 0 && "\n"}{row.map((word, wordIndex) => { const current = index++; return <Fragment key={wordIndex}>{wordIndex > 0 && " "}
@@ -100,6 +101,47 @@ export function SampleCaptionOverlay({ style, height, sample = "Caption style pr
   return <CaptionOverlay style={s} height={height} text={previewText} activeWord={wordCount ? tick % wordCount : undefined} />;
 }
 
+const parseSpellingWords = (text: string) => [...new Set(text.split(/[,\n]/u).map(word => word.trim()).filter(Boolean))];
+function CyrillicControl({ style, onChange, sample }: { style: Required<CaptionStyle>; onChange: (change: Partial<CaptionStyle>) => void; sample: string }) {
+  const savedWords = style.cyrillicWords.join("\n");
+  const [input, setInput] = useState(savedWords);
+  // Keep separators while typing, but follow a different video's settings or a preset.
+  useEffect(() => setInput(current => parseSpellingWords(current).join("\n") === savedWords ? current : savedWords), [savedWords]);
+  const valid = captionStyleSchema.shape.cyrillicWords.safeParse(parseSpellingWords(input)).success;
+  const examples = style.cyrillicMode === "words" ? style.cyrillicWords : [sample];
+  return <div className="caption-spelling">
+    <label className="caption-field">Cyrillic lookalikes
+      <select value={style.cyrillicMode} onChange={event => onChange({ cyrillicMode: event.target.value as CaptionStyle["cyrillicMode"] })}>
+        <option value="off">Off · original spelling</option>
+        <option value="words">Only listed words</option>
+        <option value="all">All caption text</option>
+      </select>
+    </label>
+    {style.cyrillicMode !== "off" && <>
+      <p className="caption-style-note">Swaps similar-looking Latin letters for Cyrillic characters. This does not translate the text. Original captions and speech timings stay saved.</p>
+      {style.cyrillicMode === "words" && <>
+        <label className="caption-field">Words to change
+          <textarea value={input} rows={3} maxLength={4050} placeholder={"Sample-12\nExample phrase"} spellCheck={false} aria-invalid={!valid} onChange={event => {
+            const text = event.target.value; setInput(text);
+            const parsed = captionStyleSchema.shape.cyrillicWords.safeParse(parseSpellingWords(text));
+            if (parsed.success) onChange({ cyrillicWords: parsed.data });
+          }} />
+        </label>
+        <p className="caption-style-note">Up to 50 words or phrases, one per line or separated by commas. Matches whole words, ignoring case.</p>
+        {!valid && <p role="alert" className="caption-spelling-error">Use at most 50 entries of 80 characters each. Your last valid list is still applied.</p>}
+      </>}
+      {examples.length > 0 ? <div className="caption-spelling-preview" aria-label="Cyrillic spelling preview">
+        {examples.slice(0, 5).map((text, index) => <div key={index}>
+          <span>{text}</span><span aria-hidden="true">→</span>
+          <span style={{ fontFamily: CAPTION_FONTS[style.fontFamily].css, fontWeight: style.bold ? 700 : 400, fontStyle: style.italic ? "italic" : "normal" }}>{captionDisplayText(text, style)}</span>
+        </div>)}
+        {examples.length > 5 && <small>+ {examples.length - 5} more entries</small>}
+      </div> : <p className="caption-style-note">Add a word to preview its spelling. Captions stay unchanged until you add words.</p>}
+      <p className="caption-style-note">TikTok Sans supports these characters. Other fonts may use fallback letters.</p>
+    </>}
+  </div>;
+}
+
 export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true, showPreview = true }: {
   value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean; showPreview?: boolean;
 }) {
@@ -113,7 +155,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
       {CAPTION_PRESETS.map(preset => {
         const selected = Object.entries(preset.style).every(([key, v]) => s[key as keyof CaptionStyle] === v);
         return <button type="button" key={preset.id} aria-pressed={selected} title={preset.description}
-          onClick={() => onChange({ ...preset.style, wordHighlight: s.wordHighlight, highlightColor: s.highlightColor })}>
+          onClick={() => onChange({ ...s, ...preset.style })}>
           <span className={`caption-look-sample look-${preset.id}`} style={{ fontFamily: CAPTION_FONTS[preset.style.fontFamily!].css, color: preset.style.color }}>Aa</span>
           <span>{preset.name}{selected && <Check size={12} />}</span>
         </button>;
@@ -132,6 +174,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
     <div className="caption-emphasis" role="group" aria-label="Caption emphasis">
       {([['bold', 'Bold'], ['italic', 'Italic'], ['uppercase', 'ALL CAPS']] as const).map(([key, name]) => <button type="button" key={key} aria-pressed={s[key]} onClick={() => patch({ [key]: !s[key] })}>{name}</button>)}
     </div>
+    <CyrillicControl style={s} onChange={patch} sample={sample} />
     <NumberControl label="Caption font size" value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
     <p className="caption-style-note">Size scales with your export resolution.</p>
     <details className="caption-more"><summary>Outline, background &amp; placement</summary>

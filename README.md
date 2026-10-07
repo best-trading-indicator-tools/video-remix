@@ -253,6 +253,20 @@ font overrides are replaced by that style. Caption wording and timing stay saved
 unchanged. Baked-in source captions cannot be restyled. Finishing presets and saved
 revisions retain the look, and prompt edits can change individual style properties.
 
+Under **Caption appearance → Cyrillic lookalikes**, choose **Only listed words** and
+enter words or phrases (one per line or comma-separated), or choose **All caption text**.
+The before/after preview shows similar-looking Cyrillic letters in place of matching
+Latin letters; this is a spelling effect, not translation. Whole-word matches ignore
+case. TikTok Sans supports the replacement characters. The effect starts off and
+applies to added captions in previews and MP4 exports, including imported SRTs.
+Original editable captions, downloadable SRT text and speech timings stay unchanged.
+Built-in looks preserve this setting; finishing presets, My style and saved revisions
+retain it. In Auto, choose **Apply changes to → Selected videos** before changing it
+to apply it in bulk (in Quick, open **All settings** for caption appearance).
+Prompts can also request “Use Cyrillic lookalikes only for Sample-12 in captions”
+or “Turn off Cyrillic lookalikes.” Changing spelling does not guarantee a platform's
+moderation or recommendation outcome.
+
 ### Complete-idea selection
 
 Auto considers shorter sentence-aligned ideas and their neighboring context,

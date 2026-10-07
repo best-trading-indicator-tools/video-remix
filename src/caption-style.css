@@ -30,7 +30,13 @@
 .caption-type-preview .caption-overlay { left: 7%; right: 7%; }
 .caption-style-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .caption-field, .caption-color { display: flex; min-width: 0; flex-direction: column; gap: 8px; font-size: 12px; color: var(--subtle); }
-.caption-styler select, .caption-styler input[type="text"], .caption-styler input[type="number"] { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 7px; font-size: 13px; }
+.caption-styler select, .caption-styler textarea, .caption-styler input[type="text"], .caption-styler input[type="number"] { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 7px; font-size: 13px; }
+.caption-styler textarea { resize: vertical; font: inherit; line-height: 1.5; }
+.caption-spelling { display: grid; gap: 10px; margin-top: 18px; }
+.caption-spelling-preview { display: grid; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 7px; font-size: 13px; }
+.caption-spelling-preview > div { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 10px; align-items: baseline; overflow-wrap: anywhere; }
+.caption-spelling-preview > div > span:first-child, .caption-spelling-preview small { color: var(--subtle); }
+.caption-spelling-error { margin: 0; font-size: 12px; color: var(--danger, #ef7777); }
 .caption-color-inputs { display: flex; gap: 6px; min-width: 0; }
 .caption-color input[type="color"] { flex: 0 0 40px; width: 40px; height: 42px; padding: 5px; border-radius: 7px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; }
 .caption-color input[type="text"] { font-family: monospace; }

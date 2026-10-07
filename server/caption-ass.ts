@@ -1,4 +1,5 @@
 import { captionLines, captionWordStarts, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style.js";
+import { captionDisplayText } from "../shared/caption-text.js";
 import type { TranscriptWord } from "../shared/types.js";
 
 export interface TimedCaption { start: number; end: number; text: string }
@@ -40,7 +41,7 @@ export function captionsAss(captions: TimedCaption[], style: CaptionStyle | unde
   const events: string[] = [];
   const dialogue = (from: number, to: number, text: string) => events.push(`Dialogue: 0,${stamp(from)},${stamp(to)},Default,,0,0,0,,${text}`);
   for (const caption of captions) {
-    const rows = captionLines(caption.text.replace(/\r/gu, ""));
+    const rows = captionLines(captionDisplayText(caption.text.replace(/\r/gu, ""), s));
     const count = rows.flat().length;
     const begin = centiseconds(caption.start), finish = centiseconds(caption.end);
     if (!count || finish <= begin) continue;

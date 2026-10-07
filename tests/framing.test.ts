@@ -243,7 +243,7 @@ test("caption fonts, colors, outlines, alignment and translucent boxes change re
 
 test("TikTok Sans resolves all four bundled faces without a system-font fallback", async () => {
   await cp(new URL('../public/caption-fonts', import.meta.url), path.join(directory, 'fonts'), { recursive: true });
-  await writeFile(path.join(directory, 'tiktok.srt'), '1\n00:00:00,000 --> 00:00:01,000\nTikTok Sans captions\n');
+  await writeFile(path.join(directory, 'tiktok.srt'), '1\n00:00:00,000 --> 00:00:01,000\nTikTok Sans captions\nАВСЕНІЈКМОРЅТХУасеіјорѕху\n');
   for (const bold of [false, true]) for (const italic of [false, true]) {
     const style = captionAssStyle({ ...DEFAULT_CAPTION_STYLE, fontFamily: 'tiktok-sans', bold, italic });
     const { stderr } = await exec('ffmpeg', ['-hide_banner', '-nostdin', '-f', 'lavfi', '-i', 'color=black:size=360x640:rate=1:duration=1',
@@ -252,5 +252,6 @@ test("TikTok Sans resolves all four bundled faces without a system-font fallback
     assert.match(selection, /-> TikTokSans16pt-/, `Expected a bundled TikTok Sans face: ${selection}`);
     assert.equal(selection.includes('Bold'), bold, `Bold must use the correct face: ${selection}`);
     assert.equal(selection.includes('Italic'), italic, `Italic must use the correct face: ${selection}`);
+    assert.doesNotMatch(stderr, /Glyph .* not found|failed to find any fallback/iu, 'All Cyrillic lookalikes must use bundled glyphs');
   }
 });
