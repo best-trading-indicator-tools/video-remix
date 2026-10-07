@@ -249,7 +249,7 @@ async function run(job: StoredJob, controller: AbortController) {
         },
       });
       job.settings = prepared.settings;
-      if (job.auto.ownFootage?.length) job.settings.ownFootage = structuredClone(job.auto.ownFootage);
+      if (job.auto.ownFootage?.length) { job.settings.ownFootage = structuredClone(job.auto.ownFootage); job.settings.ownFootageSourceId = job.sourceId; }
       job.summary = prepared.summary;
       job.notes = prepared.notes;
       controller.signal.throwIfAborted();

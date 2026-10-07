@@ -48,8 +48,8 @@ export function attachmentFromRef(value: string | null, kind: 'audio' | 'subtitl
   if (!asset) throw new PromptEditError(422, `The requested ${kind === 'audio' ? 'audio' : 'caption'} file is unavailable. Upload it before applying the prompt.`);
   return asset.id;
 }
-export function sourcePromptContext<T extends SupportingVisualOptions & Pick<RemixSettings, 'ownFootage' | 'watermarkRemoval'>>(settings: T, assets: PromptAssets) {
-  const { brollIds, ownFootage, watermarkRemoval: _watermarkRemoval, ...current } = settings;
+export function sourcePromptContext<T extends SupportingVisualOptions & Pick<RemixSettings, 'ownFootage' | 'ownFootageSourceId' | 'watermarkRemoval'>>(settings: T, assets: PromptAssets) {
+  const { brollIds, ownFootage, ownFootageSourceId: _footageSource, watermarkRemoval: _watermarkRemoval, ...current } = settings;
   return { ...current, visualSources: getVisualSources(settings), brollClips: brollIds?.map(id => {
     const index = assets.videos.findIndex(asset => asset.id === id); return index < 0 ? 'unavailable' : `video${index + 1}`;
   }), footage: ownFootage?.map(({ id: _id, assetId, ...item }) => ({ ...item,

@@ -49,6 +49,7 @@ export interface AutoOptions extends SupportingVisualOptions {
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
+  ownFootageSourceId?: string;
   aspect: Aspect;
   /** Missing on older preferences: keep their existing excerpt-selection behavior. */
   durationMode?: "full" | "excerpt";
@@ -128,6 +129,7 @@ export interface RemixSettings extends SupportingVisualOptions {
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
+  ownFootageSourceId?: string;
   speed: number;
   volume: number;
   muted: boolean;

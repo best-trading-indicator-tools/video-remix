@@ -382,7 +382,7 @@ export function createApp() {
             sourceName: source.name,
             variant: index + 1,
             auto: { ...options, brollIds: [...options.brollIds] },
-            settings: { ...DEFAULT_SETTINGS, ...(options.ownFootage ? { ownFootage: structuredClone(options.ownFootage) } : {}) },
+            settings: { ...DEFAULT_SETTINGS, ...(options.ownFootage ? { ownFootage: structuredClone(options.ownFootage), ownFootageSourceId: source.id } : {}) },
             status: "queued",
             phase: "Waiting to edit",
             progress: 0,

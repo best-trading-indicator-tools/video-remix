@@ -107,7 +107,7 @@ import QuickAutoPanel, { type AutoView, type QuickPatch } from "./QuickAutoPanel
 import { useWatermarkRemoval } from "./WatermarkRemoval";
 import { watermarkRemovalSchema } from "../shared/watermark-removal";
 import AddedFootageNotice, { type AddedFootagePreview } from "./AddedFootageNotice";
-import { footagePlacementLabel } from "../shared/own-footage";
+import { footagePlacementLabel, footageForSource, mergeSourceSettings, type OwnFootagePlacement } from "../shared/own-footage";
 
 type AutoPreset = { options: AutoOptions; variants: number };
 function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
@@ -327,12 +327,13 @@ export default function App() {
           "remix-auto-video-settings",
           {},
         ),
-      ).map(([id, value]) => [id, autoPreset(value)]),
+      ).map(([id, value]) => { const preset = autoPreset(value); return [id, { ...preset, options: footageForSource(preset.options, id) }]; }),
     ),
   );
-  const [defaultAuto, setDefaultAuto] = useState<AutoPreset>(() =>
-    autoPreset(storedObject("remix-auto-default-settings", {})),
-  );
+  const [defaultAuto, setDefaultAuto] = useState<AutoPreset>(() => {
+    const preset = autoPreset(storedObject("remix-auto-default-settings", {}));
+    return { ...preset, options: footageForSource(preset.options) };
+  });
   // Quick setup is the everyday entry point; All settings keeps every Auto control.
   const [autoView, setAutoView] = useState<AutoView>(() => {
     try { return localStorage.getItem("remix-auto-view") === "all" ? "all" : "quick"; } catch { return "quick"; }
@@ -349,8 +350,9 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [settingsById, setSettingsById] = useState<
     Record<string, RemixSettings>
-  >(() => storedObject("remix-video-settings", {}));
-  const [defaultSettings, setDefaultSettings] = useState<RemixSettings>(() => ({
+  >(() => Object.fromEntries(Object.entries(storedObject<Record<string, RemixSettings>>("remix-video-settings", {}))
+    .map(([id, value]) => [id, footageForSource(value, id)])));
+  const [defaultSettings, setDefaultSettings] = useState<RemixSettings>(() => footageForSource({
     ...DEFAULT_SETTINGS,
     ...storedObject("remix-default-settings", {}),
   }));
@@ -758,9 +760,9 @@ export default function App() {
     if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
     rememberScopeChange();
-    setSettingsById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, { ...(current[source.id] || defaultSettings), ...patch,
+    setSettingsById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, { ...mergeSourceSettings(current[source.id] || defaultSettings, patch, source.id),
       ...(source.id !== selected?.id ? { watermarkRemoval: current[source.id]?.watermarkRemoval } : {}) }])) }));
-    if (!sources.length || futureSettings) setDefaultSettings(current => ({ ...current, ...patch, watermarkRemoval: undefined }));
+    if (!sources.length || futureSettings) setDefaultSettings(current => footageForSource({ ...current, ...patch, watermarkRemoval: undefined }));
   };
   const replaceSettings = (value: RemixSettings) => updateSettings({ ...DEFAULT_SETTINGS, watermarkRemoval: undefined, ...value });
   const applyAll = () => {
@@ -770,7 +772,7 @@ export default function App() {
         sources.map((source) => [
           source.id,
           {
-            ...settings,
+            ...mergeSourceSettings(current[source.id] || defaultSettings, settings, source.id),
             watermarkRemoval: current[source.id]?.watermarkRemoval,
             trimStart:
               source.id === selected?.id
@@ -784,7 +786,7 @@ export default function App() {
         ]),
       ),
     );
-    if (futureSettings) setDefaultSettings({ ...settings, watermarkRemoval: undefined, trimStart: 0, trimEnd: null });
+    if (futureSettings) setDefaultSettings(footageForSource({ ...settings, watermarkRemoval: undefined, trimStart: 0, trimEnd: null }));
     notify(
       `Settings applied to ${sources.length} video${sources.length === 1 ? "" : "s"}. Each video's trim is kept.`,
       "success",
@@ -794,9 +796,18 @@ export default function App() {
   const updateScopedAuto = (patch: QuickPatch) => {
     if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
     rememberScopeChange();
-    const merge = (preset: AutoPreset) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...preset.options, ...patch.options, watermarkRemoval: preset.options.watermarkRemoval } });
-    setAutoById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto)])) }));
-    if (!sources.length || futureSettings) setDefaultAuto(merge);
+    const merge = (preset: AutoPreset, sourceId: string) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...mergeSourceSettings(preset.options, patch.options || {}, sourceId), watermarkRemoval: preset.options.watermarkRemoval } });
+    setAutoById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto, source.id)])) }));
+    if (!sources.length || futureSettings) setDefaultAuto(current => merge(current, ""));
+  };
+  const updateCurrentFootage = (ownFootage: OwnFootagePlacement[]) => {
+    if (!selected) return;
+    setScopeUndo(null);
+    if (mode === "auto") setAutoById(current => {
+      const preset = current[selected.id] || defaultAuto;
+      return { ...current, [selected.id]: autoPreset({ ...preset, options: { ...preset.options, ownFootage, ownFootageSourceId: selected.id } }) };
+    });
+    else setSettingsById(current => ({ ...current, [selected.id]: { ...(current[selected.id] || defaultSettings), ownFootage, ownFootageSourceId: selected.id } }));
   };
   const updateAuto = (patch: Partial<AutoPreset>) => updateScopedAuto({ ...patch, options: patch.options ? Object.fromEntries(Object.entries(patch.options).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(autoOptions[key as keyof AutoOptions]))) : undefined });
   const applyFootageToSelected = (ownFootage: NonNullable<AutoOptions['ownFootage']>) => {
@@ -805,7 +816,7 @@ export default function App() {
     setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
     setAutoById(current => ({ ...current, ...Object.fromEntries(targets.map(source => {
       const preset = current[source.id] || defaultAuto;
-      return [source.id, autoPreset({ ...preset, options: { ...preset.options, ownFootage: structuredClone(ownFootage) } })];
+      return [source.id, autoPreset({ ...preset, options: { ...preset.options, ownFootage: structuredClone(ownFootage), ownFootageSourceId: source.id } })];
     })) }));
     notify(`Footage placements applied to ${targets.length} selected video${targets.length === 1 ? '' : 's'}.`, 'success');
   };
@@ -814,10 +825,10 @@ export default function App() {
     setAutoById((current) => ({
       ...current,
       ...Object.fromEntries(
-        sources.map((source) => [source.id, autoPreset({ ...selectedAuto, options: { ...selectedAuto.options, watermarkRemoval: current[source.id]?.options.watermarkRemoval } })]),
+        sources.map((source) => [source.id, autoPreset({ ...selectedAuto, options: { ...mergeSourceSettings((current[source.id] || defaultAuto).options, selectedAuto.options, source.id), watermarkRemoval: current[source.id]?.options.watermarkRemoval } })]),
       ),
     }));
-    if (futureSettings) setDefaultAuto(autoPreset({ ...selectedAuto, options: { ...selectedAuto.options, watermarkRemoval: undefined } }));
+    if (futureSettings) setDefaultAuto(autoPreset({ ...selectedAuto, options: footageForSource({ ...selectedAuto.options, watermarkRemoval: undefined }) }));
     notify(
       `Auto settings applied to all ${sources.length} videos${futureSettings ? " and new imports" : ""}.`,
       "success",
@@ -1703,6 +1714,7 @@ export default function App() {
                   selectedId={selected?.id}
                   selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
                   onApplySelectedFootage={applyFootageToSelected}
+                  onFootageChange={updateCurrentFootage}
                   disabled={starting || brollBusy}
                 />
                 ) : (
@@ -1721,13 +1733,14 @@ export default function App() {
                   onApplyAll={applyAutoAll}
                   selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
                   onApplySelectedFootage={applyFootageToSelected}
+                  onFootageChange={updateCurrentFootage}
                   footageDisabled={starting || brollBusy}
                   libraryBusy={brollBusy}
                   capabilities={autoCapabilities}
                   variants={selectedAuto.variants}
                   onVariantsChange={(variants) => updateAuto({ variants })}
-                  onPromptManual={value => { if (selected) { setSettingsById(current => ({ ...current, [selected.id]: value })); setMode("manual"); notify("Prompt applied in Manual. Review the draft and render when ready.", "success"); } }}
-                  onPromptApply={value => { if (selected) setAutoById(current => ({ ...current, [selected.id]: autoPreset(value) })); }}
+                  onPromptManual={value => { if (selected) { setSettingsById(current => ({ ...current, [selected.id]: { ...value, ownFootageSourceId: selected.id } })); setMode("manual"); notify("Prompt applied in Manual. Review the draft and render when ready.", "success"); } }}
+                  onPromptApply={value => { if (selected) setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...value, options: { ...value.options, ownFootageSourceId: selected.id } }) })); }}
                   onBrollSelectionChange={(ids) =>
                     updateAuto({ options: { ...autoOptions, brollIds: ids } })
                   }
@@ -1757,8 +1770,8 @@ export default function App() {
                   </div>
                   {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
                     disabled={starting || brollBusy || attachmentBusy !== null}
-                    onApply={value => setSettingsById(current => ({ ...current, [selected.id]: value }))}
-                    onSwitchAuto={value => { setAutoById(current => ({ ...current, [selected.id]: autoPreset(value) })); setMode("auto"); setAutoView("all"); notify("Prompt applied in Auto. Review the preferences and start remixing when ready.", "success"); }} />}
+                    onApply={value => setSettingsById(current => ({ ...current, [selected.id]: { ...value, ownFootageSourceId: selected.id } }))}
+                    onSwitchAuto={value => { setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...value, options: { ...value.options, ownFootageSourceId: selected.id } }) })); setMode("auto"); setAutoView("all"); notify("Prompt applied in Auto. Review the preferences and start remixing when ready.", "success"); }} />}
                   <div
                     className="settings-tabs"
                     role="tablist"
@@ -2338,7 +2351,7 @@ export default function App() {
                     <p className="auto-preferences-note">Supporting shots are added during export over your manual edit. Your cuts, speed and sound settings stay in control. Live and five-second previews show your footage without these shots.</p>
                   </section>
                   <div className="manual-workflow-tools">
-                    <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
+                    <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={updateCurrentFootage} disabled={starting || !selected} />
                     <FinishingPresets mode="manual" settings={settings} disabled={starting || brollBusy || attachmentBusy !== null} onApply={patch => updateSettings({ ...patch, blackBands: applyBandFinish(settings.blackBands, patch.blackBands) })} />
                   </div>
                   <div className="settings-footer">

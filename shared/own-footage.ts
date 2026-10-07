@@ -14,6 +14,25 @@ export const ownFootageSchema = z.array(z.object({
 export type OwnFootagePlacement = z.infer<typeof ownFootageSchema>[number];
 export interface OwnFootageAsset { id: string; name: string; duration: number; hasAudio: boolean; url: string; thumbnailUrl?: string }
 
+export interface SourceFootage {
+  ownFootage?: OwnFootagePlacement[];
+  /** Explicit placements belong to one source, never to global import defaults. */
+  ownFootageSourceId?: string;
+}
+
+/** Old unbound preferences must not silently prepend footage to a new export. */
+export function footageForSource<T extends SourceFootage>(settings: T, sourceId?: string): T {
+  if (sourceId && settings.ownFootageSourceId === sourceId) return settings;
+  if (settings.ownFootage === undefined && settings.ownFootageSourceId === undefined) return settings;
+  return { ...settings, ownFootage: [], ownFootageSourceId: undefined };
+}
+
+/** Ordinary settings copies preserve each video's explicitly placed footage. */
+export function mergeSourceSettings<T extends SourceFootage>(current: T, patch: Partial<T>, sourceId: string): T {
+  const { ownFootage: _footage, ownFootageSourceId: _source, ...changes } = patch;
+  return { ...footageForSource(current, sourceId), ...changes };
+}
+
 export function footagePlacementLabel(item: OwnFootagePlacement) {
   const seconds = (n: number) => `${Number(n.toFixed(2))}s`;
   if (item.appendToEnd) return "Outro · whole clip after this video";

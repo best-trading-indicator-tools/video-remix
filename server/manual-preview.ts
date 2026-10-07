@@ -10,6 +10,7 @@ import { geometry, probeMedia, renderVideo, type MediaInfo } from "./engine.js";
 import { settingsSchema } from "./schema.js";
 import { state } from "./store.js";
 import { WatermarkRemovalError } from "./watermark-removal.js";
+import { footageForSource } from "../shared/own-footage.js";
 import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
 
 const PREVIEW_SECONDS = 5;
@@ -117,7 +118,7 @@ export function installManualPreviewRoutes(app: Express) {
     if (!parsed.success) return res.status(400).json({ error: "Check the selected video and manual preview settings." });
     const source = state.sources.find(item => item.id === parsed.data.sourceId);
     if (!source) return res.status(404).json({ error: "The source video has expired or been removed. Upload it again." });
-    const settings = parsed.data.settings;
+    const settings = footageForSource(parsed.data.settings, source.id);
     const audio = settings.audioId ? state.attachments.find(item => item.id === settings.audioId && item.kind === "audio") : undefined;
     const subtitle = settings.subtitleId ? state.attachments.find(item => item.id === settings.subtitleId && item.kind === "subtitle") : undefined;
     if ((settings.audioId && !audio) || (settings.subtitleId && !subtitle))

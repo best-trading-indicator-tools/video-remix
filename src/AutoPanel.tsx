@@ -64,6 +64,7 @@ export default function AutoPanel({
   onApplyAll,
   selectedVideos,
   onApplySelectedFootage,
+  onFootageChange,
   footageDisabled,
   libraryBusy,
   maxFiles,
@@ -91,6 +92,7 @@ export default function AutoPanel({
   onApplyAll: () => void;
   selectedVideos: FootageTarget[];
   onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
+  onFootageChange: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
   footageDisabled: boolean;
   libraryBusy: boolean;
   maxFiles?: number;
@@ -164,7 +166,7 @@ export default function AutoPanel({
           )}
           {sources.length > 1 && (
             <small>
-              Copies format, captions, sound, footage and version count to every imported video. Watermark areas stay with each video. Future imports change only when selected above.
+              Copies format, captions, sound and version count to every imported video. Added clips and watermark areas stay with each video. Future imports change only when selected above.
             </small>
           )}
           {onSaveStyle && (
@@ -209,7 +211,7 @@ export default function AutoPanel({
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
         {watermarkControls}
-        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={footageDisabled}
+        <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={onFootageChange} disabled={footageDisabled || !selectedId}
           selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
         <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />
         {fullLength ? <p className="auto-preferences-note">Full video keeps the original order, pauses and voice. One export is made per video; inserted footage adds to its length.</p>

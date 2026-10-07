@@ -158,7 +158,7 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   });
   const duration = segments.reduce((sum, cut) => sum + Math.max(0, cut.end - cut.start), 0);
   const settings: RemixSettings = {
-    ...DEFAULT_SETTINGS, ...(draft.ownFootage ? { ownFootage: draft.ownFootage } : {}), aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
+    ...DEFAULT_SETTINGS, ...(draft.ownFootage ? { ownFootage: draft.ownFootage, ownFootageSourceId: draft.sourceId } : {}), aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
     segments, focalPoint: draft.focalPoint, normalizeAudio: draft.normalizeAudio, qualityCleanup: draft.qualityCleanup,
     layout: draft.layout, secondaryFocalPoint: draft.secondaryFocalPoint,
     smoothCuts: !!draft.pacingReview?.appliedSignature && draft.pacingReview.appliedSignature === pacingCutSignature(draft.cuts),

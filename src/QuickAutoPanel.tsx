@@ -29,11 +29,12 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, disabled }: {
+export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, onFootageChange, disabled }: {
   scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean; mixedLength: boolean;
   onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
   selectedId?: string; selectedVideos: FootageTarget[]; disabled: boolean;
   onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
+  onFootageChange: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
 }) {
   const angles = options.versionMode === "angles";
   const fullLength = options.durationMode === "full";
@@ -85,7 +86,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
       </fieldset>
       </>}
       <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage}
-        onChange={ownFootage => onChange({ options: { ownFootage } })} disabled={disabled}
+        onChange={onFootageChange} disabled={disabled || !selectedId}
         selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
     </div>
   </aside>;

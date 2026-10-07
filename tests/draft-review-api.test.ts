@@ -34,7 +34,7 @@ test("an approved short retains its outline, renders an editable plan and suppor
     const source = (await upload("/api/sources")).sources[0];
     const asset = (await upload("/api/broll")).assets[0];
     const draftReview = { summary: "Source demonstration", contribution: "A closer example", approvedAt: new Date().toISOString() };
-    const settings = { ...DEFAULT_SETTINGS, aspect: "16:9", resolution: "source", segments: [{ start: 0, end: 3 }], ownFootage: [{
+    const settings = { ...DEFAULT_SETTINGS, aspect: "16:9", resolution: "source", segments: [{ start: 0, end: 3 }], ownFootageSourceId: source.id, ownFootage: [{
       id: "aacaa565-781a-440c-b0bf-8b76f167e0c8", assetId: asset.id, mode: "cover", at: 1, start: 0, end: 1, audio: "mute", fit: "contain",
     }] };
     const request = await send("/api/jobs", { items: [{ sourceId: source.id, title: "Reviewed idea", settings, draftReview }], variants: 1 });

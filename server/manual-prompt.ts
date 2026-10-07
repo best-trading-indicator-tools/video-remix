@@ -16,7 +16,7 @@ const cutSchema = z.object({
   start: z.number().finite().min(0).max(86400), end: z.number().finite().min(0).max(86400),
   focalPoint: focalPointSchema.optional(),
 }).strict().refine(cut => cut.end > cut.start + 0.04, "Each source cut must last more than 0.04 seconds");
-const supportedSettings = settingsSchema.omit({ watermarkRemoval: true, blackBands: true, captionStyle: true, ownFootage: true, supportingVisuals: true, brollIds: true, audioId: true, subtitleId: true, device: true, stripMetadata: true });
+const supportedSettings = settingsSchema.omit({ watermarkRemoval: true, blackBands: true, captionStyle: true, ownFootage: true, ownFootageSourceId: true, supportingVisuals: true, brollIds: true, audioId: true, subtitleId: true, device: true, stripMetadata: true });
 const patchSchema = supportedSettings.partial().extend({
   ...sourcePromptShape,
   audioAttachment: z.string().regex(/^audio[1-9]\d*$/u).nullable().optional(),

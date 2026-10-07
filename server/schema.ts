@@ -1,6 +1,6 @@
 import { hasStockVisuals } from "../shared/visual-sources.js";
 import { pacingOptionsSchema } from "../shared/pacing.js";
-import { ownFootageSchema } from "../shared/own-footage.js";
+import { ownFootageSchema, footageForSource } from "../shared/own-footage.js";
 import { z } from "zod";
 import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
 import { MAX_FOCUS_POINTS_PER_CUT, MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
@@ -34,6 +34,7 @@ export const settingsSchema = z
     blackBands: blackBandsSchema.optional(),
     watermarkRemoval: watermarkRemovalSchema.optional(),
     ownFootage: ownFootageSchema.optional(),
+    ownFootageSourceId: z.uuid().optional(),
     speed: n(0.5, 2),
     volume: n(0, 2),
     muted: z.boolean(),
@@ -130,7 +131,8 @@ export const batchSchema = z
     // Accepted from older clients. Randomized speed, zoom and color copies were replaced by Auto angle versions.
     randomize: z.literal(false, { error: "Subtle variations were removed. For different versions, choose Auto → What changes between versions → New angles on the same moment." }).optional(),
   })
-  .strict().refine(batch => !batch.items.some(item => item.draftReview) || batch.variants === 1, "Render reviewed drafts with their approved settings");
+  .strict().refine(batch => !batch.items.some(item => item.draftReview) || batch.variants === 1, "Render reviewed drafts with their approved settings")
+  .transform(batch => ({ ...batch, items: batch.items.map(item => ({ ...item, settings: footageForSource(item.settings, item.sourceId) })) }));
 export const normalizedSettings = (input: unknown) =>
   settingsSchema.parse({
     ...DEFAULT_SETTINGS,
@@ -149,6 +151,7 @@ export const autoOptionsObject = z
     captionStyle: captionStyleSchema.optional(),
     ...supportingVisualShape,
     ownFootage: ownFootageSchema.optional(),
+    ownFootageSourceId: z.uuid().optional(),
     audio: z.enum(AUTO_AUDIO_MODES).optional(),
     finishedReview: z.boolean().optional(),
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
@@ -199,4 +202,5 @@ export const autoBatchSchema = z.union([
   legacyAutoBatchSchema,
 ]).transform(batch => ({ ...batch, items: batch.items.map(item => item.options.durationMode === "full"
   ? { ...item, variants: 1, options: { ...item.options, narration: false, versionMode: "moments" as const } }
-  : item) }));
+  : item) }))
+  .transform(batch => ({ ...batch, items: batch.items.map(item => ({ ...item, options: footageForSource(item.options, item.sourceId) })) }));

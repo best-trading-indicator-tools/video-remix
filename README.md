@@ -996,6 +996,12 @@ inspected.
 
 ### Place your own footage
 
+Added clips belong to the video where you place them. General settings copies
+and future-import defaults do not copy these placements. Use **Apply footage to
+selected videos** to copy them explicitly. Legacy placements saved without a
+source binding are cleared from workspace preferences and excluded by the export
+API; uploaded files and existing exports remain available.
+
 Active clips from **Add my own footage** are listed beside the main preview,
 with their filename and intro, outro, insert or cover timing. **Preview** shows
 the added clip in the main player. **Remove** there removes only that placement
