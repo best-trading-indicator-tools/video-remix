@@ -58,3 +58,8 @@
 @media (prefers-reduced-motion: reduce) {
   .prompt-editor-hint-caret { display: none; animation: none; }
 }
+
+.settings-panel > .manual-prompt-editor { padding: 0; }
+.settings-panel > .manual-prompt-editor .prompt-editor { margin: 0; padding: 20px; }
+.auto-prompt-editor { min-width: 0; }
+.auto-prompt-editor .prompt-editor { margin: 0; padding: 0 0 22px; }

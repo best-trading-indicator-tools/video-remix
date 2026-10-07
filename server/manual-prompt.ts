@@ -1,3 +1,6 @@
+import { sourcePromptShape, sourcePromptInstructions, applySourcePrompt, sourcePromptSummary, sourcePromptContext, promptAssetCatalog, attachmentFromRef, hasUngroundedBandText, EMPTY_PROMPT_ASSETS, type PromptAssets } from "./source-prompt-controls.js";
+import { stockProvidersForEdit } from "./stock-broll.js";
+import { footageTimeline } from "../shared/own-footage.js";
 import { providerApiKey } from "./api-keys.js";
 import { z } from "zod";
 import type { RemixSettings } from "../shared/types.js";
@@ -13,14 +16,17 @@ const cutSchema = z.object({
   start: z.number().finite().min(0).max(86400), end: z.number().finite().min(0).max(86400),
   focalPoint: focalPointSchema.optional(),
 }).strict().refine(cut => cut.end > cut.start + 0.04, "Each source cut must last more than 0.04 seconds");
-const supportedSettings = settingsSchema.omit({ visualSources: true, supportingVisuals: true, stockVideoType: true, brollIds: true, brollMatching: true, brollCount: true, brollMaxCoverage: true, audioId: true, subtitleId: true, device: true, stripMetadata: true, callouts: true });
+const supportedSettings = settingsSchema.omit({ blackBands: true, captionStyle: true, ownFootage: true, supportingVisuals: true, brollIds: true, audioId: true, subtitleId: true, device: true, stripMetadata: true });
 const patchSchema = supportedSettings.partial().extend({
+  ...sourcePromptShape,
+  audioAttachment: z.string().regex(/^audio[1-9]\d*$/u).nullable().optional(),
+  subtitleAttachment: z.string().regex(/^subtitle[1-9]\d*$/u).nullable().optional(),
   hookText: z.string().max(200).refine(text => !/[\u0000-\u0008\u000b-\u001f\u007f]/u.test(text), "Use plain heading text").optional(),
   segments: z.array(cutSchema).min(1).max(60).nullable().optional(),
   captionStyle: captionStyleSchema.partial().refine(value => Object.keys(value).length > 0).optional(),
   focalPoint: focalPointSchema.partial().refine(value => Object.keys(value).length > 0).optional(),
 }).strict();
-const responseSchema = z.object({ patch: patchSchema, clarification: z.string().trim().min(1).max(700).optional() }).strict();
+const responseSchema = z.object({ patch: patchSchema, switchTo: z.literal("auto").optional(), clarification: z.string().trim().min(1).max(700).optional() }).strict();
 type Patch = z.infer<typeof patchSchema>;
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const display = (value: number) => Number(value.toFixed(3));
@@ -41,8 +47,9 @@ sound modifiers, all neutral at 0 and applied locally with ordinary filters: den
 automaticCaptions "off"|"auto"|"add": off keeps original/imported captions; auto transcribes the finished soundtrack locally at export and avoids duplicating existing captions; add explicitly adds new automatic captions even if text already exists. Enabling auto/add replaces any imported SRT attachment. Use auto for ordinary automatic-caption requests.
 focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, right/bottom 1; either field may be omitted); captionStyle fields are optional: fontSize 12–40; bottomPercent 5–80 (larger means HIGHER); fontFamily classic/poppins/anton/serif; color, outlineColor and backgroundColor as six-digit #RRGGBB; bold, italic and uppercase booleans; outlineWidth and shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100. A background box replaces the outline. Only added imported or automatic captions can be styled, never text already baked into source pixels.
 For a simple trim, provide trimStart/trimEnd only. The compiler removes existing segments and resets an inherited timeShift to 0 to honor those source timestamps. For explicit source sequences, provide segments only, not trimStart/trimEnd; sequence selection resets inherited timeShift to 0. timeShift moves the complete trim window while preserving its duration and clamps at the source edges; it does not work with segments. Never combine nonzero timeShift with segments. Global focalPoint replaces existing per-cut crop overrides. Do not restate unchanged fields or reset other filters.
-No speech or transcript is available during this proposal. You cannot invent or rewrite a heading from the video; only use exact heading text explicitly supplied by the user, or remove it with an empty string. Caption style affects imported or automatic captions. You may enable automaticCaptions, but cannot invent, rewrite or translate caption text. You cannot add/change audio or subtitle attachments, voices, music, B-roll, generated footage, callouts, metadata/device identity, stripMetadata, custom LUTs, subject tracking, publishing or other settings. AI upscaling and generative enhancement are unavailable; qualityCleanup is only local cleanup and resolution is ordinary resizing.
-If any part is unsupported, ambiguous, or would require speech/video analysis, return patch:{} plus clarification. Never partially fulfill mixed requests. For 'make it better' ask which changes; for specific aesthetic requests such as 'slightly warmer with less saturation', propose restrained changes. If the requested settings already match, return patch:{}. Never claim anything is rendered, saved, published or applied. No media URLs, file paths or attachment IDs. Write clarification in the request's language.`;
+No speech or transcript is available during this proposal. You cannot invent or rewrite a heading from the video; only use exact heading text explicitly supplied by the user, or remove it with an empty string. Caption style affects imported or automatic captions. You may enable automaticCaptions, but cannot invent, rewrite or translate caption text. audioAttachment and subtitleAttachment accept a supplied asset reference or null to remove the attachment. To remove ALL added captions use automaticCaptions:off and subtitleAttachment:null. Selecting an SRT file turns automatic captions off. Audio replacement uses an uploaded track; it loops if shorter than the video. callouts accepts up to 5 {text,start,end} overlays on the output clock; text must be literally supplied by the user. [] removes them. You cannot invent media, clone voices, change metadata/device identity, stripMetadata, apply custom LUTs, perform subject tracking or publish from this draft. For automatic speech selection, pacing, multiple versions or replacement narration, return patch:{} and switchTo:"auto" with no clarification so the application can prepare a complete Auto proposal. The user will review the workspace switch. Use this only when the entire request can be completed in Auto; contradictory combinations still need clarification. AI upscaling and generative enhancement are unavailable; qualityCleanup is only local cleanup and resolution is ordinary resizing.
+If any part is unsupported, ambiguous, or would require speech/video analysis, return patch:{} plus clarification. Never partially fulfill mixed requests. For 'make it better' ask which changes; for specific aesthetic requests such as 'slightly warmer with less saturation', propose restrained changes. If the requested settings already match, return patch:{}. Never claim anything is rendered, saved, published or applied. No media URLs, file paths or attachment IDs. Write clarification in the request's language.
+${sourcePromptInstructions}`;
 
 function effective(settings: RemixSettings, source: Source) {
   if (settings.segments) {
@@ -59,14 +66,23 @@ function effective(settings: RemixSettings, source: Source) {
   return { cuts: [{ start: interval.start, end: interval.end }], outputDuration: interval.outputDuration };
 }
 
-function compile(settings: RemixSettings, patch: Patch, source: Source) {
+function compile(settings: RemixSettings, patch: Patch, source: Source, assets: PromptAssets) {
   const trimChanged = own(patch, "trimStart") || own(patch, "trimEnd");
   if (patch.segments && trimChanged)
     throw new PromptEditError(422, "Request either a simple trim or a source sequence, not both at once.");
   if ((patch.segments || (settings.segments && patch.segments !== null && !trimChanged)) && patch.timeShift)
     throw new PromptEditError(422, "Time shift applies to one continuous trim. Change the source cuts directly for a sequence.");
-  const { focalPoint, captionStyle, segments, ...simple } = patch;
-  const next: RemixSettings = { ...structuredClone(settings), ...simple };
+  const { focalPoint, segments, audioAttachment, subtitleAttachment, ...simple } = patch;
+  const captionStyle = patch.captionStyle;
+  const next: RemixSettings = applySourcePrompt(settings, simple, assets);
+  if (audioAttachment !== undefined) next.audioId = attachmentFromRef(audioAttachment, "audio", assets);
+  if (subtitleAttachment !== undefined) {
+    next.subtitleId = attachmentFromRef(subtitleAttachment, "subtitle", assets);
+    if (subtitleAttachment !== null) {
+      if (patch.automaticCaptions && patch.automaticCaptions !== "off") throw new PromptEditError(422, "Choose an imported SRT file or automatic captions in one edit.");
+      next.automaticCaptions = "off";
+    }
+  }
   if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") next.subtitleId = null;
   if (focalPoint) next.focalPoint = { ...(settings.focalPoint ?? { x: 0.5, y: 0.5 }), ...focalPoint };
   if (captionStyle) next.captionStyle = { ...(settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 / 12 }), ...captionStyle };
@@ -85,11 +101,17 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
   const output = geometry({ ...source, fps: 30 }, next);
   if (output.width > 16384 || output.height > 16384)
     throw new PromptEditError(422, "The requested format exceeds the renderer’s output size limit. Choose a standard aspect ratio or a lower resolution.");
-  const summary: string[] = [];
+  const summary: string[] = sourcePromptSummary(settings, next, assets);
+  for (const [key, label] of [["audioId", "Replacement audio"], ["subtitleId", "Imported captions"]] as const)
+    if (next[key] !== settings[key]) summary.push(`${label}: ${next[key] ? assets.attachments.find(asset => asset.id === next[key])?.name || "selected file" : "none"}.`);
+  if (!same(next.callouts, settings.callouts)) summary.push(next.callouts?.length ? `Text overlays: ${next.callouts.map(cue => `“${cue.text}” at ${cue.start}–${cue.end}s`).join("; ")}.` : "Remove all text overlays.");
+  if (patch.callouts?.some(cue => cue.end > timeline.outputDuration)) throw new PromptEditError(422, "Text overlays must fit within the resulting video.");
+  if (next.layout !== settings.layout) summary.push(`Picture layout: ${next.layout}.`);
+  if (!same(next.secondaryFocalPoint, settings.secondaryFocalPoint)) summary.push(`Second subject: ${display(next.secondaryFocalPoint!.x * 100)}% across, ${display(next.secondaryFocalPoint!.y * 100)}% down.`);
   if ((next.automaticCaptions || "off") !== (settings.automaticCaptions || "off"))
     summary.push(next.automaticCaptions === "auto" ? "Automatic captions: on, avoiding duplicates."
       : next.automaticCaptions === "add" ? "Automatic captions: add new, even if captions already exist." : "Automatic captions: off.");
-  if (settings.subtitleId && !next.subtitleId) summary.push("Use automatic captions instead of the imported SRT file.");
+  if (settings.subtitleId && !next.subtitleId && next.automaticCaptions !== "off" && next.automaticCaptions) summary.push("Use automatic captions instead of the imported SRT file.");
   const numericLabels = {
     speed: "Playback speed", volume: "Volume", zoom: "Zoom", saturation: "Saturation", brightness: "Brightness", contrast: "Contrast",
     hue: "Hue", gamma: "Gamma", temperature: "Temperature", noise: "Grain", sharpness: "Sharpness", blend: "Previous-frame blend",
@@ -109,7 +131,7 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
       summary.push(`${label}: ${display(proposed)}${suffix}.`);
     }
   }
-  const booleanLabels = { muted: "Mute audio", mirror: "Mirror picture", normalizeAudio: "Audio normalization", qualityCleanup: "Local video cleanup", autoMotion: "Gentle camera motion" } as const;
+  const booleanLabels = { muted: "Mute audio", mirror: "Mirror picture", normalizeAudio: "Audio normalization", qualityCleanup: "Local video cleanup", autoMotion: "Gentle camera motion", smoothCuts: "Smooth audio cuts" } as const;
   for (const [key, label] of Object.entries(booleanLabels)) {
     const field = key as keyof typeof booleanLabels;
     if (Boolean(next[field]) !== Boolean(settings[field])) summary.push(`${label}: ${next[field] ? "on" : "off"}.`);
@@ -137,14 +159,14 @@ function compile(settings: RemixSettings, patch: Patch, source: Source) {
     if (!next.segments && Math.abs(timeline.cuts[0]!.start - (next.trimStart + next.timeShift)) > 0.001)
       summary.push("The time shift stops at the source edge and preserves the selected duration.");
   }
-  if (summary.length) summary.push(`Export: ${output.width} × ${output.height}, ${display(timeline.outputDuration)} seconds.`);
+  if (summary.length) summary.push(`Export: ${output.width} × ${output.height}, ${display(footageTimeline(next.ownFootage, timeline.outputDuration).duration)} seconds.`);
   return { settings: next, summary };
 }
 
 /** Propose manual controls without touching attachments, source files or jobs. */
-export async function proposeManualPrompt({ settings, source, prompt, signal }: {
-  settings: RemixSettings; source: Source; prompt: string; signal: AbortSignal;
-}): Promise<{ settings: RemixSettings; summary: string[]; clarification?: string }> {
+export async function proposeManualPrompt({ settings, source, prompt, signal, assets = EMPTY_PROMPT_ASSETS }: {
+  settings: RemixSettings; source: Source; prompt: string; signal: AbortSignal; assets?: PromptAssets;
+}): Promise<{ settings: RemixSettings; summary: string[]; clarification?: string; switchTo?: "auto" }> {
   signal.throwIfAborted();
   if (typeof prompt !== "string" || !prompt.trim() || prompt.length > 2000 || /[\u0000-\u0008\u000b-\u001f\u007f]/u.test(prompt))
     throw new PromptEditError(400, "Describe the changes in 1–2,000 characters of plain text.");
@@ -161,7 +183,7 @@ export async function proposeManualPrompt({ settings, source, prompt, signal }: 
   try {
     raw = await jsonCompletion({ model, apiKey, signal, maxTokens: 2200, temperature: 0,
       messages: [{ role: "system", content: instructions }, { role: "user", content: JSON.stringify({
-        editingRequest: prompt.trim(), currentSettings,
+        editingRequest: prompt.trim(), currentSettings: sourcePromptContext(currentSettings, assets), assets: promptAssetCatalog(assets), availableStockProviders: stockProvidersForEdit(),
         source: { duration: source.duration, width: source.width, height: source.height, hasAudio: source.hasAudio },
         attachments: { audio: Boolean(audioId), captions: Boolean(subtitleId) },
       }) }],
@@ -175,11 +197,15 @@ export async function proposeManualPrompt({ settings, source, prompt, signal }: 
   if (!parsed.success) throw new PromptEditError(502, "The editing assistant returned an unsupported or invalid setting. Rephrase the request; nothing was changed.");
   const unchanged = (clarification: string) => ({ settings: structuredClone(settings), summary: [], clarification });
   if (parsed.data.clarification) return unchanged(parsed.data.clarification);
+  if (parsed.data.switchTo) return { settings: structuredClone(settings), summary: [], switchTo: parsed.data.switchTo };
   const patch = parsed.data.patch;
+  if (hasUngroundedBandText(patch, settings, prompt)) return unchanged("Include the exact text you want in the black bands.");
+  if (patch.callouts?.some(cue => !settings.callouts?.some(existing => existing.text === cue.text) && !normalized(prompt).includes(normalized(cue.text))))
+    return unchanged("Include the exact text for each on-screen overlay.");
   if (patch.hookText?.trim() && patch.hookText !== settings.hookText && !normalized(prompt).includes(normalized(patch.hookText)))
     return unchanged("Speech has not been analyzed in this workspace. Include the exact heading you want to use.");
   try {
-    const result = compile(settings, patch, source);
+    const result = compile(settings, patch, source, assets);
     return result.summary.length ? result : unchanged("Those settings already match this video, or no specific change was identified. Try a more specific request.");
   } catch (error) {
     if (error instanceof PromptEditError) throw error;

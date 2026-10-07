@@ -220,6 +220,33 @@ globalThis.fetch = async (input, init) => {
       assert.ok(!metadata.streams.some((stream: { codec_type: string }) => stream.codec_type === "audio"));
       assert.ok(Math.abs(Number(metadata.format.duration) - 4) < 0.1);
     });
+    await t.test("Auto prompt settings remain a proposal and render through the ordinary Auto action", async () => {
+      const count = (await jobs()).length;
+      await writeFile(replyPath, JSON.stringify({ patch: { durationMode: "full", captions: "keep",
+        blackBands: { enabled: true, topPercent: 20, bottomPercent: 20 }, visualSources: [] } }));
+      const route = `/api/sources/${source.id}/auto-prompt`;
+      const response = await request(route, { prompt: "Keep the full video with black bands and no added captions or B-roll",
+        options: { aspect: "9:16", targetDuration: 30, narration: false }, variants: 3 });
+      assert.equal(response.status, 200, await response.clone().text());
+      const proposal = await response.json();
+      assert.equal(proposal.options.blackBands.enabled, true);
+      assert.equal(proposal.options.durationMode, "full");
+      assert.equal(proposal.variants, 1);
+      assert.equal((await jobs()).length, count);
+      const render = await request("/api/auto/jobs", { items: [{ sourceId: source.id, options: proposal.options, variants: proposal.variants }] });
+      assert.equal(render.status, 201, await render.clone().text());
+      const child = await completed((await render.json()).jobs[0].id);
+      const plan = await planOf(child.id);
+      assert.equal(plan.settings.blackBands?.enabled, true);
+      assert.equal(plan.captions.length, 0);
+      assert.ok(Math.abs(plan.outputDuration - source.duration) < 0.1);
+      assert.ok(child.outputSize! > 1000);
+      const beforeCalls = (await calls()).length;
+      assert.equal((await request(route, { prompt: "Remix", options: { aspect: "invalid" }, variants: 1 })).status, 400);
+      assert.equal((await request(route, { prompt: "Remix", options: {}, variants: 11 })).status, 400);
+      assert.equal((await request(`/api/sources/${randomUUID()}/auto-prompt`, { prompt: "Remix", options: {}, variants: 1 })).status, 404);
+      assert.equal((await calls()).length, beforeCalls);
+    });
     await t.test("manual clarification and invalid settings do not queue exports or lose existing choices", async () => {
       const count = (await jobs()).length;
       await writeFile(replyPath, JSON.stringify({ patch: { muted: true }, clarification: "Which color style do you want?" }));

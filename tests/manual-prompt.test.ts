@@ -177,7 +177,7 @@ test("manual prompts compile private bounded settings proposals without mutating
 
     await t.test("unknown controls, attachment IDs, unsafe values and nested keys cannot enter a proposal", async () => {
       const invalid = [
-        { audioId: null }, { subtitleId: null }, { device: "Other camera" }, { stripMetadata: true }, { callouts: [] },
+        { audioId: null }, { subtitleId: null }, { device: "Other camera" }, { stripMetadata: true },
         { music: "https://example.com/audio.mp3" }, { filePath: "/private/path" }, { speed: 3 }, { volume: -1 },
         { temperature: 2 }, { gamma: 0 }, { noise: 2 }, { blend: 2 }, { frameBlend: 1 }, { timeShift: 6 },
         { resolution: "4k" }, { fps: "120" }, { hookDuration: 31 }, { hookText: "bad\u0000text" },

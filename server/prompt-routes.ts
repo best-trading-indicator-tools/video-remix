@@ -8,8 +8,9 @@ import { state } from "./store.js";
 import { brollAIConfigured } from "./broll-ai.js";
 import { stockBrollConfigured, stockProvidersForEdit } from "./stock-broll.js";
 import { proposePromptEdit, PromptEditError } from "./prompt-edit.js";
-import { proposeManualPrompt } from "./manual-prompt.js";
-import { settingsSchema } from "./schema.js";
+import { sourcePromptProposal } from "./source-prompt-routing.js";
+import { MAX_AUTO_VERSIONS } from "../shared/types.js";
+import { settingsSchema, autoOptionsSchema } from "./schema.js";
 import { manualPreviewSettings } from "./manual-preview.js";
 
 const requestSchema = z.object({
@@ -17,6 +18,7 @@ const requestSchema = z.object({
   prompt: z.string().trim().min(1).max(2000),
   draft: editPlanChangesSchema.optional(),
 }).strict();
+const autoRequestSchema = z.object({ prompt: z.string().trim().min(1).max(2000), options: autoOptionsSchema, variants: z.number().int().min(1).max(MAX_AUTO_VERSIONS) }).strict();
 const differs = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
 const manualRequestSchema = z.object({ prompt: z.string().trim().min(1).max(2000), settings: settingsSchema }).strict();
 
@@ -43,8 +45,9 @@ export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?:
 /** Suggestions are read-only. The existing revision route remains the sole renderer. */
 export function installPromptEditRoutes(app: Express) {
   const pending = new Map<string, AbortController>();
-  app.post("/api/sources/:id/edit-prompt", async (req, res) => {
-    const parsed = manualRequestSchema.safeParse(req.body);
+  app.post(["/api/sources/:id/edit-prompt", "/api/sources/:id/auto-prompt"], async (req, res) => {
+    const automatic = req.path.endsWith("/auto-prompt");
+    const parsed = automatic ? autoRequestSchema.safeParse(req.body) : manualRequestSchema.safeParse(req.body);
     if (!parsed.success) return void res.status(400).json({ error: "Describe your edit in 1–2,000 characters and check the current video settings." });
     const source = state.sources.find(item => item.id === req.params.id);
     if (!source) return void res.status(404).json({ error: "This source is no longer available. Import it again to make edits." });
@@ -55,10 +58,14 @@ export function installPromptEditRoutes(app: Express) {
     const disconnect = () => { if (!res.writableEnded) controller.abort(); };
     res.once("close", disconnect); pending.set(key, controller);
     try {
-      try { manualPreviewSettings(parsed.data.settings, source); }
-      catch (error) { throw new PromptEditError(400, error instanceof Error ? error.message : "Check the current trim and source settings."); }
-      const proposal = await proposeManualPrompt({ settings: parsed.data.settings, source,
-        prompt: parsed.data.prompt, signal: controller.signal });
+      const assets = { videos: state.broll.map(({ id, name, duration }) => ({ id, name, duration })), attachments: state.attachments.map(({ id, name, kind }) => ({ id, name, kind })) };
+      const data = parsed.data;
+      if ("settings" in data) {
+        try { manualPreviewSettings(data.settings, source); }
+        catch (error) { throw new PromptEditError(400, error instanceof Error ? error.message : "Check the current trim and source settings."); }
+      }
+      const context = { source, prompt: data.prompt, signal: controller.signal, assets };
+      const proposal = await sourcePromptProposal(context, data);
       controller.signal.throwIfAborted();
       if (!state.sources.includes(source)) return void res.status(409).json({ error: "This source was removed while preparing the suggestion. Select a source again." });
       res.json(proposal);

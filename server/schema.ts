@@ -134,7 +134,7 @@ export const normalizedSettings = (input: unknown) =>
     ...DEFAULT_SETTINGS,
     ...(typeof input === "object" && input ? input : {}),
   });
-export const autoOptionsSchema = z
+export const autoOptionsObject = z
   .object({
     blackBands: blackBandsSchema.optional(),
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
@@ -151,7 +151,8 @@ export const autoOptionsSchema = z
     editorialMode: z.enum(["off", "check", "repair"]).optional(),
     versionMode: z.enum(["moments", "angles"]).optional(),
   })
-  .strict()
+  .strict();
+export const autoOptionsSchema = autoOptionsObject
   .default({ aspect: "9:16", targetDuration: 45, narration: false })
   .transform(options => hasStockVisuals(options) ? { ...options, brollMatching: "ai" as const } : options);
 const autoVariantsSchema = z.number().int().min(1).max(MAX_AUTO_VERSIONS).default(1);

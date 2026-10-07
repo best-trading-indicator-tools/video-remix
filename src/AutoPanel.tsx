@@ -1,3 +1,4 @@
+import AutoPromptEditor from "./AutoPromptEditor";
 import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
@@ -17,6 +18,7 @@ import {
 import type {
   AutoCapabilities,
   AutoOptions,
+  RemixSettings,
   VideoSource,
 } from "../shared/types";
 import { MAX_AUTO_VERSIONS, isAutoTargetDuration } from "../shared/types";
@@ -50,6 +52,8 @@ export default function AutoPanel({
   capabilities,
   variants,
   onVariantsChange,
+  onPromptApply,
+  onPromptManual,
   onBrollSelectionChange,
   onLibraryBusyChange,
   onBrollRemoved,
@@ -74,6 +78,8 @@ export default function AutoPanel({
   capabilities: AutoCapabilities | null;
   variants: number;
   onVariantsChange: (value: number) => void;
+  onPromptManual: (settings: RemixSettings) => void;
+  onPromptApply: (value: { options: AutoOptions; variants: number }) => void;
   onBrollSelectionChange: (ids: string[]) => void;
   onLibraryBusyChange: (busy: boolean) => void;
   onBrollRemoved: (id: string) => void;
@@ -177,6 +183,8 @@ export default function AutoPanel({
             </small>
           )}
         </div>
+        {selectedSource && <AutoPromptEditor key={selectedSource.id} sourceId={selectedSource.id} options={options} variants={variants}
+          disabled={footageDisabled || libraryBusy} onApply={onPromptApply} onSwitchManual={onPromptManual} />}
         <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={onLengthChange} />
         <section className="auto-layout" aria-labelledby="auto-layout-title">
           <h3 id="auto-layout-title">Black bands &amp; text</h3>

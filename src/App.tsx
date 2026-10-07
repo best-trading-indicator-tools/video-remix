@@ -1664,6 +1664,8 @@ export default function App() {
                   capabilities={autoCapabilities}
                   variants={selectedAuto.variants}
                   onVariantsChange={(variants) => updateAuto({ variants })}
+                  onPromptManual={value => { if (selected) { setSettingsById(current => ({ ...current, [selected.id]: value })); setMode("manual"); notify("Prompt applied in Manual. Review the draft and render when ready.", "success"); } }}
+                  onPromptApply={value => { if (selected) setAutoById(current => ({ ...current, [selected.id]: autoPreset(value) })); }}
                   onBrollSelectionChange={(ids) =>
                     updateAuto({ options: { ...autoOptions, brollIds: ids } })
                   }
@@ -1691,6 +1693,10 @@ export default function App() {
                       )}
                     </span>
                   </div>
+                  {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
+                    disabled={starting || brollBusy || attachmentBusy !== null}
+                    onApply={value => setSettingsById(current => ({ ...current, [selected.id]: value }))}
+                    onSwitchAuto={value => { setAutoById(current => ({ ...current, [selected.id]: autoPreset(value) })); setMode("auto"); setAutoView("all"); notify("Prompt applied in Auto. Review the preferences and start remixing when ready.", "success"); }} />}
                   <div
                     className="settings-tabs"
                     role="tablist"
@@ -2271,8 +2277,6 @@ export default function App() {
                   <div className="manual-workflow-tools">
                     <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={ownFootage => updateSettings({ ownFootage })} disabled={starting} />
                     <FinishingPresets mode="manual" settings={settings} disabled={starting || brollBusy || attachmentBusy !== null} onApply={patch => updateSettings({ ...patch, blackBands: applyBandFinish(settings.blackBands, patch.blackBands) })} />
-                    {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
-                      disabled={starting || brollBusy || attachmentBusy !== null} onApply={replaceSettings} />}
                   </div>
                   <div className="settings-footer">
                     <button
