@@ -49,6 +49,7 @@ import {
   Layers3,
   LoaderCircle,
   MonitorPlay,
+  Play,
   Plus,
   RefreshCw,
   RotateCcw,
@@ -1106,6 +1107,8 @@ export default function App() {
   };
   const visibleJobs = jobs.filter(job => matchesExport(job, libraryFilters));
   const visibleCompleted = visibleJobs.filter(job => job.status === 'completed');
+  const flaggedExports = visibleCompleted.filter(job => job.finishedReviewReport?.issues.length);
+  const flaggedMomentCount = flaggedExports.reduce((sum, job) => sum + job.finishedReviewReport!.issues.length, 0);
   const unreviewed = visibleCompleted.filter(job => reviewStatus(job.review) === 'unreviewed');
   const accepted = visibleCompleted.filter(job => reviewStatus(job.review) === 'accepted');
   const projects = [...new Set([...sources.map(source => source.project), ...jobs.map(job => job.project)].filter((project): project is string => !!project))].sort();
@@ -2531,12 +2534,20 @@ export default function App() {
               {accepted.length > 300 && <span>Narrow your filters to download up to 300 accepted exports at once.</span>}
               <button className="secondary-button" onClick={() => setPublishing({ job: null })}>App profiles &amp; scheduled posts</button>
             </div>
-            {visibleCompleted.some(job => job.finishedReviewReport?.issues.length) && <details className="export-review-queue" open>
-              <summary>Review flagged moments · {visibleCompleted.reduce((sum, job) => sum + (job.finishedReviewReport?.issues.length || 0), 0)} findings</summary>
-              <p>Open a timestamp to review its picture and sound. Use Edit this moment to make a correction.</p>
-              <ul>{visibleCompleted.filter(job => job.finishedReviewReport?.issues.length).map(job => <li key={job.id}>
-                <strong>{job.summary?.title || job.sourceName}</strong>
-                {job.finishedReviewReport!.issues.map((issue, index) => <button type="button" className="secondary-button" key={index} onClick={() => { pendingExportSeek.current = issue.start; setPreviewJob(job); }}>{duration(issue.start)} · {issue.message}</button>)}
+            {flaggedMomentCount > 0 && <details className="export-review-queue" open>
+              <summary>Review flagged moments · {flaggedMomentCount} {flaggedMomentCount === 1 ? 'finding' : 'findings'}</summary>
+              <p>Watch the finished export with your edits applied, starting at a flagged moment. Use Edit this moment in the player to make a correction.</p>
+              <ul>{flaggedExports.map(job => <li key={job.id}>
+                <strong>{exportTitle(job)}</strong>
+                {job.finishedReviewReport!.issues.map((issue, index) => <div className="flagged-moment" key={index}>
+                  <p id={`flagged-moment-${job.id}-${index}`}>{issue.message}</p>
+                  <button type="button" className="secondary-button flagged-moment-watch" aria-haspopup="dialog"
+                    aria-label={`Watch export at ${duration(issue.start)} — ${exportTitle(job)}`}
+                    aria-describedby={`flagged-moment-${job.id}-${index}`}
+                    onClick={() => { pendingExportSeek.current = issue.start; setPreviewJob(job); }}>
+                    <Play size={17} fill="currentColor" aria-hidden="true" />Watch export at {duration(issue.start)}
+                  </button>
+                </div>)}
               </li>)}</ul>
             </details>}
             {!!jobs.length && !visibleJobs.length && <div className="library-empty"><h3>No matching exports</h3><p>Change the filters to see more of your library.</p><button className="secondary-button" onClick={() => setLibraryFilters({ ...EMPTY_FILTERS })}>Clear filters</button></div>}
