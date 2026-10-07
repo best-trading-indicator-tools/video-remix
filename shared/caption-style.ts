@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const CAPTION_FONTS = {
   classic: { label: "Classic sans", family: "DejaVu Sans", css: '"DejaVu Sans", Arial, sans-serif' },
+  "tiktok-sans": { label: "TikTok Sans", family: "TikTok Sans 16pt", css: '"Caption TikTok Sans", sans-serif' },
   poppins: { label: "Poppins · clean", family: "Poppins", css: '"Caption Poppins", sans-serif' },
   anton: { label: "Anton · punchy", family: "Anton", css: '"Caption Anton", sans-serif' },
   serif: { label: "DM Serif · editorial", family: "DM Serif Display", css: '"Caption Serif", serif' },
@@ -11,7 +12,7 @@ const color = z.string().regex(/^#[0-9a-fA-F]{6}$/u, "Use a six-digit hex color"
 export const captionStyleSchema = z.object({
   fontSize: z.number().finite().min(12).max(40),
   bottomPercent: z.number().finite().min(5).max(80),
-  fontFamily: z.enum(["classic", "poppins", "anton", "serif"]).optional(),
+  fontFamily: z.enum(["classic", "tiktok-sans", "poppins", "anton", "serif"]).optional(),
   color: color.optional(), bold: z.boolean().optional(), italic: z.boolean().optional(),
   uppercase: z.boolean().optional(),
   outlineWidth: z.number().finite().min(0).max(5).optional(), outlineColor: color.optional(),

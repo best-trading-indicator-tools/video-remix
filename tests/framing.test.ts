@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
@@ -10,6 +10,7 @@ import { probeMedia, renderVideo } from "../server/engine.js";
 import type { SupportingVisual } from "../server/visuals.js";
 import { DEFAULT_BLACK_BANDS, blackBandGeometry } from "../shared/black-bands.js";
 import { randomUUID } from "node:crypto";
+import { captionAssStyle, DEFAULT_CAPTION_STYLE } from "../shared/caption-style.js";
 
 const exec = promisify(execFile);
 const ffmpeg = (args: string[]) => exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "1", ...args], { encoding: "buffer", maxBuffer: 8 * 1024 * 1024 });
@@ -227,6 +228,9 @@ test("caption fonts, colors, outlines, alignment and translucent boxes change re
   assert.ok(right.redX - left.redX > left.width * 0.4, "Alignment must move actual glyphs");
   const anton = await renderStyle({ alignment: "left", fontFamily: "anton" });
   assert.notDeepEqual(anton.pixels, left.pixels, "Bundled font choice changes rendered letterforms");
+  const tiktok = await renderStyle({ alignment: "left", fontFamily: "tiktok-sans" });
+  assert.ok(tiktok.redCount > 30, "TikTok Sans must draw visible captions");
+  assert.notDeepEqual(tiktok.pixels, left.pixels, "TikTok Sans must reach the exported pixels");
   const bold = await renderStyle({ alignment: "left", bold: true });
   assert.ok(bold.redCount > left.redCount, "The bundled bold face adds real glyph weight");
   const box = await renderStyle({ background: "box", backgroundColor: "#0000ff", backgroundOpacity: 100 });
@@ -235,4 +239,18 @@ test("caption fonts, colors, outlines, alignment and translucent boxes change re
   assert.equal(transparent.blueCount, 0, "A fully transparent box must not cover the video");
   const upper = await renderStyle({ alignment: "left", uppercase: true, italic: true, letterSpacing: 1, shadow: 1 });
   assert.notDeepEqual(upper.pixels, left.pixels, "Uppercase, italic and spacing reach the render");
+});
+
+test("TikTok Sans resolves all four bundled faces without a system-font fallback", async () => {
+  await cp(new URL('../public/caption-fonts', import.meta.url), path.join(directory, 'fonts'), { recursive: true });
+  await writeFile(path.join(directory, 'tiktok.srt'), '1\n00:00:00,000 --> 00:00:01,000\nTikTok Sans captions\n');
+  for (const bold of [false, true]) for (const italic of [false, true]) {
+    const style = captionAssStyle({ ...DEFAULT_CAPTION_STYLE, fontFamily: 'tiktok-sans', bold, italic });
+    const { stderr } = await exec('ffmpeg', ['-hide_banner', '-nostdin', '-f', 'lavfi', '-i', 'color=black:size=360x640:rate=1:duration=1',
+      '-vf', `subtitles=filename=tiktok.srt:fontsdir=fonts:force_style='${style}'`, '-frames:v', '1', '-f', 'null', '-'], { cwd: directory });
+    const selection = stderr.split('\n').find(line => line.includes('fontselect:')) || '';
+    assert.match(selection, /-> TikTokSans16pt-/, `Expected a bundled TikTok Sans face: ${selection}`);
+    assert.equal(selection.includes('Bold'), bold, `Bold must use the correct face: ${selection}`);
+    assert.equal(selection.includes('Italic'), italic, `Italic must use the correct face: ${selection}`);
+  }
 });

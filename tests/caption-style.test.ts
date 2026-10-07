@@ -9,7 +9,8 @@ test("caption styling preserves legacy records and round-trips through Auto, man
   const old = { fontSize: 20, bottomPercent: 100 / 12 };
   assert.deepEqual(captionStyleSchema.parse(old), old);
   assert.equal(captionAssStyle(old), captionAssStyle(DEFAULT_CAPTION_STYLE));
-  for (const { style } of CAPTION_PRESETS) {
+  const tiktokStyles = [false, true].flatMap(bold => [false, true].map(italic => ({ ...DEFAULT_CAPTION_STYLE, fontFamily: 'tiktok-sans' as const, bold, italic })));
+  for (const style of [...CAPTION_PRESETS.map(preset => preset.style), ...tiktokStyles]) {
     assert.deepEqual(settingsSchema.parse({ ...DEFAULT_SETTINGS, captionStyle: style }).captionStyle, style);
     assert.deepEqual(autoOptionsSchema.parse({ ...DEFAULT_AUTO_OPTIONS, captionStyle: style }).captionStyle, style);
     for (const mode of ["auto", "manual"] as const) {

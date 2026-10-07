@@ -108,6 +108,15 @@ test('source prompts expose supported editing controls and preserve reviewable d
       const matching = await auto({ captions: 'add' }, { ...options, captions: 'add' }, 3);
       assert.equal(matching.unchanged, true); assert.equal(matching.clarification, undefined);
     });
+    await t.test('TikTok Sans is available through Auto and Manual prompt proposals', async () => {
+      const patch = { captionStyle: { fontFamily: 'tiktok-sans', bold: true } };
+      const automatic = await auto(patch);
+      assert.equal(automatic.options.captionStyle?.fontFamily, 'tiktok-sans');
+      assert.match(automatic.summary.join(' '), /TikTok Sans/);
+      const manualResult = await manual(patch);
+      assert.equal(manualResult.settings.captionStyle?.fontFamily, 'tiktok-sans');
+      assert.match(manualResult.summary.join(' '), /TikTok Sans/);
+    });
     await t.test('full video and narration dependencies are explicit and contradictory requests stay unchanged', async () => {
       const options: AutoOptions = { ...DEFAULT_AUTO_OPTIONS, narration: true, versionMode: 'angles' };
       const result = await auto({ durationMode: 'full' }, options, 4);

@@ -505,7 +505,7 @@ async function prepareCaptionFonts(workDir: string, temporary: string[]) {
   if (!directory) throw new Error("Bundled caption fonts are missing. Restore public/caption-fonts or run npm run build.");
   const destination = path.join(workDir, name);
   temporary.push(destination);
-  // The bundled fonts total about 1 MB. A private copy avoids symlink privileges
+  // A private copy of the bundled fonts avoids symlink privileges
   // and also works when the project and workspace are on different drives.
   await cp(directory, destination, { recursive: true });
   return name;

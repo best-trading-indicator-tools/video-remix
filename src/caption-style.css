@@ -1,3 +1,7 @@
+@font-face { font-family: "Caption TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Caption TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
+@font-face { font-family: "Caption TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-RegularItalic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }
+@font-face { font-family: "Caption TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; }
 @font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-Regular.ttf") format("truetype"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-Bold.ttf") format("truetype"); font-weight: 700; font-display: swap; }
 @font-face { font-family: "Caption Poppins"; src: url("/caption-fonts/Poppins-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; }

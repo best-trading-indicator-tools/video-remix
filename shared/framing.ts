@@ -38,7 +38,7 @@ export function textLayoutIssues(plan: Pick<EditPlan, "settings" | "captions">, 
   const style = resolveCaptionStyle(settings.captionStyle);
   const captionSize = style.fontSize / 288;
   const captionBottom = 1 - style.bottomPercent / 100;
-  const letterWidth = { classic: 0.55, poppins: 0.6, anton: 0.48, serif: 0.57 }[style.fontFamily] * (style.bold ? 1.04 : 1) * (style.uppercase ? 1.1 : 1);
+  const letterWidth = { classic: 0.55, "tiktok-sans": 0.55, poppins: 0.6, anton: 0.48, serif: 0.57 }[style.fontFamily] * (style.bold ? 1.04 : 1) * (style.uppercase ? 1.1 : 1);
   const captionColumns = Math.max(8, Math.floor(aspect * 0.9 / (captionSize * letterWidth + style.letterSpacing / 288)));
   const padding = ((style.background === "box" ? 3 : style.outlineWidth) + style.shadow) / 288;
   for (const caption of captions) boxes.push({ kind: "caption", top: captionBottom - captionSize * wrappedLines(style.uppercase ? caption.text.toUpperCase() : caption.text, captionColumns) * 1.2 - padding, bottom: captionBottom + padding, start: caption.start, end: caption.end });

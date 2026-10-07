@@ -246,7 +246,7 @@ letter spacing, alignment, bottom spacing and background opacity. A background b
 replaces the outline. The type sample and draft preview update immediately; render
 a revision to check the final placement and wrapping in the MP4.
 
-Poppins, Anton and DM Serif are bundled locally with their font licenses. Classic
+TikTok Sans, Poppins, Anton and DM Serif are bundled locally with their font licenses. Choose **Font family → TikTok Sans**, or ask a prompt to “Use TikTok Sans captions.” Its regular, bold, italic and bold italic faces work in previews and exports; the setting also follows Auto's selected-video scope. Classic
 sans keeps the existing system-font fallback. Size scales with export resolution.
 One style applies to all added captions, including imported SRT cues; embedded SRT
 font overrides are replaced by that style. Caption wording and timing stay saved
