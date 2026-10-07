@@ -1,4 +1,5 @@
 import { historyRecords, reconcileHistory } from "./store.js";
+import { withJobUsage } from "./job-usage.js";
 import { AI_REQUEST_BUDGET_MS } from "./ai-json.js";
 import { createHash } from "node:crypto";
 import type { Express } from "express";
@@ -52,11 +53,11 @@ export function installEditorialReviewRoutes(app: Express, options: ReviewRouteO
       let sourcePath = source?.filePath;
       if (source) try { await assertLinkedSourceUnchanged(source); }
       catch { controller.signal.throwIfAborted(); sourcePath = undefined; }
-      const report = await reviewEditorialPlan({ plan: structuredClone(originalPlan),
+      const report = await withJobUsage(job, () => reviewEditorialPlan({ plan: structuredClone(originalPlan),
         transcript: job.sourceTranscript ? structuredClone(job.sourceTranscript) : undefined,
         sourcePath, visualReviewer: options.visualReviewer,
         signal: controller.signal, ...(options.reviewer ? { reviewer: options.reviewer } : {}),
-      });
+      }));
       controller.signal.throwIfAborted();
       if (!state.jobs.includes(job)) return res.status(409).json({ error: "The export was removed while its review was running." });
       if (job.status !== "completed" || running(job.id) || job.editPlan !== originalPlan ||

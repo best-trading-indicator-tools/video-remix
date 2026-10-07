@@ -1,4 +1,5 @@
 import { historyRecords, reconcileHistory } from "./store.js";
+import { withJobUsage } from "./job-usage.js";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { rm } from "node:fs/promises";
@@ -25,7 +26,7 @@ export function installFinishedReviewRoutes(app: Express, dependencies: Finished
     res.once("close", disconnected);
     const directory = path.join(paths.work, `review-${randomUUID()}`);
     try {
-      const report = await reviewJobFinished(job, state.sources.find(item => item.id === job.sourceId), controller.signal, directory, undefined, dependencies);
+      const report = await withJobUsage(job, () => reviewJobFinished(job, state.sources.find(item => item.id === job.sourceId), controller.signal, directory, undefined, dependencies));
       controller.signal.throwIfAborted();
       if (!state.jobs.includes(job) || job.status !== "completed" || isRunning(job.id))
         return res.status(409).json({ error: "The export changed or was removed during review." });

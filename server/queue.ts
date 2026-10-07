@@ -1,4 +1,5 @@
 import { historyRecords, historyMatches } from "./store.js";
+import { withJobUsage } from "./job-usage.js";
 import { reviewJobFinished } from "./finished-review-jobs.js";
 import { visualIdentity } from "./visual-identity.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
@@ -123,7 +124,7 @@ async function trackEditorialReview<T>(job: StoredJob, budgetMs: number,
 
 /** Release the worker even if output cleanup or history construction itself throws. */
 async function runWithRelease(job: StoredJob, controller: AbortController) {
-  try { await run(job, controller); }
+  try { await withJobUsage(job, () => run(job, controller)); }
   catch (error) {
     console.error(`Unable to finish export cleanup [${job.id}]:`, error);
     if (job.status === "processing") {

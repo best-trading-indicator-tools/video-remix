@@ -425,6 +425,7 @@ export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  deepseekUsage?: import("./deepseek-usage.js").DeepSeekUsage;
   project?: string;
   review?: ExportReview;
   publicationStatus?: "unpublished" | "scheduled" | "published";

@@ -1,4 +1,5 @@
 import { installApiKeyRoutes } from "./api-key-routes.js";
+import { installDeepSeekBalanceRoutes } from "./deepseek-balance.js";
 import { installWorkspaceRoutes } from "./workspace-routes.js";
 import { installExportTools } from "./export-tools.js";
 import { installExportSelectionRoutes } from "./export-selection.js";
@@ -162,6 +163,7 @@ export function createApp() {
     next();
   });
   installApiKeyRoutes(app);
+  installDeepSeekBalanceRoutes(app);
   app.use(express.json({ limit: "512kb" }));
   installWorkspaceRoutes(app);
   installExportSelectionRoutes(app);

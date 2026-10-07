@@ -48,7 +48,9 @@ test("automatic finished reviews persist and HTTP rechecks update only the repor
       const request = JSON.parse(String(options?.body));
       const metadata = JSON.parse(request.messages[1].content[0].text);
       assert.ok(request.messages[1].content.some((part: { type: string }) => part.type === "image_url"));
-      return new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(pass(metadata.samples)) } }] }), { status: 200 });
+      return new Response(JSON.stringify({ model: 'deepseek-flash', usage: { prompt_tokens: 100, prompt_cache_hit_tokens: 40,
+        prompt_cache_miss_tokens: 60, completion_tokens: 20, total_tokens: 120 },
+        choices: [{ finish_reason: "stop", message: { content: JSON.stringify(pass(metadata.samples)) } }] }), { status: 200 });
     };
     pumpQueue();
     const deadline = Date.now() + 20000;
@@ -56,6 +58,10 @@ test("automatic finished reviews persist and HTTP rechecks update only the repor
     assert.equal(job.status, "completed", job.error);
     assert.equal(job.finishedReviewReport?.status, "partial", "Missing local audio evidence remains visible without failing the render");
     assert.ok(providerCalls > 0); assert.ok(job.downloadUrl);
+    assert.equal(job.deepseekUsage?.requests, providerCalls);
+    assert.equal(job.deepseekUsage?.reportedRequests, providerCalls);
+    assert.equal(job.deepseekUsage?.totalTokens, providerCalls * 120);
+    assert.ok(job.deepseekUsage!.estimatedUsd.min > 0);
     assert.deepEqual(state.history[0]?.finishedReviewReport, job.finishedReviewReport);
     const before = createHash("sha256").update(await readFile(job.outputPath)).digest("hex");
     const settings = structuredClone(job.settings);
@@ -71,6 +77,11 @@ test("automatic finished reviews persist and HTTP rechecks update only the repor
       },
       vision: async samples => {
         if (waitForRelease) await new Promise<void>(resolve => { held = { release: resolve }; });
+        const { jsonCompletion } = await import('../server/ai-json.js');
+        await jsonCompletion({ model: 'deepseek-flash', apiKey: 'synthetic-test-key', signal: new AbortController().signal,
+          maxTokens: 100, messages: [], fetcher: async () => Response.json({ model: 'deepseek-flash',
+            usage: { prompt_tokens: 50, prompt_cache_hit_tokens: 0, completion_tokens: 10, total_tokens: 60 },
+            choices: [{ finish_reason: 'stop', message: { content: '{}' } }] }) });
         return pass(samples);
       },
     });
@@ -82,16 +93,19 @@ test("automatic finished reviews persist and HTTP rechecks update only the repor
     await t.test("finished report can be rechecked and persisted without mutating the export or settings", async () => {
       assert.equal((await post("unknown")).status, 404);
       assert.equal((await post(id, { settings: {} })).status, 400);
+      const priorTokens = job.deepseekUsage!.totalTokens;
       const response = await post(); assert.equal(response.status, 200);
       const result = await response.json() as StoredJob;
       assert.equal(result.finishedReviewReport?.status, "pass");
       assert.equal(result.finishedReviewReport?.audio.captionWindowsCompared, 1);
       assert.equal(result.outputPath, undefined); assert.equal(result.sourceTranscript, undefined);
+      assert.equal(result.deepseekUsage?.totalTokens, priorTokens + 60);
       assert.equal(state.jobs.length, 1); assert.deepEqual(job.settings, settings);
       assert.equal(createHash("sha256").update(await readFile(job.outputPath)).digest("hex"), before);
       const persisted = JSON.parse(await readWorkspaceFile(path.join(directory, "data", "state.json"), "utf8"));
       assert.deepEqual(persisted.history[0].finishedReviewReport, result.finishedReviewReport);
       assert.deepEqual(persisted.jobs[0].finishedReviewReport, result.finishedReviewReport);
+      assert.deepEqual(persisted.jobs[0].deepseekUsage, result.deepseekUsage);
     });
     await t.test("duplicate in-flight reviews are rejected and a removed export cannot receive stale results", async () => {
       waitForRelease = true;

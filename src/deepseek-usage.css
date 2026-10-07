@@ -1,0 +1,15 @@
+.deepseek-balance { display: grid; gap: 12px; margin: 0 0 22px; padding: 18px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-raised); }
+.deepseek-balance-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.deepseek-balance-heading > strong { font-size: 14px; }
+.deepseek-balances { display: flex; gap: 20px; flex-wrap: wrap; }
+.deepseek-balances > div { display: grid; gap: 6px; }
+.deepseek-balances strong { font-size: 19px; }
+.deepseek-balance p, .deepseek-balances span, .deepseek-usage p, .deepseek-unrecorded { margin: 0; color: var(--subtle); font-size: 12px; line-height: 1.6; }
+.deepseek-usage, .deepseek-unrecorded { margin: 8px 0; }
+.deepseek-usage summary { cursor: pointer; color: var(--text); font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.deepseek-usage dl { display: grid; gap: 4px; margin: 10px 0; font-size: 12px; }
+.deepseek-usage dl > div { display: flex; justify-content: space-between; gap: 12px; }
+.deepseek-usage dt { color: var(--subtle); }
+.deepseek-usage dd { margin: 0; font-variant-numeric: tabular-nums; }
+.deepseek-usage p { margin-top: 8px; }
+.deepseek-usage a { color: var(--accent); text-decoration: underline; }

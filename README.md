@@ -267,6 +267,31 @@ Prompts can also request “Use Cyrillic lookalikes only for Sample-12 in captio
 or “Turn off Cyrillic lookalikes.” Changing spelling does not guarantee a platform's
 moderation or recommendation outcome.
 
+### DeepSeek usage and remaining balance
+
+**Exports** shows a **DeepSeek credit balance** panel with the account's remaining
+USD and/or CNY, including granted and topped-up funds. **Refresh balance** reads
+DeepSeek's balance API; the checked time is shown. The balance is account-wide,
+including other applications using the same account. CNY is kept in CNY, without
+an invented USD conversion. A missing key or provider error shows an explanation,
+never a guessed zero balance.
+
+Each export card and preview shows recorded DeepSeek tokens and an **estimated USD
+cost**. Expand it for input, cached-input and output totals, models and request counts.
+The estimate uses the [published off-peak and peak rates](https://api-docs.deepseek.com/quick_start/pricing/)
+verified on October 7, 2026; the range allows for the applicable billing schedule.
+Provider prices may change, so this is not an invoice. Unknown model prices and
+missing usage reports are explicitly marked incomplete. DeepSeek reports tokens
+and a monetary balance, not a separate credit count.
+
+Usage is saved per export from new API requests, including retries, follow-up
+reviews and prompts in the saved export editor. Separate revisions have separate
+counters. Prompts before an export exists are outside its total; shared/cached
+analysis is counted on the export that made the API request, without charging it
+again on reuse. Failed or interrupted requests can lack usage reports. Older
+exports cannot be backfilled and show **usage not recorded**. The app does not
+subtract account balances to attribute costs to simultaneously running exports.
+
 ### Complete-idea selection
 
 Auto considers shorter sentence-aligned ideas and their neighboring context,

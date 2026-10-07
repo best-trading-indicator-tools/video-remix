@@ -2,6 +2,7 @@ import SourceProtection from './SourceProtection';
 import LibraryFilters from './LibraryFilters';
 import ProjectField from './ProjectField';
 import ExportDecision from './ExportDecision';
+import { DeepSeekBalancePanel, DeepSeekUsageSummary } from "./DeepSeekUsage";
 import RetentionNotice, { expiryText } from './RetentionNotice';
 import { EMPTY_FILTERS, matchesExport, reviewStatus } from '../shared/library';
 import { MAX_EXPORT_SELECTION, exportRevisionFamilies, selectableExports } from '../shared/export-selection';
@@ -2549,6 +2550,7 @@ export default function App() {
                 Back to workspace
               </button>
             </div>
+            <DeepSeekBalancePanel refreshKey={jobs.filter(job => !['queued', 'processing'].includes(job.status)).map(job => `${job.id}:${job.deepseekUsage?.reportedRequests ?? 0}`).join('|')} />
             <LibraryFilters value={libraryFilters} onChange={setLibraryFilters} projects={projects} />
             <p className="library-result-count" role="status">{visibleJobs.length} of {jobs.length} exports · {unreviewed.length} unreviewed · {accepted.length} accepted</p>
             <ExportBulkActions available={selectableJobs} selected={exportSelection.selected} busy={exportSelectionBusy}
@@ -2734,6 +2736,7 @@ export default function App() {
                                 </p>
                               )}
                               {job.status === "processing" && <JobProgress job={job} />}
+                              <DeepSeekUsageSummary job={job} />
                               <details className="export-card-details"><summary>Details &amp; checks</summary>
                               <p className="job-source-name" title={job.sourceName}>{job.sourceName}</p>
                               {job.summary && (
@@ -2971,6 +2974,7 @@ export default function App() {
               playsInline
               autoPlay
             />
+            <DeepSeekUsageSummary job={jobs.find(job => job.id === previewJob.id) ?? previewJob} />
             <QualityReportSummary report={previewJob.qualityReport} />
             <FinishedReviewSummary report={previewJob.finishedReviewReport}
               onSeek={time => { if (exportVideoRef.current) exportVideoRef.current.currentTime = time; }}

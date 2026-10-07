@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { setTimeout as delay } from "node:timers/promises";
 import { AIRequestError } from "./ai-errors.js";
+import { beginDeepSeekRequest } from "./deepseek-usage.js";
 const throwIfAborted = (signal: AbortSignal) => signal.throwIfAborted();
 
 export const AI_MAX_ATTEMPTS = 4;
@@ -97,6 +98,7 @@ async function completionAttempt({
   if (temperature !== undefined && (!Number.isFinite(temperature) || temperature < 0 || temperature > 2))
     throw new Error("Invalid provider temperature");
   const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(45_000)]);
+  const recordUsage = await beginDeepSeekRequest(model);
   let response: Response;
   try { response = await fetcher("https://api.deepseek.com/chat/completions", {
     method: "POST",
@@ -164,6 +166,9 @@ async function completionAttempt({
   let raw: unknown;
   try { raw = JSON.parse(Buffer.concat(chunks).toString("utf8")); }
   catch { throw new AIRequestError("invalid-response"); }
+  // A truncated/invalid model answer still consumes tokens. Record its envelope
+  // before content validation so subsequent retries cannot hide that usage.
+  await recordUsage(raw);
   const parsed = z
     .object({
       choices: z

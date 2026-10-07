@@ -1,4 +1,5 @@
 import type { Express } from "express";
+import { withJobUsage } from "./job-usage.js";
 import { z } from "zod";
 import type { EditPlan, EditPlanChanges, PromptEditResponse, Transcript } from "../shared/types.js";
 import { applyEditPlanChanges, editPlanChangesSchema } from "./edit-plan.js";
@@ -106,8 +107,8 @@ export function installPromptEditRoutes(app: Express) {
       }
       const canRefreshBroll = stockBrollConfigured(stockProvidersForEdit(parent.auto)) &&
         brollAIConfigured();
-      const proposal = await proposePromptEdit({ plan: effective, prompt, signal: controller.signal,
-        sourceTranscript: parent.sourceTranscript, canRefreshBroll, pendingBrollCount: draft?.refreshBroll ? draft.brollCount : undefined });
+      const proposal = await withJobUsage(parent, () => proposePromptEdit({ plan: effective, prompt, signal: controller.signal,
+        sourceTranscript: parent.sourceTranscript, canRefreshBroll, pendingBrollCount: draft?.refreshBroll ? draft.brollCount : undefined }));
       controller.signal.throwIfAborted();
       if (!state.jobs.includes(parent) || parent.editPlan !== baseline || !state.sources.some(source => source.id === parent.sourceId))
         return void res.status(409).json({ error: "This edit is no longer available. Reload your exports." });
