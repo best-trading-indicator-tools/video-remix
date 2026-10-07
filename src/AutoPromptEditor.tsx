@@ -9,6 +9,7 @@ const identityOf = (value: unknown) => JSON.stringify(value, (_key, item: unknow
 
 const examples = [
   { label: 'Captions & bands', prompt: 'Add bold yellow captions and black bands above and below the picture.' },
+  { label: 'Upper-band text', prompt: 'Add "YOUR TITLE" in Cyrillic lookalikes, white, medium size, in the upper black band.' },
   { label: 'Add my ending clip', prompt: 'Append my uploaded ending clip in full after each video, keeping its audio. Ask me to name the clip if more than one could match.' },
   { label: 'Add B-roll', prompt: 'Add 4 relevant B-roll shots, covering at most 50% of the video.' },
   { label: 'Animated visuals', prompt: 'Add supporting animations using Remotion.' },

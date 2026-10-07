@@ -1,11 +1,15 @@
 .black-bands-editor { display: grid; gap: 14px; width: 100%; min-width: 0; padding: 16px 0; }
 .black-bands-editor > label { display: grid; gap: 8px; font-size: 12px; }
-.black-bands-editor > .black-bands-toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.black-bands-editor .black-bands-toggle { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
 .black-bands-toggle input { width: 16px; height: 16px; margin: 2px 0; accent-color: #ea8454; }
 .black-bands-toggle span { display: grid; gap: 5px; }
 .black-bands-toggle small, .black-bands-hint { color: #93949c; font-size: 11px; line-height: 1.6; margin: 0; }
 .black-bands-editor select, .black-bands-editor textarea { width: 100%; min-width: 0; color: inherit; background: #15161b; border: 1px solid #36373d; border-radius: 7px; padding: 10px; font: inherit; }
 .black-bands-editor textarea { resize: vertical; line-height: 1.5; }
+.band-text-editor { display: grid; gap: 12px; min-width: 0; margin: 0; padding: 12px; border: 1px solid #36373d; border-radius: 7px; font-size: 12px; }
+.band-text-editor legend { padding: 0 5px; }
+.band-text-color { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.band-text-color input { width: 38px; height: 28px; padding: 2px; border: 1px solid #36373d; border-radius: 5px; background: #15161b; cursor: pointer; }
 .black-bands-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; }
 .black-bands-overlay ~ .caption-overlay { z-index: 3; }
 .black-bands-overlay ~ .edit-platform-guide { z-index: 4; }

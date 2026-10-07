@@ -4,7 +4,7 @@ import { captionDisplayText } from "./caption-text.js";
 
 import { wrapEditorialText } from "./text-wrap.js";
 export { wrapEditorialText } from "./text-wrap.js";
-import { bandTextLayout } from "./black-bands.js";
+import { bandTextAppearance, bandTextLayout } from "./black-bands.js";
 
 // Estimates for editor guidance; font shaping and platform overlays vary by device.
 export function textLayoutIssues(plan: Pick<EditPlan, "settings" | "captions">, outputAspect?: number): QualityIssue[] {
@@ -27,12 +27,13 @@ export function textLayoutIssues(plan: Pick<EditPlan, "settings" | "captions">, 
     const columns = Math.max(8, Math.floor(aspect * 0.84 / (size * 0.64)));
     boxes.push({ kind: "callout", top: contentTop + contentHeight * 0.24 - size * 0.45, bottom: contentTop + contentHeight * 0.24 + size * (wrapEditorialText(callout.text, columns).split("\n").length * 1.25 + 0.45), start: callout.start, end: callout.end });
   }
-  if (bands) for (const [text, bandHeight, bandTop, kind] of [
-    [bands.topText, contentTop, 0, "top band text"],
-    [bands.bottomText, bands.bottomPercent / 100, 1 - bands.bottomPercent / 100, "bottom band text"],
+  if (bands) for (const [side, bandHeight, bandTop, kind] of [
+    ["top", contentTop, 0, "top band text"],
+    ["bottom", bands.bottomPercent / 100, 1 - bands.bottomPercent / 100, "bottom band text"],
   ] as const) {
-    if (!text.trim()) continue;
-    const layout = bandTextLayout(text, aspect * 1000, 1000, bandHeight * 1000, bands.fontPercent);
+    const appearance = bandTextAppearance(bands, side);
+    if (!appearance.text.trim()) continue;
+    const layout = bandTextLayout(appearance.text, aspect * 1000, 1000, bandHeight * 1000, appearance.fontPercent);
     const textHeight = layout.text.split("\n").length * layout.fontSize * 1.25 / 1000;
     boxes.push({ kind, top: bandTop + (bandHeight - textHeight) / 2, bottom: bandTop + (bandHeight + textHeight) / 2, start: 0, end: Infinity });
   }

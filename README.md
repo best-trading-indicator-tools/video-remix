@@ -267,6 +267,15 @@ Prompts can also request “Use Cyrillic lookalikes only for Sample-12 in captio
 or “Turn off Cyrillic lookalikes.” Changing spelling does not guarantee a platform's
 moderation or recommendation outcome.
 
+Black-band text has its own color, size and Cyrillic-lookalike controls for each band.
+In Auto Quick or All settings, Manual, or a saved export's prompt editor, try:
+“Add BPC157 in cyrillic white font medium size font in upper band.” This enables
+the bands and displays **ВРС157** in white, centered in the upper band throughout
+the video. Medium is 5.4% of the shorter canvas dimension, shrinking if needed to fit.
+The editable text stays `BPC157`; the lower band and speech-caption styles stay
+unchanged. In Auto, **Apply changes to → Selected videos** applies the reviewed
+prompt to the checked videos. Per-band appearance also follows My style and presets.
+
 ### DeepSeek usage and remaining balance
 
 **Exports** shows a **DeepSeek credit balance** panel with the account's remaining
@@ -513,7 +522,7 @@ captions smaller and move them up”, or “keep the first 20 seconds”. Choose
 **Render this revision** button creates the corrected export. **Undo last prompt**
 restores the previous draft; manual controls remain available.
 
-Prompts support hooks, caption corrections/removal, cut sequences, framing,
+Prompts support hooks, caption corrections/removal, black-band text and appearance, cut sequences, framing,
 existing supporting shots, and another stock search. Output trim times refer to
 the current short; explicitly requested source timestamps refer to the original.
 Saved narration stays locked. Unsupported or ambiguous requests return a short

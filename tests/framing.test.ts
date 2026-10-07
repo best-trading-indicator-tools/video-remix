@@ -172,6 +172,31 @@ test("long band text fits the upper strip and speech captions use the full outpu
     "Speech captions remain in the bottom band, not the shrunken video window");
 });
 
+test("rendered bands use Cyrillic display text and independent colors and sizes", async () => {
+  const blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, fontPercent: 3.5, topText: "BPC157", bottomText: "FOOTER",
+    topStyle: { cyrillic: true, color: "#ffffff", fontPercent: 5.4 }, bottomStyle: { color: "#00ff00", fontPercent: 8 } };
+  const output = await render(black, { aspect: "9:16", resolution: "720", trimEnd: 1, blackBands });
+  const literal = await render(black, { aspect: "9:16", resolution: "720", trimEnd: 1, blackBands: {
+    ...blackBands, topText: "ВРС157", topStyle: { ...blackBands.topStyle, cyrillic: false },
+  } });
+  const frame = async (input: string) => (await ffmpeg(["-ss", "0.5", "-i", input, "-frames:v", "1", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"])).stdout;
+  const actual = await frame(output);
+  assert.deepEqual(actual, await frame(literal), "Display-only conversion matches directly typed Cyrillic glyphs in the MP4");
+  const { width, height } = await probeMedia(output);
+  let topMin = height, topMax = -1, bottomMin = height, bottomMax = -1, stray = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = (y * width + x) * 3, r = actual[i]!, g = actual[i + 1]!, b = actual[i + 2]!;
+    if (r > 180 && g > 180 && b > 180 && y < height * .25) { topMin = Math.min(topMin, y); topMax = Math.max(topMax, y); }
+    else if (g > 180 && r < 70 && b < 70 && y > height * .85) { bottomMin = Math.min(bottomMin, y); bottomMax = Math.max(bottomMax, y); }
+    if (Math.max(r, g, b) > 180 && y >= height * .25 && y <= height * .85) stray++;
+  }
+  assert.ok(topMax - topMin > width * .025, "Medium upper-band glyphs are visible");
+  assert.ok(bottomMax - bottomMin > (topMax - topMin) * 1.3, "The lower band's independent large size survives");
+  assert.ok(Math.abs((topMax + topMin) / 2 - height * .125) < 3, "Upper text is vertically centered");
+  assert.equal(stray, 0, "No text extends outside the bands");
+  assert.equal(blackBands.topText, "BPC157");
+});
+
 test("caption percentage and font size move and scale actual rendered glyphs on the ASS canvas", async () => {
   const low = await render(black, { trimEnd: 1, captionStyle: { fontSize: 20, bottomPercent: 10 } }, undefined, captions);
   const raised = await render(black, { trimEnd: 1, captionStyle: { fontSize: 20, bottomPercent: 40 } }, undefined, captions);

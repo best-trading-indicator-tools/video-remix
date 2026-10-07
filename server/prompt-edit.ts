@@ -8,6 +8,8 @@ import { applyEditPlanChanges } from "./edit-plan.js";
 import { retimeTranscript } from "./auto-plan.js";
 import { focalPointSchema, captionStyleSchema } from "./schema.js";
 import { captionStyleDescription } from "../shared/caption-style.js";
+import { applyBlackBandsPatch, blackBandsPatchSchema, blackBandChangeSummary } from "../shared/black-bands.js";
+import { blackBandPromptInstructions, hasUngroundedBlackBandText } from "./black-band-prompt.js";
 
 export class PromptEditError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -24,6 +26,7 @@ const operationSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("caption"), id, text: z.string().min(1).max(500).optional(), start: seconds.optional(), end: seconds.optional() }).strict().refine(hasPatch),
   z.object({ op: z.literal("remove_captions"), ids: z.union([z.literal("all"), z.array(id).min(1).max(300)]) }).strict(),
   captionStyleSchema.partial().extend({ op: z.literal("caption_style") }).strict().refine(hasPatch),
+  blackBandsPatchSchema.extend({ op: z.literal("black_bands") }).strict().refine(hasPatch),
   z.object({ op: z.literal("framing"), fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional() }).strict().refine(hasPatch),
   z.object({ op: z.literal("cut_focal_point"), index: z.number().int().nonnegative(), focalPoint: focalPointSchema }).strict(),
   z.object({ op: z.literal("trim"), start: seconds.optional(), end: seconds.optional() }).strict().refine(hasPatch),
@@ -68,6 +71,7 @@ Support ONLY these operations, with exactly these fields:
 {"op":"caption_style","fontSize":20,"bottomPercent":18,"fontFamily":"poppins","color":"#ffffff","bold":true,"italic":false,"uppercase":false,"outlineWidth":1.2,"outlineColor":"#151515","shadow":0,"letterSpacing":0,"alignment":"center","background":"none","backgroundColor":"#10151c","backgroundOpacity":80} (each optional; fontSize 12–40, bottomPercent 5–80 moving UP with larger values; fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans), six-digit hex colors, outlineWidth and shadow 0–5, letterSpacing 0–4, alignment left/center/right, background none/box, backgroundOpacity 0–100; a box replaces the outline. Only added captions can be styled; captions baked into source pixels cannot be restyled.)
 caption_style also accepts cyrillicMode off/words/all and cyrillicWords (complete list of at most 50 literal words/phrases, each 1–80 characters without newlines). This swaps similar-looking Latin letters for Cyrillic only when drawn, preserving caption text and speech timing. Enable only for explicit lookalike requests, never for translation or ordinary Cyrillic-language captions. Specific words use "words" and the requested list; preserve existing entries when adding more. Use "all" only when requested for all caption text and "off" to restore original spelling. If words/scope are missing, ask for them; never invent terms or claim platform moderation outcomes. Use this style operation rather than rewriting individual caption cues for lookalikes.
 {"op":"framing","fit":"crop|contain|blur","focalPoint":{"x":0.5,"y":0.5}} (each optional; global focalPoint also replaces existing source-cut overrides)
+{"op":"black_bands","enabled":true,"topText":"BPC157","topStyle":{"cyrillic":true,"color":"#ffffff","fontPercent":5.4}} (all fields except op optional; at least one change). ${blackBandPromptInstructions}
 {"op":"cut_focal_point","index":0,"focalPoint":{"x":0.5,"y":0.5}} (zero-based index in resulting cuts; x/y 0–1, left/top 0, center 0.5, right/bottom 1)
 {"op":"trim","start":0,"end":10} (current OUTPUT seconds, start/end each optional; omitted means unchanged edge; only one trim OR cuts operation)
 {"op":"cuts","cuts":[{"start":10,"end":20}]} (explicit ORIGINAL SOURCE seconds; one to 60 pieces; keep specified order; focalPoint optional on each piece)
@@ -94,6 +98,7 @@ function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?:
     playbackSpeed: plan.settings.speed, narrationLocked: plan.narration, canRefreshBroll, pendingBrollCount,
     hook: plan.settings.hookText, fit: plan.settings.fit, focalPoint: plan.settings.focalPoint ?? { x: 0.5, y: 0.5 },
     captionStyle: plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 },
+    blackBands: plan.settings.blackBands,
     cuts: plan.cuts.map((cut, index) => ({ index, ...cut })),
     captions: plan.captions.map(({ id, start, end, text }) => ({ id, start, end, text })),
     selectedSpeech,
@@ -139,6 +144,11 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
       case "caption_style": {
         const { op: _op, ...patch } = operation;
         changes.framing = { ...changes.framing, captionStyle: { ...(changes.framing?.captionStyle ?? plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 }), ...patch } };
+        break;
+      }
+      case "black_bands": {
+        const { op: _op, ...patch } = operation;
+        changes.framing = { ...changes.framing, blackBands: applyBlackBandsPatch(changes.framing?.blackBands ?? plan.settings.blackBands, patch) };
         break;
       }
       case "framing": {
@@ -189,6 +199,7 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
     if (changes.framing.fit === plan.settings.fit) delete changes.framing.fit;
     if (same(changes.framing.focalPoint, plan.settings.focalPoint ?? { x: 0.5, y: 0.5 })) delete changes.framing.focalPoint;
     if (same(changes.framing.captionStyle, plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 })) delete changes.framing.captionStyle;
+    if (same(changes.framing.blackBands, plan.settings.blackBands)) delete changes.framing.blackBands;
     if (!Object.keys(changes.framing).length) delete changes.framing;
   }
   if (changes.refreshBroll && operations.some(operation => operation.op === "visual"))
@@ -208,6 +219,7 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
     if (edited.length) summary.push(`Correct ${edited.length} caption${edited.length === 1 ? "" : "s"}: ${edited.map(cue => `${displaySeconds(cue.start)}–${displaySeconds(cue.end)}s “${excerpt(cue.text)}”`).join("; ")}.`);
   }
   if (changes.framing?.fit) summary.push(`Set the picture fit to ${changes.framing.fit}.`);
+  if (changes.framing?.blackBands) summary.push(...blackBandChangeSummary(plan.settings.blackBands, changes.framing.blackBands));
   if (changes.framing?.focalPoint) summary.push(`Set the source focal point to ${Math.round(changes.framing.focalPoint.x * 100)}% across and ${Math.round(changes.framing.focalPoint.y * 100)}% down.`);
   if (changes.framing?.captionStyle) {
     const style = changes.framing.captionStyle;
@@ -257,6 +269,8 @@ export async function proposePromptEdit({ plan, prompt, signal, sourceTranscript
   const parsed = responseSchema.safeParse(raw);
   if (!parsed.success) throw new PromptEditError(502, "The editing assistant returned an unsupported or invalid change. Rephrase the request; nothing was changed.");
   if (parsed.data.clarification) return { changes: { revision: plan.revision }, summary: [], clarification: parsed.data.clarification };
+  if (parsed.data.operations.some(operation => operation.op === "black_bands" && hasUngroundedBlackBandText(operation, plan.settings.blackBands, prompt)))
+    return { changes: { revision: plan.revision }, summary: [], clarification: "Include the exact text you want in the black bands." };
   const normalized = (value: string) => value.trim().replace(/\s+/gu, " ").toLocaleLowerCase();
   if (!context.captions.some(cue => cue.text.trim()) && !context.selectedSpeech.trim() && parsed.data.operations.some(operation =>
     operation.op === "hook" && operation.text.trim() && !normalized(prompt).includes(normalized(operation.text))))

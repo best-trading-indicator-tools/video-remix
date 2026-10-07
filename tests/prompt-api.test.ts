@@ -92,8 +92,9 @@ globalThis.fetch = async (input, init) => {
     const beforeJobs = (await jobs()).length;
     let proposal!: PromptEditResponse;
     await t.test("a suggestion composes with unsaved captions but creates no job and exposes no secrets or paths", async () => {
-      await reply([{ op: "hook", text: "A clearer headline" }, { op: "caption_style", fontSize: 16, bottomPercent: 18 }]);
-      const response = await request(route, { revision: plan.revision, prompt: "Change the hook and make captions smaller and higher",
+      await reply([{ op: "hook", text: "A clearer headline" }, { op: "caption_style", fontSize: 16, bottomPercent: 18 },
+        { op: "black_bands", enabled: true, topText: "BPC157", topStyle: { cyrillic: true, color: "#ffffff", fontPercent: 5.4 } }]);
+      const response = await request(route, { revision: plan.revision, prompt: "Change the hook and make captions smaller and higher. Add BPC157 in cyrillic white font medium size font in upper band",
         draft: { revision: plan.revision, captions: [{ ...plan.captions[0]!, text: "My manual correction" }] } });
       assert.equal(response.status, 200, await response.clone().text());
       proposal = await response.json();
@@ -102,6 +103,8 @@ globalThis.fetch = async (input, init) => {
       assert.equal(proposal.plan.captions[0]!.text, "My manual correction");
       assert.equal(proposal.changes.captions?.[0]?.text, "My manual correction");
       assert.equal(proposal.changes.revision, plan.revision);
+      assert.equal(proposal.changes.framing?.blackBands?.topText, "BPC157");
+      assert.equal(proposal.plan.settings.blackBands?.topStyle?.cyrillic, true);
       assert.deepEqual(proposal.plan.cuts, plan.cuts);
       assert.deepEqual(await planOf(parent.id), plan);
       assert.equal((await jobs()).length, beforeJobs);
@@ -111,6 +114,15 @@ globalThis.fetch = async (input, init) => {
       for (const text of [sent, received]) {
         assert.ok(!text.includes(directory)); assert.ok(!text.includes("test-private-prompt-key"));
       }
+    });
+    await t.test("follow-up prompts preserve unsaved band appearance in the cumulative revision", async () => {
+      await reply([{ op: "black_bands", topStyle: { color: "#ffff00" } }]);
+      const response = await request(route, { revision: plan.revision, prompt: "Make upper-band text yellow", draft: proposal.changes });
+      assert.equal(response.status, 200, await response.clone().text());
+      proposal = await response.json();
+      assert.deepEqual(proposal.changes.framing?.blackBands?.topStyle, { color: "#ffff00", fontPercent: 5.4, cyrillic: true });
+      assert.equal(proposal.changes.framing?.blackBands?.topText, "BPC157");
+      assert.equal((await jobs()).length, beforeJobs);
     });
     await t.test("adding stock to an originally plain edit keeps pending counts through follow-up prompts", async () => {
       await reply([{ op: "add_broll", count: 2 }]);
@@ -187,6 +199,7 @@ globalThis.fetch = async (input, init) => {
       assert.equal((await jobs()).length, beforeJobs + 1);
       assert.equal(next.settings.hookText, "A clearer headline");
       assert.equal(next.captions[0]!.text, "My manual correction");
+      assert.deepEqual(next.settings.blackBands, proposal.changes.framing?.blackBands);
       assert.deepEqual(next.cuts, plan.cuts);
       assert.deepEqual(next.media, plan.media);
       assert.deepEqual(await planOf(parent.id), plan);

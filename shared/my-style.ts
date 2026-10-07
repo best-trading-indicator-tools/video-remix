@@ -25,7 +25,7 @@ export function captureMyStyle(options: AutoOptions, savedAt = new Date().toISOS
   return styleSchema.parse({
     version: 1, savedAt,
     ...(options.captionStyle ? { captionStyle: structuredClone(options.captionStyle) } : {}),
-    ...(bands ? { blackBands: { enabled: bands.enabled, fit: bands.fit, topPercent: bands.topPercent, bottomPercent: bands.bottomPercent, fontPercent: bands.fontPercent } } : {}),
+    ...(bands ? { blackBands: blackBandFinishSchema.parse(bands) } : {}),
     ...(options.pacing ? { pacing: structuredClone(options.pacing) } : {}),
     ...(options.audio ? { audio: options.audio } : {}),
   });

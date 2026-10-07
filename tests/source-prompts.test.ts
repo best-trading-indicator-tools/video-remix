@@ -117,6 +117,29 @@ test('source prompts expose supported editing controls and preserve reviewable d
       assert.equal(manualResult.settings.captionStyle?.fontFamily, 'tiktok-sans');
       assert.match(manualResult.summary.join(' '), /TikTok Sans/);
     });
+    await t.test('upper-band Cyrillic prompts keep literal text and preserve bottom-band and speech-caption styling', async () => {
+      const prompt = 'Add BPC157 in cyrillic white font medium size font in upper band';
+      const patch = { blackBands: { enabled: true, topText: 'BPC157', topStyle: { cyrillic: true, color: '#ffffff', fontPercent: 5.4 } } };
+      const existing = { blackBands: { ...DEFAULT_BLACK_BANDS, fontPercent: 8, bottomText: 'Keep my footer', bottomStyle: { color: '#00ff00', fontPercent: 3.5 } },
+        captionStyle: { fontSize: 30, bottomPercent: 20, color: '#ffaa00' } };
+      const automatic = await auto(patch, { ...DEFAULT_AUTO_OPTIONS, ...existing }, 1, undefined, prompt);
+      const manualResult = await manual(patch, { ...DEFAULT_SETTINGS, ...existing }, prompt);
+      for (const settings of [automatic.options, manualResult.settings]) {
+        assert.equal(settings.blackBands?.topText, 'BPC157');
+        assert.deepEqual(settings.blackBands?.topStyle, patch.blackBands.topStyle);
+        assert.equal(settings.blackBands?.bottomText, existing.blackBands.bottomText);
+        assert.deepEqual(settings.blackBands?.bottomStyle, existing.blackBands.bottomStyle);
+        assert.deepEqual(settings.captionStyle, existing.captionStyle);
+      }
+      assert.equal(automatic.switchTo, undefined);
+      assert.match(automatic.summary.join(' '), /ВРС157.*white.*medium.*Cyrillic/);
+      assert.match(manualResult.summary.join(' '), /ВРС157.*white.*medium.*Cyrillic/);
+      const recolored = await auto({ blackBands: { topStyle: { color: '#ff0000' } } }, automatic.options, 1, undefined, 'Make upper-band text red');
+      assert.deepEqual(recolored.options.blackBands?.topStyle, { ...patch.blackBands.topStyle, color: '#ff0000' });
+      const restored = await manual({ blackBands: { topStyle: { cyrillic: false } } }, manualResult.settings, 'Restore original letters in the upper band');
+      assert.equal(restored.settings.blackBands?.topStyle?.cyrillic, false);
+      assert.match(restored.summary.join(' '), /BPC157/);
+    });
     await t.test('Cyrillic spelling rules round-trip through Auto and Manual proposals and can be switched off', async () => {
       const captionStyle = { cyrillicMode: 'words' as const, cyrillicWords: ['Sample-12'] };
       const prompt = 'Use Cyrillic lookalikes only for Sample-12 in captions';

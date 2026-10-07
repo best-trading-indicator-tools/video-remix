@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { DEFAULT_BLACK_BANDS, applyBandFinish, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
-import { DEFAULT_SETTINGS } from "../shared/types.js";
+import { DEFAULT_BLACK_BANDS, applyBandFinish, applyBlackBandsPatch, bandTextAppearance, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
+import { DEFAULT_SETTINGS, DEFAULT_AUTO_OPTIONS } from "../shared/types.js";
+import { captureMyStyle, styleAuto } from "../shared/my-style.js";
 import { settingsSchema, autoOptionsSchema } from "../server/schema.js";
 import { captureFinishingPreset } from "../shared/finishing-presets.js";
 import { textLayoutIssues } from "../shared/framing.js";
@@ -17,10 +18,31 @@ test("Auto, Manual and saved edit revisions accept bands and reject malformed se
     { topPercent: 0 }, { bottomPercent: 41 }, { topPercent: 40, bottomPercent: 40 },
     { topPercent: Infinity }, { fontPercent: NaN }, { fit: "blur" },
     { topText: "x".repeat(201) }, { bottomText: "hello\0world" }, { enabled: "yes" },
+    { topStyle: { color: "white:shadowx=2" } }, { topStyle: { color: "#fff" } },
+    { bottomStyle: { fontPercent: 11 } }, { topStyle: { cyrillic: "true" } }, { topStyle: { unknown: true } },
   ]) {
     assert.equal(settingsSchema.safeParse({ ...DEFAULT_SETTINGS, blackBands: { ...bands, ...invalid } }).success, false);
     assert.equal(autoOptionsSchema.safeParse({ blackBands: { ...bands, ...invalid } }).success, false);
   }
+});
+
+test("band spelling and appearance are independent, sparse, reversible, and included in saved styles", () => {
+  const before = { ...bands, fontPercent: 8, topText: "BPC157", topStyle: { color: "#ff0000", fontPercent: 3.5 }, bottomStyle: { color: "#00ff00" } };
+  const next = applyBlackBandsPatch(before, { topStyle: { cyrillic: true, color: "#ffffff", fontPercent: 5.4 } });
+  assert.equal(next.topText, "BPC157");
+  assert.deepEqual(bandTextAppearance(next, "top"), { text: "ВРС157", color: "#ffffff", fontPercent: 5.4, cyrillic: true });
+  assert.deepEqual(bandTextAppearance(next, "bottom"), bandTextAppearance(before, "bottom"));
+  const colorOnly = applyBlackBandsPatch(next, { topStyle: { color: "#ffff00" } });
+  assert.deepEqual(colorOnly.topStyle, { color: "#ffff00", fontPercent: 5.4, cyrillic: true });
+  assert.equal(bandTextAppearance(applyBlackBandsPatch(next, { topStyle: { cyrillic: false } }), "top").text, "BPC157");
+  assert.deepEqual(before.topStyle, { color: "#ff0000", fontPercent: 3.5 });
+  const preset = captureFinishingPreset("auto", "Cyrillic bands", { ...DEFAULT_AUTO_OPTIONS, blackBands: next }, "bands");
+  if (preset.mode !== "auto") throw new Error("Unexpected preset");
+  assert.deepEqual(preset.settings.blackBands?.topStyle, next.topStyle);
+  const saved = captureMyStyle({ ...DEFAULT_AUTO_OPTIONS, blackBands: next });
+  assert.equal("topText" in saved.blackBands!, false);
+  const applied = styleAuto({ ...DEFAULT_AUTO_OPTIONS, blackBands: before }, saved);
+  assert.deepEqual(applied.blackBands, next);
 });
 
 test("band finishing presets preserve each video's words", () => {

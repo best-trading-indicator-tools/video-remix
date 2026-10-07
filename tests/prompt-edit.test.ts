@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { DEFAULT_SETTINGS, type EditPlan, type Transcript } from "../shared/types.js";
 import { applyEditPlanChanges } from "../server/edit-plan.js";
 import { PromptEditError, proposePromptEdit } from "../server/prompt-edit.js";
+import { DEFAULT_BLACK_BANDS } from "../shared/black-bands.js";
 
 const makePlan = (): EditPlan => ({
   version: 1, revision: 3, sourceId: "private-source", sourceDuration: 30, outputDuration: 10,
@@ -47,6 +48,34 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
   });
   const propose = (plan = makePlan(), prompt = "Change the opening heading to Micrograms vs. milligrams") => proposePromptEdit({ plan, prompt, signal: signal() });
   try {
+    await t.test("saved-export prompts style either band without changing captions, source cuts or original text", async () => {
+      const plan = makePlan();
+      plan.settings.blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, bottomText: "Keep footer", bottomStyle: { color: "#00ff00" } };
+      const before = structuredClone(plan);
+      const prompt = "Add BPC157 in cyrillic white font medium size font in upper band";
+      reply = { operations: [{ op: "black_bands", enabled: true, topText: "BPC157", topStyle: { cyrillic: true, color: "#ffffff", fontPercent: 5.4 } }] };
+      const result = await propose(plan, prompt);
+      const next = applyEditPlanChanges(plan, result.changes);
+      assert.equal(next.settings.blackBands?.topText, "BPC157");
+      assert.deepEqual(next.settings.blackBands?.topStyle, { cyrillic: true, color: "#ffffff", fontPercent: 5.4 });
+      assert.deepEqual(next.settings.blackBands?.bottomStyle, plan.settings.blackBands.bottomStyle);
+      assert.equal(next.settings.blackBands?.bottomText, "Keep footer");
+      assert.deepEqual(next.settings.captionStyle, plan.settings.captionStyle);
+      assert.deepEqual(next.captions, plan.captions);
+      assert.deepEqual(next.cuts, plan.cuts);
+      assert.deepEqual(plan, before);
+      assert.match(result.summary.join(" "), /ВРС157.*white.*medium.*Cyrillic/);
+      reply = { operations: [{ op: "black_bands", topStyle: { color: "#ff0000" } }] };
+      const recolored = await propose(next, "Make upper-band text red");
+      assert.equal(recolored.changes.framing?.blackBands?.topStyle?.cyrillic, true);
+      assert.equal(recolored.changes.framing?.blackBands?.topStyle?.fontPercent, 5.4);
+      reply = { operations: [{ op: "black_bands", topText: "Invented words" }] };
+      const ungrounded = await propose(plan, prompt);
+      assert.ok(ungrounded.clarification);
+      assert.deepEqual(ungrounded.changes, { revision: plan.revision });
+      reply = { operations: [{ op: "black_bands", topStyle: { fontPercent: 40 } }] };
+      await assert.rejects(propose(plan, prompt), /unsupported or invalid/);
+    });
     await t.test("one text request uses the configured private model without media URLs, paths or full source transcript", async () => {
       process.env.DEEPSEEK_TEXT_MODEL = "deepseek-test-model";
       const plan = makePlan();

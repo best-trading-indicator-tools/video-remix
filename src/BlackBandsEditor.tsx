@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { bandTextLayout, DEFAULT_BLACK_BANDS, type BlackBands } from "../shared/black-bands";
+import { bandTextAppearance, bandTextLayout, DEFAULT_BLACK_BANDS, type BandSide, type BandTextStyle, type BlackBands } from "../shared/black-bands";
 import Slider from "./Slider";
 import "./black-bands.css";
 
@@ -22,20 +22,37 @@ export function BlackBandsOverlay({ value, aspect }: { value?: BlackBands; aspec
   const width = 1000 * aspect, height = 1000;
   return <svg className="black-bands-overlay" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
     {([
-      [value.topText, value.topPercent * 10, 0],
-      [value.bottomText, value.bottomPercent * 10, 1000 - value.bottomPercent * 10],
-    ] as const).map(([text, bandHeight, top], index) => {
-      const layout = bandTextLayout(text, width, height, bandHeight, value.fontPercent);
+      ["top", value.topPercent * 10, 0],
+      ["bottom", value.bottomPercent * 10, 1000 - value.bottomPercent * 10],
+    ] as const).map(([side, bandHeight, top]) => {
+      const appearance = bandTextAppearance(value, side);
+      const layout = bandTextLayout(appearance.text, width, height, bandHeight, appearance.fontPercent);
       const lines = layout.text.split("\n");
       const first = top + bandHeight / 2 - (lines.length - 1) * layout.fontSize * 1.25 / 2;
-      return <g key={index}>
+      return <g key={side}>
         <rect x={0} y={top} width={width} height={bandHeight} fill="black" />
-        <text fill="white" textAnchor="middle" dominantBaseline="central" fontFamily="Arial, sans-serif" fontWeight="700" fontSize={layout.fontSize}>
+        <text fill={appearance.color} textAnchor="middle" dominantBaseline="central" fontFamily="Arial, sans-serif" fontWeight="700" fontSize={layout.fontSize}>
           {lines.map((line, lineIndex) => <tspan key={lineIndex} x={width / 2} y={first + lineIndex * layout.fontSize * 1.25}>{line}</tspan>)}
         </text>
       </g>;
     })}
   </svg>;
+}
+
+function BandTextEditor({ bands, side, onChange }: { bands: BlackBands; side: BandSide; onChange: (patch: Partial<BlackBands>) => void }) {
+  const label = side === "top" ? "Top" : "Bottom";
+  const appearance = bandTextAppearance(bands, side);
+  const updateStyle = (patch: BandTextStyle) => onChange({ [`${side}Style`]: { ...bands[`${side}Style`], ...patch } });
+  return <fieldset className="band-text-editor">
+    <legend>{label} band text</legend>
+    <textarea aria-label={`${label} band text`} rows={2} maxLength={200} value={bands[`${side}Text`]} placeholder={side === "top" ? "Write a headline or caption…" : "Optional second caption…"} onChange={event => onChange({ [`${side}Text`]: event.target.value })} />
+    <label className="band-text-color">Text color<input aria-label={`${label} band text color`} type="color" value={appearance.color} onChange={event => updateStyle({ color: event.target.value })} /></label>
+    <Slider label={`${label} text size${appearance.fontPercent === 5.4 ? " · Medium" : ""}`} value={appearance.fontPercent} defaultValue={5.4} min={3} max={10} step={0.1} unit="%" onChange={fontPercent => updateStyle({ fontPercent })} />
+    <label className="black-bands-toggle"><input type="checkbox" checked={appearance.cyrillic} onChange={event => updateStyle({ cyrillic: event.target.checked })} />
+      <span>{label} band Cyrillic lookalikes</span>
+    </label>
+    {appearance.cyrillic && bands[`${side}Text`].trim() && <p className="black-bands-hint">Displayed: {appearance.text}</p>}
+  </fieldset>;
 }
 
 export default function BlackBandsEditor({ value, onChange }: {
@@ -59,10 +76,9 @@ export default function BlackBandsEditor({ value, onChange }: {
         : "A wider window fills the canvas width. Portrait footage loses some of the top and bottom. Adjust the subject position in Manual or Edit this result."}</p>
       <Slider label="Top band" value={bands.topPercent} defaultValue={25} min={10} max={Math.min(40, 70 - bands.bottomPercent)} step={1} unit="%" onChange={topPercent => update({ topPercent })} />
       <Slider label="Bottom band" value={bands.bottomPercent} defaultValue={15} min={10} max={Math.min(40, 70 - bands.topPercent)} step={1} unit="%" onChange={bottomPercent => update({ bottomPercent })} />
-      <label>Top band text<textarea rows={3} maxLength={200} value={bands.topText} placeholder="Write a headline or caption…" onChange={event => update({ topText: event.target.value })} /></label>
-      <label>Bottom band text<textarea rows={2} maxLength={200} value={bands.bottomText} placeholder="Optional second caption…" onChange={event => update({ bottomText: event.target.value })} /></label>
-      <Slider label="Band text size" value={bands.fontPercent} defaultValue={5.4} min={3} max={10} step={0.1} unit="%" onChange={fontPercent => update({ fontPercent })} />
-      <p className="black-bands-hint">White text stays on screen throughout the video and shrinks to fit. Speech captions keep their separate styling; leave the bottom text blank if captions appear there. Opening hooks appear over the video.</p>
+      <BandTextEditor bands={bands} side="top" onChange={update} />
+      <BandTextEditor bands={bands} side="bottom" onChange={update} />
+      <p className="black-bands-hint">Band text stays on screen throughout the video and shrinks to fit. Cyrillic lookalikes swap similar letters for display; your typed text stays editable. Speech captions keep their separate styling; leave the bottom text blank if captions appear there. Opening hooks appear over the video.</p>
     </>}
   </div>;
 }

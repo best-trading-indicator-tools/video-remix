@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
 import { captionDisplayText } from "../shared/caption-text.js";
 import { captionsAss, parseCanonicalSrt } from "./caption-ass.js";
-import { blackBandsSchema, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
+import { blackBandsSchema, blackBandGeometry, bandTextAppearance, bandTextLayout } from "../shared/black-bands.js";
 import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
 import { watermarkFilters } from "./watermark-removal.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
@@ -846,17 +846,18 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     const decorations: string[] = [];
     if (s.blackBands?.enabled) {
       decorations.push(`pad=${canvas.width}:${canvas.height}:0:${top}:color=black`);
-      for (const [text, bandHeight, bandTop] of [
-        [s.blackBands.topText, top, 0],
-        [s.blackBands.bottomText, bottom, top + height],
+      for (const [side, bandHeight, bandTop] of [
+        ["top", top, 0],
+        ["bottom", bottom, top + height],
       ] as const) {
-        if (!text.trim()) continue;
-        const layout = bandTextLayout(text, width, canvas.height, bandHeight, s.blackBands.fontPercent);
+        const appearance = bandTextAppearance(s.blackBands, side);
+        if (!appearance.text.trim()) continue;
+        const layout = bandTextLayout(appearance.text, width, canvas.height, bandHeight, appearance.fontPercent);
         const filename = `band-${randomUUID()}.txt`;
         const filePath = path.join(workDir, filename);
         temporary.push(filePath);
         await writeFile(filePath, layout.text, "utf8");
-        decorations.push(`drawtext=${await drawTextFont()}:textfile=${filename}:expansion=none:fontsize=${decimal(layout.fontSize)}:fontcolor=white:line_spacing=${decimal(layout.fontSize * 0.25)}:x=(w-text_w)/2:y=${bandTop}+(${bandHeight}-text_h)/2:fix_bounds=1`);
+        decorations.push(`drawtext=${await drawTextFont()}:textfile=${filename}:expansion=none:fontsize=${decimal(layout.fontSize)}:fontcolor=${appearance.color}:line_spacing=${decimal(layout.fontSize * 0.25)}:x=(w-text_w)/2:y=${bandTop}+(${bandHeight}-text_h)/2:fix_bounds=1`);
       }
     }
     if (options.subtitlePath) {
