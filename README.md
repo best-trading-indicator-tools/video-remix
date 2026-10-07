@@ -181,7 +181,11 @@ the last change. Brush size is relative to the original picture.
 FFmpeg fills masked pixels from neighboring pixels. This requires no service,
 credits, model download or additional Python installation. Small overlays on
 simple backgrounds work best; complex detail or motion can leave a soft patch.
-Very large or thick masks are rejected with guidance to make a tighter selection.
+Thick masks are reconstructed at an adaptive processing resolution and composited
+through the original mask, preserving the rest of the source at full resolution.
+Selections covering more than 25% of the picture are rejected before analysis or
+review starts, with guidance to adjust the marked area. Selection errors stop the
+job immediately instead of repeating the same export automatically.
 
 Masks are stored with the individual video's settings, retained when disabled,
 and preserved in saved export revisions. They are excluded from styles,

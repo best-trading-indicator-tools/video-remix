@@ -34,6 +34,7 @@ import { captionCuesSrt } from "./edit-plan.js";
 import { writeFile } from "node:fs/promises";
 import { addManualCaptions, wantsManualCaptions } from "./manual-captions.js";
 import { serverDiagnostic } from "./diagnostics.js";
+import { validateWatermarkRemoval } from "./watermark-removal.js";
 const running = new Map<string, AbortController>();
 const runningPromises = new Map<string, Promise<void>>();
 // Only initial analysis and clip selection need exclusive access to a source.
@@ -166,6 +167,8 @@ async function run(job: StoredJob, controller: AbortController) {
         "The source video is no longer available. Upload it again.",
       );
     await assertLinkedSourceUnchanged(source);
+    validateWatermarkRemoval(job.auto && !job.editPlan ? job.auto.watermarkRemoval : job.settings.watermarkRemoval,
+      Math.max(2, Math.floor(source.width / 2) * 2), Math.max(2, Math.floor(source.height / 2) * 2));
     if (!source.fingerprint) {
       source.fingerprint = await fingerprintFile(source.filePath, controller.signal);
       // Known, different sources may now use the remaining worker slots.

@@ -11,6 +11,8 @@ import { settingsSchema, autoOptionsSchema } from "../server/schema.js";
 import { probeMedia, renderVideo } from "../server/engine.js";
 import { manualPreviewSettings } from "../server/manual-preview.js";
 import { captureFinishingPreset } from "../shared/finishing-presets.js";
+import { validateWatermarkRemoval, watermarkFilters, WatermarkRemovalError } from "../server/watermark-removal.js";
+import { canRetryRender } from "../server/job-recovery.js";
 import type { StoredJob, StoredSource } from "../server/store.js";
 
 const rectangle = (x: number, y: number, w: number, h: number): MaskStroke => ({ kind: "rect", size: .04,
@@ -20,7 +22,7 @@ const second = { id: "second", start: 2, end: 3, strokes: [rectangle(217, 87, 26
 const timed: WatermarkRemoval = { enabled: true, mode: "timed", masks: [first, second] };
 const fixed: WatermarkRemoval = { enabled: true, mode: "fixed", masks: [first] };
 const exec = promisify(execFile);
-const ffmpeg = (args: string[]) => exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "1", ...args], { encoding: "buffer", maxBuffer: 8 * 1024 * 1024 });
+const ffmpeg = (args: string[], cwd?: string) => exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "1", ...args], { cwd, encoding: "buffer", maxBuffer: 8 * 1024 * 1024 });
 let directory: string, source: string, serial = 0;
 before(async () => {
   directory = await mkdtemp(path.join(tmpdir(), "remix-watermark-")); source = path.join(directory, "source.mp4");
@@ -29,9 +31,9 @@ before(async () => {
     "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", source]);
 });
 after(async () => { if (directory) await rm(directory, { recursive: true, force: true }); });
-async function render(changes: Partial<RemixSettings>) {
+async function render(changes: Partial<RemixSettings>, input = source) {
   const output = path.join(directory, `out-${++serial}.mp4`), workDir = path.join(directory, `work-${serial}`);
-  await renderVideo({ input: source, output, source: await probeMedia(source), settings: { ...DEFAULT_SETTINGS, ...changes }, workDir,
+  await renderVideo({ input, output, source: await probeMedia(input), settings: { ...DEFAULT_SETTINGS, ...changes }, workDir,
     signal: new AbortController().signal, onProgress: () => {} });
   assert.ok(!(await readdir(workDir)).some(name => name.endsWith(".pgm")), "Temporary masks must be cleaned up");
   return output;
@@ -136,6 +138,51 @@ test("Auto preparation carries source masks into its editable render settings", 
 });
 
 test("oversized selections fail clearly and leave no temporary masks", async () => {
-  await assert.rejects(render({ watermarkRemoval: { ...fixed, masks: [{ ...first, strokes: [rectangle(0, 0, 300, 160)] }] } }), /selection is too large/);
+  await assert.rejects(render({ watermarkRemoval: { ...fixed, masks: [{ ...first, strokes: [rectangle(0, 0, 300, 160)] }] } }), /covers more than 25%/);
   assert.ok(!(await readdir(path.join(directory, `work-${serial}`))).some(name => name.endsWith(".pgm")));
+});
+
+// Regression: this real selection covered only 5% of a 1080x1920 source, but
+// rounding made it 193px high, crossing the old absolute radius limit by 1px.
+const reported: WatermarkRemoval = { enabled: true, mode: "fixed", masks: [{ id: "reported", start: 0, end: 1,
+  strokes: [{ kind: "rect", size: .04, points: [{ x: .2457, y: .11553 }, { x: .7431, y: .21541 }] }] }] };
+async function portraitFixture(scale = 1) {
+  const input = path.join(directory, `portrait-${scale}.mp4`);
+  await ffmpeg(["-f", "lavfi", "-i", `color=blue:size=${1080 * scale}x${1920 * scale}:rate=8:duration=1`,
+    "-vf", `drawgrid=w=8:h=8:t=1:color=red,drawbox=x=0:y=0:w=iw:h=${700 * scale}:color=blue:t=fill,` +
+      `drawbox=x=${300 * scale}:y=${250 * scale}:w=${450 * scale}:h=${130 * scale}:color=white:t=fill`,
+    "-c:v", "libx264", "-preset", "ultrafast", "-threads", "1", "-pix_fmt", "yuv420p", input]);
+  return input;
+}
+test("a 5% selection is removed at HD and 4K without reducing export dimensions", async () => {
+  for (const scale of [1, 2]) {
+    const input = await portraitFixture(scale);
+    const output = await render({ watermarkRemoval: reported, trimEnd: .375, aspect: "original" }, input);
+    blue(await pixel(output, .1, 500 * scale, 300 * scale));
+    const info = await probeMedia(output);
+    assert.equal(info.width, 1080 * scale); assert.equal(info.height, 1920 * scale);
+  }
+});
+test("adaptive reconstruction preserves unmarked detail, erased pixels and source-time ranges", async () => {
+  const input = await portraitFixture();
+  const removal: WatermarkRemoval = { ...reported, mode: "timed", masks: [{ ...reported.masks[0]!, start: .5, end: .875,
+    strokes: [...reported.masks[0]!.strokes, { kind: "erase", size: .04, points: [{ x: .5, y: 300 / 1920 }] }] }] };
+  const output = await render({ watermarkRemoval: removal, aspect: "original" }, input);
+  white(await pixel(output, .1, 350, 300)); blue(await pixel(output, .6, 350, 300));
+  white(await pixel(output, .6, 540, 300)); white(await pixel(output, .9, 350, 300));
+  const workDir = path.join(directory, "adaptive-pixels"); await mkdir(workDir);
+  const filters = await watermarkFilters(reported, 1080, 1920, [{ start: 0, end: 1 }], 1, workDir, [], new AbortController().signal);
+  // Compare decoded pixels before encoding, so H.264 quantization does not hide
+  // accidental down/upscaling of the untouched checker grid.
+  const sample = async (prefix: string) => (await ffmpeg(["-i", input, "-filter_complex", `${prefix}crop=100:100:400:900`,
+    "-frames:v", "1", "-pix_fmt", "yuv420p", "-f", "rawvideo", "pipe:1"], workDir)).stdout;
+  assert.deepEqual(await sample(`[0:v]${filters.join(",")},`), await sample("[0:v]"));
+});
+test("watermark validation errors require attention instead of automatic retry", () => {
+  const large: WatermarkRemoval = { ...fixed, masks: [{ ...first, strokes: [rectangle(0, 0, 300, 160)] }] };
+  assert.throws(() => validateWatermarkRemoval(large, 320, 180), error => {
+    assert.ok(error instanceof WatermarkRemovalError); assert.equal(canRetryRender(error), false); return true;
+  });
+  assert.doesNotThrow(() => validateWatermarkRemoval({ ...large, enabled: false }, 320, 180));
+  assert.doesNotThrow(() => validateWatermarkRemoval(reported, 2160, 3840));
 });

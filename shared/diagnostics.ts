@@ -90,6 +90,10 @@ export function explainProblem(message: string, status?: number) {
     return rule("SERVICE_BUSY", "The service is temporarily limiting requests", "Wait a few minutes before retrying. Avoid repeatedly pressing the same action.");
   if (/api.?key|unauthorized|authentication|credentials/iu.test(message) || status === 401)
     return rule("SERVICE_AUTH_REQUIRED", "An external service is not configured correctly", "Check the service configuration on the computer running the app, then restart it. Never send your API keys with an error report.");
+  if (/watermark selection.*(?:too large|covers more than)/iu.test(message))
+    return rule("WATERMARK_SELECTION_TOO_LARGE", "The watermark area needs adjustment", "Open Watermark removal and reduce the marked area, or switch it off, then create the export again. Changing the video length or batch size will not fix this selection.");
+  if (/watermark removal supports source frames/iu.test(message))
+    return rule("WATERMARK_SOURCE_UNSUPPORTED", "This source is too large for watermark removal", "Use a source at 16 megapixels or less, or switch off Watermark removal before exporting.");
   if (/too large|exceeds.*(?:size|limit)|maximum.*file size/iu.test(message) || status === 413)
     return rule("LIMIT_EXCEEDED", "This file or request exceeds the limit", "Choose a smaller file or batch, or shorten the requested edit, then try again.");
   if (/invalid.*(?:video|media)|readable video|playable video|invalid data|does not contain.*video/iu.test(message))

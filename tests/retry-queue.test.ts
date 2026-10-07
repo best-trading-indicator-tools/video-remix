@@ -8,7 +8,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
 import type { AddressInfo } from "node:net";
-import { DEFAULT_SETTINGS } from "../shared/types.js";
+import { DEFAULT_AUTO_OPTIONS, DEFAULT_SETTINGS } from "../shared/types.js";
 import type { StoredJob, StoredSource } from "../server/store.js";
 
 const exec = promisify(execFile);
@@ -180,6 +180,24 @@ child.on('exit', code => process.exit(code ?? 1));
       assert.equal(canRetryRender(new Error("ffmpeg exceeded the processing time limit")), true);
       assert.equal(canRetryRender(Object.assign(new Error("Rate limited"), { status: 429 })), true);
       assert.equal(canRetryRender(Object.assign(new Error("Unauthorized"), { status: 401 })), false);
+    });
+
+    await t.test("invalid watermark areas stop before analysis or encoding without automatic retries", async () => {
+      for (const auto of [false, true]) {
+        const item = job();
+        const watermarkRemoval = { enabled: true, mode: "fixed" as const, masks: [{ id: "too-large", start: 0, end: .8,
+          strokes: [{ kind: "rect" as const, size: .04, points: [{ x: .1, y: .1 }, { x: .9, y: .9 }] }] }] };
+        if (auto) item.auto = { ...DEFAULT_AUTO_OPTIONS, watermarkRemoval };
+        else item.settings.watermarkRemoval = watermarkRemoval;
+        pumpQueue(); await until(() => settled(item), "Invalid watermark job did not settle");
+        assert.equal(item.status, "failed");
+        assert.equal(item.retry?.count, 0); assert.equal(item.retry?.stopped, "needs-attention");
+        assert.equal((await counts())[item.id], undefined, "The encoder must never start");
+        assert.equal(item.editPlan, undefined, "Auto must not analyze an invalid selection");
+        assert.equal(item.diagnostic?.code, "WATERMARK_SELECTION_TOO_LARGE");
+        assert.match(item.diagnostic!.nextStep, /Watermark removal/);
+        assert.doesNotMatch(item.error!, /file or request exceeds/);
+      }
     });
 
     await t.test("backend shutdown queues interrupted work; restarting does not reset its budget or schedule", async () => {
