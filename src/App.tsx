@@ -95,7 +95,7 @@ import ManualPromptEditor from "./ManualPromptEditor";
 import FinishingPresets from "./FinishingPresets";
 import { useDialogViewport } from "./useDialogViewport";
 import { compactBrollNotes } from "../shared/broll-notes";
-import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
+import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals, VISUAL_SOURCE_LABELS, visualSourceSummary } from "../shared/visual-sources";
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 import { DEFAULT_AUDIO_SETTINGS } from "../shared/audio";
 import SoundModifiers from "./SoundModifiers";
@@ -106,9 +106,10 @@ import { captureMyStyle, MY_STYLE_STORAGE, restoreMyStyle, styleAuto, styleManua
 import QuickAutoPanel, { type AutoView, type QuickPatch } from "./QuickAutoPanel";
 import { useWatermarkRemoval } from "./WatermarkRemoval";
 import { watermarkRemovalSchema } from "../shared/watermark-removal";
+import AddedFootageNotice, { type AddedFootagePreview } from "./AddedFootageNotice";
+import { footagePlacementLabel } from "../shared/own-footage";
 
 type AutoPreset = { options: AutoOptions; variants: number };
-const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
 function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
   const options = value?.options;
   const versionMode = options?.versionMode === "angles" ? "angles" : "moments";
@@ -417,6 +418,7 @@ export default function App() {
   const [publishing, setPublishing] = useState<{ job: RenderJob | null } | null>(null);
   const [editingIssue, setEditingIssue] = useState<FinishedIssue>();
   const [original, setOriginal] = useState(false);
+  const [footagePreview, setFootagePreview] = useState<AddedFootagePreview | null>(null);
   const [renderedPreview, setRenderedPreview] = useState<{ id: string; url: string; duration: number; signature: string } | null>(null);
   const [showRendered, setShowRendered] = useState(false);
   const [previewBusy, setPreviewBusy] = useState(false);
@@ -477,6 +479,7 @@ export default function App() {
   const manualLive = mode === "manual" && !sourcePreview && !usingRendered;
   const activePreviewSettings = mode === "auto" ? autoOptions : settings;
   const livePreviewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: activePreviewSettings });
+  useEffect(() => setFootagePreview(null), [livePreviewSignature, watermark.editing, view]);
   useEffect(() => {
     setOriginal(false);
     setShowRendered(false);
@@ -487,7 +490,7 @@ export default function App() {
     const observer = new ResizeObserver(([entry]) => { if (entry) setPreviewHeight(entry.contentRect.height); });
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [selected?.id, mode, view, watermark.editing]);
+  }, [selected?.id, mode, view, watermark.editing, footagePreview]);
   const sequencePreview = selected ? manualSequencePreview(settings, selected.duration) : null;
   const liveInterval = sequencePreview?.first ?? (selected && (settings.trimEnd === null || settings.trimEnd <= selected.duration)
     ? manualPreviewInterval(settings, selected.duration) : null);
@@ -701,6 +704,8 @@ export default function App() {
     settings.volume,
     settings.muted,
     manualLive,
+    footagePreview,
+    watermark.editing,
     selected?.id,
   ]);
 
@@ -708,7 +713,7 @@ export default function App() {
     if (!videoRef.current || !manualLive || !liveInterval) return;
     videoRef.current.currentTime = liveInterval.start;
     setLiveOutputTime(0);
-  }, [liveInterval?.start, liveInterval?.end, manualLive, selected?.id]);
+  }, [liveInterval?.start, liveInterval?.end, manualLive, selected?.id, footagePreview, watermark.editing]);
 
 
   useEffect(() => {
@@ -1119,6 +1124,23 @@ export default function App() {
       ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
       : renderScope === "selected" && selected ? 1 : sources.length;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
+  const renderTargets = mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources;
+  const renderFootageCount = renderTargets.reduce((count, source) => count + ((mode === "auto"
+    ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings).ownFootage?.length ?? 0), 0);
+  const removePreviewFootage = (id: string) => {
+    if (!selected) return;
+    // This button identifies one video's insert; it must never edit the batch or future imports.
+    setScopeUndo(null); setFootagePreview(null);
+    if (mode === "auto") setAutoById(current => {
+      const preset = current[selected.id] || defaultAuto;
+      return { ...current, [selected.id]: autoPreset({ ...preset, options: { ...preset.options,
+        ownFootage: preset.options.ownFootage?.filter(item => item.id !== id) } }) };
+    });
+    else setSettingsById(current => {
+      const value = current[selected.id] || defaultSettings;
+      return { ...current, [selected.id]: { ...value, ownFootage: value.ownFootage?.filter(item => item.id !== id) } };
+    });
+  };
   useEffect(() => { if (health) setDiagnosticEnvironment(health.runtime, health); }, [health]);
   const missingBrollSources = (mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources).filter(source => {
     const options = mode === "auto" ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings;
@@ -1447,7 +1469,7 @@ export default function App() {
                     <MonitorPlay size={16} />
                     Preview
                   </h2>
-                    {!watermark.editing && <div className="preview-switch" role="group" aria-label="Video preview mode">
+                    {!watermark.editing && !footagePreview && <div className="preview-switch" role="group" aria-label="Video preview mode">
                       <button
                         disabled={!selected}
                         aria-pressed={!original && !usingRendered}
@@ -1468,7 +1490,17 @@ export default function App() {
                     </div>}
                 </div>
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
-                  {watermark.editing ? watermark.preview : selected ? (
+                  {watermark.editing ? watermark.preview : footagePreview ? <div className="added-footage-player">
+                    <div className="preview-label">{footagePlacementLabel(footagePreview.placement)}</div>
+                    <div className="video-frame" style={{ width: `min(100%, calc(var(--live-preview-height, 465px) * ${previewAspect}))`, aspectRatio: previewAspect }}>
+                      <video key={footagePreview.placement.id} src={footagePreview.asset.url} controls playsInline preload="metadata" aria-label="Added clip preview"
+                        muted={footagePreview.placement.audio === "mute" || footagePreview.placement.mode === "cover"}
+                        style={{ objectFit: footagePreview.placement.fit === "crop" ? "cover" : "contain" }}
+                        onLoadedMetadata={event => { event.currentTarget.currentTime = footagePreview.placement.appendToEnd ? 0 : footagePreview.placement.start; }}
+                        onTimeUpdate={event => { const player = event.currentTarget; if (!player.paused && player.currentTime >= (footagePreview.placement.appendToEnd ? footagePreview.asset.duration : footagePreview.placement.end)) player.pause(); }} />
+                    </div>
+                    <button type="button" className="secondary-button" onClick={() => setFootagePreview(null)}>Back to source preview</button>
+                  </div> : selected ? (
                     <>
                       <div className="preview-label">
                         <span />
@@ -1604,6 +1636,7 @@ export default function App() {
                 <div className="preview-bottom">
                   {selected ? (
                     <>
+                      {!!activePreviewSettings.ownFootage?.length && <AddedFootageNotice value={activePreviewSettings.ownFootage} onPreview={setFootagePreview} onRemove={removePreviewFootage} disabled={starting} previewDisabled={watermark.editing} />}
                       <div className="preview-file">
                         <Film size={15} />
                         <strong title={selected.name}>{selected.name}</strong>
@@ -1612,18 +1645,19 @@ export default function App() {
                       <div className="preview-note">
                         <CircleHelp size={12} />
                         <span>
-                          {watermark.editing ? "Mark on the original picture. These areas follow this source through your edits and exports."
+                          {footagePreview ? `Previewing ${footagePreview.asset.name}, an added clip in this export.`
+                            : watermark.editing ? "Mark on the original picture. These areas follow this source through your edits and exports."
                             : sourcePreview ? "Your original footage. Switch to Live to see your changes."
                             : mode === "auto"
                             ? "Live format, black bands and text. Auto cuts, generated captions and sound are ready after export."
                             : usingRendered ? "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
-                          {!watermark.editing && sampleCaptions && " Sample caption text shows the selected style and placement."}
+                          {!watermark.editing && !footagePreview && sampleCaptions && " Sample caption text shows the selected style and placement."}
                           {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Mark on video to preview it."}
                         </span>
                       </div>
-                      {mode === "manual" && !watermark.editing && <>
+                      {mode === "manual" && !watermark.editing && !footagePreview && <>
                         <div className="manual-preview-actions">
                           <p>{previewBusy ? "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of this edit` : "Review the first five seconds before exporting."}</p>
                           {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || !liveInterval} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />Render 5s preview</button>}
@@ -2332,11 +2366,12 @@ export default function App() {
                 </span>
                 <div>
                   <h2>One click. Every cut.</h2>
-                  <p>
+                  <p className="render-source-target" title={renderTargets.length === 1 ? renderTargets[0]!.name : undefined}>
                     {sources.length
-                      ? `${sources.length} source video${sources.length === 1 ? "" : "s"} ready for a fresh take.`
+                      ? renderTargets.length === 1 ? `Exporting: ${renderTargets[0]!.name}` : `${renderTargets.length} videos selected for export.`
                       : "Add your videos to put the studio to work."}
                   </p>
+                  {renderFootageCount > 0 && <p className="render-footage-summary">Includes {renderFootageCount} added clip{renderFootageCount === 1 ? "" : "s"} · Review beside the preview</p>}
                 </div>
               </div>
               {mode === "manual" && (

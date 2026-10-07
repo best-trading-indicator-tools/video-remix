@@ -18,6 +18,8 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, sele
   const [error, setError] = useState("");
   const [progress, setProgress] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const details = useRef<HTMLDetailsElement>(null);
+  useEffect(() => { if (value.length && details.current) details.current.open = true; }, [value.length]);
   const uploadRequest = useRef<XMLHttpRequest | null>(null);
   const load = async () => {
     try { const body = await apiRequest<{ assets: OwnFootageAsset[] }>("/api/broll"); setAssets(body.assets); setError(""); }
@@ -44,7 +46,7 @@ export default function OwnFootagePanel({ value = [], onChange, onApplyAll, sele
     xhr.onloadend = () => { uploadRequest.current = null; setProgress(null); };
     xhr.send(data);
   };
-  return <details className="own-footage"><summary><Film size={16} />Add my own footage <span>{value.length ? `${value.length} placement${value.length === 1 ? "" : "s"}` : "Optional"}</span></summary>
+  return <details ref={details} className="own-footage"><summary><Film size={16} />Add my own footage <span>{value.length ? `On · ${value.length} added clip${value.length === 1 ? "" : "s"}` : "Off"}</span></summary>
     <p className="own-footage-note">Add your whole clip at the end, or place a selected part at a precise time. “Insert” adds duration. “Cover” replaces the picture while the original speech continues.</p>
     <fieldset disabled={disabled || progress !== null}>
       <legend className="visually-hidden">Your footage placements</legend>

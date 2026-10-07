@@ -29,3 +29,15 @@
 .own-footage-batch p { margin: 10px 0 0; color: var(--subtle); font-size: 12px; line-height: 1.6; }
 .own-footage-batch p + button { margin-top: 12px; }
 @media (max-width: 580px) { .own-footage-fields { grid-template-columns: 1fr; } .own-footage { padding: 14px; } }
+.added-footage-notice { padding: 14px; border: 1px solid var(--line-strong); border-radius: 9px; background: var(--surface-raised); margin-bottom: 16px; }
+.added-footage-notice > strong { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--accent); }
+.added-footage-notice p, .added-footage-notice li span { font-size: 12px; line-height: 1.5; color: var(--subtle); }
+.added-footage-notice ul { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 12px; }
+.added-footage-notice li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.added-footage-notice li > div { display: grid; gap: 4px; flex: 1 1 160px; min-width: 0; overflow-wrap: anywhere; }
+.added-footage-notice li strong { font-size: 12px; }
+.added-footage-notice .secondary-button { padding: 7px 9px; font-size: 11px; min-height: 32px; }
+.added-footage-player { width: 100%; display: grid; justify-items: center; gap: 12px; }
+.render-info .render-source-target { max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.render-info .render-footage-summary { color: var(--accent); }
+@media (max-width: 580px) { .render-info .render-source-target { max-width: 230px; } }

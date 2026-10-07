@@ -54,7 +54,7 @@ export default function SupportingVisualsEditor({ options, onChange, capabilitie
     <div className="supporting-visuals" data-tour="supporting-visuals">
       <fieldset className="auto-visual-sources" disabled={libraryBusy} aria-describedby={`${prefix}-auto-visual-sources-note`}>
         <legend>Supporting visuals</legend>
-        <p id={`${prefix}-auto-visual-sources-note`} className="auto-preferences-note">Choose any combination. Leave all off to keep only your footage.</p>
+        <p id={`${prefix}-auto-visual-sources-note`} className="auto-preferences-note">Choose any combination of automatic supporting shots. Clips in “Add my own footage” are controlled separately.</p>
         <div className="auto-visual-options">
           {visualChoices.map(({ id, description, icon: Icon, available, setup }) => {
             const checked = visualSources.includes(id);
@@ -69,8 +69,8 @@ export default function SupportingVisualsEditor({ options, onChange, capabilitie
             </label>;
           })}
         </div>
-        {visualSources.length > 0 ? <button type="button" className="auto-visual-clear" onClick={() => onChange({ visualSources: [] })}>Use original footage only</button>
-          : <p className="auto-visual-empty">Original footage only. No supporting shots will be added.</p>}
+        {visualSources.length > 0 ? <button type="button" className="auto-visual-clear" onClick={() => onChange({ visualSources: [] })}>Turn off automatic supporting shots</button>
+          : <p className="auto-visual-empty">Automatic supporting shots are off.</p>}
       </fieldset>
       <p className="auto-preferences-note">Stock videos provided by <a href="https://www.pexels.com" target="_blank" rel="noreferrer">Pexels</a> and <a href="https://pixabay.com" target="_blank" rel="noreferrer">Pixabay</a>. Creator credits accompany each selected clip.</p>
       {graphicsSelected && !capabilities?.intelligence && <p className="auto-preferences-note">Configure DeepSeek to plan illustrated explainers. Without it, the original picture is kept.</p>}

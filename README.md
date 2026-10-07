@@ -996,6 +996,13 @@ inspected.
 
 ### Place your own footage
 
+Active clips from **Add my own footage** are listed beside the main preview,
+with their filename and intro, outro, insert or cover timing. **Preview** shows
+the added clip in the main player. **Remove** there removes only that placement
+from the current video, regardless of the batch settings scope. Source cards and
+the render bar include added clips in their summaries; turning off automatic
+supporting shots does not remove explicit footage placements.
+
 Open **Your footage** in Auto, Manual, Short clips, or Edit this result. Upload a
 video, then either append it automatically or place a selected part:
 

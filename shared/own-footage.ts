@@ -14,6 +14,14 @@ export const ownFootageSchema = z.array(z.object({
 export type OwnFootagePlacement = z.infer<typeof ownFootageSchema>[number];
 export interface OwnFootageAsset { id: string; name: string; duration: number; hasAudio: boolean; url: string; thumbnailUrl?: string }
 
+export function footagePlacementLabel(item: OwnFootagePlacement) {
+  const seconds = (n: number) => `${Number(n.toFixed(2))}s`;
+  if (item.appendToEnd) return "Outro · whole clip after this video";
+  const length = seconds(item.end - item.start);
+  if (item.mode === "insert" && item.at === 0) return `Intro · ${length} before this video`;
+  return item.mode === "insert" ? `Insert at ${seconds(item.at)} · adds ${length}` : `Cover at ${seconds(item.at)} · ${length}`;
+}
+
 /** Resolve the full asset on the server; a saved trim must not shorten an outro. */
 export function resolveFootagePlacement(item: OwnFootagePlacement, assetDuration: number): OwnFootagePlacement {
   return item.appendToEnd ? { ...item, mode: "insert", at: 0, start: 0, end: assetDuration } : item;
