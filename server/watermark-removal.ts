@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import { rasterizeMask, removalIntervals, removalMasks, type WatermarkRemoval } from "../shared/watermark-removal.js";
+import { DEFAULT_WATERMARK_FEATHER, featherMask, rasterizeMask, removalIntervals, removalMasks, type WatermarkRemoval } from "../shared/watermark-removal.js";
+import { runLocal, MEDIA_INPUT_ARGS } from "./auto-process.js";
 
 export class WatermarkRemovalError extends Error {
   readonly status = 422;
@@ -34,10 +35,14 @@ function validateMask(pixels: Uint8Array) {
 }
 
 /** Reject invalid selections before Auto analysis or review spends time on the job. */
-export function validateWatermarkRemoval(value: WatermarkRemoval | undefined, width: number, height: number) {
+export function validateWatermarkRemoval(value: WatermarkRemoval | undefined, width: number, height: number, duration?: number) {
   if (!value?.enabled) return;
   if (width * height > 17_000_000) throw new WatermarkRemovalError("Watermark removal supports source frames up to 16 megapixels.");
-  for (const mask of removalMasks(value)) validateMask(rasterizeMask(mask.strokes, width, height));
+  for (const mask of removalMasks(value)) {
+    if (mask.fill === "reference" && (mask.referenceTime === undefined || (duration !== undefined && mask.referenceTime >= duration)))
+      throw new WatermarkRemovalError("Choose a clean frame within the original video for this watermark area.");
+    validateMask(rasterizeMask(mask.strokes, width, height));
+  }
 }
 
 /** Conservatively downsample the mask, including a pixel of resampling support. */
@@ -56,8 +61,10 @@ function reducedMask(pixels: Uint8Array, width: number, height: number, smallWid
 }
 
 export async function watermarkFilters(value: WatermarkRemoval | undefined, width: number, height: number,
-  cuts: { start: number; end: number }[], speed: number, workDir: string, temporary: string[], signal: AbortSignal) {
+  cuts: { start: number; end: number }[], speed: number, workDir: string, temporary: string[], signal: AbortSignal,
+  source?: { input: string; duration: number; fps: number }) {
   const filters: string[] = [];
+  const references = new Map<number, string>();
   if (value?.enabled && width * height > 17_000_000) throw new WatermarkRemovalError("Watermark removal supports source frames up to 16 megapixels.");
   for (const mask of removalMasks(value)) {
     signal.throwIfAborted();
@@ -73,31 +80,52 @@ export async function watermarkFilters(value: WatermarkRemoval | undefined, widt
     };
     const number = (n: number) => Number(n.toFixed(8));
     const enable = intervals.length ? `:enable='${intervals.map(interval => `gte(t,${number(interval.start)})*lt(t,${number(interval.end)})`).join("+")}'` : "";
-    const radius = maskRadius(pixels, width, height);
+    const alphaPixels = featherMask(pixels, width, height, (value!.feather ?? DEFAULT_WATERMARK_FEATHER) * Math.min(width, height));
+    const alpha = await writeMask(alphaPixels, width, height);
+    const label = `watermark${filters.length}`;
+    const composite = `movie=filename=${alpha},format=gray[${label}mask];` +
+      `[${label}clean][${label}mask]alphamerge[${label}patch];` +
+      `[${label}original][${label}patch]overlay=0:0:format=auto${enable}`;
+    if (mask.fill === "reference") {
+      if (!source || mask.referenceTime === undefined || mask.referenceTime >= source.duration)
+        throw new WatermarkRemovalError("Choose a clean frame within the original video for this watermark area.");
+      const time = Math.min(mask.referenceTime, Math.max(0, source.duration - 1 / (source.fps || 30)));
+      let filename = references.get(time);
+      if (!filename) {
+        filename = `watermark-reference-${randomUUID()}.png`;
+        const file = path.join(workDir, filename); temporary.push(file);
+        await runLocal("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-threads", "2",
+          "-ss", String(time), ...MEDIA_INPUT_ARGS, "-i", source.input, "-map", "0:V:0", "-an",
+          "-vf", `scale=${width}:${height}:flags=bicubic,setsar=1`, "-frames:v", "1", "-update", "1", "-threads", "1", file], { signal, timeout: 30000 });
+        references.set(time, filename);
+      }
+      filters.push(`null[${label}original];movie=filename=${filename},setsar=1[${label}clean];${composite}`);
+      continue;
+    }
+    // Reconstruct the blending margin as well, so original logo edges never leak back in.
+    const workPixels = alphaPixels.map(pixel => pixel ? 255 : 0);
+    const radius = maskRadius(workPixels, width, height);
     if (radius <= 24) {
-      filters.push(`removelogo=filename=${await writeMask(pixels, width, height)}${enable}`);
+      filters.push(`split[${label}original][${label}work];` +
+        `[${label}work]removelogo=filename=${await writeMask(workPixels, width, height)}[${label}clean];${composite}`);
       continue;
     }
     // Thick marks at HD/4K need bounded reconstruction kernels, not rejection or
     // a lower-resolution export. Only the cleaned patch is scaled; the original
-    // full-resolution mask composites it onto untouched source pixels.
+    // full-resolution softened mask composites it onto the source pixels.
     let scale = 20 / radius, smallWidth: number, smallHeight: number, small: Uint8Array;
     do {
       signal.throwIfAborted();
       smallWidth = Math.max(2, Math.floor(width * scale / 2) * 2);
       smallHeight = Math.max(2, Math.floor(height * scale / 2) * 2);
-      small = reducedMask(pixels, width, height, smallWidth, smallHeight);
+      small = reducedMask(workPixels, width, height, smallWidth, smallHeight);
       scale *= .75;
     } while (maskRadius(small, smallWidth, smallHeight) > 24);
     const filename = await writeMask(small, smallWidth, smallHeight);
-    const alpha = await writeMask(pixels, width, height);
-    const label = `watermark${filters.length}`;
     filters.push(`split[${label}original][${label}work];` +
       `[${label}work]scale=${smallWidth}:${smallHeight}:flags=area,setsar=1,removelogo=filename=${filename}${enable},` +
       `scale=${width}:${height}:flags=bilinear,setsar=1[${label}clean];` +
-      `movie=filename=${alpha},format=gray[${label}mask];` +
-      `[${label}clean][${label}mask]alphamerge[${label}patch];` +
-      `[${label}original][${label}patch]overlay=0:0:format=auto${enable}`);
+      composite);
   }
   return filters;
 }

@@ -168,7 +168,7 @@ async function run(job: StoredJob, controller: AbortController) {
       );
     await assertLinkedSourceUnchanged(source);
     validateWatermarkRemoval(job.auto && !job.editPlan ? job.auto.watermarkRemoval : job.settings.watermarkRemoval,
-      Math.max(2, Math.floor(source.width / 2) * 2), Math.max(2, Math.floor(source.height / 2) * 2));
+      Math.max(2, Math.floor(source.width / 2) * 2), Math.max(2, Math.floor(source.height / 2) * 2), source.duration);
     if (!source.fingerprint) {
       source.fingerprint = await fingerprintFile(source.filePath, controller.signal);
       // Known, different sources may now use the remaining worker slots.

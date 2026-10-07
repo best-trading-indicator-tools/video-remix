@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { Brush, Eraser, LoaderCircle, MousePointer2, Play, Pause, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { DEFAULT_SETTINGS, type VideoSource } from "../shared/types";
-import { activeRemovalMasks, DEFAULT_WATERMARK_REMOVAL, MAX_MASK_STROKES, MAX_STROKE_POINTS, MAX_WATERMARK_MASKS,
+import { activeRemovalMasks, DEFAULT_WATERMARK_REMOVAL, DEFAULT_WATERMARK_FEATHER, featherMask, MAX_MASK_STROKES, MAX_STROKE_POINTS, MAX_WATERMARK_MASKS,
   rasterizeMask, watermarkRemovalSchema, type MaskPoint, type MaskStroke, type WatermarkMask, type WatermarkRemoval } from "../shared/watermark-removal";
 import { apiRequest } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
@@ -60,9 +60,10 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
     {removal.enabled && source && <>
       <p>Saved for this video only. Mark on the original picture before cropping or adding black bands.</p>
       <label>Removal timing<select value={removal.mode} onChange={event => update({ ...removal, mode: event.target.value as WatermarkRemoval["mode"] })}>
-        <option value="fixed">Automatic · same area throughout</option><option value="timed">Manual · areas at specific times</option>
+        <option value="fixed">Whole video · fixed area</option><option value="timed">Time ranges · only while visible</option>
       </select></label>
-      {removal.mode === "fixed" && removal.masks.length > 1 && <p>Automatic uses Area 1 throughout. Your other areas are kept for Manual timing.</p>}
+      {removal.mode === "fixed" && <p>This removes the area on every frame, even after the mark disappears. Use a time range for a temporary label.</p>}
+      {removal.mode === "fixed" && removal.masks.length > 1 && <p>Whole video uses Area 1. Your other areas are kept for Time ranges.</p>}
       {removal.mode === "timed" && <div className="watermark-ranges">
         <p>Times refer to the original video. Add a range whenever the mark moves; areas stay fixed within each range.</p>
         {removal.masks.map((item, index) => <div key={item.id} className="watermark-range">
@@ -79,8 +80,32 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
           <TimeField label="Area end (seconds)" value={mask.end} max={source.duration} onChange={n => { if (n <= mask.start || n > source.duration) return false; patchMask({ end: n }); return true; }} />
         </div>}
       </div>}
+      {mask && <>
+        <label>Area fill<select value={mask.fill ?? "surroundings"} onChange={event => patchMask(event.target.value === "reference"
+          ? { fill: "reference", referenceTime: mask.referenceTime ?? Math.min(time, Math.max(0, source.duration - 1 / (source.fps || 30))) }
+          : { fill: "surroundings" })}>
+          <option value="surroundings">Blend surrounding pixels</option><option value="reference">Copy from a clean frame</option>
+        </select></label>
+        {mask.fill === "reference" && <>
+          <p>Use real background detail from a nearby frame where this area is clear. Best for short removals on a steady background; the patch does not follow camera or subject movement.</p>
+          <TimeField label="Clean frame (source seconds)" value={mask.referenceTime ?? 0} max={Math.max(0, source.duration - 1 / (source.fps || 30))}
+            onChange={n => { if (n < 0 || n >= source.duration) return false; patchMask({ referenceTime: n }); return true; }} />
+          <button type="button" className="secondary-button" onClick={() => open(mask.referenceTime ?? 0)}>View clean frame</button>
+          {editing && <button type="button" className="secondary-button" onClick={() => {
+            patchMask({ referenceTime: Math.min(time, Math.max(0, source.duration - 1 / (source.fps || 30))) }); seekTo(mask.start);
+          }}>Use playhead as clean frame</button>}
+        </>}
+      </>}
+      <label>Edge softness <output>{Math.round((removal.feather ?? DEFAULT_WATERMARK_FEATHER) * 1000) / 10}%</output>
+        <input aria-label="Watermark edge softness" type="range" min={0} max={.03} step={.0025} value={removal.feather ?? DEFAULT_WATERMARK_FEATHER}
+          onChange={event => update({ ...removal, feather: event.target.valueAsNumber })} />
+      </label>
+      <p>Blends a narrow margin around the selection. The selected mark stays fully covered.</p>
       <button type="button" className="secondary-button" onClick={() => editing ? setEditing(false) : open()}>{editing ? "Done marking" : "Mark on video"}</button>
       {editing && <>
+        <button type="button" className="secondary-button" disabled={!mask || time <= mask.start || time >= source.duration} onClick={() => {
+          if (mask) update({ ...removal, mode: "timed", masks: removal.masks.map(item => item.id === mask.id ? { ...item, end: time } : item) });
+        }}>Stop this area at playhead</button>
         <div className="watermark-tools" role="group" aria-label="Watermark marking tools">
           {([["rect", "Select", MousePointer2], ["brush", "Brush", Brush], ["erase", "Erase", Eraser]] as const).map(([id, label, Icon]) =>
             <button key={id} type="button" aria-pressed={tool === id} onClick={() => setTool(id)}><Icon size={17} />{label}</button>)}
@@ -90,7 +115,7 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
         {tool !== "rect" && <label>Brush size <output>{Math.round(size * 100)}%</output><input aria-label="Watermark brush size" type="range" min={.005} max={.2} step={.005} value={size} onChange={event => setSize(event.target.valueAsNumber)} /></label>}
         <button type="button" className="watermark-clear" disabled={!mask?.strokes.length} onClick={() => patchMask({ strokes: [] })}><Trash2 size={14} />Clear selected area</button>
       </>}
-      <p>Local removal fills the marked pixels from their surroundings. Small marks on simple backgrounds work best. Preview the cleaned result before exporting.</p>
+      <p>Surrounding-pixel fill can look soft on large labels. A clean frame can preserve real texture when the background matches. Preview the cleaned result before exporting.</p>
       {error && <ProblemNotice message={error} operation="Mark watermark" />}
     </>}
   </section>;
@@ -124,8 +149,9 @@ function WatermarkWorkspace({ source, value, mask, onStrokes, tool, size, seek, 
     if (!context) return;
     const pixels = new Uint8Array(width * height);
     for (const item of activeRemovalMasks(value, time)) {
-      const raster = rasterizeMask(item.id === mask?.id && draft ? draft : item.strokes, width, height);
-      for (let i = 0; i < pixels.length; i++) if (raster[i]) pixels[i] = item.id === mask?.id ? 180 : 95;
+      const raster = featherMask(rasterizeMask(item.id === mask?.id && draft ? draft : item.strokes, width, height), width, height,
+        (value.feather ?? DEFAULT_WATERMARK_FEATHER) * Math.min(width, height));
+      for (let i = 0; i < pixels.length; i++) pixels[i] = Math.max(pixels[i]!, Math.round(raster[i]! / 255 * (item.id === mask?.id ? 180 : 95)));
     }
     const image = context.createImageData(width, height);
     for (let i = 0; i < pixels.length; i++) { image.data[i * 4] = 235; image.data[i * 4 + 1] = 160; image.data[i * 4 + 2] = 95; image.data[i * 4 + 3] = pixels[i]!; }

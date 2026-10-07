@@ -716,7 +716,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       `scale=${even(source.width)}:${even(source.height)}:flags=bicubic`,
       "setsar=1",
       ...await watermarkFilters(s.watermarkRemoval, even(source.width), even(source.height),
-        segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal),
+        segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal, { input, duration: source.duration, fps: source.fps }),
       // Clean the selected source pixels before scaling; no external service.
       ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),
     ];

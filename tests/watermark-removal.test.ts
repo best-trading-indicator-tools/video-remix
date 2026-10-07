@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 import { DEFAULT_SETTINGS, type RemixSettings } from "../shared/types.js";
-import { DEFAULT_WATERMARK_REMOVAL, rasterizeMask, removalIntervals, watermarkRemovalSchema, type MaskStroke, type WatermarkRemoval } from "../shared/watermark-removal.js";
+import { DEFAULT_WATERMARK_REMOVAL, featherMask, rasterizeMask, removalIntervals, watermarkRemovalSchema, type MaskStroke, type WatermarkRemoval } from "../shared/watermark-removal.js";
 import { settingsSchema, autoOptionsSchema } from "../server/schema.js";
 import { probeMedia, renderVideo } from "../server/engine.js";
 import { manualPreviewSettings } from "../server/manual-preview.js";
@@ -35,7 +35,7 @@ async function render(changes: Partial<RemixSettings>, input = source) {
   const output = path.join(directory, `out-${++serial}.mp4`), workDir = path.join(directory, `work-${serial}`);
   await renderVideo({ input, output, source: await probeMedia(input), settings: { ...DEFAULT_SETTINGS, ...changes }, workDir,
     signal: new AbortController().signal, onProgress: () => {} });
-  assert.ok(!(await readdir(workDir)).some(name => name.endsWith(".pgm")), "Temporary masks must be cleaned up");
+  assert.ok(!(await readdir(workDir)).some(name => name.startsWith("watermark-")), "Temporary masks and reference frames must be cleaned up");
   return output;
 }
 async function pixel(file: string, time: number, x = 68, y = 38) {
@@ -52,12 +52,48 @@ test("defaults are off; Auto and Manual accept bounded masks and reject malforme
   assert.deepEqual(autoOptionsSchema.parse({ watermarkRemoval: timed }).watermarkRemoval, timed);
   assert.deepEqual(settingsSchema.parse({ ...DEFAULT_SETTINGS, watermarkRemoval: timed }).watermarkRemoval, timed);
   for (const invalid of [
+    { ...timed, feather: .04 }, { ...timed, feather: -1 },
+    { ...timed, masks: [{ ...first, fill: "reference" }] },
+    { ...timed, masks: [{ ...first, fill: "reference", referenceTime: -1 }] },
     { ...timed, mode: "tracking" }, { ...timed, masks: [first, first] }, { ...timed, masks: [{ ...first, end: first.start }] },
     { ...timed, masks: [{ ...first, strokes: [{ kind: "brush", size: .04, points: [{ x: NaN, y: 0 }] }] }] },
     { ...timed, masks: [{ ...first, strokes: [{ kind: "rect", size: .04, points: [{ x: 0, y: 0 }] }] }] },
     { ...timed, masks: [{ ...first, strokes: Array(101).fill(first.strokes[0]) }] },
     { ...timed, masks: [{ ...first, strokes: [{ kind: "brush", size: .04, points: Array(301).fill({ x: .5, y: .5 }) }] }] },
   ]) assert.equal(watermarkRemovalSchema.safeParse(invalid).success, false);
+});
+
+test("soft edges keep the marked pixels opaque and fade only a bounded surrounding margin", () => {
+  const binary = new Uint8Array(20 * 20);
+  for (let y = 7; y < 13; y++) binary.fill(255, y * 20 + 7, y * 20 + 13);
+  const alpha = featherMask(binary, 20, 20, 4);
+  assert.equal(alpha[10 * 20 + 7], 255, "Never blend the original logo back into the selected core");
+  assert.ok(alpha[10 * 20 + 6]! < 255 && alpha[10 * 20 + 6]! > alpha[10 * 20 + 5]!);
+  assert.equal(alpha[10 * 20 + 3], 0);
+  assert.deepEqual(featherMask(binary, 20, 20, 0), binary);
+  assert.equal(binary[10 * 20 + 6], 0, "The saved binary selection stays unchanged");
+});
+
+test("a clean source frame preserves real texture and is used only in the marked source interval", async () => {
+  const input = path.join(directory, "textured.mp4");
+  await ffmpeg(["-f", "lavfi", "-i", "color=blue:size=320x180:rate=24:duration=3", "-f", "lavfi", "-i", "sine=frequency=440:duration=3",
+    "-vf", "drawgrid=w=8:h=8:t=2:color=red,drawbox=x=60:y=35:w=20:h=10:color=white:t=fill:enable='lt(t,1)'",
+    "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", input]);
+  const removal: WatermarkRemoval = { enabled: true, mode: "timed", feather: .01,
+    masks: [{ ...first, start: .25, end: .75, fill: "reference", referenceTime: 1.5 }] };
+  const output = await render({ watermarkRemoval: removal }, input);
+  white(await pixel(output, .1)); white(await pixel(output, .9));
+  const texture = await pixel(input, 1.5, 64, 38), result = await pixel(output, .5, 64, 38);
+  assert.ok(texture[0]! > 180, `Fixture must contain red texture, got ${texture}`);
+  assert.ok(result.every((n, i) => Math.abs(n - texture[i]!) < 25), `Reference texture changed: ${result} vs ${texture}`);
+  assert.equal((await probeMedia(output)).hasAudio, true);
+  // The clean frame is outside these reordered cuts. It must still come from
+  // original source time 1.5s, not the concatenated/sped-up output timeline.
+  const reordered = await render({ watermarkRemoval: removal, speed: 2, segments: [{ start: 1, end: 1.5 }, { start: 0, end: 1 }] }, input);
+  const moved = await pixel(reordered, .5, 64, 38);
+  assert.ok(moved.every((n, i) => Math.abs(n - texture[i]!) < 25));
+  await assert.rejects(render({ watermarkRemoval: { ...removal, masks: [{ ...removal.masks[0]!, referenceTime: 9 }] } }, input), /clean frame within the original video/);
+  assert.ok(!(await readdir(path.join(directory, `work-${serial}`))).some(name => name.startsWith("watermark-")));
 });
 
 test("brush follows a continuous path, erasing preserves surrounding and cleared pixels", () => {
@@ -185,4 +221,6 @@ test("watermark validation errors require attention instead of automatic retry",
   });
   assert.doesNotThrow(() => validateWatermarkRemoval({ ...large, enabled: false }, 320, 180));
   assert.doesNotThrow(() => validateWatermarkRemoval(reported, 2160, 3840));
+  assert.throws(() => validateWatermarkRemoval({ ...fixed, masks: [{ ...first, fill: "reference", referenceTime: 10 }] }, 320, 180, 4),
+    error => error instanceof WatermarkRemovalError && !canRetryRender(error));
 });

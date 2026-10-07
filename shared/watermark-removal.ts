@@ -4,6 +4,7 @@ export const MAX_WATERMARK_MASKS = 16;
 export const MAX_MASK_STROKES = 100;
 export const MAX_STROKE_POINTS = 300;
 export const MAX_MASK_POINTS = 8000;
+export const DEFAULT_WATERMARK_FEATHER = .01;
 const coordinate = z.number().finite().min(0).max(1);
 const point = z.object({ x: coordinate, y: coordinate }).strict();
 const stroke = z.object({
@@ -15,13 +16,18 @@ const stroke = z.object({
 export const watermarkRemovalSchema = z.object({
   enabled: z.boolean(),
   mode: z.enum(["fixed", "timed"]),
+  /** Soft transition outside the painted mask, relative to the shorter source dimension. */
+  feather: z.number().finite().min(0).max(.03).optional(),
   masks: z.array(z.object({
     id: z.string().min(1).max(80).regex(/^[a-zA-Z0-9_-]+$/),
     /** Always original-source seconds, before trims, cuts, speed and inserts. */
     start: z.number().finite().min(0).max(86400),
     end: z.number().finite().min(0).max(86400),
+    fill: z.enum(["surroundings", "reference"]).optional(),
+    referenceTime: z.number().finite().min(0).max(86400).optional(),
     strokes: z.array(stroke).max(MAX_MASK_STROKES),
-  }).strict().refine(value => value.end > value.start, "End must be after start")).max(MAX_WATERMARK_MASKS),
+  }).strict().refine(value => value.end > value.start, "End must be after start")
+    .refine(value => value.fill !== "reference" || value.referenceTime !== undefined, "Choose a clean source frame for this area")).max(MAX_WATERMARK_MASKS),
 }).strict().refine(value => new Set(value.masks.map(mask => mask.id)).size === value.masks.length, "Mask IDs must be unique")
   .refine(value => value.masks.reduce((total, mask) => total + mask.strokes.reduce((sum, item) => sum + item.points.length, 0), 0) <= MAX_MASK_POINTS, "Too many brush points. Clear an unused area first.");
 export type WatermarkRemoval = z.infer<typeof watermarkRemovalSchema>;
@@ -63,6 +69,24 @@ export function rasterizeMask(strokes: MaskStroke[], width: number, height: numb
     }
   }
   return pixels;
+}
+
+/** Keep the selected mark fully covered; blend only a narrow surrounding margin. */
+export function featherMask(pixels: Uint8Array, width: number, height: number, radius: number): Uint8Array {
+  if (radius <= 0) return pixels;
+  const distance = new Uint16Array(pixels.length).fill(65535);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const i = y * width + x;
+    distance[i] = pixels[i] ? 0 : Math.min(65535, x ? distance[i - 1]! + 1 : 65535, y ? distance[i - width]! + 1 : 65535);
+  }
+  const alpha = new Uint8Array(pixels.length);
+  for (let y = height - 1; y >= 0; y--) for (let x = width - 1; x >= 0; x--) {
+    const i = y * width + x;
+    distance[i] = Math.min(distance[i]!, x < width - 1 ? distance[i + 1]! + 1 : 65535, y < height - 1 ? distance[i + width]! + 1 : 65535);
+    const t = Math.max(0, 1 - distance[i]! / radius);
+    alpha[i] = Math.round(255 * t * t * (3 - 2 * t));
+  }
+  return alpha;
 }
 
 /** A mask follows every occurrence of a source interval, even reordered/repeated cuts. */

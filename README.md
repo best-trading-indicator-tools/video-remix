@@ -169,20 +169,30 @@ video in the main preview. Use **Select** for a movable, resizable box, **Brush*
 for irregular shapes, **Erase** to subtract from the mask, and **Undo** to restore
 the last change. Brush size is relative to the original picture.
 
-- **Automatic · same area throughout** applies Area 1 to the entire source.
-- **Manual · areas at specific times** saves up to 16 areas with start/end times
+- **Whole video · fixed area** applies Area 1 to every frame, including frames
+  after a temporary label disappears. Use a time range for a temporary mark.
+- **Time ranges · only while visible** saves up to 16 areas with start/end times
   on the original video's clock. Scrub or enter an exact timestamp, then use
   **Add area at playhead** when a mark changes position. Areas remain fixed within
   their ranges; there is no automatic motion tracking.
+- **Stop this area at playhead** sets the selected area's end to the current
+  source time and switches to time ranges.
+- **Area fill → Copy from a clean frame** uses the same region from a selected
+  original frame. Scrub to a nearby clear frame, then **Use playhead as clean
+  frame**. This retains real texture on a steady background; the patch is static
+  and will not follow camera or subject movement. Each area can use its own frame.
+- **Edge softness** blends a narrow margin around the selection while keeping
+  the selected core fully covered. Set it to zero for a hard mask boundary.
 - **Preview removal · 3s** renders a local sample from the playhead in the main
   player. **Back to marking** restores the source for comparison. The colored
   selection is a mask, not the cleaned result.
 
-FFmpeg fills masked pixels from neighboring pixels. This requires no service,
+The default fill reconstructs masked pixels from neighboring pixels; clean-frame
+fill copies source detail instead. Both run locally with FFmpeg, requiring no service,
 credits, model download or additional Python installation. Small overlays on
 simple backgrounds work best; complex detail or motion can leave a soft patch.
 Thick masks are reconstructed at an adaptive processing resolution and composited
-through the original mask, preserving the rest of the source at full resolution.
+through the softened mask, preserving pixels beyond its margin at full resolution.
 Selections covering more than 25% of the picture are rejected before analysis or
 review starts, with guidance to adjust the marked area. Selection errors stop the
 job immediately instead of repeating the same export automatically.
