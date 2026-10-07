@@ -20,10 +20,13 @@
     "setup:focus": "node scripts/setup-focus.mjs",
     "setup:watermark": "node scripts/setup-watermark.mjs",
     "setup:speaker": "node scripts/setup-speaker.mjs",
-    "measure:audio": "node --import tsx scripts/measure-audio.mjs"
+    "measure:audio": "node --import tsx scripts/measure-audio.mjs",
+    "mcp": "node scripts/mcp.mjs",
+    "mcp:install": "node scripts/install-mcp.mjs"
   },
   "dependencies": {
     "@hyperframes/producer": "0.8.40",
+    "@modelcontextprotocol/server": "2.3.1",
     "@remotion/bundler": "4.0.525",
     "@remotion/renderer": "4.0.525",
     "archiver": "^8.0.0",
@@ -37,6 +40,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.3.1",
     "@types/archiver": "^8.0.0",
     "@types/express": "^5.0.6",
     "@types/multer": "^2.2.0",
