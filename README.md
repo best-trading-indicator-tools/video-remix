@@ -165,7 +165,7 @@ presets save band sizes and styling while retaining each video's own words.
 
 ### Watermark removal
 
-**Auto → All settings** and **Manual → Essentials → Frame it right** include a
+**Auto → Quick**, **Auto → All settings** and **Manual → Essentials → Frame it right** include a
 **Watermark removal** checkbox, off by default. Enabling it opens the original
 video in the main preview. Use **Select** for a movable, resizable box, **Brush**
 for irregular shapes, **Erase** to subtract from the mask, and **Undo** to restore

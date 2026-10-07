@@ -1748,6 +1748,7 @@ export default function App() {
               {mode === "auto" ? (
                 autoView === "quick" ? (
                 <QuickAutoPanel
+                  watermarkControls={watermark.controls}
                   options={autoOptions}
                   variants={selectedAuto.variants}
 

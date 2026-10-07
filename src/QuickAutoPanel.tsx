@@ -30,9 +30,9 @@ const VERSION_MODES = [
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
 ] as const;
 
-export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, promptEditor, footageValue, footageScope, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, onFootageChange, disabled }: {
+export default function QuickAutoPanel({ options, variants, mixed, mixedLength, scopeDescription, promptEditor, watermarkControls, footageValue, footageScope, onChange, onView, selectedId, selectedVideos, onApplySelectedFootage, onFootageChange, disabled }: {
   scopeDescription: string; options: AutoOptions; variants: number; mixed: boolean; mixedLength: boolean;
-  promptEditor: ReactNode; footageValue: AutoOptions['ownFootage']; footageScope: string;
+  promptEditor: ReactNode; watermarkControls: ReactNode; footageValue: AutoOptions['ownFootage']; footageScope: string;
   onChange: (patch: QuickPatch) => void; onView: (view: AutoView) => void;
   selectedId?: string; selectedVideos: FootageTarget[]; disabled: boolean;
   onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
@@ -88,6 +88,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
       </>}
+      {watermarkControls}
       <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope}
         onChange={onFootageChange} disabled={disabled || !selectedId}
         selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
