@@ -1665,7 +1665,7 @@ export default function App() {
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
                           {!watermark.editing && !footagePreview && sampleCaptions && " Sample caption text shows the selected style and placement."}
-                          {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Mark on video to preview it."}
+                          {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Open watermark editor, then Preview removal to check it."}
                         </span>
                       </div>
                       {mode === "manual" && !watermark.editing && !footagePreview && <>

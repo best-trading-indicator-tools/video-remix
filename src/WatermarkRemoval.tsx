@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useId, useRef, useState, type PointerEvent } from "react";
 import { Brush, Eraser, LoaderCircle, MousePointer2, Play, Pause, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import { DEFAULT_SETTINGS, type VideoSource } from "../shared/types";
 import { activeRemovalMasks, DEFAULT_WATERMARK_REMOVAL, DEFAULT_WATERMARK_FEATHER, featherMask, MAX_MASK_STROKES, MAX_STROKE_POINTS, MAX_WATERMARK_MASKS,
@@ -25,6 +25,7 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
   value?: WatermarkRemoval; onChange: (value: WatermarkRemoval) => void; source?: VideoSource; workspaceKey: string;
 }) {
   const removal = value ?? DEFAULT_WATERMARK_REMOVAL;
+  const editorHelpId = useId();
   const [editing, setEditing] = useState(false), [tool, setTool] = useState<Tool>("brush"), [size, setSize] = useState(.04);
   const [maskId, setMaskId] = useState(""), [time, setTime] = useState(0), [seek, setSeek] = useState({ time: 0, token: 0 });
   const [error, setError] = useState("");
@@ -101,7 +102,12 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
           onChange={event => update({ ...removal, feather: event.target.valueAsNumber })} />
       </label>
       <p>Blends a narrow margin around the selection. The selected mark stays fully covered.</p>
-      <button type="button" className="secondary-button" onClick={() => editing ? setEditing(false) : open()}>{editing ? "Done marking" : "Mark on video"}</button>
+      <button type="button" className="secondary-button" aria-describedby={editorHelpId} onClick={() => editing ? setEditing(false) : open()}>
+        {editing ? <X size={16} /> : <Brush size={16} />}{editing ? "Close watermark editor" : "Open watermark editor"}
+      </button>
+      <p id={editorHelpId}>{editing
+        ? "Areas save automatically as you draw. Closing returns to the main preview; watermark removal stays enabled for export."
+        : "Open the editor to mark or adjust areas and preview the cleaned result."}</p>
       {editing && <>
         <button type="button" className="secondary-button" disabled={!mask || time <= mask.start || time >= source.duration} onClick={() => {
           if (mask) update({ ...removal, mode: "timed", masks: removal.masks.map(item => item.id === mask.id ? { ...item, end: time } : item) });

@@ -169,6 +169,10 @@ video in the main preview. Use **Select** for a movable, resizable box, **Brush*
 for irregular shapes, **Erase** to subtract from the mask, and **Undo** to restore
 the last change. Brush size is relative to the original picture.
 
+Areas save automatically as you draw. **Close watermark editor** returns to the
+main preview while keeping removal enabled for export; it does not start a render.
+Use **Open watermark editor** to adjust the saved areas or preview removal.
+
 - **Whole video · fixed area** applies Area 1 to every frame, including frames
   after a temporary label disappears. Use a time range for a temporary mark.
 - **Time ranges · only while visible** saves up to 16 areas with start/end times
