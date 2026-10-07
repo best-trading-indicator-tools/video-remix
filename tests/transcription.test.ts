@@ -4,6 +4,7 @@ import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { findPython } from "../scripts/setup-python.mjs";
 import {
   transcribeLocal,
   transcriptionAvailable,
@@ -47,6 +48,48 @@ test("transcription respects a pre-cancelled operation before touching files", a
     }),
     { name: "AbortError" },
   );
+});
+
+test("speech readiness and setup reject an incompatible audio decoder", async (context) => {
+  let python;
+  try {
+    python = await findPython(run, { maxMinor: null });
+  } catch {
+    return context.skip("Python is not installed.");
+  }
+  await run(python.command, [...python.args, "-c", `
+import contextlib, importlib.util, io, sys, types
+from unittest.mock import patch
+
+spec = importlib.util.spec_from_file_location("transcribe", "scripts/transcribe.py")
+runner = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(runner)
+runner.cached_model = lambda *args: "unused-model"
+runner.load_model = lambda *args: None
+
+def broken_decoder(*args, **kwargs):
+    raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
+
+modules = {
+    "faster_whisper": types.ModuleType("faster_whisper"),
+    "faster_whisper.audio": types.SimpleNamespace(decode_audio=broken_decoder),
+    "faster_whisper.vad": types.SimpleNamespace(get_vad_model=lambda: None),
+    "ctranslate2": types.SimpleNamespace(get_supported_compute_types=lambda _: {"int8"}),
+    "onnxruntime": types.ModuleType("onnxruntime"),
+}
+with patch.dict(sys.modules, modules):
+    for mode in ("--check", "--download"):
+        output = io.StringIO()
+        with patch.object(sys, "argv", ["transcribe.py", mode]), contextlib.redirect_stdout(output):
+            try:
+                runner.main()
+            except RuntimeError as error:
+                assert "setup:auto" in str(error), str(error)
+                assert "metadata_errors" in str(error), str(error)
+            else:
+                raise AssertionError(f"{mode} accepted a broken decoder")
+        assert not output.getvalue(), "A broken decoder must not report ready"
+  `]);
 });
 
 test(

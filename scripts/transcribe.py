@@ -2,11 +2,13 @@
 """Local CPU Whisper runner. stdout is one JSON value; stderr contains progress."""
 
 import argparse
+import io
 import json
 import math
 import os
 from pathlib import Path
 import sys
+import wave
 
 # Bound native libraries even when this runner is used outside the Node wrapper.
 os.environ["OMP_NUM_THREADS"] = "2"
@@ -39,6 +41,28 @@ def load_model(location):
 
     return WhisperModel(location, device="cpu", compute_type="int8", cpu_threads=2,
                         num_workers=1, local_files_only=True)
+
+
+def check_audio_decoder():
+    """Exercise Whisper's decoder before reporting that transcription is ready."""
+    from faster_whisper.audio import decode_audio
+
+    try:
+        with io.BytesIO() as buffer:
+            with wave.open(buffer, "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes(b"\x00\x00" * 1600)
+            buffer.seek(0)
+            samples = decode_audio(buffer, sampling_rate=16000)
+            if len(samples) != 1600:
+                raise RuntimeError("The audio decoder returned incomplete audio.")
+    except Exception as error:
+        raise RuntimeError(
+            "The local speech audio decoder is not working. "
+            f"Run npm run setup:auto again. Details: {error}"
+        ) from error
 
 
 def finite_time(value, duration):
@@ -111,6 +135,8 @@ def main():
         progress(0, "Downloading speech model")
         args.cache_dir.mkdir(parents=True, exist_ok=True)
     location = cached_model(args.model, args.cache_dir.resolve(), args.download)
+    if args.check or args.download:
+        check_audio_decoder()
     if args.check:
         import ctranslate2
         import onnxruntime  # noqa: F401: VAD must be installed too.

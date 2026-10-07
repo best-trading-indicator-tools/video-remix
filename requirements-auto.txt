@@ -1,3 +1,5 @@
 # Local CPU transcription; no Torch, cloud account, or API key required.
 faster-whisper==1.2.1
 ctranslate2==4.6.0
+# PyAV 19 removed metadata_errors, which faster-whisper 1.2.1 still passes.
+av>=11,<19
