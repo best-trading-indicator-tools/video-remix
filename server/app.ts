@@ -1,6 +1,7 @@
 import { installApiKeyRoutes } from "./api-key-routes.js";
 import { installWorkspaceRoutes } from "./workspace-routes.js";
 import { installExportTools } from "./export-tools.js";
+import { installExportSelectionRoutes } from "./export-selection.js";
 import { installPublishingRoutes } from "./publishing-routes.js";
 import { publishingJobs } from "./publishing-lock.js";
 import { historyRecords, historyMatches, historyPage, historyStockUses } from "./store.js";
@@ -163,6 +164,7 @@ export function createApp() {
   installApiKeyRoutes(app);
   app.use(express.json({ limit: "512kb" }));
   installWorkspaceRoutes(app);
+  installExportSelectionRoutes(app);
   installMediaImportRoutes(app);
   installManualPreviewRoutes(app);
   installSpeakerFocusRoutes(app);

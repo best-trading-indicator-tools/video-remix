@@ -3,14 +3,16 @@ import LibraryFilters from './LibraryFilters';
 import ProjectField from './ProjectField';
 import ExportDecision from './ExportDecision';
 import RetentionNotice, { expiryText } from './RetentionNotice';
-import { EMPTY_FILTERS, matchesExport, reviewStatus, revisionFamilies } from '../shared/library';
+import { EMPTY_FILTERS, matchesExport, reviewStatus } from '../shared/library';
+import { MAX_EXPORT_SELECTION, exportRevisionFamilies, selectableExports } from '../shared/export-selection';
 import { recordDiagnostic } from "./diagnostics-store";
 import { ExportPreview, ExportName } from "./ExportPreview";
 import ExportKeepButton from "./ExportKeepButton";
 import ExportDeleteButton from "./ExportDeleteButton";
+import ExportBulkActions, { useExportSelection } from './ExportBulkActions';
 import PublishingPanel from "./PublishingPanel";
 import QuickReview from "./QuickReview";
-import { exportStatus, visibleExportChanges } from "../shared/export-presentation";
+import { exportStatus, exportTitle, visibleExportChanges } from "../shared/export-presentation";
 import { apiRequest as api } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
 import { setDiagnosticEnvironment } from "./diagnostics-store";
@@ -387,6 +389,8 @@ export default function App() {
   const [reviewRefresh, setReviewRefresh] = useState(0);
   const observedJobDiagnostics = useRef<Set<string> | null>(null);
   const [jobs, setJobs] = useState<RenderJob[]>([]);
+  const [exportSelectionBusy, setExportSelectionBusy] = useState(false);
+  const exportMutationVersion = useRef(0);
   const [editorialRetries, setEditorialRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
   const editorialRequests = useRef(new Set<string>());
   const [finishedRetries, setFinishedRetries] = useState<Record<string, { pending: boolean; error: string }>>({});
@@ -603,6 +607,7 @@ export default function App() {
     const poll = async () => {
       let active = false;
       try {
+        const mutationVersion = exportMutationVersion.current;
         const data = await api<{ jobs: RenderJob[] }>("/api/jobs");
         if (!stopped) {
           const seen = observedJobDiagnostics.current;
@@ -613,7 +618,7 @@ export default function App() {
             }
           }
           else observedJobDiagnostics.current = new Set(data.jobs.flatMap(job => job.diagnostic ? [job.diagnostic.id] : []));
-          setJobs(data.jobs);
+          if (mutationVersion === exportMutationVersion.current) setJobs(data.jobs);
           setConnected(true);
         }
         active = data.jobs.some((job) =>
@@ -1111,6 +1116,8 @@ export default function App() {
       return groups;
     }, {}),
   ).sort((a, b) => b[0].createdAt.localeCompare(a[0].createdAt));
+  const selectableJobs = view === 'exports' ? selectableExports(batchGroups, expandedRevisions) : [];
+  const exportSelection = useExportSelection(selectableJobs);
   const manualDefaults = { ...DEFAULT_SETTINGS,
     visualSources: [], supportingVisuals: "off", brollIds: [], brollCount: DEFAULT_BROLL_COUNT,
     brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE, brollMatching: "tags", stockVideoType: "all", blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
@@ -2501,6 +2508,22 @@ export default function App() {
             </div>
             <LibraryFilters value={libraryFilters} onChange={setLibraryFilters} projects={projects} />
             <p className="library-result-count" role="status">{visibleJobs.length} of {jobs.length} exports · {unreviewed.length} unreviewed · {accepted.length} accepted</p>
+            <ExportBulkActions available={selectableJobs} selected={exportSelection.selected} busy={exportSelectionBusy}
+              onBusy={setExportSelectionBusy} onSelectAll={exportSelection.selectAll} onClear={exportSelection.clear}
+              onKept={saved => {
+                exportMutationVersion.current++;
+                setJobs(current => current.map(job => {
+                  const kept = saved.find(item => item.id === job.id);
+                  return kept ? { ...job, keptAt: kept.keptAt } : job;
+                }));
+              }}
+              onDeleted={ids => {
+                exportMutationVersion.current++;
+                setJobs(current => current.filter(job => !ids.includes(job.id)));
+                setPreviewJob(current => current && ids.includes(current.id) ? null : current);
+                setQuickReview(current => current?.filter(job => !ids.includes(job.id)) ?? null);
+                setReviewRefresh(value => value + 1);
+              }} onReview={setQuickReview} />
             <div className="publishing-actions">
               {unreviewed.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...unreviewed])}><MonitorPlay size={16} />Review unreviewed · {unreviewed.length}</button>}
               {visibleCompleted.length > 0 && <button className="secondary-button" onClick={() => setQuickReview([...visibleCompleted])}>Review filtered exports · {visibleCompleted.length}</button>}
@@ -2541,7 +2564,7 @@ export default function App() {
               batchGroups.map((batch) => {
                 const allBatch = jobs.filter(job => job.batchId === batch[0].batchId);
                 const removable = allBatch.filter(job => !job.keptAt && !job.draftSavedAt);
-                const families = revisionFamilies(batch).map(family => family.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+                const families = exportRevisionFamilies(batch);
                 const batchCompleted = allBatch.filter(
                   (job) => job.status === "completed",
                 );
@@ -2610,9 +2633,15 @@ export default function App() {
                             : job.settings.aspect;
                         return (
                           <article
-                            className={`job-card status-${job.status}`}
+                            className={`job-card status-${job.status}${exportSelection.selectedIds.has(job.id) ? ' is-selected' : ''}`}
                             key={job.id}
                           >
+                            <label className="export-card-selection" title={['queued', 'processing'].includes(job.status) ? 'Available after rendering finishes' : 'Select this export for bulk actions'}>
+                              <input type="checkbox" aria-label={`Select export: ${exportTitle(job)} · V${job.variant}${job.parentJobId ? ` · Revision ${job.revision ?? 1}` : ''}`}
+                                checked={exportSelection.selectedIds.has(job.id)}
+                                disabled={exportSelectionBusy || ['queued', 'processing'].includes(job.status) || (!exportSelection.selectedIds.has(job.id) && exportSelection.selected.length >= MAX_EXPORT_SELECTION)}
+                                onChange={() => exportSelection.toggle(job.id)} />
+                            </label>
                             {job.status === "completed" ? <ExportPreview job={job} onOpen={() => setPreviewJob(job)} /> : <div className="job-thumb">{source ? <img src={source.thumbnailUrl} alt="" loading="lazy" decoding="async" /> : <Film size={21} />}{job.status === "processing" && <LoaderCircle className="spin" size={18} />}</div>}
                             <div className="job-main">
                               <div className="job-title">

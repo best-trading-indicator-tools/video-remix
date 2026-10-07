@@ -262,6 +262,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
     description: "Exports groups your jobs into batches, with current stages, warnings, errors and completed videos.",
     options: [["Progress and recovery", "Cancel work, retry eligible failures, or read why a version was skipped."],
       ["Preview and download", "Watch the result and read what changed. Download an MP4, available SRT captions, or the completed batch as a ZIP."],
+      ["Select several exports", "Check cards across collections to keep, download a ZIP, review, or delete the selection. Select all shown excludes hidden revisions and running exports. Deleting lists the selected files for confirmation, including any kept copies or saved drafts."],
       ["Keep what you need", "Generated files are retained for the period shown in the app. Download them before cleanup; History keeps the editing record."]],
   },
   { id: "revisions", chapter: "Results", title: "Refine a finished result", target: ".exports-panel", destination: { view: "exports" },
