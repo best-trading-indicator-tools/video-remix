@@ -169,7 +169,10 @@ export default function OnboardingTour({ onNavigate, onClose, initialTopic }: {
                 ? <option key={item.id} value={position}>{position + 1}. {item.title}</option> : null)}
             </optgroup>)}
           </select>
-        </label> : <button className="text-button" onClick={() => { setDetailed(true); setIndex(0); }}>Browse all help topics</button>}
+        </label> : <button className="text-button" onClick={() => {
+          setDetailed(true);
+          setIndex(step.helpTopic ? Math.max(0, TOUR_STEPS.findIndex(topic => topic.id === step.helpTopic!.id)) : 0);
+        }}>{step.helpTopic?.label ?? "Browse all help topics"}</button>}
       </div>
       <footer className="onboarding-footer">
         <button type="button" className="secondary-button" disabled={index === 0} onClick={() => setIndex(value => value - 1)}><ArrowLeft size={15} />Back</button>

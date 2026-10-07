@@ -33,8 +33,8 @@ test("every topic has a stable unique identity and destinations cover all editin
   }
 });
 
-test("first-use introduction is three steps with contextual detailed help retained", () => {
-  assert.equal(INTRO_STEPS.length, 3);
-  assert.deepEqual(INTRO_STEPS.map(step => step.destination?.view), ["studio", "studio", "exports"]);
+test("first-use introduction includes optional chat editing with contextual detailed help retained", () => {
+  assert.equal(INTRO_STEPS.length, 4);
+  assert.deepEqual(INTRO_STEPS.map(step => step.destination?.view), ["studio", "studio", "exports", "exports"]);
   assert.ok(TOUR_STEPS.length > INTRO_STEPS.length);
 });

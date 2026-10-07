@@ -25,6 +25,7 @@ export interface TourStep {
   fallbackTarget?: string;
   destination?: TourDestination;
   reveal?: string;
+  helpTopic?: { id: string; label: string };
 }
 const auto = { view: "studio", mode: "auto" } as const;
 const autoQuick = { view: "studio", mode: "auto", autoView: "quick" } as const;
@@ -308,11 +309,18 @@ export const TOUR_STEPS: readonly TourStep[] = [
       ["Compare recorded results", "Compare all recorded reviews by approach and benchmark case. Acceptance rates use explicit human verdicts; undecided exports and automatic repairs are reported separately."],
       ["Download measurements", "Export all measurements as CSV or JSON. The latest platform results for listed exports use one latest snapshot per recorded post; compare similar observation periods."]],
   },
+  { id: "mcp", chapter: "Edit from chat", title: "Connect Claude or Codex with MCP", target: ".exports-panel", destination: { view: "exports" },
+    description: "MCP connects Claude Code, Claude Desktop or Codex to Remix Studio on this computer. Ask for bulk edits, ending footage, captions and exports from a chat. No public server is needed.",
+    options: [["Connect once", "In the Remix Studio folder, run npm run build, then npm run mcp:install. Restart Claude Desktop, or open a new Claude Code or Codex session."],
+      ["Keep Remix Studio running", "In Claude Code, type /mcp and look for remix-studio. In any connected client, ask: Use remix-studio to list my videos and ending clips."],
+      ["Try a bulk edit", "Append outro.mp4 to videos A and B, add medium white text in the upper band, and export both. Name an available clip, or give its full local file path to import it."],
+      ["Separate drafts, familiar exports", "Name the videos you want to edit. MCP drafts do not copy browser selections or unsaved settings. Finished videos appear here in Exports for preview and download."]],
+  },
   { id: "ready", chapter: "Ready", title: "Your next cut starts here", target: ".mode-switch", destination: auto,
     description: "Import a video, choose a mode, then review your settings before rendering.",
     options: [["Come back whenever you need", "Quick guide and How it works reopen this tour. Jump to topic goes straight to a particular option."],
       ["Your work stays yours", "The tour only moves between views. Your settings, footage and exports are unchanged."],
-      ["Once per browser", "The three-step introduction opens on your first visit. Completion is remembered across tabs and restarts; open help whenever you need it."]],
+      ["Once per browser", "The four-step introduction opens on your first visit. Completion is remembered across tabs and restarts; open help whenever you need it."]],
   },
 ];
 
@@ -323,4 +331,7 @@ export const INTRO_STEPS: readonly TourStep[] = [
     options: [['Start with Auto', 'Use Quick setup, then Auto remix. Open All settings when you need more control.']] },
   { id: 'intro-review', chapter: 'Get started', title: '3. Review your clips', description: 'Preview, accept, request edits, or reject. Download accepted clips when you are ready.', target: '.exports-panel', destination: {view: 'exports'},
     options: [['Keep your work', 'Editing drafts save automatically. Keep finished exports to protect them from expiry.'], ['Help when you need it', 'Use Help with this workflow or Quick guide to explore detailed topics.']] },
+  { id: 'intro-mcp', chapter: 'Optional · Edit from chat', title: '4. Edit from Claude or Codex', description: 'The local MCP connection lets Claude Code, Claude Desktop or Codex edit several videos for you. Keep Remix Studio running while you use it.', target: '.exports-panel', destination: {view: 'exports'},
+    options: [['Ask for a batch edit', 'For example: Append outro.mp4 to videos A and B, add white upper-band text, and export both.'], ['Review the results here', 'MCP uses separate drafts, so name your videos instead of relying on browser selections. Finished clips appear in Exports.']],
+    helpTopic: { id: 'mcp', label: 'Set up Claude or Codex' } },
 ];
