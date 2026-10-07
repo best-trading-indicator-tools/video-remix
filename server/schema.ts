@@ -17,6 +17,7 @@ export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => c
 export { captionStyleSchema } from "../shared/caption-style.js";
 import { captionStyleSchema } from "../shared/caption-style.js";
 import { blackBandsSchema } from "../shared/black-bands.js";
+import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
 const supportingVisualShape = {
   supportingVisuals: z.enum(["off", "stock", "library", "graphics", "both"]).optional(),
   visualSources: z.array(z.enum(["pixabay", "pexels", "hyperframes", "remotion", "library"]))
@@ -31,6 +32,7 @@ export const settingsSchema = z
   .object({
     ...supportingVisualShape,
     blackBands: blackBandsSchema.optional(),
+    watermarkRemoval: watermarkRemovalSchema.optional(),
     ownFootage: ownFootageSchema.optional(),
     speed: n(0.5, 2),
     volume: n(0, 2),
@@ -136,6 +138,7 @@ export const normalizedSettings = (input: unknown) =>
   });
 export const autoOptionsObject = z
   .object({
+    watermarkRemoval: watermarkRemovalSchema.optional(),
     blackBands: blackBandsSchema.optional(),
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
     targetDuration: z.number().int().min(1).default(45),

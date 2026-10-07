@@ -161,6 +161,35 @@ captions occupy that area. Hooks and callouts appear over the video window. Your
 band text is included even when Auto is set to keep original speech captions. Finishing
 presets save band sizes and styling while retaining each video's own words.
 
+### Watermark removal
+
+**Auto → All settings** and **Manual → Essentials → Frame it right** include a
+**Watermark removal** checkbox, off by default. Enabling it opens the original
+video in the main preview. Use **Select** for a movable, resizable box, **Brush**
+for irregular shapes, **Erase** to subtract from the mask, and **Undo** to restore
+the last change. Brush size is relative to the original picture.
+
+- **Automatic · same area throughout** applies Area 1 to the entire source.
+- **Manual · areas at specific times** saves up to 16 areas with start/end times
+  on the original video's clock. Scrub or enter an exact timestamp, then use
+  **Add area at playhead** when a mark changes position. Areas remain fixed within
+  their ranges; there is no automatic motion tracking.
+- **Preview removal · 3s** renders a local sample from the playhead in the main
+  player. **Back to marking** restores the source for comparison. The colored
+  selection is a mask, not the cleaned result.
+
+FFmpeg fills masked pixels from neighboring pixels. This requires no service,
+credits, model download or additional Python installation. Small overlays on
+simple backgrounds work best; complex detail or motion can leave a soft patch.
+Very large or thick masks are rejected with guidance to make a tighter selection.
+
+Masks are stored with the individual video's settings, retained when disabled,
+and preserved in saved export revisions. They are excluded from styles,
+finishing presets, copy-to-all and future-import defaults. Timed masks follow
+trims, reordered/repeated source cuts and playback speed, before cropping, color,
+black bands, added captions and supporting footage. Existing live edit previews
+show the source until a cleaned sample or export is rendered.
+
 ### Caption appearance
 
 Choose a look in **Auto → Caption appearance**, **Manual → Captions → Caption appearance**,

@@ -46,6 +46,7 @@ export interface SupportingVisualOptions {
   brollMaxCoverage?: number;
 }
 export interface AutoOptions extends SupportingVisualOptions {
+  watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
   aspect: Aspect;
@@ -124,6 +125,7 @@ export interface AutoCapabilities {
   message?: string;
 }
 export interface RemixSettings extends SupportingVisualOptions {
+  watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
   speed: number;

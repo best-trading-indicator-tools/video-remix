@@ -100,7 +100,7 @@ export default function TimelinePreview({ plan, job, time, seekToken, rate, onRa
       {!!rate && rate !== 1 && <span>{rate}×</span>}
       <button type="button" aria-label={muted ? 'Unmute preview' : 'Mute preview'} onClick={() => setMuted(!muted)}>{muted ? <VolumeX size={16} /> : <Volume2 size={16} />}</button>
     </div>
-    <p className="draft-preview-note">Live cut preview · Render for final sound, transitions and effects.</p>
+    <p className="draft-preview-note">Live cut preview · Render for final sound, transitions and effects.{plan.settings.watermarkRemoval?.enabled && " Saved watermark removal is applied when rendering."}</p>
     {error && <p role="alert">{error}</p>}
   </div>;
 }

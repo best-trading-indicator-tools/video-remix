@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
 import { captionsAss, parseCanonicalSrt } from "./caption-ass.js";
 import { blackBandsSchema, blackBandGeometry, bandTextLayout } from "../shared/black-bands.js";
+import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
+import { watermarkFilters } from "./watermark-removal.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters, audioNormalizationFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings, TranscriptWord } from "../shared/types.js";
@@ -401,6 +403,8 @@ function validateSettings(settings: RemixSettings): void {
     (settings.segments?.reduce((sum, segment) => sum + (segment.focusTrack?.length ?? 0), 0) ?? 0) > MAX_FOCUS_POINTS_TOTAL)
     throw new Error("Focus tracks need bounded, ordered source timestamps and coordinates between 0 and 1");
   const style = settings.captionStyle;
+  if (settings.watermarkRemoval !== undefined && !watermarkRemovalSchema.safeParse(settings.watermarkRemoval).success)
+    throw new Error("Watermark removal needs valid brush marks and source-time ranges.");
   if (settings.blackBands !== undefined && !blackBandsSchema.safeParse(settings.blackBands).success)
     throw new Error("Black bands need valid sizes, fit and printable text of at most 200 characters per band");
   if (style !== undefined && !captionStyleSchema.safeParse(style).success)
@@ -711,6 +715,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       // Work in display pixels so anamorphic and autorotated inputs export correctly.
       `scale=${even(source.width)}:${even(source.height)}:flags=bicubic`,
       "setsar=1",
+      ...await watermarkFilters(s.watermarkRemoval, even(source.width), even(source.height),
+        segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal),
       // Clean the selected source pixels before scaling; no external service.
       ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),
     ];

@@ -3,7 +3,7 @@ import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
 import { CaptionAppearance } from "./CaptionStyleEditor";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
   ChevronDown,
@@ -42,6 +42,7 @@ export const AUTO_FORMAT_NAMES: Record<AutoOptions["aspect"], string> = {
 };
 
 export default function AutoPanel({
+  watermarkControls,
   scopeDescription,
   onView,
   onSaveStyle,
@@ -68,6 +69,7 @@ export default function AutoPanel({
   maxFiles,
   maxFileSize,
 }: {
+  watermarkControls: ReactNode;
   scopeDescription: string;
   onView?: (view: AutoView) => void;
   onSaveStyle?: () => void;
@@ -162,7 +164,7 @@ export default function AutoPanel({
           )}
           {sources.length > 1 && (
             <small>
-              Copies format, captions, sound, footage and version count to every imported video. Future imports change only when selected above.
+              Copies format, captions, sound, footage and version count to every imported video. Watermark areas stay with each video. Future imports change only when selected above.
             </small>
           )}
           {onSaveStyle && (
@@ -206,6 +208,7 @@ export default function AutoPanel({
           </label>
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
+        {watermarkControls}
         <OwnFootagePanel key={selectedId || "default"} value={options.ownFootage} onChange={ownFootage => onChange({ ...options, ownFootage })} disabled={footageDisabled}
           selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
         <FinishingPresets mode="auto" settings={options} disabled={libraryBusy} onApply={patch => onChange({ ...options, ...patch, blackBands: applyBandFinish(options.blackBands, patch.blackBands) })} />

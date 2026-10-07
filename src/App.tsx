@@ -104,6 +104,8 @@ import { blackBandsSchema, DEFAULT_BLACK_BANDS, applyBandFinish } from "../share
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
 import { captureMyStyle, MY_STYLE_STORAGE, restoreMyStyle, styleAuto, styleManual, type MyStyle } from "../shared/my-style";
 import QuickAutoPanel, { type AutoView, type QuickPatch } from "./QuickAutoPanel";
+import { useWatermarkRemoval } from "./WatermarkRemoval";
+import { watermarkRemovalSchema } from "../shared/watermark-removal";
 
 type AutoPreset = { options: AutoOptions; variants: number };
 const visualSourceSummary = (options: AutoOptions) => getVisualSources(options).map((source) => VISUAL_SOURCE_LABELS[source]).join(" + ") || "Original footage only";
@@ -132,6 +134,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
       blackBands: blackBandsSchema.safeParse(options?.blackBands).success ? options?.blackBands : undefined,
+      watermarkRemoval: watermarkRemovalSchema.safeParse(options?.watermarkRemoval).success ? options?.watermarkRemoval : undefined,
       finishedReview: options?.finishedReview !== false,
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
       versionMode,
@@ -450,6 +453,15 @@ export default function App() {
     ? autoById[selected.id] || defaultAuto
     : defaultAuto;
   const autoOptions = selectedAuto.options;
+  const watermark = useWatermarkRemoval({ source: selected, workspaceKey: `${mode}:${view}:${autoView}`,
+    value: (mode === "auto" ? autoOptions : settings).watermarkRemoval,
+    onChange: watermarkRemoval => {
+      if (!selected) return;
+      // Painted source coordinates and timestamps belong to this video, regardless of batch scope.
+      if (mode === "auto") setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...(current[selected.id] || defaultAuto),
+        options: { ...(current[selected.id] || defaultAuto).options, watermarkRemoval } }) }));
+      else setSettingsById(current => ({ ...current, [selected.id]: { ...(current[selected.id] || defaultSettings), watermarkRemoval } }));
+    } });
   const lengthTargets = [...settingTargets.map(source => autoById[source.id] || defaultAuto), ...(futureSettings ? [defaultAuto] : [])];
   const mixedAutoLength = lengthTargets.some(preset => (preset.options.durationMode ?? "excerpt") !== (autoOptions.durationMode ?? "excerpt"));
   const autoPresets = sources.map(
@@ -475,7 +487,7 @@ export default function App() {
     const observer = new ResizeObserver(([entry]) => { if (entry) setPreviewHeight(entry.contentRect.height); });
     observer.observe(frame);
     return () => observer.disconnect();
-  }, [selected?.id, mode, view]);
+  }, [selected?.id, mode, view, watermark.editing]);
   const sequencePreview = selected ? manualSequencePreview(settings, selected.duration) : null;
   const liveInterval = sequencePreview?.first ?? (selected && (settings.trimEnd === null || settings.trimEnd <= selected.duration)
     ? manualPreviewInterval(settings, selected.duration) : null);
@@ -741,10 +753,11 @@ export default function App() {
     if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
     rememberScopeChange();
-    setSettingsById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, { ...(current[source.id] || defaultSettings), ...patch }])) }));
-    if (!sources.length || futureSettings) setDefaultSettings(current => ({ ...current, ...patch }));
+    setSettingsById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, { ...(current[source.id] || defaultSettings), ...patch,
+      ...(source.id !== selected?.id ? { watermarkRemoval: current[source.id]?.watermarkRemoval } : {}) }])) }));
+    if (!sources.length || futureSettings) setDefaultSettings(current => ({ ...current, ...patch, watermarkRemoval: undefined }));
   };
-  const replaceSettings = (value: RemixSettings) => updateSettings({ ...DEFAULT_SETTINGS, ...value });
+  const replaceSettings = (value: RemixSettings) => updateSettings({ ...DEFAULT_SETTINGS, watermarkRemoval: undefined, ...value });
   const applyAll = () => {
     setScopeUndo({ auto: autoById, manual: settingsById, defaultAuto, defaultSettings });
     setSettingsById((current) =>
@@ -753,6 +766,7 @@ export default function App() {
           source.id,
           {
             ...settings,
+            watermarkRemoval: current[source.id]?.watermarkRemoval,
             trimStart:
               source.id === selected?.id
                 ? settings.trimStart
@@ -765,7 +779,7 @@ export default function App() {
         ]),
       ),
     );
-    if (futureSettings) setDefaultSettings({ ...settings, trimStart: 0, trimEnd: null });
+    if (futureSettings) setDefaultSettings({ ...settings, watermarkRemoval: undefined, trimStart: 0, trimEnd: null });
     notify(
       `Settings applied to ${sources.length} video${sources.length === 1 ? "" : "s"}. Each video's trim is kept.`,
       "success",
@@ -775,7 +789,7 @@ export default function App() {
   const updateScopedAuto = (patch: QuickPatch) => {
     if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
     rememberScopeChange();
-    const merge = (preset: AutoPreset) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...preset.options, ...patch.options } });
+    const merge = (preset: AutoPreset) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...preset.options, ...patch.options, watermarkRemoval: preset.options.watermarkRemoval } });
     setAutoById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto)])) }));
     if (!sources.length || futureSettings) setDefaultAuto(merge);
   };
@@ -795,10 +809,10 @@ export default function App() {
     setAutoById((current) => ({
       ...current,
       ...Object.fromEntries(
-        sources.map((source) => [source.id, autoPreset(selectedAuto)]),
+        sources.map((source) => [source.id, autoPreset({ ...selectedAuto, options: { ...selectedAuto.options, watermarkRemoval: current[source.id]?.options.watermarkRemoval } })]),
       ),
     }));
-    if (futureSettings) setDefaultAuto(autoPreset(selectedAuto));
+    if (futureSettings) setDefaultAuto(autoPreset({ ...selectedAuto, options: { ...selectedAuto.options, watermarkRemoval: undefined } }));
     notify(
       `Auto settings applied to all ${sources.length} videos${futureSettings ? " and new imports" : ""}.`,
       "success",
@@ -1086,7 +1100,7 @@ export default function App() {
     brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE, brollMatching: "tags", stockVideoType: "all", blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
-  ).length;
+  ).length + (settings.watermarkRemoval?.enabled ? 1 : 0);
   const edited = adjustedCount > 0;
   const previewFilter = manualLive
     ? `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`
@@ -1433,7 +1447,7 @@ export default function App() {
                     <MonitorPlay size={16} />
                     Preview
                   </h2>
-                    <div className="preview-switch" role="group" aria-label="Video preview mode">
+                    {!watermark.editing && <div className="preview-switch" role="group" aria-label="Video preview mode">
                       <button
                         disabled={!selected}
                         aria-pressed={!original && !usingRendered}
@@ -1451,10 +1465,10 @@ export default function App() {
                         Original
                       </button>
                       {mode === "manual" && previewCurrent && <button aria-pressed={usingRendered} className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>Rendered</button>}
-                    </div>
+                    </div>}
                 </div>
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
-                  {selected ? (
+                  {watermark.editing ? watermark.preview : selected ? (
                     <>
                       <div className="preview-label">
                         <span />
@@ -1598,16 +1612,18 @@ export default function App() {
                       <div className="preview-note">
                         <CircleHelp size={12} />
                         <span>
-                          {sourcePreview ? "Your original footage. Switch to Live to see your changes."
+                          {watermark.editing ? "Mark on the original picture. These areas follow this source through your edits and exports."
+                            : sourcePreview ? "Your original footage. Switch to Live to see your changes."
                             : mode === "auto"
                             ? "Live format, black bands and text. Auto cuts, generated captions and sound are ready after export."
                             : usingRendered ? "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
-                          {sampleCaptions && " Sample caption text shows the selected style and placement."}
+                          {!watermark.editing && sampleCaptions && " Sample caption text shows the selected style and placement."}
+                          {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Mark on video to preview it."}
                         </span>
                       </div>
-                      {mode === "manual" && <>
+                      {mode === "manual" && !watermark.editing && <>
                         <div className="manual-preview-actions">
                           <p>{previewBusy ? "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of this edit` : "Review the first five seconds before exporting."}</p>
                           {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || !liveInterval} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />Render 5s preview</button>}
@@ -1657,6 +1673,7 @@ export default function App() {
                 />
                 ) : (
                 <AutoPanel
+                  watermarkControls={watermark.controls}
                   scopeDescription={scopeDescription}
                   onView={setAutoView}
                   onSaveStyle={saveMyStyle}
@@ -1826,6 +1843,7 @@ export default function App() {
                             </SelectField>
                           </div>
                           <BlackBandsEditor value={settings.blackBands} onChange={blackBands => updateSettings({ blackBands })} />
+                          {watermark.controls}
                           <Slider
                             label="Zoom"
                             value={settings.zoom}

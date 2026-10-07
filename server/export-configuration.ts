@@ -26,11 +26,13 @@ export function exportConfiguration(job: StoredJob, duration: number): ExportCon
     visualSources: [...new Set((job.supportingVisuals || []).map(shot => shot.visualSource || shot.stock?.providerId?.split(":")[0] || (shot.kind === "graphic" ? "graphics" : "library")))].sort(),
   };
   // Compare editing choices independently of the selected words, times, IDs and subject positions.
-  const { ownFootage, segments, hookText, trimStart, trimEnd, callouts, audioId, subtitleId, focalPoint, secondaryFocalPoint, blackBands, ...profile } = settings;
-  const { brollIds, ownFootage: _autoFootage, blackBands: autoBands, ...autoProfile } = auto || {};
+  const { ownFootage, segments, hookText, trimStart, trimEnd, callouts, audioId, subtitleId, focalPoint, secondaryFocalPoint, blackBands, watermarkRemoval, ...profile } = settings;
+  const { brollIds, ownFootage: _autoFootage, blackBands: autoBands, watermarkRemoval: autoRemoval, ...autoProfile } = auto || {};
   const profileId = createHash("sha256").update(canonical({ version: 1, profile, auto: auto ? autoProfile : null,
     ...(blackBands ? { blackBands: blackBandFinishSchema.parse(blackBands) } : {}),
     ...(autoBands ? { autoBlackBands: blackBandFinishSchema.parse(autoBands) } : {}),
+    ...(watermarkRemoval?.enabled ? { watermarkRemoval: watermarkRemoval.mode } : {}),
+    ...(autoRemoval?.enabled ? { autoWatermarkRemoval: autoRemoval.mode } : {}),
     ownFootage: ownFootage?.map(({ mode, audio, fit, appendToEnd }) => ({ mode, audio, fit, ...(appendToEnd ? { appendToEnd: true } : {}) })),
     hook: Boolean(hookText), soundtrack: Boolean(audioId), subtitles: Boolean(subtitleId) })).digest("hex").slice(0, 12);
   return { version: 1, profileId, settings, ...(auto ? { auto } : {}), actual };

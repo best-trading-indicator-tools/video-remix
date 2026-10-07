@@ -522,6 +522,7 @@ export async function prepareAutoRemix({
     ...DEFAULT_SETTINGS,
     ...(keepOriginalAudio ? DEFAULT_AUDIO_SETTINGS : {}),
     ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
+    ...(options.watermarkRemoval ? { watermarkRemoval: structuredClone(options.watermarkRemoval) } : {}),
     ...(options.captionStyle ? { captionStyle: options.captionStyle }
       : anglePreset ? { captionStyle: structuredClone(anglePreset.style) } : {}),
     aspect: options.aspect,
@@ -544,6 +545,7 @@ export async function prepareAutoRemix({
     settings.resolution = "source";
   if (settings.hookText) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
   if (settings.blackBands?.enabled) changes.push("Black bands with custom text");
+  if (settings.watermarkRemoval?.enabled && settings.watermarkRemoval.masks.some(mask => mask.strokes.length)) changes.push("Watermark removal in marked source areas");
   if (settings.callouts?.length) changes.push("Key-point overlays");
   // The sound look is measured on the footage that was actually selected, since
   // the tone and noise of the kept speech is what the export carries. Automatic

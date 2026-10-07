@@ -11,7 +11,7 @@ import { providerApiKey } from './api-keys.js';
 import { stockProvidersForEdit } from './stock-broll.js';
 import { PromptEditError } from './prompt-edit.js';
 
-const patchSchema = autoOptionsObject.omit({ ownFootage: true, brollIds: true, supportingVisuals: true }).partial().extend({
+const patchSchema = autoOptionsObject.omit({ watermarkRemoval: true, ownFootage: true, brollIds: true, supportingVisuals: true }).partial().extend({
   ...sourcePromptShape,
   aspect: autoOptionsObject.shape.aspect.removeDefault().optional(),
   targetDuration: autoOptionsObject.shape.targetDuration.removeDefault().optional(),

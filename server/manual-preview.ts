@@ -9,6 +9,7 @@ import { config } from "./config.js";
 import { geometry, probeMedia, renderVideo, type MediaInfo } from "./engine.js";
 import { settingsSchema } from "./schema.js";
 import { state } from "./store.js";
+import { WatermarkRemovalError } from "./watermark-removal.js";
 import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
 
 const PREVIEW_SECONDS = 5;
@@ -165,6 +166,7 @@ export function installManualPreviewRoutes(app: Express) {
       if (res.destroyed) return;
       if (timedOut) return res.status(504).json({ error: "The preview took too long. Try a shorter interval or simpler effects." });
       if (error instanceof PreviewError || error instanceof ImportError) return res.status(error.status).json({ error: error.message });
+      if (error instanceof WatermarkRemovalError) return res.status(422).json({ error: error.message });
       if ((error as NodeJS.ErrnoException).code === "ENOENT")
         return res.status(404).json({ error: "A selected media file is no longer available. Upload it again." });
       console.error("Manual preview failed:", error);

@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';
 import { DEFAULT_SETTINGS, DEFAULT_AUTO_OPTIONS, type AutoOptions } from '../shared/types.js';
 import { DEFAULT_BLACK_BANDS } from '../shared/black-bands.js';
+import type { WatermarkRemoval } from '../shared/watermark-removal.js';
 import { proposeManualPrompt } from '../server/manual-prompt.js';
 import { proposeAutoPrompt } from '../server/auto-prompt.js';
 import { sourcePromptProposal } from '../server/source-prompt-routing.js';
@@ -30,6 +31,18 @@ test('source prompts expose supported editing controls and preserve reviewable d
     return proposeAutoPrompt({ options, variants, source, signal, prompt: 'Remix with captions, black bands and B-roll', assets });
   };
   try {
+    await t.test('text edits preserve painted masks without sending or inventing source coordinates', async () => {
+      const watermarkRemoval: WatermarkRemoval = { enabled: true, mode: 'timed', masks: [{ id: 'mark', start: 1, end: 2,
+        strokes: [{ kind: 'brush', size: .04, points: [{ x: .2, y: .3 }] }] }] };
+      const manualResult = await manual({ brightness: .1 }, { ...DEFAULT_SETTINGS, watermarkRemoval });
+      assert.deepEqual(manualResult.settings.watermarkRemoval, watermarkRemoval);
+      assert.equal('watermarkRemoval' in context.currentSettings, false);
+      const autoResult = await auto({ aspect: '1:1' }, { ...DEFAULT_AUTO_OPTIONS, watermarkRemoval });
+      assert.deepEqual(autoResult.options.watermarkRemoval, watermarkRemoval);
+      assert.equal('watermarkRemoval' in context.currentSettings, false);
+      await assert.rejects(manual({ watermarkRemoval }), /unsupported or invalid/);
+      await assert.rejects(auto({ watermarkRemoval }), /unsupported or invalid/);
+    });
     await t.test('Manual combines captions, bands and stock without losing unrelated settings', async () => {
       const settings = { ...DEFAULT_SETTINGS, speed: 1.2, subtitleId: assets.attachments[1]!.id,
         blackBands: { ...DEFAULT_BLACK_BANDS, topText: 'Keep this heading', topPercent: 30 },
