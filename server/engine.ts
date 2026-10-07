@@ -708,15 +708,26 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         "utf8",
       );
     }
-    const filters = [
+    const sourceInputArgs = editList
+      ? ["-copyts", "-protocol_whitelist", "file,pipe", "-format_whitelist", `concat,${FORMATS}`, "-f", "concat", "-safe", concatSafe,
+        "-segment_time_metadata", "1", "-i", editList]
+      : [...SAFE_INPUT, "-ss", decimal(start), "-t", decimal(clipLength), "-i", input];
+    const sourceFilters = [
       ...(segments ? ["select=concatdec_select"] : []),
       `trim=duration=${decimal(clipLength)}`,
       `setpts=(PTS-STARTPTS)/${s.speed}`,
       // Work in display pixels so anamorphic and autorotated inputs export correctly.
       `scale=${even(source.width)}:${even(source.height)}:flags=bicubic`,
       "setsar=1",
+    ];
+    let renderProgressBase = 0;
+    const filters = [
+      ...sourceFilters,
       ...await watermarkFilters(s.watermarkRemoval, even(source.width), even(source.height),
-        segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal, { input, duration: source.duration, fps: source.fps }),
+        segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal, { input, duration: source.duration, fps: source.fps,
+          timeline: { inputArgs: sourceInputArgs, filters: [...sourceFilters, `fps=${fps}:start_time=0`], fps,
+            duration: Math.min(duration, options.maximumOutputDuration ?? duration),
+            onProgress: progress => { renderProgressBase = 75; options.onProgress(progress * .75); } } }),
       // Clean the selected source pixels before scaling; no external service.
       ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),
     ];
@@ -860,32 +871,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       "-threads",
       "2",
     ];
-    if (editList)
-      args.push(
-        "-copyts",
-        "-protocol_whitelist",
-        "file,pipe",
-        "-format_whitelist",
-        `concat,${FORMATS}`,
-        "-f",
-        "concat",
-        "-safe",
-        concatSafe,
-        "-segment_time_metadata",
-        "1",
-        "-i",
-        editList,
-      );
-    else
-      args.push(
-        ...SAFE_INPUT,
-        "-ss",
-        decimal(start),
-        "-t",
-        decimal(clipLength),
-        "-i",
-        input,
-      );
+    args.push(...sourceInputArgs);
     const replacementAudio = !!options.audioPath && !s.muted;
     if (replacementAudio)
       args.push(
@@ -1039,7 +1025,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     );
     let buffered = "";
     let lastProgress = 0;
-    options.onProgress(0);
+    options.onProgress(renderProgressBase);
     await run("ffmpeg", args, {
       cwd: workDir,
       signal,
@@ -1053,7 +1039,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
           const progress = clamp((seconds / exportDuration) * 100, 0, 99);
           if (Number.isFinite(progress) && progress > lastProgress) {
             lastProgress = progress;
-            options.onProgress(progress);
+            options.onProgress(renderProgressBase + progress * (100 - renderProgressBase) / 100);
           }
         }
       },

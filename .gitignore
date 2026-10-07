@@ -15,5 +15,7 @@ api-keys.enc.*.tmp
 *.log
 .venv/
 .venv-imports/
+.venv-watermark/
+scripts/models/big-lama.pt
 __pycache__/
 *cookies*.txt

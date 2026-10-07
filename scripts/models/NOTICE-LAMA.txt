@@ -1,0 +1,12 @@
+LaMa: Resolution-robust Large Mask Inpainting with Fourier Convolutions
+Copyright 2021 Samsung Research. Licensed under Apache License 2.0.
+Source and license: https://github.com/advimman/lama
+License text: LICENSE-LAMA.txt
+
+The optional, unmodified big-lama.pt TorchScript weights are distributed by
+Sanster: https://github.com/Sanster/models/releases/tag/add_big_lama
+The download URL and pinned SHA-256 are recorded in ../lama-model.json.
+
+Video Remixer's streaming worker is an independent integration. It bounds model
+input size, handles source-time masks and composites generated pixels only inside
+the user's selection and feather margin. Weights are not bundled in this repository.

@@ -11,7 +11,8 @@ import { settingsSchema, autoOptionsSchema } from "../server/schema.js";
 import { probeMedia, renderVideo } from "../server/engine.js";
 import { manualPreviewSettings } from "../server/manual-preview.js";
 import { captureFinishingPreset } from "../shared/finishing-presets.js";
-import { validateWatermarkRemoval, watermarkFilters, WatermarkRemovalError } from "../server/watermark-removal.js";
+import { lamaBounds, validateWatermarkRemoval, watermarkFilters, WatermarkRemovalError } from "../server/watermark-removal.js";
+import { assertLamaInstalled, LamaError } from "../server/lama.js";
 import { canRetryRender } from "../server/job-recovery.js";
 import type { StoredJob, StoredSource } from "../server/store.js";
 
@@ -223,4 +224,92 @@ test("watermark validation errors require attention instead of automatic retry",
   assert.doesNotThrow(() => validateWatermarkRemoval(reported, 2160, 3840));
   assert.throws(() => validateWatermarkRemoval({ ...fixed, masks: [{ ...first, fill: "reference", referenceTime: 10 }] }, 320, 180, 4),
     error => error instanceof WatermarkRemovalError && !canRetryRender(error));
+});
+
+test("LaMa is an explicit saved fill; legacy masks and disabled defaults retain their behavior", () => {
+  const lama = { ...fixed, masks: [{ ...first, fill: "lama" }] };
+  assert.equal(watermarkRemovalSchema.parse(lama).masks[0]!.fill, "lama");
+  assert.equal(autoOptionsSchema.parse({ watermarkRemoval: lama }).watermarkRemoval!.masks[0]!.fill, "lama");
+  assert.equal(settingsSchema.parse({ ...DEFAULT_SETTINGS, watermarkRemoval: lama }).watermarkRemoval!.masks[0]!.fill, "lama");
+  assert.equal(watermarkRemovalSchema.parse(fixed).masks[0]!.fill, undefined);
+  assert.equal(canRetryRender(new LamaError("Local model missing")), false);
+  const alpha = new Uint8Array(1080 * 1920);
+  for (let y = 8; y < 15; y++) alpha.fill(255, y * 1080 + 9, y * 1080 + 70);
+  const { box, crop, pixels } = lamaBounds(alpha, 1080, 1920);
+  assert.deepEqual(box, { x: 8, y: 8, width: 62, height: 8 });
+  assert.ok(crop.x >= 0 && crop.y >= 0 && crop.width <= 1080 && crop.height <= 1920);
+  assert.ok(crop.x <= box.x && crop.y <= box.y && crop.x + crop.width >= box.x + box.width);
+  assert.equal(pixels.length, 62 * 8);
+  assert.equal(pixels.filter(Boolean).length, 61 * 7, "Even-aligned padding adds no marked pixels");
+});
+
+test("local LaMa reconstructs pixels and preserves audio, timing, mixed fills and cleanup", { timeout: 120_000 }, async t => {
+  try { await assertLamaInstalled(); } catch { t.skip("Run npm run setup:watermark to enable the real-model integration test"); return; }
+  const removal: WatermarkRemoval = { ...timed, feather: 0, masks: [{ ...first, fill: "lama" }, second] };
+  const file = await render({ watermarkRemoval: removal, speed: 2, resolution: "source", aspect: "original",
+    segments: [{ start: 2, end: 3 }, { start: 0, end: 1 }, { start: 1, end: 2 }, { start: 1, end: 2 }] });
+  const info = await probeMedia(file);
+  assert.equal(info.width, 320); assert.equal(info.height, 180); assert.equal(info.hasAudio, true);
+  assert.ok(Math.abs(info.duration - 2) < .1);
+  blue(await pixel(file, .2, 228, 94)); white(await pixel(file, .7));
+  blue(await pixel(file, 1.2)); blue(await pixel(file, 1.7)); white(await pixel(file, 1.2, 228, 94));
+});
+
+test("LaMa respects trim and erased holes, reports progress, and cleans up after cancellation", { timeout: 120_000 }, async t => {
+  try { await assertLamaInstalled(); } catch { t.skip("Run npm run setup:watermark to enable the real-model integration test"); return; }
+  const erase: MaskStroke = { kind: "erase", size: .06, points: [{ x: 70 / 320, y: 40 / 180 }] };
+  const removal: WatermarkRemoval = { ...timed, feather: 0, masks: [{ ...first, fill: "lama", strokes: [...first.strokes, erase] }] };
+  const file = await render({ watermarkRemoval: removal, trimStart: 1, trimEnd: 2, speed: .5 });
+  white(await pixel(file, .5, 68, 38));
+  const repaired = await pixel(file, .5, 78, 38);
+  // The deliberately retained white hole is visible context to the model, so
+  // its neighboring reconstruction need not be exactly flat blue.
+  assert.ok(repaired[2]! > repaired[0]! + 60 && repaired[2]! > repaired[1]! + 60,
+    `The marked white text should be replaced by a blue-dominant patch: ${repaired}`);
+  const output = path.join(directory, "cancel-lama.mp4"), workDir = path.join(directory, "cancel-lama");
+  const controller = new AbortController(), progress: number[] = [];
+  await assert.rejects(renderVideo({ input: source, output, source: await probeMedia(source),
+    settings: { ...DEFAULT_SETTINGS, watermarkRemoval: { ...fixed, masks: [{ ...first, fill: "lama" }] } }, workDir,
+    signal: controller.signal, onProgress: value => { progress.push(value); if (value > 0 && value < 75) controller.abort(); } }));
+  assert.ok(progress.some(p => p > 0 && p < 75), "Report inference progress before encoding");
+  assert.deepEqual(await readdir(workDir), [], "Cancelled inference must remove model patches, masks and plan files");
+  // A cancelled worker releases its model slot; the next render must complete.
+  const completed: number[] = [];
+  await renderVideo({ input: source, output, source: await probeMedia(source), workDir,
+    settings: { ...DEFAULT_SETTINGS, trimEnd: .3, watermarkRemoval: { ...fixed, masks: [{ ...first, fill: "lama" }] } },
+    signal: new AbortController().signal, onProgress: value => completed.push(value) });
+  assert.equal(completed.at(-1), 100);
+  assert.ok(completed.every((p, i) => !i || p >= completed[i - 1]!), "Progress must not reset after inference");
+});
+
+test("LaMa patches stay aligned on VFR input and leave unmarked pixels exact before encoding", { timeout: 120_000 }, async t => {
+  try { await assertLamaInstalled(); } catch { t.skip("Run npm run setup:watermark to enable the real-model integration test"); return; }
+  const input = path.join(directory, "variable.mp4"), workDir = path.join(directory, "variable-work");
+  await mkdir(workDir, { recursive: true });
+  await ffmpeg(["-f", "lavfi", "-i", "color=blue:size=320x180:rate=24:duration=2",
+    "-vf", "drawbox=color=red:t=fill:enable='gte(t,1)',drawbox=x=60:y=35:w=20:h=10:color=white:t=fill,drawgrid=w=12:h=12:t=1:color=green:enable='gte(t,1)',select='not(mod(n,3))+gte(t,1)'",
+    "-fps_mode", "vfr", "-c:v", "libx264", "-pix_fmt", "yuv420p", input]);
+  const timeline = { inputArgs: ["-i", input], filters: ["setpts=PTS-STARTPTS", "fps=12:start_time=0"], fps: 12, duration: 2 };
+  const filters = await watermarkFilters({ ...fixed, feather: 0, masks: [{ ...first, fill: "lama" }] }, 320, 180,
+    [{ start: 0, end: 2 }], 1, workDir, [], new AbortController().signal,
+    { input, duration: 2, fps: 24, timeline });
+  const raw = async (clean: boolean, crop: string) => (await ffmpeg(["-i", input, "-vf",
+    ["setpts=PTS-STARTPTS", ...(clean ? filters : ["fps=12:start_time=0"]), crop].join(","),
+    "-t", "2", "-an", "-pix_fmt", "rgb24", "-f", "rawvideo", "pipe:1"], workDir)).stdout;
+  const cleaned = await raw(true, "crop=80:30:220:140"), original = await raw(false, "crop=80:30:220:140");
+  assert.equal(cleaned.length, original.length);
+  let changed = 0, maximumDifference = 0;
+  for (let i = 0; i < cleaned.length; i++) if (cleaned[i] !== original[i]) {
+    changed++; maximumDifference = Math.max(maximumDifference, Math.abs(cleaned[i]! - original[i]!));
+  }
+  assert.equal(changed, 0, `${changed} unmasked channels changed, largest difference ${maximumDifference}`);
+  const mark = await raw(true, "crop=2:2:66:38,scale=1:1");
+  assert.equal(mark.length, 24 * 3);
+  blue([...mark.subarray(3 * 4, 3 * 5)]);
+  assert.ok(mark[3 * 18]! > 100 && mark[3 * 18 + 2]! < 90, "The patch must follow the red scene, not repeat a blue frame");
+  // Both LaMa masks run through the same loaded worker and compose in saved order.
+  const two = await render({ trimEnd: .3, watermarkRemoval: { ...timed, masks: [
+    { ...first, fill: "lama", start: 0, end: .3 }, { ...second, fill: "lama", start: 0, end: .3 },
+  ] } });
+  blue(await pixel(two, .1)); blue(await pixel(two, .1, 228, 94));
 });

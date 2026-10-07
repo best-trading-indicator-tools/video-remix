@@ -2,22 +2,30 @@ import { spawn } from "node:child_process";
 export async function runLocal(
   binary: string,
   args: string[],
-  options: { signal?: AbortSignal; timeout?: number; cwd?: string } = {},
+  options: { signal?: AbortSignal; timeout?: number; cwd?: string; onStdout?: (chunk: string) => void; processGroup?: boolean } = {},
 ): Promise<{ stdout: string; stderr: string }> {
   if (options.signal?.aborted)
     throw new DOMException("Cancelled", "AbortError");
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd: options.cwd,
+      detached: options.processGroup && process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
     let stdout = "",
       stderr = "",
       expired = false;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
+    const kill = (signal: NodeJS.Signals) => {
+      if (options.processGroup && child.pid && process.platform !== "win32") {
+        try { process.kill(-child.pid, signal); } catch { /* Already exited. */ }
+      } else if (options.processGroup && child.pid && process.platform === "win32") {
+        spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }).on("error", () => child.kill(signal));
+      } else child.kill(signal);
+    };
     const abort = () => {
-      child.kill("SIGTERM");
-      killTimer = setTimeout(() => child.kill("SIGKILL"), 1000);
+      kill("SIGTERM");
+      killTimer = setTimeout(() => kill("SIGKILL"), 1000);
       killTimer.unref();
     };
     const timer = setTimeout(() => {
@@ -34,6 +42,7 @@ export async function runLocal(
     if (options.signal?.aborted) abort();
     child.stdout.on("data", (chunk) => {
       stdout = (stdout + chunk.toString()).slice(-2_000_000);
+      options.onStdout?.(chunk.toString());
     });
     child.stderr.on("data", (chunk) => {
       stderr = (stderr + chunk.toString()).slice(-300_000);
@@ -43,6 +52,7 @@ export async function runLocal(
       reject(error);
     });
     child.once("close", (code) => {
+      if (options.processGroup && (options.signal?.aborted || expired)) kill("SIGKILL");
       clear();
       if (options.signal?.aborted)
         return reject(new DOMException("Cancelled", "AbortError"));

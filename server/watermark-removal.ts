@@ -3,6 +3,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_WATERMARK_FEATHER, featherMask, rasterizeMask, removalIntervals, removalMasks, type WatermarkRemoval } from "../shared/watermark-removal.js";
 import { runLocal, MEDIA_INPUT_ARGS } from "./auto-process.js";
+import { assertLamaInstalled, renderLama, type LamaArea, type LamaTimeline } from "./lama.js";
 
 export class WatermarkRemovalError extends Error {
   readonly status = 422;
@@ -45,6 +46,34 @@ export function validateWatermarkRemoval(value: WatermarkRemoval | undefined, wi
   }
 }
 
+export async function preflightWatermarkRemoval(value: WatermarkRemoval | undefined, width: number, height: number, duration: number) {
+  validateWatermarkRemoval(value, width, height, duration);
+  if (removalMasks(value).some(mask => mask.fill === "lama" && rasterizeMask(mask.strokes, width, height).some(Boolean)))
+    await assertLamaInstalled();
+}
+
+/** Only the marked patch is stored; a larger source crop supplies reconstruction context. */
+export function lamaBounds(alpha: Uint8Array, width: number, height: number) {
+  let left = width, top = height, right = 0, bottom = 0;
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) if (alpha[y * width + x]) {
+    left = Math.min(left, x); right = Math.max(right, x + 1);
+    top = Math.min(top, y); bottom = Math.max(bottom, y + 1);
+  }
+  if (right <= left || bottom <= top) throw new WatermarkRemovalError("Mark an area before using LaMa.");
+  // Chroma-subsampled overlay coordinates must be even; pad with zero alpha
+  // rather than letting FFmpeg round an odd selection origin to a different pixel.
+  left = Math.floor(left / 2) * 2; top = Math.floor(top / 2) * 2;
+  right = Math.min(width, Math.ceil(right / 2) * 2); bottom = Math.min(height, Math.ceil(bottom / 2) * 2);
+  const box = { x: left, y: top, width: right - left, height: bottom - top };
+  const cw = Math.min(width, Math.max(256, box.width * 2 + 32));
+  const ch = Math.min(height, Math.max(256, box.height * 2 + 32, box.width));
+  const crop = { x: Math.max(0, Math.min(width - cw, Math.floor((left + right - cw) / 2))),
+    y: Math.max(0, Math.min(height - ch, Math.floor((top + bottom - ch) / 2))), width: cw, height: ch };
+  const pixels = new Uint8Array(box.width * box.height);
+  for (let y = 0; y < box.height; y++) pixels.set(alpha.subarray((top + y) * width + left, (top + y) * width + right), y * box.width);
+  return { box, crop, pixels };
+}
+
 /** Conservatively downsample the mask, including a pixel of resampling support. */
 function reducedMask(pixels: Uint8Array, width: number, height: number, smallWidth: number, smallHeight: number) {
   const reduced = new Uint8Array(smallWidth * smallHeight);
@@ -62,8 +91,9 @@ function reducedMask(pixels: Uint8Array, width: number, height: number, smallWid
 
 export async function watermarkFilters(value: WatermarkRemoval | undefined, width: number, height: number,
   cuts: { start: number; end: number }[], speed: number, workDir: string, temporary: string[], signal: AbortSignal,
-  source?: { input: string; duration: number; fps: number }) {
+  source?: { input: string; duration: number; fps: number; timeline?: LamaTimeline }) {
   const filters: string[] = [];
+  const lamaAreas: LamaArea[] = [];
   const references = new Map<number, string>();
   if (value?.enabled && width * height > 17_000_000) throw new WatermarkRemovalError("Watermark removal supports source frames up to 16 megapixels.");
   for (const mask of removalMasks(value)) {
@@ -81,6 +111,19 @@ export async function watermarkFilters(value: WatermarkRemoval | undefined, widt
     const number = (n: number) => Number(n.toFixed(8));
     const enable = intervals.length ? `:enable='${intervals.map(interval => `gte(t,${number(interval.start)})*lt(t,${number(interval.end)})`).join("+")}'` : "";
     const alphaPixels = featherMask(pixels, width, height, (value!.feather ?? DEFAULT_WATERMARK_FEATHER) * Math.min(width, height));
+    if (mask.fill === "lama") {
+      if (!source?.timeline) throw new WatermarkRemovalError("LaMa needs the selected video's render timeline.");
+      const { box, crop, pixels: patchAlpha } = lamaBounds(alphaPixels, width, height);
+      const alpha = await writeMask(patchAlpha, box.width, box.height);
+      const filename = `watermark-lama-${randomUUID()}.mkv`, output = path.join(workDir, filename);
+      temporary.push(output);
+      lamaAreas.push({ box, crop, alpha: path.join(workDir, alpha), output, intervals });
+      const label = `watermark${filters.length}`;
+      filters.push(`null[${label}original];movie=filename=${filename},setpts=PTS-STARTPTS,setsar=1,format=yuv420p[${label}clean];` +
+        `movie=filename=${alpha},format=gray[${label}mask];[${label}clean][${label}mask]alphamerge[${label}patch];` +
+        `[${label}original][${label}patch]overlay=${box.x}:${box.y}:format=auto${enable}`);
+      continue;
+    }
     const alpha = await writeMask(alphaPixels, width, height);
     const label = `watermark${filters.length}`;
     const composite = `movie=filename=${alpha},format=gray[${label}mask];` +
@@ -126,6 +169,12 @@ export async function watermarkFilters(value: WatermarkRemoval | undefined, widt
       `[${label}work]scale=${smallWidth}:${smallHeight}:flags=area,setsar=1,removelogo=filename=${filename}${enable},` +
       `scale=${width}:${height}:flags=bilinear,setsar=1[${label}clean];` +
       composite);
+  }
+  if (lamaAreas.length) {
+    // The decode pass and main video use identical CFR frame timestamps, including
+    // VFR sources, repeated cuts and speed changes. Audio stays on the original input.
+    filters.unshift(`fps=${source!.timeline!.fps}:start_time=0`);
+    await renderLama(lamaAreas, source!.timeline!, workDir, temporary, signal);
   }
   return filters;
 }

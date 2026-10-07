@@ -10,6 +10,8 @@ import { geometry, probeMedia, renderVideo, type MediaInfo } from "./engine.js";
 import { settingsSchema } from "./schema.js";
 import { state } from "./store.js";
 import { WatermarkRemovalError } from "./watermark-removal.js";
+import { LamaError } from "./lama.js";
+import { removalMasks } from "../shared/watermark-removal.js";
 import { footageForSource } from "../shared/own-footage.js";
 import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
 
@@ -128,7 +130,8 @@ export function installManualPreviewRoutes(app: Express) {
     active = id;
     const controller = new AbortController();
     let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, TIMEOUT_MS);
+    const usesLama = removalMasks(settings.watermarkRemoval).some(mask => mask.fill === "lama" && mask.strokes.length);
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, usesLama ? 5 * 60_000 : TIMEOUT_MS);
     timeout.unref();
     const disconnected = () => { if (!res.writableFinished) controller.abort(); };
     res.once("close", disconnected);
@@ -167,7 +170,7 @@ export function installManualPreviewRoutes(app: Express) {
       if (res.destroyed) return;
       if (timedOut) return res.status(504).json({ error: "The preview took too long. Try a shorter interval or simpler effects." });
       if (error instanceof PreviewError || error instanceof ImportError) return res.status(error.status).json({ error: error.message });
-      if (error instanceof WatermarkRemovalError) return res.status(422).json({ error: error.message });
+      if (error instanceof WatermarkRemovalError || error instanceof LamaError) return res.status(422).json({ error: error.message });
       if ((error as NodeJS.ErrnoException).code === "ENOENT")
         return res.status(404).json({ error: "A selected media file is no longer available. Upload it again." });
       console.error("Manual preview failed:", error);

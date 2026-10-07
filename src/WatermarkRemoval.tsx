@@ -9,7 +9,7 @@ import "./watermark-removal.css";
 
 type Tool = "rect" | "brush" | "erase";
 const stamp = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, "0")}`;
-const newMask = (start: number, end: number): WatermarkMask => ({ id: crypto.randomUUID(), start, end, strokes: [] });
+const newMask = (start: number, end: number): WatermarkMask => ({ id: crypto.randomUUID(), start, end, fill: "lama", strokes: [] });
 
 function TimeField({ label, value, max, onChange }: { label: string; value: number; max: number; onChange: (n: number) => boolean }) {
   const [text, setText] = useState(String(value));
@@ -84,9 +84,11 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
       {mask && <>
         <label>Area fill<select value={mask.fill ?? "surroundings"} onChange={event => patchMask(event.target.value === "reference"
           ? { fill: "reference", referenceTime: mask.referenceTime ?? Math.min(time, Math.max(0, source.duration - 1 / (source.fps || 30))) }
-          : { fill: "surroundings" })}>
-          <option value="surroundings">Blend surrounding pixels</option><option value="reference">Copy from a clean frame</option>
+          : { fill: event.target.value as "lama" | "surroundings" })}>
+          <option value="lama">AI reconstruction · LaMa (local)</option>
+          <option value="surroundings">Blend surrounding pixels · fast</option><option value="reference">Copy from a clean frame</option>
         </select></label>
+        {mask.fill === "lama" && <p>Rebuilds the marked background with free, local AI. Slower than blending; fine details and moving backgrounds can still change or flicker. Preview a short sample first.</p>}
         {mask.fill === "reference" && <>
           <p>Use real background detail from a nearby frame where this area is clear. Best for short removals on a steady background; the patch does not follow camera or subject movement.</p>
           <TimeField label="Clean frame (source seconds)" value={mask.referenceTime ?? 0} max={Math.max(0, source.duration - 1 / (source.fps || 30))}
@@ -121,7 +123,7 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
         {tool !== "rect" && <label>Brush size <output>{Math.round(size * 100)}%</output><input aria-label="Watermark brush size" type="range" min={.005} max={.2} step={.005} value={size} onChange={event => setSize(event.target.valueAsNumber)} /></label>}
         <button type="button" className="watermark-clear" disabled={!mask?.strokes.length} onClick={() => patchMask({ strokes: [] })}><Trash2 size={14} />Clear selected area</button>
       </>}
-      <p>Surrounding-pixel fill can look soft on large labels. A clean frame can preserve real texture when the background matches. Preview the cleaned result before exporting.</p>
+      <p>Cover the entire unwanted label, including its background. Preview the cleaned result before exporting.</p>
       {error && <ProblemNotice message={error} operation="Mark watermark" />}
     </>}
   </section>;

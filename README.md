@@ -181,6 +181,11 @@ Use **Open watermark editor** to adjust the saved areas or preview removal.
   their ranges; there is no automatic motion tracking.
 - **Stop this area at playhead** sets the selected area's end to the current
   source time and switches to time ranges.
+- **Area fill → AI reconstruction · LaMa (local)** is the default for new areas.
+  It reconstructs the marked background on each frame using a free local model.
+  Existing saved areas retain their previous fill; select LaMa to upgrade them.
+- **Area fill → Blend surrounding pixels · fast** keeps the lightweight FFmpeg
+  fill available without installing a model.
 - **Area fill → Copy from a clean frame** uses the same region from a selected
   original frame. Scrub to a nearby clear frame, then **Use playhead as clean
   frame**. This retains real texture on a steady background; the patch is static
@@ -191,12 +196,31 @@ Use **Open watermark editor** to adjust the saved areas or preview removal.
   player. **Back to marking** restores the source for comparison. The colored
   selection is a mask, not the cleaned result.
 
-The default fill reconstructs masked pixels from neighboring pixels; clean-frame
-fill copies source detail instead. Both run locally with FFmpeg, requiring no service,
-credits, model download or additional Python installation. Small overlays on
-simple backgrounds work best; complex detail or motion can leave a soft patch.
-Thick masks are reconstructed at an adaptive processing resolution and composited
-through the softened mask, preserving pixels beyond its margin at full resolution.
+Install LaMa once on the machine running the video engine:
+
+```sh
+npm run setup:watermark
+```
+
+This creates a separate `.venv-watermark` Python environment and downloads the
+196 MiB TorchScript model after verifying its SHA-256 hash. Python 3.12 is
+recommended. The model uses the [Apache 2.0 license](https://github.com/advimman/lama/blob/main/LICENSE),
+which permits commercial use; attribution and the license are in `scripts/models/`.
+There are no API keys, credits or per-video fees. Rendering stays offline and never
+downloads models automatically. The other two fills work without this installation.
+
+LaMa uses Apple Metal when available, with CPU fallback. Only one local model worker
+runs at a time across previews and exports. It streams frames, processes a surrounding
+crop at a maximum 512-pixel model size, and stores only lossless replacement patches.
+The export keeps its original requested dimensions and audio. Masks are composited
+at full resolution, preserving pixels outside their softened boundaries; progress
+includes reconstruction, and cancelling also stops its decoder and patch encoder.
+
+LaMa can give less blurry results than surrounding-pixel blending, but it cannot
+recover hidden truth: large labels, faces and moving detail can look invented or
+flicker between frames. Cover the whole label, including any background box, and
+preview before exporting. A matching clean frame can retain real texture instead.
+This is a general method for each video's selected areas, with no clip-specific logic.
 Selections covering more than 25% of the picture are rejected before analysis or
 review starts, with guidance to adjust the marked area. Selection errors stop the
 job immediately instead of repeating the same export automatically.

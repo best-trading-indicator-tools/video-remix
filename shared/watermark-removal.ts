@@ -23,7 +23,8 @@ export const watermarkRemovalSchema = z.object({
     /** Always original-source seconds, before trims, cuts, speed and inserts. */
     start: z.number().finite().min(0).max(86400),
     end: z.number().finite().min(0).max(86400),
-    fill: z.enum(["surroundings", "reference"]).optional(),
+    // Missing fill retains the original behavior for saved edits and exports.
+    fill: z.enum(["lama", "surroundings", "reference"]).optional(),
     referenceTime: z.number().finite().min(0).max(86400).optional(),
     strokes: z.array(stroke).max(MAX_MASK_STROKES),
   }).strict().refine(value => value.end > value.start, "End must be after start")
