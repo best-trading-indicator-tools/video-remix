@@ -172,6 +172,9 @@ the last change. Brush size is relative to the original picture.
 Areas save automatically as you draw. **Close watermark editor** returns to the
 main preview while keeping removal enabled for export; it does not start a render.
 Use **Open watermark editor** to adjust the saved areas or preview removal.
+**Undo** reverses edits made in the current watermark session and keeps removal
+enabled. Switching OFF/ON starts a fresh undo history and retains only the areas
+currently saved; marks removed with Undo or Clear stay removed.
 
 - **Whole video · fixed area** applies Area 1 to every frame, including frames
   after a temporary label disappears. Use a time range for a temporary mark.

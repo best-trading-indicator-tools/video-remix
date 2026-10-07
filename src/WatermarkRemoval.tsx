@@ -5,6 +5,7 @@ import { activeRemovalMasks, DEFAULT_WATERMARK_REMOVAL, DEFAULT_WATERMARK_FEATHE
   rasterizeMask, watermarkRemovalSchema, type MaskPoint, type MaskStroke, type WatermarkMask, type WatermarkRemoval } from "../shared/watermark-removal";
 import { apiRequest } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
+import { rememberWatermarkEdit, restoreWatermarkEdit, type WatermarkEdit } from "../shared/watermark-edit-history";
 import "./watermark-removal.css";
 
 type Tool = "rect" | "brush" | "erase";
@@ -29,14 +30,14 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
   const [editing, setEditing] = useState(false), [tool, setTool] = useState<Tool>("brush"), [size, setSize] = useState(.04);
   const [maskId, setMaskId] = useState(""), [time, setTime] = useState(0), [seek, setSeek] = useState({ time: 0, token: 0 });
   const [error, setError] = useState("");
-  const history = useRef<WatermarkRemoval[]>([]);
+  const history = useRef<WatermarkEdit[]>([]);
   const mask = (removal.mode === "fixed" ? removal.masks[0] : removal.masks.find(item => item.id === maskId)) ?? removal.masks[0];
   useEffect(() => { history.current = []; setEditing(false); setMaskId(""); setTime(0); setError(""); setSeek({ time: 0, token: 0 }); }, [source?.id, workspaceKey]);
   useEffect(() => { if (!removal.enabled) setEditing(false); }, [removal.enabled]);
-  const update = (next: WatermarkRemoval) => {
+  const update = (next: WatermarkRemoval, record = true) => {
     const parsed = watermarkRemovalSchema.safeParse(next);
     if (!parsed.success) { setError(parsed.error.issues[0]?.message || "Check the marked areas."); return; }
-    history.current = [...history.current.slice(-59), removal];
+    history.current = rememberWatermarkEdit(history.current, removal, parsed.data, record);
     setError(""); onChange(parsed.data);
   };
   const patchMask = (change: Partial<WatermarkMask>) => {
@@ -46,14 +47,14 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
   const open = (at = time) => {
     setEditing(true);
     seekTo(at);
-    if (!removal.masks.length && source) update({ ...removal, masks: [newMask(0, source.duration)] });
+    if (!removal.masks.length && source) update({ ...removal, masks: [newMask(0, source.duration)] }, false);
     requestAnimationFrame(() => document.querySelector('.preview-panel')?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
   };
   const selectMask = (item: WatermarkMask) => { setMaskId(item.id); open(item.start); };
   const controls = <section className="watermark-controls" aria-label="Watermark removal">
     <label className="watermark-toggle"><input type="checkbox" checked={removal.enabled} disabled={!source} onChange={event => {
       const enabled = event.target.checked;
-      update({ ...removal, enabled, masks: enabled && !removal.masks.length && source ? [newMask(0, source.duration)] : removal.masks });
+      update({ ...removal, enabled, masks: enabled && !removal.masks.length && source ? [newMask(0, source.duration)] : removal.masks }, false);
       setEditing(enabled);
       if (enabled) seekTo(time);
     }} /><span><strong>Watermark removal</strong><small>Brush away a logo, timestamp or unwanted overlay.</small></span></label>
@@ -117,7 +118,10 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
         <div className="watermark-tools" role="group" aria-label="Watermark marking tools">
           {([["rect", "Select", MousePointer2], ["brush", "Brush", Brush], ["erase", "Erase", Eraser]] as const).map(([id, label, Icon]) =>
             <button key={id} type="button" aria-pressed={tool === id} onClick={() => setTool(id)}><Icon size={17} />{label}</button>)}
-          <button type="button" disabled={!history.current.length} onClick={() => { const previous = history.current.pop(); if (previous) { setError(""); onChange(previous); } }}><RotateCcw size={17} />Undo</button>
+          <button type="button" title="Undo the last watermark edit" disabled={!history.current.length} onClick={() => {
+            const previous = history.current.pop();
+            if (previous) { setError(""); onChange(restoreWatermarkEdit(removal, previous)); }
+          }}><RotateCcw size={17} />Undo</button>
         </div>
         <p>{tool === "rect" ? "Drag a box on the video. Drag its center to move it or a corner to resize it." : tool === "brush" ? "Paint over the mark. Pause or scrub to check its position." : "Brush over a selection to remove it from the mask."}</p>
         {tool !== "rect" && <label>Brush size <output>{Math.round(size * 100)}%</output><input aria-label="Watermark brush size" type="range" min={.005} max={.2} step={.005} value={size} onChange={event => setSize(event.target.valueAsNumber)} /></label>}
