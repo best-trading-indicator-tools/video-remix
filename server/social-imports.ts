@@ -78,7 +78,11 @@ export async function downloadSocialVideo(input: string, directory: string, opti
     "--format", "bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4]/bv*+ba/b",
     "--merge-output-format", "mp4", "--remux-video", "mp4",
     "--output", "video.%(ext)s",
-    "--progress-template", 'download:remix-progress:{"downloaded":%(progress.downloaded_bytes)j,"total":%(progress.total_bytes)j,"estimate":%(progress.total_bytes_estimate)j}',
+    "--print", 'before_dl:remix-stage:{"stage":"download","availableAt":%(available_at|0)j,"formatsAvailableAt":%(requested_formats.:.available_at|[])j}',
+    "--print", 'post_process:remix-stage:{"stage":"prepare"}',
+    // yt-dlp emits bare NA for unavailable fields, even with the JSON format.
+    // Explicit defaults keep updates valid for known, estimated and unknown sizes.
+    "--progress-template", 'download:remix-progress:{"downloaded":%(progress.downloaded_bytes|0)j,"total":%(progress.total_bytes|0)j,"estimate":%(progress.total_bytes_estimate|0)j}',
     "--print", 'after_move:remix-result:{"file":%(filepath)j,"title":%(title)j}', "--", link.url];
   const binary = await downloader();
   options.signal.throwIfAborted();
@@ -93,6 +97,7 @@ export async function downloadSocialVideo(input: string, directory: string, opti
       { cwd: directory, detached: process.platform !== "win32", stdio: ["ignore", "pipe", "pipe"] });
     let stderr = "", pending = "", pendingError = "", result: { file?: unknown; title?: unknown } | undefined;
     let failure: Error | undefined, monitoring = false, closed = false;
+    let waitingUntil = 0;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
     const kill = (signal: NodeJS.Signals) => {
       try {
@@ -107,11 +112,30 @@ export async function downloadSocialVideo(input: string, directory: string, opti
       killTimer.unref();
     };
     const fail = (error: Error) => { failure ??= error; stop(); };
+    const reportAvailability = () => {
+      const seconds = Math.max(0, Math.ceil(waitingUntil - Date.now() / 1000));
+      options.onProgress(seconds > 0 ? `Waiting for ${link.platform} · ${seconds}s` : `Starting download from ${link.platform}`, 0);
+      if (!seconds) waitingUntil = 0;
+    };
     const line = (value: string) => {
       try {
         if (value.startsWith("remix-result:")) result = JSON.parse(value.slice(13));
+        if (value.startsWith("remix-stage:")) {
+          const stage = JSON.parse(value.slice(12));
+          if (stage.stage === "download") {
+            // Some platforms require a pre-playback wait. Report their actual
+            // availability timestamp without exposing signed media URLs.
+            const times = [stage.availableAt, ...(Array.isArray(stage.formatsAvailableAt) ? stage.formatsAvailableAt : [])];
+            waitingUntil = Math.max(0, ...times.map(Number).filter(Number.isFinite));
+            reportAvailability();
+          } else if (stage.stage === "prepare") {
+            waitingUntil = 0;
+            options.onProgress("Preparing MP4", 70);
+          }
+        }
         if (value.startsWith("remix-progress:")) {
           const progress = JSON.parse(value.slice(15));
+          waitingUntil = 0;
           const bytes = Number(progress.downloaded) || 0;
           const total = Number(progress.total) || Number(progress.estimate) || 0;
           if (bytes > options.maxBytes || total > options.maxBytes)
@@ -133,6 +157,7 @@ export async function downloadSocialVideo(input: string, directory: string, opti
     });
     const timeout = setTimeout(() => fail(new SocialImportError("The download took too long. Try again or use Browse files to import a local copy.")), 45 * 60_000);
     const monitor = setInterval(() => {
+      if (waitingUntil) reportAvailability();
       if (monitoring) return;
       monitoring = true;
       void (async () => {

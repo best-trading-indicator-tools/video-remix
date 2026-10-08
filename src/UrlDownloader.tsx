@@ -121,9 +121,9 @@ export default function UrlDownloader({ health, connected, active }: { health: H
               onChange={event => setSelected(current => event.target.checked ? [...current, item.id] : current.filter(id => id !== item.id))} />
             {isReady ? <img className="downloader-thumbnail" src={item.download!.thumbnailUrl} alt="" loading="lazy" /> : <div className="downloader-thumbnail placeholder"><Link2 size={21} /></div>}
             <div className="downloader-details"><h3>{item.name}</h3>{item.remoteUrl && <a className="downloader-source-link" href={item.remoteUrl} target="_blank" rel="noreferrer">{item.remoteUrl}</a>}
-              <div className="downloader-meta">{isReady ? <><span>{Math.floor(item.download!.duration / 60)}:{String(Math.floor(item.download!.duration % 60)).padStart(2, "0")}</span><span>{formatFileSize(item.download!.size)}</span><span>{item.download!.width} × {item.download!.height}</span></> : <span>{item.phase}</span>}
+              <div className="downloader-meta">{isReady ? <><span>{Math.floor(item.download!.duration / 60)}:{String(Math.floor(item.download!.duration % 60)).padStart(2, "0")}</span><span>{formatFileSize(item.download!.size)}</span><span>{item.download!.width} × {item.download!.height}</span></> : <span>{item.status === "processing" && <LoaderCircle size={13} className="spin" aria-hidden="true" />}{item.phase}</span>}
                 <span>{item.stripMetadata !== false ? <><ShieldCheck size={13} />Metadata {isReady ? "stripped" : "cleanup on"}</> : "Original metadata"}</span></div>
-              {item.status === "processing" && <progress max={100} value={item.progress} aria-label={`Download progress for ${item.name}`} />}
+              {item.status === "processing" && <progress max={100} value={item.progress > 0 ? item.progress : undefined} aria-label={`Download progress for ${item.name}`} />}
             </div>
             <div className="downloader-card-actions">
               {isReady && <a className="secondary-button" href={item.download!.url} download><Download size={15} />Download MP4</a>}

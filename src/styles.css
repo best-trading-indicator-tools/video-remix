@@ -1851,6 +1851,10 @@ h1 > span {
   font-size: 12px;
   margin-left: 3px;
 }
+.primary-button .zip-tag {
+  color: inherit;
+  border-color: currentColor;
+}
 .job-list {
   display: flex;
   flex-direction: column;
@@ -3009,7 +3013,7 @@ h1 > span {
     padding: 8px;
     gap: 4px;
   }
-  .zip-tag {
+  .batch-heading .zip-tag {
     display: none;
   }
   .batch-label {

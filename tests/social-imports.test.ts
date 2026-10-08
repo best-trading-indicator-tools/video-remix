@@ -85,8 +85,24 @@ if (url.includes("SLOW0000001")) {
   console.error('remix-progress:{"downloaded":20,"total":100}');
   await new Promise(resolve => setTimeout(resolve, 4000));
 }
+if (url.includes("STAGE000001")) {
+  console.log('remix-stage:{invalid');
+  console.log('remix-stage:{"stage":"unknown","message":"private-provider-output"}');
+  process.stdout.write('remix-st');
+  await new Promise(resolve => setTimeout(resolve, 20));
+  console.log('age:' + JSON.stringify({ stage: "download", availableAt: "NA", formatsAvailableAt: [Date.now() / 1000 + 1, "NA"] }));
+  await new Promise(resolve => setTimeout(resolve, 2400));
+}
+if (url.includes("SIZES000001")) {
+  // Match yt-dlp's output templates, including its bare-NA missing-value behavior.
+  const template = args[args.indexOf("--progress-template") + 1].replace(/^download:/, "");
+  for (const values of [{ downloaded_bytes: 10, total_bytes: 100 }, { downloaded_bytes: 30, total_bytes_estimate: 100 }, { downloaded_bytes: 50 }]) {
+    console.log(template.replace(/%\\(progress\\.(\\w+)(?:\\|([^)]*))?\\)j/g, (_, key, fallback) => values[key] === undefined ? (fallback ?? "NA") : JSON.stringify(values[key])));
+  }
+}
 await copyFile(${JSON.stringify(fixture)}, "video.mp4");
 console.log('remix-progress:{"downloaded":100,"total":100}');
+if (url.includes("STAGE000001")) console.log('remix-stage:{"stage":"prepare"}');
 console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), title: "Fixture / title" }));
 `);
   await chmod(binary, 0o700);
@@ -223,6 +239,41 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
         assert.equal(item.progress, 100); assert.equal(item.kind, "remote");
         assert.equal((await fetch(`${base}${item.source!.url}`)).status, 200);
       }
+    });
+    await t.test("platform wait, download start and MP4 preparation have distinct progress without exposing raw output", async () => {
+      const previous = process.env.YT_DLP_BIN;
+      const work = await mkdtemp(path.join(directory, "download-stages-"));
+      const phases: { phase: string; percent: number }[] = [];
+      process.env.YT_DLP_BIN = binary;
+      try {
+        const result = await downloadSocialVideo("https://youtu.be/STAGE000001", work, {
+          signal: new AbortController().signal, maxBytes: 10 * 1024 * 1024,
+          onProgress: (phase, percent) => phases.push({ phase, percent }), checkSpace: async () => {},
+        });
+        assert.ok(result.size > 0);
+        assert.deepEqual(phases, [
+          { phase: "Waiting for YouTube · 1s", percent: 0 },
+          { phase: "Starting download from YouTube", percent: 0 },
+          { phase: "Downloading from YouTube", percent: 70 },
+          { phase: "Preparing MP4", percent: 70 },
+        ]);
+        const args: string[] = JSON.parse(await readFile(path.join(work, "arguments.json"), "utf8"));
+        assert.ok(args.some(arg => arg.startsWith("before_dl:remix-stage:")));
+        assert.ok(args.some(arg => arg.startsWith("post_process:remix-stage:")));
+      } finally { if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous; }
+    });
+    await t.test("progress remains readable when yt-dlp omits exact or estimated byte totals", async () => {
+      const previous = process.env.YT_DLP_BIN;
+      const work = await mkdtemp(path.join(directory, "download-sizes-"));
+      const percentages: number[] = [];
+      process.env.YT_DLP_BIN = binary;
+      try {
+        await downloadSocialVideo("https://youtu.be/SIZES000001", work, {
+          signal: new AbortController().signal, maxBytes: 10 * 1024 * 1024,
+          onProgress: (_, percent) => percentages.push(percent), checkSpace: async () => {},
+        });
+        assert.deepEqual(percentages, [7, 21, 0, 70]);
+      } finally { if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous; }
     });
     await t.test("download progress survives polling and pending downloads restart after shutdown", async () => {
       const item = await add("https://youtube.com/watch?v=SLOW0000001");

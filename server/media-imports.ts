@@ -164,7 +164,7 @@ async function processImport(item: StoredImport, signal: AbortSignal) {
   let published = false;
   try {
     if (item.kind === "remote" && !item.size) {
-      item.phase = "Connecting to video link"; item.progress = 0;
+      item.phase = `Reading video details from ${socialVideoLink(item.remoteUrl!).platform}`; item.progress = 0;
       await persist(item);
       const directory = path.join(folder(item.id), "download");
       await rm(directory, { recursive: true, force: true });
