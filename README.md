@@ -51,6 +51,36 @@ Larger editors keep independent preview and control columns. Dialogs adapt to
 the visible viewport when the keyboard opens. See [responsive UI checks](docs/responsive-ui.md)
 for the layout rules and browser verification matrix.
 
+## URL Downloader · free extra tool
+
+Open **Downloader** in the top navigation to save full videos from URLs without
+setting up an edit. This is an additional page: **Workspace → Add videos** keeps
+its existing importer. Downloader files do not become editing sources or exports.
+
+- Paste up to **100 links per batch** by default, including YouTube videos and
+  **YouTube Shorts**, TikTok videos, and Instagram posts/Reels. Newlines, spaces
+  and commas are supported. Duplicate video links within the batch are skipped;
+  invalid links remain available for correction while valid ones can continue.
+- **Strip metadata** is on by default. It removes source tags, chapters and
+  software tags while retaining basic playback information. Ordinary H.264/AAC
+  MP4s are cleaned without re-encoding their picture or soundtrack. Other codecs
+  and videos needing rotation are converted to a compatible MP4. Uncheck it to
+  save the imported file unchanged. The full video and original audio are kept;
+  no AI provider or credits are used.
+- Follow each video's progress, retry a failed download, or cancel pending work.
+  Processing continues while the app server runs, including after leaving the
+  page. The queue and completed files survive app restarts.
+- Save a single **Download MP4**, **Download all ready** as a ZIP, or select up to
+  **100 ready videos** for a ZIP. Duplicate titles receive unique numbered names.
+  Files are available for **48 hours**, and the downloader holds up to 200 items.
+  Removing a ready download asks for confirmation and leaves saved computer
+  copies and editing sources alone.
+
+The tool uses the same platform downloader, login cookies, file limits and
+network recovery as the workspace URL importer. A platform restriction or login
+requirement affects both tools. **Help with downloader** opens its interactive
+help topic.
+
 ## Import long recordings
 
 - Import up to **100 videos per batch** by default (`MAX_FILES`, 1–100), with up to **200 source videos** in the workspace. Completed import cards do not occupy unfinished-import slots. If one selected file cannot be queued, the other files continue and its error stays visible beside the uploader.

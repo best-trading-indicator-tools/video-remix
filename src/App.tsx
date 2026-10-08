@@ -93,6 +93,7 @@ import HistoryPanel from "./HistoryPanel";
 import ApiSettings from "./ApiSettings";
 import Slider from "./Slider";
 import ImportPanel from "./ImportPanel";
+import UrlDownloader from "./UrlDownloader";
 import SourceList from "./SourceList";
 import LongFormPanel from "./LongFormPanel";
 import ManualPromptEditor from "./ManualPromptEditor";
@@ -371,7 +372,7 @@ export default function App() {
   const [brollBusy, setBrollBusy] = useState(false);
   const [attachmentBusy, setAttachmentBusy] = useState<string | null>(null);
   const [capabilityVersion, setCapabilityVersion] = useState(0);
-  const [view, setView] = useState<"studio" | "exports" | "history" | "settings">("studio");
+  const [view, setView] = useState<"studio" | "exports" | "history" | "settings" | "downloader">("studio");
   const [historySource, setHistorySource] = useState<VideoSource | null>(null);
   const [tab, setTab] = useState<"essentials" | "color" | "advanced" | "all">(
     "essentials",
@@ -1251,6 +1252,9 @@ export default function App() {
           <button className={`history-nav-button ${view === "history" ? "active" : ""}`} aria-current={view === "history" ? "page" : undefined} aria-label="History" title="History" onClick={() => { setHistorySource(null); setView("history"); }}>
             <History size={15} />History
           </button>
+          <button className={view === "downloader" ? "active" : ""} aria-current={view === "downloader" ? "page" : undefined} aria-label="URL Downloader" title="URL Downloader" onClick={() => setView("downloader")}>
+            <Download size={15} />Downloader
+          </button>
           <button className={view === "settings" ? "active" : ""} aria-current={view === "settings" ? "page" : undefined} aria-label="Settings" title="Settings" onClick={() => setView("settings")}>
             <Settings2 size={15} />Settings
           </button>
@@ -1280,7 +1284,7 @@ export default function App() {
         <div className="page-heading">
           <div>
             <h1>
-              {view === "studio" ? "Your workspace" : view === "settings" ? "Settings" : view === "history" ? "History" : "Exports"}
+              {view === "studio" ? "Your workspace" : view === "settings" ? "Settings" : view === "history" ? "History" : view === "downloader" ? "URL Downloader" : "Exports"}
             </h1>
             <p>
               {view === "studio"
@@ -1290,12 +1294,13 @@ export default function App() {
                   : "Shape the frame, dial in your look, and make every version your own."
                 : view === "settings" ? "Manage the API keys used by your workspace."
                 : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
+                : view === "downloader" ? "Save videos from links, one at a time or in bulk. Free to use, with no AI credits."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>
           </div>
         </div>
 
-        {view !== "settings" && <button className="text-button contextual-help" onClick={() => openTour(view === 'history' ? 'history' : view === 'exports' ? 'exports' : mode === 'shorts' ? 'shorts-discovery' : mode === 'manual' ? 'modes' : 'quick-setup')}>Help with {view === 'studio' ? mode === 'shorts' ? 'Short clips' : mode === 'auto' ? 'Auto' : 'Manual' : view}</button>}
+        {view !== "settings" && <button className="text-button contextual-help" onClick={() => openTour(view === 'downloader' ? 'url-downloader' : view === 'history' ? 'history' : view === 'exports' ? 'exports' : mode === 'shorts' ? 'shorts-discovery' : mode === 'manual' ? 'modes' : 'quick-setup')}>Help with {view === 'studio' ? mode === 'shorts' ? 'Short clips' : mode === 'auto' ? 'Auto' : 'Manual' : view}</button>}
         {!loading && !engineReady && (
           connected && health
             ? <ProblemNotice operation="Set up video engine" message="FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server." />
@@ -2519,6 +2524,9 @@ export default function App() {
                 </span>
               </div>
             </section>}
+        </div>
+        <div hidden={view !== "downloader"} style={{ display: view === "downloader" ? undefined : "none" }}>
+          <UrlDownloader health={health} connected={connected} active={view === "downloader"} />
         </div>
         {view === "settings" ? (
           <ApiSettings onSaved={() => setCapabilityVersion(value => value + 1)} />

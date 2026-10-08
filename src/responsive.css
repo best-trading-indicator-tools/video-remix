@@ -122,6 +122,23 @@ textarea { resize: vertical; }
   .main-nav .nav-count { min-width: 16px; font-size: 11px; padding: 2px 4px; }
 }
 
+/* Keep all five navigation destinations readable at desktop, tablet and phone widths. */
+.site-header .main-nav { width: max-content; }
+.site-header .brand { flex-shrink: 0; white-space: nowrap; }
+.site-header .main-nav button { white-space: nowrap; overflow-wrap: normal; flex-shrink: 0; }
+@media (max-width: 1200px) { .header-right .engine-status { display: none; } }
+@media (min-width: 681px) and (max-width: 1100px) {
+  .site-header { height: 126px; padding-bottom: 56px; }
+  .site-header .main-nav { position: absolute; top: auto; bottom: 7px; left: 24px; right: 24px; width: auto; transform: none; justify-content: center; }
+  .site-header .header-right { margin-left: auto; }
+}
+@media (max-width: 680px) {
+  .site-header .main-nav { width: auto; gap: 2px; }
+  .site-header .main-nav button { flex: 1 1 auto; min-width: 0; min-height: 44px; padding: 8px 4px; font-size: 11px; gap: 0; }
+  .site-header .main-nav button > svg, .site-header .main-nav .nav-count { display: none; }
+}
+@media (max-width: 380px) { .site-header .main-nav button { font-size: 10px; padding-inline: 2px; } }
+
 /* On a narrow editor, keep the timeline between playback and the long settings form. */
 @container dialog-viewport (max-width: 900px) or (max-height: 650px) {
   .edit-plan-modal > form { display: flex; flex-direction: column; overflow: visible; }

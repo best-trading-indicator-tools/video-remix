@@ -18,6 +18,8 @@ import { openRegularUpload, UnsafeUploadError } from "./upload-file.js";
 import { diagnosticSchema } from "../shared/diagnostics.js";
 import { serverDiagnostic } from "./diagnostics.js";
 import { availableDiskSpace } from "./disk-space.js";
+import { cleanVideoDownload } from "./engine.js";
+import { ZipArchive } from "archiver";
 
 const TTL = 48 * 60 * 60 * 1000;
 const DISK_RESERVE = 128 * 1024 * 1024;
@@ -37,6 +39,8 @@ const storedSchema = z.object({
   error: z.string().optional(), signature: signatureSchema.optional(),
   diagnostic: diagnosticSchema.optional(),
   remoteUrl: z.string().max(2048).optional(),
+  purpose: z.literal("download").optional(), stripMetadata: z.boolean().optional(),
+  downloadInfo: z.object({ duration: z.number().positive(), width: z.number().positive(), height: z.number().positive(), size: z.number().positive() }).optional(),
 }).strict().refine(item => item.kind === "remote" ? !!item.remoteUrl : item.size > 0);
 type StoredImport = z.infer<typeof storedSchema>;
 
@@ -60,6 +64,7 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 const folder = (id: string) => path.join(paths.imports, id);
 const mediaPath = (item: StoredImport) => path.join(paths.uploads, `${item.id}${path.extname(item.name).toLowerCase()}`);
 const thumbnailPath = (id: string) => path.join(paths.thumbnails, `${id}.jpg`);
+const readyDownloadPath = (item: StoredImport) => item.stripMetadata !== false ? path.join(folder(item.id), "ready.mp4") : mediaPath(item);
 function cleanName(input: string) {
   const name = path.basename(input.replaceAll("\\", "/")).replace(/[\u0000-\u001f\u007f]/gu, "").slice(0, 180);
   if (!extensions.has(path.extname(name).toLowerCase()))
@@ -91,6 +96,11 @@ function publicImport(item: StoredImport): ImportSession {
     ...(source ? { source: publicSource(source) } : {}), ...(item.error ? { error: item.error } : {}),
     ...(item.error ? { diagnostic: item.diagnostic || serverDiagnostic(item.error, { id: `import-${item.id}-${item.updatedAt}`, entityId: item.id,
       occurredAt: new Date(item.updatedAt).toISOString(), operation: "Import video" }) } : {}),
+    ...(item.purpose === "download" ? { purpose: item.purpose, remoteUrl: item.remoteUrl, stripMetadata: item.stripMetadata !== false,
+      ...(item.status === "completed" && item.downloadInfo ? { download: { ...item.downloadInfo,
+        url: `/api/downloads/${item.id}/file`, thumbnailUrl: `/api/downloads/${item.id}/thumbnail`,
+        expiresAt: new Date(item.updatedAt + TTL).toISOString() } } : {}),
+    } : {}),
   };
 }
 async function persist(item: StoredImport) {
@@ -126,10 +136,13 @@ async function requireSpace(additional = 0) {
   if (free < reserved + additional + DISK_RESERVE)
     throw new ImportError(507, "There is not enough free disk space for this import and the remaining uploads. Free some space or cancel an unused import.");
 }
-function ensureCapacity() {
+function ensureCapacity(purpose?: "download") {
   const unfinished = [...sessions.values()].filter(item => item.status !== "completed").length;
   if (unfinished >= config.maxFiles) throw new ImportError(429, `There are already ${config.maxFiles} unfinished imports. Finish or cancel an unused import before adding more.`);
-  if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
+  if (purpose === "download") {
+    if ([...sessions.values()].filter(item => item.purpose === "download").length >= 200)
+      throw new ImportError(429, "Your downloader has 200 videos. Remove a download before adding more.");
+  } else if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
 }
 async function discard(item: StoredImport) {
   sessions.delete(item.id);
@@ -180,6 +193,28 @@ async function processImport(item: StoredImport, signal: AbortSignal) {
     }
     const media = await probeMedia(mediaPath(item), signal);
     if (media.duration > 86400) throw new ImportError(400, "Choose a video shorter than 24 hours.");
+    if (item.purpose === "download") {
+      if (item.stripMetadata !== false) {
+        item.phase = "Cleaning metadata"; item.progress = 75; await persist(item);
+        await requireSpace(item.size);
+        await cleanVideoDownload({ input: mediaPath(item), output: readyDownloadPath(item), workDir: folder(item.id), signal,
+          onProgress: percent => { item.progress = 75 + percent * .2; } });
+      }
+      signal.throwIfAborted();
+      item.phase = "Preparing download"; item.progress = 98;
+      await createThumbnail(readyDownloadPath(item), thumbnailPath(item.id), signal);
+      const prepared = await probeMedia(readyDownloadPath(item), signal);
+      const size = (await stat(readyDownloadPath(item))).size;
+      signal.throwIfAborted();
+      await exclusive(async () => {
+        signal.throwIfAborted();
+        item.downloadInfo = { duration: prepared.duration, width: prepared.width, height: prepared.height, size };
+        item.status = "completed"; item.phase = "Ready to download"; item.progress = 100; item.updatedAt = Date.now();
+        delete item.error; delete item.diagnostic;
+        await persist(item);
+      });
+      return;
+    }
     item.phase = "Creating preview image"; item.progress = preparationProgress(8);
     await createThumbnail(mediaPath(item), thumbnailPath(item.id), signal);
     signal.throwIfAborted();
@@ -254,7 +289,10 @@ export async function initMediaImports() {
       if (item.id !== entry.name || cleanName(item.name) !== item.name || item.offset > item.size) continue;
       if (item.kind === "remote") socialVideoLink(item.remoteUrl!);
       sessions.set(item.id, item);
-      if (state.sources.some(source => source.id === item.id)) {
+      if (item.purpose === "download" && item.status === "completed") {
+        const ready = await lstat(readyDownloadPath(item));
+        if (!item.downloadInfo || !ready.isFile() || ready.size !== item.downloadInfo.size) throw new Error("Download missing");
+      } else if (state.sources.some(source => source.id === item.id)) {
         item.status = "completed"; item.phase = "Ready to edit"; item.progress = 100;
       } else if (item.status !== "completed" && !(item.kind === "remote" && !item.size)) {
         const info = await lstat(mediaPath(item));
@@ -314,7 +352,44 @@ function getSession(id: unknown) {
 
 export function installMediaImportRoutes(app: Express) {
   app.get("/api/imports", route(async (_req, res) => {
-    res.json({ imports: [...sessions.values()].sort((a, b) => b.createdAt - a.createdAt).map(publicImport) });
+    res.json({ imports: [...sessions.values()].filter(item => item.purpose !== "download").sort((a, b) => b.createdAt - a.createdAt).map(publicImport) });
+  }));
+  app.get("/api/downloads", route(async (_req, res) => {
+    res.json({ imports: [...sessions.values()].filter(item => item.purpose === "download").sort((a, b) => b.createdAt - a.createdAt).map(publicImport) });
+  }));
+  const downloadable = (id: unknown) => {
+    const item = getSession(id);
+    if (item.purpose !== "download") throw new ImportError(404, "Download not found.");
+    if (item.status !== "completed" || !item.downloadInfo) throw new ImportError(409, "This video is not ready to download yet.");
+    return item;
+  };
+  app.get("/api/downloads/selected.zip", route(async (req, res) => {
+    const parsed = z.array(z.uuid()).min(1).max(100).refine(ids => new Set(ids).size === ids.length)
+      .safeParse(typeof req.query.ids === "string" ? req.query.ids.split(",") : []);
+    if (!parsed.success) throw new ImportError(400, "Select 1–100 ready videos to download as a ZIP.");
+    const items = parsed.data.map(downloadable);
+    const handles: FileHandle[] = [];
+    const archive = new ZipArchive({ zlib: { level: 0 } });
+    try {
+      // Open every file before headers; cleanup cannot turn a selected ZIP into a partial success.
+      for (const item of items) handles.push(await openRegularUpload(readyDownloadPath(item)));
+      archive.on("error", error => res.destroy(error)); archive.on("warning", error => res.destroy(error));
+      res.on("close", () => { archive.abort(); for (const handle of handles) void handle.close().catch(() => {}); });
+      res.attachment("remix-downloads.zip"); archive.pipe(res);
+      items.forEach((item, index) => archive.append(handles[index]!.createReadStream(), { name: `${String(index + 1).padStart(2, "0")}-${cleanName(item.name)}` }));
+      await archive.finalize();
+    } catch (error) {
+      archive.abort(); await Promise.allSettled(handles.map(handle => handle.close())); throw error;
+    }
+  }));
+  app.get("/api/downloads/:id/file", route(async (req, res) => {
+    const item = downloadable(req.params.id), handle = await openRegularUpload(readyDownloadPath(item));
+    res.attachment(cleanName(item.name)); res.setHeader("Content-Length", (await handle.stat()).size);
+    await pipeline(handle.createReadStream(), res);
+  }));
+  app.get("/api/downloads/:id/thumbnail", route(async (req, res) => {
+    const item = downloadable(req.params.id);
+    res.type("image/jpeg"); await pipeline(createReadStream(thumbnailPath(item.id)), res);
   }));
   app.get("/api/imports/:id", route(async (req, res) => { res.json(publicImport(getSession(req.params.id))); }));
   app.post("/api/imports", route(async (req, res) => {
@@ -374,19 +449,25 @@ export function installMediaImportRoutes(app: Express) {
     res.status(imports.length ? 202 : 400).json({ imports, errors, ...(!imports.length ? { error: errors[0]?.error } : {}) });
     pump();
   }));
-  app.post("/api/imports/links", route(async (req, res) => {
-    const parsed = z.object({ links: z.array(z.string().min(1).max(2048)).min(1).max(config.maxFiles) }).strict().safeParse(req.body);
+  app.post(["/api/imports/links", "/api/downloads"], route(async (req, res) => {
+    const standalone = req.path === "/api/downloads";
+    const fields = { links: z.array(z.string().min(1).max(2048)).min(1).max(config.maxFiles) };
+    const parsed = (standalone ? z.object({ ...fields, stripMetadata: z.boolean().default(true) }).strict() : z.object(fields).strict()).safeParse(req.body);
     if (!parsed.success) throw new ImportError(400, `Enter 1–${config.maxFiles} TikTok, Instagram or YouTube video links, one per line.`);
     const imports: ImportSession[] = [];
     const errors: { name: string; error: string }[] = [];
+    const seenLinks = new Set<string>();
     for (const candidate of parsed.data.links) {
       try {
         const link = socialVideoLink(candidate);
+        if (standalone && seenLinks.has(link.url)) continue;
+        seenLinks.add(link.url);
         const item = await exclusive(async () => {
-          ensureCapacity();
+          ensureCapacity(standalone ? "download" : undefined);
           await requireSpace();
           const now = Date.now();
           const value: StoredImport = { id: randomUUID(), name: `${link.platform} video.mp4`, size: 0, offset: 0, kind: "remote",
+            ...(standalone ? { purpose: "download" as const, stripMetadata: "stripMetadata" in parsed.data ? parsed.data.stripMetadata as boolean : true } : {}),
             remoteUrl: link.url, status: "processing", phase: `Waiting to download from ${link.platform}`, progress: 0, createdAt: now, updatedAt: now };
           await persist(value);
           sessions.set(value.id, value);
@@ -403,17 +484,19 @@ export function installMediaImportRoutes(app: Express) {
       const previous = getSession(req.params.id);
       if (previous.kind !== "remote" || previous.status !== "failed" || active.has(previous.id) || cancelled.has(previous.id) || state.sources.some(source => source.id === previous.id))
         throw new ImportError(409, "Only failed video link imports can be retried. Refresh the import status and try again.");
-      if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
+      if (previous.purpose !== "download" && state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
       const link = socialVideoLink(previous.remoteUrl!);
       await requireSpace();
       // A failed preparation can leave downloaded media behind. Restart from
       // the saved URL under the same session id, with no duplicate source.
       await rm(mediaPath(previous), { force: true });
       await rm(thumbnailPath(previous.id), { force: true });
+      await rm(path.join(folder(previous.id), "ready.mp4"), { force: true });
       const next: StoredImport = { ...previous, size: 0, offset: 0, status: "processing", progress: 0,
         phase: `Waiting to retry download from ${link.platform}`, updatedAt: Math.max(Date.now(), previous.updatedAt + 1) };
       delete next.error;
       delete next.diagnostic;
+      delete next.downloadInfo;
       await persist(next);
       sessions.set(next.id, next);
       return next;

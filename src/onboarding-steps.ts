@@ -10,7 +10,7 @@ export function rememberOnboarding(storage?: SessionStorage) {
 }
 
 export type TourDestination = {
-  view: "studio" | "exports" | "history";
+  view: "studio" | "exports" | "history" | "downloader";
   mode?: "auto" | "manual" | "shorts";
   tab?: "essentials" | "color" | "advanced" | "all";
   autoView?: "quick" | "all";
@@ -308,6 +308,12 @@ export const TOUR_STEPS: readonly TourStep[] = [
     options: [["Settings & posting outcomes", "Compare the listed page's posts by settings profile and platform. Similar outcomes do not prove that a setting caused them."],
       ["Compare recorded results", "Compare all recorded reviews by approach and benchmark case. Acceptance rates use explicit human verdicts; undecided exports and automatic repairs are reported separately."],
       ["Download measurements", "Export all measurements as CSV or JSON. The latest platform results for listed exports use one latest snapshot per recorded post; compare similar observation periods."]],
+  },
+  { id: "url-downloader", chapter: "Extra tools", title: "Just download videos from links", target: ".downloader-entry", destination: { view: "downloader" },
+    description: "Downloader is a separate, free tool for saving full videos without setting up an edit. Your existing workspace importer stays available for videos you want to remix.",
+    options: [["Paste one link or a batch", "YouTube videos and Shorts, TikTok videos and Instagram posts/Reels use the same downloader as the existing importer. Paste links on separate lines; duplicates in a batch are skipped."],
+      ["Metadata cleanup is on", "Strip metadata is checked by default. Keep the full video and its audio, with source tags removed. No AI credits are used."],
+      ["Save one or several", "Each video has progress and a Retry button if it fails. Download a ready MP4, or select up to 100 ready videos for a ZIP. Downloads continue while the app server runs; save files within 48 hours."]],
   },
   { id: "mcp", chapter: "Edit from chat", title: "Connect Claude or Codex with MCP", target: ".exports-panel", destination: { view: "exports" },
     description: "MCP connects Claude Code, Claude Desktop or Codex to Remix Studio on this computer. Ask for bulk edits, ending footage, captions and exports from a chat. No public server is needed.",

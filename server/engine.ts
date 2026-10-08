@@ -22,7 +22,7 @@ import { watermarkFilters } from "./watermark-removal.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters, audioNormalizationFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings, TranscriptWord } from "../shared/types.js";
-import { MAX_BROLL_COUNT } from "../shared/types.js";
+import { DEFAULT_SETTINGS, MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
 import { footageTimeline, ownFootageSchema, resolveFootagePlacement } from "../shared/own-footage.js";
@@ -132,6 +132,7 @@ async function localFile(filePath: string): Promise<string> {
 
 interface ProbeStream {
   codec_type?: string;
+  codec_name?: string;
   width?: number;
   height?: number;
   duration?: string;
@@ -220,6 +221,35 @@ export async function probeMedia(filePath: string, signal?: AbortSignal): Promis
     fps,
     hasAudio: !!info.streams?.some((stream) => stream.codec_type === "audio"),
   };
+}
+
+/** Prepare a full-length download without AI or editing. Common MP4s need only a remux. */
+export async function cleanVideoDownload(options: {
+  input: string; output: string; workDir: string; signal: AbortSignal; onProgress: (progress: number) => void;
+}) {
+  const input = await localFile(options.input), output = path.resolve(options.output);
+  if (input === output) throw new Error("Output must be different from source");
+  const info = await probe(input, options.signal);
+  const video = info.streams?.find(stream => stream.codec_type === "video" && !stream.disposition?.attached_pic);
+  const audio = info.streams?.find(stream => stream.codec_type === "audio");
+  const rotation = video?.side_data_list?.find(side => typeof side.rotation === "number")?.rotation ?? Number(video?.tags?.rotate ?? 0);
+  if (video?.codec_name === "h264" && (!audio || audio.codec_name === "aac") && rotation === 0) {
+    try {
+      await run("ffmpeg", ["-hide_banner", "-loglevel", "error", "-nostdin", "-y", ...SAFE_INPUT,
+        "-i", input, "-map", "0:V:0", "-map", "0:a:0?", "-c", "copy",
+        // Source SEI can contain software signatures and embedded captions. Picture packets remain unchanged.
+        "-bsf:v", "filter_units=remove_types=6", ...CLEAN_EXPORT_METADATA_ARGS, output],
+      { signal: options.signal, timeout: 45 * 60_000 });
+      assertCleanExportMetadata(await probe(output, options.signal));
+      options.onProgress(100);
+      return;
+    } catch (error) {
+      await rm(output, { force: true }).catch(() => {});
+      throw error;
+    }
+  }
+  // Convert other codecs, or bake rotation into pixels before removing its metadata.
+  await renderVideo({ ...options, source: await probeMedia(input, options.signal), settings: { ...DEFAULT_SETTINGS } });
 }
 
 export async function probeAudio(filePath: string): Promise<number> {

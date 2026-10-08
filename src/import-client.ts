@@ -101,22 +101,23 @@ export function createUploadImport(file: File, identity: string, signal?: AbortS
   }));
 }
 
-export async function importVideoLinks(links: string[]): Promise<{
+export async function importVideoLinks(links: string[], download?: { stripMetadata: boolean }): Promise<{
   imports: ImportSession[]; errors?: { name: string; error: string }[];
 }> {
   const controller = new AbortController();
+  const endpoint = download ? "/api/downloads" : "/api/imports/links";
   // This deadline covers queue submission, including the response body, not the download.
   const timer = setTimeout(() => controller.abort(new Error(
     "Adding video links timed out after 30 seconds. Check that the app server is running and reachable. " +
     "The links may already be queued; refresh and check the import queue before submitting them again.",
   )), 30_000);
   try {
-    return await importRequest("/api/imports/links", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links }),
+    return await importRequest(endpoint, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links, ...(download ? { stripMetadata: download.stripMetadata } : {}) }),
       signal: controller.signal,
     });
   } catch (error) {
-    if (controller.signal.aborted) reportProblem(controller.signal.reason, { operation: "Import video links", endpoint: "/api/imports/links", method: "POST" });
+    if (controller.signal.aborted) reportProblem(controller.signal.reason, { operation: download ? "Download video links" : "Import video links", endpoint, method: "POST" });
     controller.signal.throwIfAborted();
     throw error;
   } finally { clearTimeout(timer); }

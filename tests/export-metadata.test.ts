@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { promisify } from "node:util";
-import { burnOutputCaptions, probeMedia, renderVideo } from "../server/engine.js";
+import { burnOutputCaptions, cleanVideoDownload, probeMedia, renderVideo } from "../server/engine.js";
 import { assertCleanExportMetadata, type ExportMetadata } from "../server/export-metadata.js";
 import { DEFAULT_SETTINGS } from "../shared/types.js";
 
@@ -83,6 +83,26 @@ test("final captioning cleans tagged input metadata while preserving AAC packets
   await assertCleanFile(output, true);
   const packets = async (file: string) => (await ffmpeg("-i", file, "-map", "0:a:0", "-c:a", "copy", "-f", "adts", "pipe:1")).stdout;
   assert.deepEqual(await packets(output), await packets(input));
+});
+
+test("standalone download cleanup removes metadata without re-encoding ordinary H.264 picture or AAC audio", async () => {
+  const output = path.join(directory, "download.mp4");
+  await cleanVideoDownload({ input, output, workDir: directory, signal: new AbortController().signal, onProgress: () => {} });
+  await assertCleanFile(output, true);
+  const frames = async (file: string) => (await ffmpeg("-i", file, "-map", "0:v:0", "-f", "framemd5", "pipe:1")).stdout;
+  assert.deepEqual(await frames(output), await frames(input), "The decoded video frames are unchanged");
+  const audio = async (file: string) => (await ffmpeg("-i", file, "-map", "0:a:0", "-c:a", "copy", "-f", "adts", "pipe:1")).stdout;
+  assert.deepEqual(await audio(output), await audio(input), "Original audio packets are retained");
+});
+
+test("download cleanup bakes source rotation into the picture before stripping it", async () => {
+  const rotated = path.join(directory, "rotated.mp4"), output = path.join(directory, "rotated-download.mp4");
+  await ffmpeg("-display_rotation", "90", "-i", input, "-map", "0:v:0", "-map", "0:a:0", "-c", "copy", rotated);
+  assert.equal((await probeMedia(rotated)).width, 180, "Fixture must have portrait display rotation");
+  await cleanVideoDownload({ input: rotated, output, workDir: directory, signal: new AbortController().signal, onProgress: () => {} });
+  await assertCleanFile(output, true);
+  const media = await probeMedia(output);
+  assert.equal(media.width, 180); assert.equal(media.height, 320);
 });
 
 test("the final metadata guard rejects unexpected tags, chapters and tracks", () => {

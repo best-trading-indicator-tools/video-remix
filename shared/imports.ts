@@ -21,4 +21,17 @@ export interface ImportSession {
   source?: VideoSource;
   error?: string;
   diagnostic?: Diagnostic;
+  /** Standalone downloads share the queue, but never enter the editing workspace. */
+  purpose?: "download";
+  remoteUrl?: string;
+  stripMetadata?: boolean;
+  download?: {
+    url: string;
+    thumbnailUrl: string;
+    duration: number;
+    width: number;
+    height: number;
+    size: number;
+    expiresAt: string;
+  };
 }

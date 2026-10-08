@@ -1,0 +1,52 @@
+.url-downloader { display: grid; gap: 20px; padding-bottom: 28px; }
+.downloader-entry, .downloader-results { padding: 24px; min-width: 0; }
+.downloader-title { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
+.downloader-title h2 { font-size: 20px; letter-spacing: -.4px; margin: 3px 0 6px; }
+.downloader-entry > p, .downloader-title p { color: var(--subtle); font-size: 13px; margin: 0 0 16px; }
+.downloader-free { color: var(--accent); border: 1px solid var(--line); border-radius: 20px; padding: 6px 12px; font-size: 12px; white-space: nowrap; }
+.downloader-entry form > label { display: block; font-size: 13px; font-weight: 600; margin: 20px 0 8px; }
+.downloader-entry textarea { display: block; width: 100%; min-height: 130px; resize: vertical; border: 1px solid var(--line); background: var(--field); color: var(--text); padding: 14px; border-radius: 8px; font: inherit; font-size: 13px; line-height: 1.8; }
+.downloader-note { color: var(--subtle); font-size: 12px; line-height: 1.6; margin: 10px 0; }
+.downloader-entry > p:last-child { margin: 18px 0 0; }
+.downloader-start { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 16px; margin-top: 20px; }
+.downloader-clean, .downloader-selection label { display: flex; gap: 10px; align-items: center; cursor: pointer; }
+.downloader-clean strong { display: block; font-size: 13px; }
+.downloader-clean small { display: block; color: var(--subtle); font-size: 12px; margin-top: 3px; }
+.url-downloader input[type=checkbox] { width: 17px; height: 17px; flex: 0 0 17px; accent-color: var(--accent); }
+.downloader-link-summary, .downloader-selection { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; font-size: 12px; margin-top: 12px; color: var(--subtle); }
+.downloader-link-summary strong { color: var(--text); }
+.downloader-invalid { padding-left: 20px; color: var(--subtle); font-size: 12px; overflow-wrap: anywhere; }
+.downloader-invalid li { margin-top: 5px; }
+.downloader-validation { color: var(--accent); font-size: 13px; }
+.downloader-notice { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--accent); margin: 0; }
+.downloader-notice svg { flex-shrink: 0; }
+.downloader-empty { display: grid; justify-items: center; text-align: center; padding: 45px 16px; color: var(--subtle); }
+.downloader-empty h3 { color: var(--text); font-size: 16px; margin: 14px 0 5px; }
+.downloader-empty p { font-size: 13px; max-width: 360px; }
+.downloader-list { margin-top: 18px; display: grid; gap: 12px; }
+.downloader-card { padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
+.downloader-card-main { display: flex; gap: 14px; align-items: center; min-width: 0; }
+.downloader-thumbnail { width: 86px; height: 68px; object-fit: contain; background: var(--field); border-radius: 6px; flex-shrink: 0; }
+.downloader-thumbnail.placeholder { display: grid; place-items: center; color: var(--subtle); }
+.downloader-details { flex: 1; min-width: 0; }
+.downloader-details h3 { margin: 0 0 4px; font-size: 14px; font-weight: 550; overflow-wrap: anywhere; }
+.downloader-source-link { color: var(--subtle); display: block; font-size: 11px; overflow-wrap: anywhere; }
+.downloader-meta { display: flex; flex-wrap: wrap; gap: 7px 14px; color: var(--subtle); font-size: 11px; margin-top: 8px; }
+.downloader-meta span { display: inline-flex; align-items: center; gap: 4px; }
+.downloader-details progress { display: block; width: 100%; height: 5px; margin-top: 12px; accent-color: var(--accent); }
+.downloader-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.url-downloader .primary-button, .url-downloader .secondary-button { min-height: 42px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; text-decoration: none; }
+.downloader-remove { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; border-top: 1px solid var(--line); padding-top: 14px; margin-top: 14px; font-size: 12px; }
+.downloader-remove span { flex: 1 1 250px; }
+@media (max-width: 900px) { .downloader-card-main { flex-wrap: wrap; } .downloader-card-actions { width: 100%; justify-content: flex-end; } }
+@media (max-width: 680px) {
+  .downloader-entry, .downloader-results { padding: 16px; }
+  .downloader-title h2 { font-size: 18px; }
+  .downloader-title { gap: 10px; }
+  .downloader-entry textarea { font-size: 16px; }
+  .downloader-start > button, .downloader-title > a { width: 100%; }
+  .downloader-thumbnail { width: 58px; height: 58px; }
+  .downloader-card { padding: 12px; }
+  .downloader-card-main { gap: 10px; }
+  .downloader-details { flex-basis: calc(100% - 100px); }
+}

@@ -29,6 +29,7 @@ test("pasted batches accept mixed platforms and separators, deduplicate video id
 });
 
 test("social links allow individual videos, strip tracking, and reject unrelated URLs", () => {
+  assert.deepEqual(socialVideoLink("https://www.youtube.com/shorts/NTlN61zEzUY"), { platform: "YouTube", url: "https://www.youtube.com/watch?v=NTlN61zEzUY" });
   for (const url of ["https://youtu.be/BaW_jenozKc?si=tracking", "https://m.youtube.com/shorts/BaW_jenozKc", "https://youtube.com/watch?v=BaW_jenozKc&list=PL123"])
     assert.deepEqual(socialVideoLink(url), { platform: "YouTube", url: "https://www.youtube.com/watch?v=BaW_jenozKc" });
   assert.equal(socialVideoLink("https://instagram.com/reels/ABC-123_/?igsh=tracking").url, "https://www.instagram.com/reel/ABC-123_/");
@@ -90,7 +91,8 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
 `);
   await chmod(binary, 0o700);
   await exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=12:duration=1",
-    "-f", "lavfi", "-i", "sine=duration=1", "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", fixture]);
+    "-f", "lavfi", "-i", "sine=duration=1", "-c:v", "libx264", "-threads", "1", "-pix_fmt", "yuv420p", "-c:a", "aac",
+    "-metadata", "title=SOURCE_METADATA_MARKER", "-shortest", fixture]);
   const listener = net.createServer();
   await new Promise<void>(resolve => listener.listen(0, "127.0.0.1", resolve));
   const port = (listener.address() as net.AddressInfo).port;
@@ -361,6 +363,62 @@ console.log("remix-result:" + JSON.stringify({ file: path.resolve("video.mp4"), 
         process.env.YT_DLP_COOKIES = "";
         if (previous === undefined) delete process.env.YT_DLP_BIN; else process.env.YT_DLP_BIN = previous;
       }
+    });
+    await t.test("standalone bulk downloads clean metadata, serve MP4 and ZIP, and leave the importer and exports separate", async () => {
+      const originalSources = (await (await fetch(`${base}/api/sources`)).json()).sources.map((item: any) => item.id);
+      const originalImports = (await (await fetch(`${base}/api/imports`)).json()).imports.map((item: any) => item.id);
+      const result = await post("/api/downloads", { links: ["https://www.youtube.com/shorts/NTlN61zEzUY", "https://youtu.be/NTlN61zEzUY", "https://www.instagram.com/reel/Download123/", "https://localhost/private"] });
+      assert.equal(result.status, 202);
+      const queued = await result.json() as { imports: ImportSession[]; errors: { error: string }[] };
+      assert.equal(queued.imports.length, 2); assert.equal(queued.errors.length, 1);
+      assert.ok(queued.imports.every(item => item.purpose === "download" && item.stripMetadata));
+      const ready = await Promise.all(queued.imports.map(item => wait(item.id, value => ["completed", "failed"].includes(value.status))));
+      for (const item of ready) {
+        assert.equal(item.status, "completed", JSON.stringify(item)); assert.equal(item.source, undefined); assert.ok(item.download);
+        const response = await fetch(`${base}${item.download.url}`);
+        assert.equal(response.status, 200); assert.match(response.headers.get("content-disposition")!, /attachment.*\.mp4/);
+        const file = path.join(directory, `${item.id}.mp4`);
+        await writeFile(file, Buffer.from(await response.arrayBuffer()));
+        const metadata = JSON.parse((await exec("ffprobe", ["-v", "error", "-show_format", "-show_streams", "-show_chapters", "-of", "json", file])).stdout);
+        assert.equal(metadata.format.tags.title, undefined); assert.equal(metadata.format.tags.encoder, undefined);
+        assert.equal(metadata.chapters.length, 0); assert.equal(item.download.width, 160); assert.equal(item.download.height, 90);
+        assert.equal((await fetch(`${base}${item.download.thumbnailUrl}`)).status, 200);
+      }
+      const zip = await fetch(`${base}/api/downloads/selected.zip?ids=${ready.map(item => item.id).join(",")}`);
+      assert.equal(zip.status, 200); const zipFile = path.join(directory, "downloads.zip");
+      await writeFile(zipFile, Buffer.from(await zip.arrayBuffer()));
+      assert.match((await exec("unzip", ["-t", zipFile])).stdout, /No errors/);
+      const names = (await exec("unzip", ["-Z1", zipFile])).stdout.trim().split("\n");
+      assert.equal(names.length, 2); assert.ok(names.every(name => name.endsWith(".mp4"))); assert.notEqual(names[0], names[1]);
+      assert.equal((await fetch(`${base}/api/downloads/selected.zip?ids=${ready[0]!.id},invalid`)).status, 400);
+      assert.equal((await fetch(`${base}/api/downloads/selected.zip?ids=${ready[0]!.id},${ready[0]!.id}`)).status, 400);
+      assert.deepEqual((await (await fetch(`${base}/api/sources`)).json()).sources.map((item: any) => item.id), originalSources);
+      assert.deepEqual((await (await fetch(`${base}/api/imports`)).json()).imports.map((item: any) => item.id), originalImports);
+      assert.equal((await (await fetch(`${base}/api/jobs`)).json()).jobs.length, 0);
+      await stop(); await start();
+      assert.equal((await (await fetch(`${base}/api/downloads`)).json()).imports.length, 2);
+      assert.equal((await fetch(`${base}${ready[0]!.download!.url}`)).status, 200);
+      const original = await (await post("/api/downloads", { links: ["https://youtu.be/BaW_jenozKc"], stripMetadata: false })).json();
+      const retained = await wait(original.imports[0].id, item => item.status === "completed");
+      assert.deepEqual(Buffer.from(await (await fetch(`${base}${retained.download!.url}`)).arrayBuffer()), await readFile(fixture));
+      for (const item of [...ready, retained]) {
+        assert.equal((await fetch(`${base}/api/imports/${item.id}`, { method: "DELETE" })).status, 200);
+        assert.equal((await fetch(`${base}/api/downloads/${item.id}/file`)).status, 404);
+        await assert.rejects(access(path.join(data, "imports", item.id)), { code: "ENOENT" });
+      }
+    });
+    await t.test("standalone failures can retry and active downloads can cancel without affecting other files", async () => {
+      await rm(retryMarker, { force: true });
+      const response = await post("/api/downloads", { links: ["https://youtu.be/RETRY000001", "https://youtu.be/SLOW0000001"] });
+      const [retry, slow] = (await response.json()).imports as ImportSession[];
+      const failed = await wait(retry!.id, item => item.status === "failed");
+      assert.equal((await fetch(`${base}/api/downloads/${failed.id}/file`)).status, 409);
+      assert.equal((await fetch(`${base}/api/downloads/selected.zip?ids=${failed.id}`)).status, 409);
+      assert.equal((await fetch(`${base}/api/imports/${slow!.id}`, { method: "DELETE" })).status, 200);
+      assert.equal((await post(`/api/imports/${failed.id}/retry`, {})).status, 202);
+      const recovered = await wait(failed.id, item => ["completed", "failed"].includes(item.status));
+      assert.equal(recovered.status, "completed", JSON.stringify(recovered)); assert.equal(recovered.stripMetadata, true);
+      await fetch(`${base}/api/imports/${recovered.id}`, { method: "DELETE" });
     });
     await t.test("invalid configured cookies fail clearly without falling back to anonymous downloads", async () => {
       const malformed = path.join(directory, "invalid-cookies.txt");
