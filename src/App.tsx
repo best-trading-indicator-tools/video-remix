@@ -1,5 +1,6 @@
 import { upscaleSchema } from "../shared/upscale";
 import UpscaleControl from "./UpscaleControl";
+import { DesktopUpdateNotice } from "./DesktopUpdates";
 import SourceProtection from './SourceProtection';
 import LibraryFilters from './LibraryFilters';
 import ProjectField from './ProjectField';
@@ -1310,6 +1311,7 @@ export default function App() {
       </header>
 
       <main>
+        <DesktopUpdateNotice hidden={view === "settings"} />
         <div className="page-heading">
           <div>
             <h1>

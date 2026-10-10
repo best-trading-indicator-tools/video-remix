@@ -1,23 +1,34 @@
-name: Desktop installers
+name: Desktop feature releases
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the prepared release after all three platforms pass
+        type: boolean
+        default: false
   push:
     branches: [main]
     paths:
-      - 'desktop/**'
-      - 'electron-builder.yml'
-      - 'package*.json'
-      - 'src/**'
-      - 'server/**'
-      - 'shared/**'
-      - '.github/workflows/desktop.yml'
+      - 'desktop/release.json'
 permissions:
   contents: read
 concurrency:
-  group: desktop-${{ github.ref }}
-  cancel-in-progress: true
+  group: desktop-${{ github.sha }}
+  cancel-in-progress: false
 jobs:
+  validate:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate the feature release marker
+        run: |
+          node --input-type=module -e "import {readFile} from 'node:fs/promises'; import {validateRelease} from './desktop/release-utils.mjs'; validateRelease(JSON.parse(await readFile('desktop/release.json')), JSON.parse(await readFile('package.json')).version);"
   package:
+    needs: validate
     name: ${{ matrix.os }} installer and bundled-engine smoke
     runs-on: ${{ matrix.os }}
     timeout-minutes: 25
@@ -44,6 +55,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Check release selection and private runtime behavior
+        run: npx tsx --import ./tests/setup.mjs --test tests/desktop-runtime.test.ts tests/desktop-updates.test.ts tests/desktop-release.test.ts
       - run: npm run desktop:build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
@@ -60,3 +73,24 @@ jobs:
             release/*.deb
           if-no-files-found: error
           retention-days: 14
+  publish:
+    needs: package
+    if: github.event_name == 'push' || inputs.publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: release-installers
+      - name: Publish verified installers together
+        run: node scripts/publish-desktop-release.mjs release-installers
+        env:
+          GH_TOKEN: ${{ github.token }}

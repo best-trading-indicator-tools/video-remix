@@ -983,7 +983,7 @@ FFmpeg and ffprobe must be installed for media integration tests. Local transcri
 
 The app runs locally on your Mac. GitHub Actions provides optional remote verification:
 
-- Pushes to `main` run build/type checks. Relevant desktop changes also build Mac, Windows and Linux installers and test their bundled engine; relevant upscaler changes run the cross-platform AI compatibility checks. The full test suite remains manual. Documentation-only pushes are skipped. New pushes cancel superseded automatic checks.
+- Pushes to `main` run build/type checks. Completed substantial features update `desktop/release.json`, triggering Mac, Windows and Linux installer checks and automatic release publication. Small fixes wait for the next feature release. The desktop app shows **View update** for newer releases, with a manual check in **Settings → App updates**. Relevant upscaler changes run cross-platform AI compatibility checks. The full test suite remains manual. Documentation-only pushes are skipped. New pushes cancel superseded ordinary checks; prepared desktop releases finish independently. See [desktop release and update details](desktop.md).
 - Full remote tests run only when you explicitly choose **Actions → Build checks and manual tests → Run workflow**, or run `gh workflow run ci.yml --ref main`. A push does not cancel a manually requested test run.
 - Run `npm test` on your Mac for local testing without using GitHub Actions minutes.
 

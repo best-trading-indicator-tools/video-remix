@@ -1,6 +1,6 @@
 {
   "name": "video-remix",
-  "version": "1.1.0",
+  "version": "1.2.0-preview.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -27,6 +27,7 @@
     "mcp": "node scripts/mcp.mjs",
     "mcp:install": "node scripts/install-mcp.mjs",
     "desktop:prepare": "node desktop/build-resources.mjs",
+    "desktop:release": "node scripts/prepare-desktop-release.mjs",
     "desktop:dev": "npm run build && npm run desktop:prepare && electron .",
     "desktop:pack": "npm run build && npm run desktop:prepare && electron-builder --dir",
     "desktop:build": "npm run build && npm run desktop:prepare && electron-builder"

@@ -7,7 +7,7 @@ const { pathToFileURL } = require('node:url');
 
 if (process.env.REMIX_DESKTOP_TEST_HOME) app.setPath('userData', process.env.REMIX_DESKTOP_TEST_HOME);
 if (!app.requestSingleInstanceLock()) app.quit();
-let window, engine, installer, runtimeApi, context, origin, quitting = false, stopping = false;
+let window, engine, installer, runtimeApi, context, origin, updateChecker, quitting = false, stopping = false;
 let state = { busy: false, phase: 'Checking bundled tools', completed: 0, total: 1, logs: [], components: [], engineReady: false, error: '' };
 const root = path.resolve(__dirname, '..');
 const setupUrl = pathToFileURL(path.join(__dirname, 'welcome.html')).href;
@@ -78,6 +78,17 @@ app.whenReady().then(async () => {
     if (url !== setupUrl && (!origin || new URL(url).origin !== origin)) { event.preventDefault(); external(url); }
   });
   ipcMain.handle('setup:state', event => { trusted(event); return state; });
+  const { createUpdateChecker, fetchPublishedReleases } = await import('./updates.mjs');
+  updateChecker = createUpdateChecker({ currentVersion: app.getVersion(), fetchReleases: fetchPublishedReleases,
+    onChange: value => { if (!window.isDestroyed()) window.webContents.send('updates:state', value); } });
+  ipcMain.handle('updates:state', event => { trusted(event); return updateChecker.getState(); });
+  ipcMain.handle('updates:check', event => { trusted(event); return updateChecker.check(true); });
+  ipcMain.handle('updates:open', async event => {
+    trusted(event);
+    const release = updateChecker.getState().release;
+    if (!release) throw new Error('Check for an available update first.');
+    await shell.openExternal(release.url);
+  });
   ipcMain.handle('setup:open', async event => { trusted(event); publish({ components: await runtimeApi.componentState(context.runtime) }); await setup(); });
   ipcMain.handle('setup:studio', async event => { trusted(event); if (!origin || !state.engineReady) throw new Error('The local engine is still starting.'); await writeFile(path.join(context.runtime, 'welcome-complete'), '1'); await window.loadURL(origin); });
   ipcMain.handle('setup:cancel', event => { trusted(event); installer?.abort(); });
@@ -97,6 +108,11 @@ app.whenReady().then(async () => {
     { role: 'editMenu' }, { role: 'viewMenu' },
   ]));
   await setup();
+  if (app.isPackaged) {
+    void updateChecker.check();
+    const updateTimer = setInterval(() => void updateChecker.check(), 6 * 60 * 60 * 1000);
+    updateTimer.unref();
+  }
   try { await initialize(); } catch (error) { publish({ error: error.message, phase: 'Setup needs attention' }); }
 });
 app.on('second-instance', () => { if (window) { if (window.isMinimized()) window.restore(); window.focus(); } });

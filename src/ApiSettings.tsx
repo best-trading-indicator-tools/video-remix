@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, ExternalLink, KeyRound, LoaderCircle } from "lucide-react";
 import { API_PROVIDERS, type ApiConnectionResult, type ApiKeySettings, type ApiProvider } from "../shared/api-keys";
 import { apiRequest } from "./api-client";
+import { DesktopUpdateSettings } from "./DesktopUpdates";
 
 const providers: Record<ApiProvider, { name: string; description: string; url: string; link: string; help: string }> = {
   deepseek: { name: "DeepSeek", description: "Prompt edits, hooks, visual matching and reviews. We chose DeepSeek for its much lower cost than many proprietary LLM APIs. This is a paid API; usage is billed to your account.", url: "https://platform.deepseek.com/api_keys", link: "Open DeepSeek · create a key", help: "Create an account, add a small balance, then copy your API key." },
@@ -66,6 +67,7 @@ export default function ApiSettings({ onSaved }: { onSaved: () => void }) {
   const working = Boolean(busy || testing);
 
   return <section className="api-settings" aria-label="API keys">
+    <DesktopUpdateSettings />
     {window.remixDesktop && <div className="desktop-tools-card panel"><div><h2>Local tools</h2><p>Install or repair captions, the AI upscaler and other free local features.</p></div>
       <button type="button" className="secondary-button" onClick={() => { void window.remixDesktop?.openSetup().catch(() => setError("Could not open Local tools. Restart Remix Studio.")); }}>Open Local tools</button></div>}
     <div className="api-settings-intro">

@@ -1,0 +1,14 @@
+.desktop-update-notice { display:flex; align-items:center; gap:14px; padding:16px 18px; margin-top:20px; border:1px solid var(--line-strong); border-radius:12px; background:var(--surface); }
+.desktop-update-notice > svg { color:var(--accent); flex-shrink:0; }
+.desktop-update-notice > div { flex:1; min-width:0; }
+.desktop-update-notice strong { font-size:13px; }
+.desktop-update-notice p, .desktop-update-settings p { color:var(--subtle); font-size:12px; line-height:1.6; margin-top:5px; }
+.desktop-update-notice .secondary-button { white-space:nowrap; }
+.update-dismiss { display:flex; align-items:center; justify-content:center; min-width:36px; min-height:40px; border-radius:7px; background:transparent; color:var(--subtle); }
+.update-dismiss:hover { background:var(--surface-hover); color:var(--text); }
+.desktop-update-settings { padding:20px; margin-bottom:20px; }
+.desktop-update-settings h2 { font-size:16px; }
+.desktop-update-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:14px; }
+.desktop-update-settings .desktop-update-result { color:var(--text); }
+.desktop-update-time { font-size:11px !important; }
+@media (max-width:640px) { .desktop-update-notice { flex-wrap:wrap; gap:10px; } .desktop-update-notice > div { flex-basis:calc(100% - 40px); } .desktop-update-notice .secondary-button { margin-left:28px; } }

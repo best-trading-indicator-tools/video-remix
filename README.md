@@ -234,7 +234,9 @@ Downloader items stay separate from editing sources and exports. Platform access
 
 ### Desktop app · no terminal required
 
-[**Download the desktop preview**](https://github.com/best-trading-indicator-tools/video-remix/releases/tag/v1.1.0-preview.1) for **Apple Silicon Macs (macOS 14+)**, **Windows x64**, or **Linux x64**.
+[**Download the desktop preview**](https://github.com/best-trading-indicator-tools/video-remix/releases) for **Apple Silicon Macs (macOS 14+)**, **Windows x64**, or **Linux x64**.
+
+Completed features get a new desktop release automatically after all three platform builds pass. Small fixes are bundled into the next feature release. The app checks for published updates and shows **View update**; **Settings → App updates** also lets you check manually. Download the new installer, then quit and replace the app—your workspace and downloaded models stay in place. The original 1.1 preview needs one manual update to gain this notification feature.
 
 1. Install the `.dmg` on Mac, run the `.exe` on Windows, or use the `.AppImage` / `.deb` on Linux. Open **Remix Studio**.
 2. Choose local tools and click **Install selected tools**. Downloads and progress are shown inside the app; you can cancel and retry. Basic Manual editing works immediately.

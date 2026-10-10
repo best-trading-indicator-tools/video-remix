@@ -6,4 +6,8 @@ contextBridge.exposeInMainWorld('remixDesktop', {
   install: ids => ipcRenderer.invoke('setup:install', ids),
   cancel: () => ipcRenderer.invoke('setup:cancel'),
   onState: callback => { const listener = (_event, state) => callback(state); ipcRenderer.on('setup:state', listener); return () => ipcRenderer.removeListener('setup:state', listener); },
+  getUpdateState: () => ipcRenderer.invoke('updates:state'),
+  checkUpdates: () => ipcRenderer.invoke('updates:check'),
+  openUpdate: () => ipcRenderer.invoke('updates:open'),
+  onUpdateState: callback => { const listener = (_event, state) => callback(state); ipcRenderer.on('updates:state', listener); return () => ipcRenderer.removeListener('updates:state', listener); },
 });
