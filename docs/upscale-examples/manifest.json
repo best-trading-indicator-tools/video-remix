@@ -1,16 +1,36 @@
 {
-  "generatedAt": "2026-10-10T05:50:30.320Z",
+  "generatedAt": "2026-10-10T06:30:17.421Z",
   "runtime": {
     "installed": true,
     "ready": true,
     "device": "mps"
   },
-  "sourceUrl": "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4",
-  "attribution": "© copyright Blender Foundation | www.sintel.org",
-  "license": "https://creativecommons.org/licenses/by/3.0/",
-  "changes": "2.5-second excerpts, downsampled and compressed to make controlled inputs; AI enlarged by the app; comparisons cropped and labelled.",
+  "sources": [
+    {
+      "id": "sintel",
+      "title": "Sintel trailer",
+      "filename": "sintel-trailer-original.mp4",
+      "url": "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4",
+      "sha256": "34bbd52a4b89fdf63c8ace50b268da26653a59508288100cd3c23de276db7931",
+      "attribution": "© copyright Blender Foundation | www.sintel.org",
+      "attributionUrl": "https://durian.blender.org/sharing/",
+      "license": "https://creativecommons.org/licenses/by/3.0/"
+    },
+    {
+      "id": "tears-of-steel",
+      "title": "Tears of Steel",
+      "filename": "tears-of-steel-original.webm",
+      "url": "https://media.xiph.org/tearsofsteel/tears_of_steel_1080p.webm",
+      "sha256": "328253280a05e6b14a92f1f43d818d9b7d38ab5d3f6d5d98606198fd3daef2ff",
+      "attribution": "(CC) Blender Foundation | mango.blender.org",
+      "attributionUrl": "https://mango.blender.org/sharing/",
+      "license": "https://creativecommons.org/licenses/by/3.0/"
+    }
+  ],
+  "changes": "2.5-second excerpts, cropped where specified, downsampled and compressed at CRF 26 to make controlled inputs; AI enlarged by the app; comparisons use the same output-pixel crop and timestamp on both sides. New live-action posters are lossless, with no further resizing, blur or sharpening.",
   "samples": [
     {
+      "sourceId": "sintel",
       "id": "closeup-1080p",
       "title": "Close-up · 360p → 1080p",
       "start": 14,
@@ -37,6 +57,47 @@
       }
     },
     {
+      "sourceId": "tears-of-steel",
+      "id": "live-action-1080p",
+      "title": "Live action · 360p → 1080p",
+      "start": 32,
+      "sourceCrop": "crop=1422:800:249:0",
+      "inputWidth": 640,
+      "inputHeight": 360,
+      "target": "1080",
+      "detailCrop": {
+        "width": 640,
+        "height": 480,
+        "x": 800,
+        "y": 110
+      },
+      "posterFrame": 0,
+      "seconds": 18.1,
+      "before": {
+        "width": 640,
+        "height": 360
+      },
+      "after": {
+        "duration": 2.5,
+        "width": 1920,
+        "height": 1080,
+        "fps": 24,
+        "hasAudio": true
+      },
+      "generatedAt": "2026-10-10T06:26:24.606Z",
+      "comparisonUpdatedAt": "2026-10-10T06:30:11.460Z",
+      "files": {
+        "before": "live-action-1080p-before.mp4",
+        "ai": "live-action-1080p-ai.mp4",
+        "comparison": "live-action-1080p-comparison.mp4",
+        "poster": "live-action-1080p-poster.png",
+        "resize": "live-action-1080p-resize.mp4",
+        "resizeDetail": "live-action-1080p-resize-detail.png",
+        "aiDetail": "live-action-1080p-ai-detail.png"
+      }
+    },
+    {
+      "sourceId": "sintel",
       "id": "motion-4k",
       "title": "Motion · 540p → 4K",
       "start": 27,
@@ -60,6 +121,46 @@
         "before": "motion-4k-before.mp4",
         "ai": "motion-4k-ai.mp4",
         "comparison": "motion-4k-comparison.mp4"
+      }
+    },
+    {
+      "sourceId": "tears-of-steel",
+      "id": "print-4k",
+      "title": "Printed edges · 540p → 4K",
+      "start": 80,
+      "sourceCrop": "crop=1422:800:249:0",
+      "inputWidth": 960,
+      "inputHeight": 540,
+      "target": "2160",
+      "detailCrop": {
+        "width": 640,
+        "height": 480,
+        "x": 640,
+        "y": 260
+      },
+      "posterFrame": 0,
+      "seconds": 43.3,
+      "before": {
+        "width": 960,
+        "height": 540
+      },
+      "after": {
+        "duration": 2.5,
+        "width": 3840,
+        "height": 2160,
+        "fps": 24,
+        "hasAudio": true
+      },
+      "generatedAt": "2026-10-10T06:27:13.495Z",
+      "comparisonUpdatedAt": "2026-10-10T06:30:17.420Z",
+      "files": {
+        "before": "print-4k-before.mp4",
+        "ai": "print-4k-ai.mp4",
+        "comparison": "print-4k-comparison.mp4",
+        "poster": "print-4k-poster.png",
+        "resize": "print-4k-resize.mp4",
+        "resizeDetail": "print-4k-resize-detail.png",
+        "aiDetail": "print-4k-ai-detail.png"
       }
     }
   ]

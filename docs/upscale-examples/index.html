@@ -2,37 +2,94 @@
 <html lang="en">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Video Remix · AI upscale examples</title>
+<title>Remix Studio · AI upscaler comparisons</title>
 <style>
   :root{color-scheme:dark;font:16px/1.6 system-ui,sans-serif;background:#101216;color:#eee}
   body{max-width:1100px;margin:0 auto;padding:40px 24px}h1{font-size:clamp(28px,5vw,44px);line-height:1.15}
-  h2{margin-bottom:8px}a{color:#b7d9ff}p{max-width:850px;color:#bbc2ce}section{margin:40px 0}
-  video{width:100%;background:#000;border-radius:12px;display:block}nav{display:flex;gap:24px;flex-wrap:wrap;margin-top:14px}
-  small{color:#a8b1be}footer{border-top:1px solid #353a45;margin-top:48px;padding-top:20px}code{color:#eee}
+  h2{margin-bottom:8px}a{color:#b7d9ff}p{max-width:950px;color:#bbc2ce}section{margin:48px 0}
+  video{width:100%;background:#000;border-radius:12px;display:block}nav{display:flex;gap:12px 24px;flex-wrap:wrap;margin-top:14px}
+  small,figcaption{color:#a8b1be}footer{border-top:1px solid #353a45;margin-top:48px;padding-top:20px}code{color:#eee}
+  figure{margin:24px 0;padding:20px;border:1px solid #353a45;border-radius:12px;background:#171b21}
+  .compare{--split:50%;position:relative;max-width:640px;aspect-ratio:4/3;margin:0 auto;overflow:hidden;background:#000}
+  .compare img{display:block;width:100%;height:100%;object-fit:contain}
+  .before{position:absolute;inset:0;clip-path:inset(0 calc(100% - var(--split)) 0 0)}
+  .compare::after{content:"";position:absolute;top:0;bottom:0;left:var(--split);border-left:2px solid #fff;pointer-events:none}
+  .label{position:absolute;bottom:12px;padding:4px 10px;background:#000c;color:#fff;border-radius:4px;font-size:13px}
+  .ai-label{right:12px}.before-label{left:12px}
+  .slider-label{display:block;margin-top:16px;font-weight:600}.compare-range{width:100%;max-width:640px;display:block;margin:8px auto 12px;accent-color:#d8b58a}
+  input:focus-visible,summary:focus-visible,a:focus-visible{outline:2px solid #d8b58a;outline-offset:4px}
+  details{border-top:1px solid #353a45;padding-top:24px}summary{cursor:pointer;font-size:20px;font-weight:650}
+  @media(max-width:600px){body{padding:24px 16px}figure{padding:12px}.label{font-size:11px;padding:3px 6px}}
 </style>
 <body>
-<small>VIDEO REMIX / LOCAL REAL-ESRGAN</small>
-<h1>See what the upscaler changes.</h1>
-<p>Two short examples rendered through the app. Each comparison shows the same crop at the target resolution: ordinary Lanczos resizing on the left, AI on the right. Use fullscreen to inspect texture; the full-frame files are linked below.</p>
-<p>These are controlled tests made by reducing an animated trailer to 360p or 540p first. Results on your recordings may differ. AI can smooth or invent detail and flicker between frames; higher pixel counts do not guarantee better footage.</p>
+<small>REMIX STUDIO / LOCAL REAL-ESRGAN</small>
+<h1>Inspect the details, then watch them move.</h1>
+<p>Actual exports from the app's free local upscaler. These live-action tests make edge cleanup easier to inspect than a small thumbnail. The slider compares ordinary Lanczos resizing with Real-ESRGAN on the exact same frame and crop. The still images are lossless PNGs.</p>
+<p>These are controlled examples: high-resolution footage was cropped to 16:9, reduced to 360p or 540p and compressed at H.264 CRF 26 first. Both results use the same final H.264 settings. AI can smooth textures, alter letters or flicker between frames. The examples show selected cases, not a guarantee for every recording.</p>
 <section>
-  <h2>Close-up · 360p → 1080p</h2>
-  <p>2.5 seconds · 24 fps · original audio · 640 × 360 input → 1920 × 1080 output</p>
-  <video controls loop muted playsinline preload="metadata" poster="closeup-1080p-poster.jpg" src="closeup-1080p-comparison.mp4"></video>
-  <nav><a href="closeup-1080p-before.mp4">Before · 360p</a><a href="closeup-1080p-ai.mp4">AI result · 1080p</a><a href="closeup-1080p-comparison.mp4">Comparison video</a></nav>
+  <h2>Live action · 360p → 1080p</h2>
+  <p>Look at the blue sleeve folds, shoulder trim and metallic arm. The AI result has cleaner edges, but also smoother skin and background texture.</p>
+  <figure>
+    <div class="compare" id="live-action-compare">
+      <img src="live-action-1080p-ai-detail.png" alt="AI-upscaled detail of the actor's jacket and metallic arm" width="640" height="480">
+      <span class="label ai-label">Real-ESRGAN AI</span>
+      <div class="before"><img src="live-action-1080p-resize-detail.png" alt="The identical detail after ordinary resizing" width="640" height="480"><span class="label before-label">Ordinary resize</span></div>
+    </div>
+    <label class="slider-label" for="live-action-slider">Compare the same frame</label>
+    <input class="compare-range" id="live-action-slider" type="range" min="0" max="100" value="50" data-compare="live-action-compare" aria-label="Live-action comparison: left end shows only AI, right end shows only ordinary resizing">
+    <figcaption>Slide left for AI only; right for ordinary resizing only. Arrow keys work too. Frame 0 · identical 640 × 480 output-pixel crops, with no additional resizing of the PNG files.</figcaption>
+  </figure>
+  <video controls loop muted playsinline preload="none" poster="live-action-1080p-poster.png" src="live-action-1080p-comparison.mp4"></video>
+  <nav><a href="live-action-1080p-before.mp4">Input · 360p</a><a href="live-action-1080p-resize.mp4">Ordinary resize · 1080p</a><a href="live-action-1080p-ai.mp4">AI result · 1080p</a><a href="live-action-1080p-comparison.mp4">Comparison video</a></nav>
+  <p><small>2.5 seconds · 24 fps · original audio · 640 × 360 input → 1920 × 1080 output. The video above shows the same crop throughout; the links contain the full frames.</small></p>
 </section>
 <section>
-  <h2>Motion · 540p → 4K</h2>
-  <p>2.5 seconds · 24 fps · original audio · 960 × 540 input → 3840 × 2160 output</p>
-  <video controls loop muted playsinline preload="metadata" poster="motion-4k-poster.jpg" src="motion-4k-comparison.mp4"></video>
-  <nav><a href="motion-4k-before.mp4">Before · 540p</a><a href="motion-4k-ai.mp4">AI result · 4K</a><a href="motion-4k-comparison.mp4">Comparison video</a></nav>
+  <h2>Printed edges · 540p → 4K</h2>
+  <p>Look at the letter outlines and paper folds. Cleaner outlines do not establish accurate text recovery: fine lettering can stay distorted or lose texture.</p>
+  <figure>
+    <div class="compare" id="print-compare">
+      <img src="print-4k-ai-detail.png" alt="AI-upscaled detail of printed lettering and paper folds" width="640" height="480">
+      <span class="label ai-label">Real-ESRGAN AI</span>
+      <div class="before"><img src="print-4k-resize-detail.png" alt="The same lettering and paper folds after ordinary resizing" width="640" height="480"><span class="label before-label">Ordinary resize</span></div>
+    </div>
+    <label class="slider-label" for="print-slider">Compare the same frame</label>
+    <input class="compare-range" id="print-slider" type="range" min="0" max="100" value="50" data-compare="print-compare" aria-label="Printed-edge comparison: left end shows only AI, right end shows only ordinary resizing">
+    <figcaption>Slide left for AI only; right for ordinary resizing only. Frame 0 · identical 640 × 480 output-pixel crops.</figcaption>
+  </figure>
+  <video controls loop muted playsinline preload="none" poster="print-4k-poster.png" src="print-4k-comparison.mp4"></video>
+  <nav><a href="print-4k-before.mp4">Input · 540p</a><a href="print-4k-resize.mp4">Ordinary resize · 4K</a><a href="print-4k-ai.mp4">AI result · 4K</a><a href="print-4k-comparison.mp4">Comparison video</a></nav>
+  <p><small>2.5 seconds · 24 fps · original audio · 960 × 540 input → 3840 × 2160 output.</small></p>
 </section>
+<details>
+  <summary>Earlier animated tests · a subtler improvement</summary>
+  <p>These earlier examples use smooth animated faces. At a small display size the difference can be hard to see. They remain available to show that the benefit depends on the footage.</p>
+  <section>
+    <h2>Close-up · 360p → 1080p</h2>
+    <video controls loop muted playsinline preload="none" poster="closeup-1080p-poster.jpg" src="closeup-1080p-comparison.mp4"></video>
+    <nav><a href="closeup-1080p-before.mp4">Input · 360p</a><a href="closeup-1080p-ai.mp4">AI result · 1080p</a><a href="closeup-1080p-comparison.mp4">Comparison video</a></nav>
+  </section>
+  <section>
+    <h2>Motion · 540p → 4K</h2>
+    <video controls loop muted playsinline preload="none" poster="motion-4k-poster.jpg" src="motion-4k-comparison.mp4"></video>
+    <nav><a href="motion-4k-before.mp4">Input · 540p</a><a href="motion-4k-ai.mp4">AI result · 4K</a><a href="motion-4k-comparison.mp4">Comparison video</a></nav>
+  </section>
+</details>
 <footer>
-  <p>Source: <a href="https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4">Sintel trailer</a>.
-    © copyright Blender Foundation | <a href="https://durian.blender.org/">www.sintel.org</a>.
-    <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a> · <a href="https://durian.blender.org/sharing/">Attribution details</a>.
-    Changes: excerpted, downsampled, compressed, AI enlarged; comparisons cropped and labelled. No endorsement implied.</p>
-  <p>Reproduce from the repository with <code>npm run examples:upscale</code> after setup. <a href="manifest.json">Render details</a>.</p>
+  <p>Live-action source: <a href="https://media.xiph.org/tearsofsteel/tears_of_steel_1080p.webm">Tears of Steel</a>.
+    (CC) Blender Foundation | <a href="https://mango.blender.org/sharing/">mango.blender.org · attribution details</a>.
+    Animated source: <a href="https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4">Sintel trailer</a>.
+    © copyright Blender Foundation | <a href="https://durian.blender.org/sharing/">www.sintel.org · attribution details</a>.
+    Both films: <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>.</p>
+  <p>Changes: excerpted, cropped where specified, downsampled, compressed and AI enlarged; comparison views cropped and labelled. No endorsement implied.</p>
+  <p>Reproduce with <code>npm run examples:upscale</code> after setup. To regenerate only one example, append <code>-- live-action-1080p</code> or <code>-- print-4k</code>. Original downloads are cached in <code>output/upscale-examples</code> (the live-action source is about 545 MiB). <a href="manifest.json">Exact source hashes, crops and render details</a>.</p>
 </footer>
+<script>
+  for (const input of document.querySelectorAll('[data-compare]')) {
+    const frame = document.getElementById(input.dataset.compare);
+    const update = () => frame.style.setProperty('--split', `${input.value}%`);
+    input.addEventListener('input', update);
+    update();
+  }
+</script>
 </body>
 </html>

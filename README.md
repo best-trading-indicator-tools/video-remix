@@ -145,14 +145,21 @@ To upscale a batch:
 
 The control appears in Auto Quick setup, All settings, Manual, Short clips, and the saved-result editor. It follows **This video / Selected videos / All videos** in Auto and Manual, and is saved with finishing presets. You can also ask **“Upscale these videos to 4K with local AI”** in Auto, Manual, or saved-result prompts. Review and apply the proposal, then render. **Prompt planning uses your configured DeepSeek key**; choosing the upscaler directly or updating local MCP drafts with `upscale: "2160"` does not.
 
-**See the difference.** These stills show ordinary resizing on the left and AI on the right. Click either image to open its comparison video.
+**Inspect the details.** These comparisons use the app's actual exports: ordinary Lanczos resizing on the left, Real-ESRGAN on the right. Each pair shows the same frame and the same 640 × 480 crop at the output resolution. The PNG stills have no extra sharpening, blur, or JPEG compression. Click an image to see the crop in motion.
 
-| 360p → 1080p · Close-up | 540p → 4K · Motion |
-| --- | --- |
-| [![Close-up comparison: ordinary resizing on the left and Real-ESRGAN AI on the right](docs/upscale-examples/closeup-1080p-poster.jpg)](docs/upscale-examples/closeup-1080p-comparison.mp4) | [![Motion comparison: ordinary resizing on the left and Real-ESRGAN AI on the right](docs/upscale-examples/motion-4k-poster.jpg)](docs/upscale-examples/motion-4k-comparison.mp4) |
-| [Original 360p](docs/upscale-examples/closeup-1080p-before.mp4) · [AI result 1080p](docs/upscale-examples/closeup-1080p-ai.mp4) | [Original 540p](docs/upscale-examples/motion-4k-before.mp4) · [AI result 4K](docs/upscale-examples/motion-4k-ai.mp4) |
+**Live action · 360p → 1080p.** Look at the jacket folds and the metallic arm's outline. Edges are cleaner, while skin and background textures become smoother too.
 
-Open `docs/upscale-examples/index.html` locally for the full before/after gallery. These are controlled tests using short, reduced-resolution excerpts of Blender's *Sintel* trailer, © Blender Foundation, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The clips were excerpted, downsampled, compressed, and AI enlarged; comparison views are cropped and labelled. Results on your recordings may differ. [Source and attribution →](https://durian.blender.org/sharing/) Run `npm run examples:upscale` to reproduce the examples.
+[![Live-action detail: ordinary resizing on the left; the app's Real-ESRGAN export on the right, with cleaner sleeve folds and arm contours](docs/upscale-examples/live-action-1080p-poster.png)](docs/upscale-examples/live-action-1080p-comparison.mp4)
+
+[Input 360p](docs/upscale-examples/live-action-1080p-before.mp4) · [Ordinary resize 1080p](docs/upscale-examples/live-action-1080p-resize.mp4) · [AI result 1080p](docs/upscale-examples/live-action-1080p-ai.mp4)
+
+**Printed edges · 540p → 4K.** Inspect the letter outlines and paper folds. Sharper edges do not guarantee accurate text reconstruction; small letters can remain distorted.
+
+[![Printed detail at 4K: identical crops of ordinary resizing and Real-ESRGAN, showing letter edges and paper folds](docs/upscale-examples/print-4k-poster.png)](docs/upscale-examples/print-4k-comparison.mp4)
+
+[Input 540p](docs/upscale-examples/print-4k-before.mp4) · [Ordinary resize 4K](docs/upscale-examples/print-4k-resize.mp4) · [AI result 4K](docs/upscale-examples/print-4k-ai.mp4)
+
+Open `docs/upscale-examples/index.html` locally for an interactive before/after slider, comparison videos, and the earlier animated examples where the improvement is subtler. **These are controlled demonstrations:** 2.5-second excerpts of *Tears of Steel* were cropped to 16:9, reduced to 360p/540p and compressed at H.264 CRF 26 before upscaling. Both sides use the same input and final H.264 encoding settings. They illustrate selected cases, not an average quality guarantee for recordings. Footage: (CC) Blender Foundation | [mango.blender.org](https://mango.blender.org/sharing/), [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). [Render details and exact crops](docs/upscale-examples/manifest.json). Run `npm run examples:upscale` to reproduce all examples.
 
 The free [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) `realesr-general-x4v3` model reconstructs the selected main footage locally, before added captions and overlays. Apple Silicon uses the GPU through PyTorch MPS; CPU execution is also supported.
 
