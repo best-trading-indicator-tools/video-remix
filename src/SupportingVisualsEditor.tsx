@@ -26,8 +26,8 @@ export default function SupportingVisualsEditor({ options, onChange, capabilitie
   const librarySelected = hasLibraryVisuals(options);
   const graphicsSelected = hasGraphicVisuals(options);
   const visualChoices: { id: VisualSource; description: string; icon: typeof Film; available: boolean; setup: string }[] = [
-    { id: "pixabay", description: "Moving stock footage", icon: Film, available: capabilities?.stockProviders?.includes("pixabay") ?? !!capabilities?.stockBroll, setup: "Add a Pixabay API key in Settings to enable stock search." },
-    { id: "pexels", description: "Moving stock footage", icon: Film, available: !!capabilities?.stockProviders?.includes("pexels"), setup: "Add a Pexels API key in Settings to enable stock search." },
+    { id: "pixabay", description: "Free moving stock footage", icon: Film, available: capabilities?.stockProviders?.includes("pixabay") ?? !!capabilities?.stockBroll, setup: "Add a free Pixabay API key in Settings to enable stock search." },
+    { id: "pexels", description: "Free moving stock footage", icon: Film, available: !!capabilities?.stockProviders?.includes("pexels"), setup: "Add a free Pexels API key in Settings to enable stock search." },
     { id: "hyperframes", description: "Illustrated explainers", icon: Layers3, available: !!capabilities?.motionGraphics, setup: "HyperFrames renderer is unavailable on this engine." },
     { id: "remotion", description: "Illustrated explainers", icon: Shapes, available: !!capabilities?.remotionGraphics, setup: "Remotion renderer is unavailable on this engine." },
     { id: "library", description: "Your uploaded clips", icon: FolderOpen, available: true, setup: "" },

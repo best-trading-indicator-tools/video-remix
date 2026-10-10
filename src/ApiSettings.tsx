@@ -4,9 +4,9 @@ import { API_PROVIDERS, type ApiKeySettings, type ApiProvider } from "../shared/
 import { apiRequest } from "./api-client";
 
 const providers: Record<ApiProvider, { name: string; description: string }> = {
-  deepseek: { name: "DeepSeek", description: "AI editing, hooks, visual matching, and editorial reviews." },
-  pixabay: { name: "Pixabay", description: "Stock videos and animations for supporting footage." },
-  pexels: { name: "Pexels", description: "Stock videos for supporting footage." },
+  deepseek: { name: "DeepSeek", description: "Prompt edits, hooks, visual matching and reviews. We chose DeepSeek for its much lower cost than many proprietary LLM APIs. This is a paid API; usage is billed to your account." },
+  pixabay: { name: "Pixabay", description: "Free stock videos and animations with a free API key. Provider usage limits apply." },
+  pexels: { name: "Pexels", description: "Free stock videos with a free API key. Provider usage limits apply." },
   postiz: { name: "Postiz", description: "Schedule and publish exports to your connected channels." },
 };
 const blankKeys = (): Record<ApiProvider, string> => ({ deepseek: "", pixabay: "", pexels: "", postiz: "" });

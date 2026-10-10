@@ -9,7 +9,7 @@ Actual Remix Studio UI captured in Chrome on October 10, 2026. The workspace and
 | [bulk-settings.jpg](bulk-settings.jpg) | Selected-video scope, with future-import defaults unchecked. |
 | [ai-upscaler.jpg](ai-upscaler.jpg) | 4K selected, local processing, and the actual readiness result on an Apple Silicon Mac. Other hosts display their own device. |
 | [prompt-upscale.jpg](prompt-upscale.jpg) | Built-in 4K prompt example targeting two videos. The proposal has not been submitted or applied in this capture. |
-| [onboarding-api-keys.jpg](onboarding-api-keys.jpg) | First-run API setup, with provider dependencies and a direct Open Settings action. No keys are entered. |
+| [onboarding-api-keys.jpg](onboarding-api-keys.jpg) | First-run API setup explaining free Pixabay/Pexels access, the choice of low-cost paid DeepSeek, provider dependencies, and the Open Settings action. No keys are entered. |
 
 ## Refreshing the images
 

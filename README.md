@@ -110,7 +110,7 @@ Upload intros, outros, demonstrations, or B-roll and place them in the edit:
 
 Choose crop or contain framing for each placement. Auto supports copying these placements across selected videos; Short clips can apply footage to its drafts.
 
-Optional supporting visuals can combine **your B-roll library**, **Pixabay**, **Pexels**, and locally rendered **HyperFrames / Remotion** animations. Request a shot count and coverage limit. Stock selection checks relevance and motion, retains creator credits, and reports when suitable shots are unavailable. Animated explainers can illustrate processes, comparisons, or numbers grounded in the spoken content.
+Optional supporting visuals can combine **your B-roll library**, free stock footage from **Pixabay** and **Pexels**, and locally rendered **HyperFrames / Remotion** animations. Both stock APIs are free within their usage limits; AI matching uses paid DeepSeek requests. Request a shot count and coverage limit. Stock selection checks relevance and motion, retains creator credits, and reports when suitable shots are unavailable. Animated explainers can illustrate processes, comparisons, or numbers grounded in the spoken content.
 
 Supporting visuals are **off by default**. Stock matching and semantic animation planning use DeepSeek; the animation rendering itself runs locally. [Footage placement →](docs/user-guide.md#place-your-own-footage) · [Supporting visuals →](docs/user-guide.md#optional-b-roll-and-animated-cards)
 
@@ -266,7 +266,7 @@ Open **http://127.0.0.1:5173**. The API runs on port **8787**. Keep the developm
 
 The first speech setup downloads its model; subsequent transcription uses the cached model locally. You can skip speech setup for basic Manual edits and URL downloads. No API key is needed to start the app.
 
-The first-run tour starts with **API keys in Settings**: DeepSeek unlocks prompt editing and AI matching; add Pixabay or Pexels for stock B-roll. **Open Settings** closes the tour so you can save each key. Keys are optional for local editing and upscaling. The remaining steps cover imports, output settings, review, and MCP. Reopen the tour through **Quick guide**, or use the contextual help for a detailed walkthrough.
+The first-run tour starts with **API keys in Settings**: DeepSeek provides low-cost, paid prompt editing and AI matching; Pixabay and Pexels provide free stock B-roll APIs. **Open Settings** closes the tour so you can save each key. Keys are optional for local editing and upscaling. The remaining steps cover imports, output settings, review, and MCP. Reopen the tour through **Quick guide**, or use the contextual help for a detailed walkthrough.
 
 ![First onboarding step explaining DeepSeek, stock B-roll keys, and the Open Settings action](docs/screenshots/onboarding-api-keys.jpg)
 
@@ -296,6 +296,10 @@ Model installers need internet access initially. Local model processing has no p
 ## AI, integrations, and costs
 
 Manage provider keys in **Settings** or use a private root `.env` based on [.env.example](.env.example). Saved Settings keys override environment keys and can be removed to restore the environment configuration. Changing a saved key does not require restarting the app; environment changes do.
+
+**Pixabay and Pexels are free:** their stock APIs and API keys have no usage charge within provider limits, and footage remains subject to each provider's license. Automatic stock matching still uses separately billed DeepSeek requests. [Pixabay API](https://pixabay.com/service/about/api/) · [Pexels API pricing](https://help.pexels.com/hc/en-us/articles/47677890260761-Is-the-Pexels-API-free-to-use). As of October 10, 2026, Pexels reports that [new API key issuance is paused](https://help.pexels.com/hc/en-us/articles/900004904026-How-do-I-get-an-API-key); start with Pixabay if you do not already have a Pexels key.
+
+**Why DeepSeek?** We chose it to keep AI editing affordable: its API prices are substantially lower than many proprietary LLM APIs, including Claude Sonnet and Opus. DeepSeek is **paid, billed by token usage** against your own account balance. Costs depend on the model, input/output volume and caching; compare the current [DeepSeek rates](https://api-docs.deepseek.com/quick_start/pricing/) and [Claude rates](https://platform.claude.com/docs/en/about-claude/pricing) rather than assuming a fixed saving on every request.
 
 | Service | Used for | What leaves the app |
 | --- | --- | --- |
