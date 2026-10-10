@@ -46,6 +46,7 @@ export interface SupportingVisualOptions {
   brollMaxCoverage?: number;
 }
 export interface AutoOptions extends SupportingVisualOptions {
+  upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
@@ -126,6 +127,8 @@ export interface AutoCapabilities {
   message?: string;
 }
 export interface RemixSettings extends SupportingVisualOptions {
+  /** Free local enlargement; a minimum short edge, without downscaling native footage. */
+  upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
   ownFootage?: OwnFootagePlacement[];
@@ -318,7 +321,7 @@ export interface EditPlanChanges {
   captions?: CaptionCue[];
   cuts?: EditSegment[];
   visuals?: EditPlanVisual[];
-  framing?: { fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
+  framing?: { upscale?: RemixSettings["upscale"]; fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
   correctionSeconds?: number;
 }
 export interface PromptEditRequest {

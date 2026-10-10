@@ -19,6 +19,8 @@ import { captionsAss, parseCanonicalSrt } from "./caption-ass.js";
 import { blackBandsSchema, blackBandGeometry, bandTextAppearance, bandTextLayout } from "../shared/black-bands.js";
 import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
 import { watermarkFilters } from "./watermark-removal.js";
+import { upscaleSchema } from "../shared/upscale.js";
+import { assertUpscaleInstalled, renderUpscale } from "./upscale.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters, audioNormalizationFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings, TranscriptWord } from "../shared/types.js";
@@ -436,6 +438,8 @@ function validateSettings(settings: RemixSettings): void {
   const style = settings.captionStyle;
   if (settings.watermarkRemoval !== undefined && !watermarkRemovalSchema.safeParse(settings.watermarkRemoval).success)
     throw new Error("Watermark removal needs valid brush marks and source-time ranges.");
+  if (settings.upscale !== undefined && !upscaleSchema.safeParse(settings.upscale).success)
+    throw new Error("Choose a supported AI upscaling target.");
   if (settings.blackBands !== undefined && !blackBandsSchema.safeParse(settings.blackBands).success)
     throw new Error("Black bands need valid sizes, fit and printable text of at most 200 characters per band");
   if (style !== undefined && !captionStyleSchema.safeParse(style).success)
@@ -492,6 +496,13 @@ export function geometry(
     settings.aspect === "original"
       ? width / height
       : ratio(settings.aspect, ":");
+  if (settings.upscale && settings.upscale !== "off") {
+    const native = geometry(source, { ...settings, upscale: "off", resolution: "source" });
+    const edge = Number(settings.upscale);
+    if (Math.min(native.width, native.height) >= edge) return native;
+    return target >= 1 ? { width: even(edge * target), height: edge }
+      : { width: edge, height: even(edge / target) };
+  }
   if (settings.resolution !== "source") {
     const edge = Number(settings.resolution);
     // Set the requested edge directly. Scaling an intermediate crop can land
@@ -625,6 +636,7 @@ export async function burnOutputCaptions(options: { input: string; output: strin
 }
 
 export interface RenderOptions {
+  onPhase?: (phase: string) => void;
   maximumOutputDuration?: number;
   ownFootage?: ResolvedFootage[];
   input: string;
@@ -691,6 +703,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
   const footageTimes = footageTimeline(placements, duration, fps);
   let exportDuration = footageTimes.duration;
   const canvas = geometry(source, s);
+  const aiUpscale = !!s.upscale && s.upscale !== "off";
+  if (aiUpscale) await assertUpscaleInstalled();
   const { width, height, top, bottom } = blackBandGeometry(canvas.width, canvas.height, s.blackBands);
   if (canvas.width > 16384 || canvas.height > 16384)
     throw new Error("This aspect ratio exceeds the output size limit. Choose Source resolution or a standard video format.");
@@ -759,10 +773,31 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal, { input, duration: source.duration, fps: source.fps,
           timeline: { inputArgs: sourceInputArgs, filters: [...sourceFilters, `fps=${fps}:start_time=0`], fps,
             duration: Math.min(duration, options.maximumOutputDuration ?? duration),
-            onProgress: progress => { renderProgressBase = 75; options.onProgress(progress * .75); } } }),
+            onProgress: progress => { renderProgressBase = aiUpscale ? 30 : 75; options.onProgress(progress * renderProgressBase / 100); } } }),
       // Clean the selected source pixels before scaling; no external service.
       ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),
     ];
+    if (aiUpscale) {
+      const native = geometry(source, { ...s, upscale: "off", resolution: "source" });
+      const factor = Math.min(4, Math.max(canvas.width / native.width, canvas.height / native.height) * s.zoom);
+      if (factor > 1.001) {
+        const progressStart = renderProgressBase;
+        options.onPhase?.("Waiting for the local AI upscaler");
+        const enhanced = await renderUpscale({ inputArgs: sourceInputArgs, filters: [...filters],
+          width: even(source.width), height: even(source.height),
+          outputWidth: even(source.width * factor), outputHeight: even(source.height * factor), fps,
+          duration: Math.min(duration, options.maximumOutputDuration ?? duration),
+        }, workDir, temporary, signal, progress => {
+          options.onPhase?.("Upscaling with local Real-ESRGAN AI");
+          options.onProgress(progressStart + progress * (85 - progressStart) / 100);
+        });
+        options.onPhase?.("Rendering the AI-upscaled video");
+        // Keep the original input for its soundtrack. Replace only its selected
+        // picture timeline, before framing, supporting shots and any added text.
+        filters.splice(0, filters.length, `nullsink;movie=filename=${enhanced},setpts=PTS-STARTPTS,setsar=1`);
+        renderProgressBase = 85;
+      }
+    }
     const focalX = focalExpression(s, "x");
     const focalY = focalExpression(s, "y");
     if (s.fit === "crop" && (!s.layout || s.layout === "single")) {

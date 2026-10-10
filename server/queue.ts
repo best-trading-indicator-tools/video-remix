@@ -36,6 +36,7 @@ import { writeFile } from "node:fs/promises";
 import { addManualCaptions, wantsManualCaptions } from "./manual-captions.js";
 import { serverDiagnostic } from "./diagnostics.js";
 import { preflightWatermarkRemoval } from "./watermark-removal.js";
+import { assertUpscaleInstalled } from "./upscale.js";
 const running = new Map<string, AbortController>();
 const runningPromises = new Map<string, Promise<void>>();
 // Only initial analysis and clip selection need exclusive access to a source.
@@ -168,6 +169,8 @@ async function run(job: StoredJob, controller: AbortController) {
         "The source video is no longer available. Upload it again.",
       );
     await assertLinkedSourceUnchanged(source);
+    const upscale = job.auto && !job.editPlan ? job.auto.upscale : job.settings.upscale;
+    if (upscale && upscale !== "off") await assertUpscaleInstalled();
     await preflightWatermarkRemoval(job.auto && !job.editPlan ? job.auto.watermarkRemoval : job.settings.watermarkRemoval,
       Math.max(2, Math.floor(source.width / 2) * 2), Math.max(2, Math.floor(source.height / 2) * 2), source.duration);
     if (!source.fingerprint) {
@@ -347,6 +350,7 @@ async function run(job: StoredJob, controller: AbortController) {
     if (automaticManual) job.phase = "Preparing the soundtrack for automatic captions";
     await saveStore();
     await renderVideo({
+      onPhase: phase => { job.phase = phase; },
       ownFootage,
       input: source.filePath,
       output: job.outputPath,

@@ -1,3 +1,4 @@
+import { UpscaleError } from "./upscale.js";
 import type { Express } from "express";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
@@ -70,7 +71,7 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
   // Limit unusual panoramic source formats as well as ordinary 720p exports.
   // The renderer scales display pixels first, so this preserves crop positions.
   const output = geometry(source, preview);
-  const scale = Math.min(1, 720 / Math.min(output.width, output.height), 1280 / Math.max(output.width, output.height));
+  const scale = preview.upscale && preview.upscale !== "off" ? 1 : Math.min(1, 720 / Math.min(output.width, output.height), 1280 / Math.max(output.width, output.height));
   const previewSource = scale === 1 ? source : {
     ...source,
     width: Math.max(2, Math.floor(source.width * scale / 2) * 2),
@@ -131,7 +132,7 @@ export function installManualPreviewRoutes(app: Express) {
     const controller = new AbortController();
     let timedOut = false;
     const usesLama = removalMasks(settings.watermarkRemoval).some(mask => mask.fill === "lama" && mask.strokes.length);
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, usesLama ? 5 * 60_000 : TIMEOUT_MS);
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, parsed.data.settings.upscale && parsed.data.settings.upscale !== "off" ? 30 * 60_000 : usesLama ? 5 * 60_000 : TIMEOUT_MS);
     timeout.unref();
     const disconnected = () => { if (!res.writableFinished) controller.abort(); };
     res.once("close", disconnected);
@@ -170,7 +171,7 @@ export function installManualPreviewRoutes(app: Express) {
       if (res.destroyed) return;
       if (timedOut) return res.status(504).json({ error: "The preview took too long. Try a shorter interval or simpler effects." });
       if (error instanceof PreviewError || error instanceof ImportError) return res.status(error.status).json({ error: error.message });
-      if (error instanceof WatermarkRemovalError || error instanceof LamaError) return res.status(422).json({ error: error.message });
+      if (error instanceof WatermarkRemovalError || error instanceof LamaError || error instanceof UpscaleError) return res.status(422).json({ error: error.message });
       if ((error as NodeJS.ErrnoException).code === "ENOENT")
         return res.status(404).json({ error: "A selected media file is no longer available. Upload it again." });
       console.error("Manual preview failed:", error);

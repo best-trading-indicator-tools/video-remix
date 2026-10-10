@@ -113,6 +113,20 @@ Select a rectangle or paint a mask, erase parts of the selection, and undo chang
 
 Masks belong to individual sources and do not copy through bulk settings or presets. Timed areas are fixed within their ranges, rather than automatically following a moving watermark. [Setup, controls, and limitations →](docs/user-guide.md#watermark-removal)
 
+### Upscale videos with free local AI
+
+Choose **AI video upscaler** in Auto Quick setup, All settings, Manual, Short clips, or the saved-result editor. Targets are **1080p, 1440p, and 4K (2160p)**. The control follows the existing **This video / Selected videos / All videos** scope in Auto and Manual, and is saved with finishing presets. Prompts such as **“Upscale these videos to 4K with local AI”** work in Auto, Manual, and saved-result editing; local MCP drafts accept `upscale: "2160"` too.
+
+Install once on the computer hosting the app:
+
+```bash
+npm run setup:upscale
+```
+
+The free [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) `realesr-general-x4v3` model reconstructs the selected main footage locally, before added captions and overlays. Apple Silicon uses the GPU through PyTorch MPS; CPU execution is also supported. Processing needs no API key, subscription, credits, or video upload. The app's existing DeepSeek prompt planner still uses its configured key; choosing the control or updating MCP draft settings does not.
+
+Targets specify a minimum shorter edge while keeping the chosen aspect ratio; enabling AI upscaling overrides ordinary Resolution and does not shrink larger native pictures. The model reconstructs up to 4×; larger requested enlargements use a final resize. Supporting shots, inserted footage, and graphics are fitted normally rather than passed through the model. AI estimates details and may change textures or flicker between frames. Preview a short sample first. Bulk jobs share one inference slot to bound GPU memory, and temporary reconstructed video files are removed after completion or cancellation. [Details →](docs/user-guide.md#ai-video-upscaling)
+
 ### Describe edits in a prompt
 
 Use **Remix with a prompt** in Auto, **Edit with a prompt** in Manual, or the prompt editor inside a saved result.

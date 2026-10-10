@@ -526,6 +526,7 @@ export async function prepareAutoRemix({
     ...(options.captionStyle ? { captionStyle: options.captionStyle }
       : anglePreset ? { captionStyle: structuredClone(anglePreset.style) } : {}),
     aspect: options.aspect,
+    ...(options.upscale ? { upscale: options.upscale } : {}),
     fit: blur ? "blur" : "crop",
     resolution: "1080",
     fps: "30",
@@ -540,10 +541,11 @@ export async function prepareAutoRemix({
   };
   // Keep native detail for small Auto sources. Explicit export presets in the
   // timestamp/manual editor produce their requested pixel dimensions.
-  const native = geometry(source, { ...settings, resolution: "source" });
+  const native = geometry(source, { ...settings, upscale: "off", resolution: "source" });
   if (Math.min(source.width, source.height) < 1080 && Math.min(native.width, native.height) < 1080)
     settings.resolution = "source";
   if (settings.hookText) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
+  if (settings.upscale && settings.upscale !== "off") changes.push(`Local Real-ESRGAN AI upscaling to ${settings.upscale}p`);
   if (settings.blackBands?.enabled) changes.push("Black bands with custom text");
   if (settings.watermarkRemoval?.enabled && settings.watermarkRemoval.masks.some(mask => mask.strokes.length)) changes.push("Watermark removal in marked source areas");
   if (settings.callouts?.length) changes.push("Key-point overlays");

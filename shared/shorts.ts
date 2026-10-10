@@ -1,3 +1,4 @@
+import { upscaleSchema } from "./upscale.js";
 import { ownFootageSchema, type OwnFootagePlacement } from "./own-footage.js";
 import { pacingCutSignature, pacingReviewSchema, type PacingReview } from "./pacing.js";
 import { DEFAULT_SETTINGS, type FocalPoint, type FocusKeyframe, type RemixSettings, type VideoSource } from "./types.js";
@@ -25,6 +26,7 @@ export interface ShortDraft {
   aspect: RemixSettings["aspect"];
   fit: RemixSettings["fit"];
   resolution: RemixSettings["resolution"];
+  upscale?: RemixSettings["upscale"];
   zoom: number;
   focalPoint: FocalPoint;
   autoFocus?: boolean;
@@ -43,7 +45,7 @@ export interface ShortDraftStore { version: 1; drafts: ShortDraft[] }
 export function shortReviewSignature(draft: ShortDraft): string {
   return JSON.stringify({ id: draft.id, sourceId: draft.sourceId, sourceFingerprint: draft.sourceFingerprint,
     title: draft.title, cuts: draft.cuts.map(({ start, end, focalPoint }) => ({ start: parseSourceClock(start) ?? start, end: parseSourceClock(end) ?? end, focalPoint })),
-    aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom: draft.zoom ?? 1, focalPoint: draft.focalPoint,
+    aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, upscale: draft.upscale, zoom: draft.zoom ?? 1, focalPoint: draft.focalPoint,
     autoFocus: draft.autoFocus === true, focusMode: draft.focusMode || "face", normalizeAudio: draft.normalizeAudio,
     qualityCleanup: draft.qualityCleanup, layout: draft.layout || "single", secondaryFocalPoint: draft.secondaryFocalPoint,
     ownFootage: (draft.ownFootage || []).map(item => ({ id: item.id, assetId: item.assetId, mode: item.mode, appendToEnd: item.appendToEnd,
@@ -158,7 +160,7 @@ export function validateShortDraft(draft: ShortDraft, source?: VideoSource): { e
   });
   const duration = segments.reduce((sum, cut) => sum + Math.max(0, cut.end - cut.start), 0);
   const settings: RemixSettings = {
-    ...DEFAULT_SETTINGS, ...(draft.ownFootage ? { ownFootage: draft.ownFootage, ownFootageSourceId: draft.sourceId } : {}), aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, zoom,
+    ...DEFAULT_SETTINGS, ...(draft.ownFootage ? { ownFootage: draft.ownFootage, ownFootageSourceId: draft.sourceId } : {}), aspect: draft.aspect, fit: draft.fit, resolution: draft.resolution, upscale: draft.upscale, zoom,
     segments, focalPoint: draft.focalPoint, normalizeAudio: draft.normalizeAudio, qualityCleanup: draft.qualityCleanup,
     layout: draft.layout, secondaryFocalPoint: draft.secondaryFocalPoint,
     smoothCuts: !!draft.pacingReview?.appliedSignature && draft.pacingReview.appliedSignature === pacingCutSignature(draft.cuts),
@@ -207,6 +209,7 @@ export function restoreShortDrafts(input: unknown): ShortDraft[] {
       ...(value.ownFootage !== undefined && ownFootageSchema.safeParse(value.ownFootage).success ? { ownFootage: ownFootageSchema.parse(value.ownFootage) } : {}),
       aspect: (["original", "9:16", "1:1", "4:5", "16:9"].includes(String(value.aspect)) ? value.aspect : "9:16") as ShortDraft["aspect"],
       fit: (["crop", "contain", "blur"].includes(String(value.fit)) ? value.fit : "crop") as ShortDraft["fit"],
+      ...(upscaleSchema.safeParse(value.upscale).success ? { upscale: upscaleSchema.parse(value.upscale) } : {}),
       resolution: (["source", "720", "1080"].includes(String(value.resolution)) ? value.resolution : "1080") as ShortDraft["resolution"],
       zoom: typeof value.zoom === "number" && Number.isFinite(value.zoom) && value.zoom >= 1 && value.zoom <= 2 ? value.zoom : 1,
       focalPoint: focal(value.focalPoint) ? value.focalPoint : { x: 0.5, y: 0.5 },

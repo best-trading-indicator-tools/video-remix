@@ -2,6 +2,7 @@ import { hasStockVisuals } from "../shared/visual-sources.js";
 import { pacingOptionsSchema } from "../shared/pacing.js";
 import { ownFootageSchema, footageForSource } from "../shared/own-footage.js";
 import { z } from "zod";
+import { upscaleSchema } from "../shared/upscale.js";
 import { DEFAULT_SETTINGS, MAX_AUTO_VERSIONS, MAX_BROLL_COUNT } from "../shared/types.js";
 import { MAX_FOCUS_POINTS_PER_CUT, MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
 import { AUDIO_RANGES, AUTO_AUDIO_MODES, MAX_AUDIO_FADE, type AudioLookKey } from "../shared/audio.js";
@@ -30,6 +31,7 @@ const supportingVisualShape = {
 };
 export const settingsSchema = z
   .object({
+    upscale: upscaleSchema.optional(),
     ...supportingVisualShape,
     blackBands: blackBandsSchema.optional(),
     watermarkRemoval: watermarkRemovalSchema.optional(),
@@ -140,6 +142,7 @@ export const normalizedSettings = (input: unknown) =>
   });
 export const autoOptionsObject = z
   .object({
+    upscale: upscaleSchema.optional(),
     watermarkRemoval: watermarkRemovalSchema.optional(),
     blackBands: blackBandsSchema.optional(),
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),

@@ -1,3 +1,4 @@
+import UpscaleControl from "./UpscaleControl";
 import { SlidersHorizontal, Zap } from "lucide-react";
 import type { ReactNode } from "react";
 import type { AutoOptions } from "../shared/types";
@@ -88,6 +89,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
       </>}
+      <UpscaleControl value={options.upscale} onChange={upscale => onChange({ options: { upscale } })} />
       {watermarkControls}
       <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope}
         onChange={onFootageChange} disabled={disabled || !selectedId}

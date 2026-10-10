@@ -6,6 +6,7 @@ import PromptEditor, { type PromptExample, type ReviewablePrompt } from "./Promp
 interface ManualPromptProposal extends ReviewablePrompt { settings: RemixSettings; auto?: { options: AutoOptions; variants: number } }
 interface SettingsUndo { settings: RemixSettings; appliedIdentity: string }
 const examples: PromptExample[] = [
+  { label: "AI upscale to 4K", prompt: "Upscale to 4K with the free local AI upscaler. Keep all other settings." },
   { label: "Add captions", prompt: "Add automatic captions in bold yellow Poppins." },
   { label: "Black bands", prompt: "Add black bands above and below the video, keeping the whole picture." },
   { label: "Add B-roll", prompt: "Add 4 relevant B-roll shots, covering at most 50% of the video." },
@@ -47,7 +48,7 @@ export default function ManualPromptEditor({ sourceId, settings, disabled = fals
     <PromptEditor<ManualPromptProposal> contextKey={`${sourceId}:${identity}`} disabled={disabled} onSuggest={suggest} onApply={apply}
       examples={examples} placeholder="e.g. Add captions, black bands and 4 B-roll shots"
       description="Describe a change for the selected video."
-      scope="Captions, black bands, B-roll, animations, uploaded footage, cuts, color, sound and output settings. Automatic selection or narration can propose a switch to Auto. Apply changes to this video after reviewing."
+      scope="AI upscaling, Captions, black bands, B-roll, animations, uploaded footage, cuts, color, sound and output settings. Automatic selection or narration can propose a switch to Auto. Apply changes to this video after reviewing."
       appliedMessage="Settings applied to this video. Preview or render when ready."
       undoBlockedMessage="Your newer manual changes are kept. Undo is available while the last prompt is still the latest edit."
       applied={!!undo} canUndo={!!undo && undo.appliedIdentity === identity} onUndo={() => {

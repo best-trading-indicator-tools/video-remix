@@ -19,3 +19,6 @@ api-keys.enc.*.tmp
 scripts/models/big-lama.pt
 __pycache__/
 *cookies*.txt
+
+.venv-upscale/
+scripts/models/realesr-general-x4v3.pth

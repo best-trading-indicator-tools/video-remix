@@ -1,3 +1,4 @@
+import { upscaleSchema } from "../shared/upscale.js";
 import { z } from "zod";
 import { ownFootageSchema } from "../shared/own-footage.js";
 import type { CaptionCue, EditPlan, EditPlanChanges, EditSegment, Transcript } from "../shared/types.js";
@@ -43,7 +44,7 @@ export const editPlanChangesSchema = z.object({
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: cutsSchema.optional(),
   visuals: z.array(visualSchema).max(60).optional(),
-  framing: z.object({ fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional(), blackBands: blackBandsSchema.optional() }).strict().optional(),
+  framing: z.object({ upscale: upscaleSchema.optional(), fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional(), blackBands: blackBandsSchema.optional() }).strict().optional(),
   correctionSeconds: z.number().finite().min(0).max(86400).optional(),
 }).strict();
 

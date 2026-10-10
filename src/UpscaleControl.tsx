@@ -1,0 +1,28 @@
+import { useEffect, useId, useState } from 'react';
+import { UPSCALE_LABELS, type Upscale } from '../shared/upscale';
+import './upscale.css';
+
+export default function UpscaleControl({ value, onChange, disabled = false }: {
+  value?: Upscale; onChange: (value: Upscale) => void; disabled?: boolean;
+}) {
+  const id = useId();
+  const [installed, setInstalled] = useState<boolean | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch('/api/upscale/capabilities', { signal: controller.signal }).then(response => {
+      if (!response.ok) throw new Error('Unavailable');
+      return response.json();
+    }).then(value => setInstalled(value.installed === true)).catch(() => {});
+    return () => controller.abort();
+  }, []);
+  return <div className="upscale-control">
+    <label htmlFor={id}>AI video upscaler <span>Free · Local</span></label>
+    <select id={id} value={value ?? 'off'} disabled={disabled} aria-describedby={`${id}-help`}
+      onChange={event => onChange(event.target.value as Upscale)}>
+      {(['off', '1080', '1440', '2160'] as const).map(key => <option key={key} value={key}>{UPSCALE_LABELS[key]}</option>)}
+    </select>
+    <p id={`${id}-help`}>Real-ESRGAN reconstructs detail in smaller main videos. No credits or uploads. Larger originals keep their size.</p>
+    {installed === false && <p role="status">One-time setup needed on this computer: <code>npm run setup:upscale</code>. Then refresh this page.</p>}
+    {value && value !== 'off' && <p>Uses at least {value}px on the shorter edge, overriding Resolution. 4K takes longer and uses more disk space. AI can change fine details; preview a sample first.</p>}
+  </div>;
+}

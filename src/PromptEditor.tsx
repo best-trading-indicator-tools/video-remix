@@ -11,6 +11,7 @@ export interface PromptExample { label: string; prompt: string }
 
 export function savedEditExamples(plan: EditPlan): PromptExample[] {
   return [
+    { label: "AI upscale to 4K", prompt: "Upscale to 4K using local Real-ESRGAN AI." },
     ...(plan.captions.length ? [
       { label: "Smaller captions", prompt: "Make the captions a little smaller." },
       { label: "Raise captions", prompt: "Move captions to 15% from the bottom." },
@@ -31,7 +32,7 @@ export function savedEditExamples(plan: EditPlan): PromptExample[] {
 
 /** Generates a reviewable proposal. Applying it never starts a render. */
 export default function PromptEditor<T extends ReviewablePrompt = PromptProposal>({ contextKey, disabled = false, onSuggest, onApply, onUndo, canUndo = false, applied = false,
-  title = "Edit with a prompt", examples = [], scope = "Hooks, captions, cut points, framing and B-roll. You can keep using the controls below.",
+  title = "Edit with a prompt", examples = [], scope = "AI upscaling, hooks, captions, cut points, framing and B-roll. You can keep using the controls below.",
   placeholder = "Describe what you’d like to change…", description = "Describe a change. Review it before rendering.",
   appliedMessage = "Prompt applied to your draft. Render this revision when ready.",
   undoBlockedMessage = "Your manual changes are newer. Reset changes to return to the saved export.",

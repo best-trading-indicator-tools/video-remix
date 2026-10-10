@@ -1,3 +1,4 @@
+import { upscaleCapabilities } from "./upscale.js";
 import { installApiKeyRoutes } from "./api-key-routes.js";
 import { installDeepSeekBalanceRoutes } from "./deepseek-balance.js";
 import { installWorkspaceRoutes } from "./workspace-routes.js";
@@ -322,6 +323,7 @@ export function createApp() {
     ]);
     res.json({ ok: true });
   });
+  app.get("/api/upscale/capabilities", async (_req, res) => res.json(await upscaleCapabilities()));
   app.get("/api/auto/capabilities", async (_req, res) =>
     res.json(await getAutoCapabilities()),
   );

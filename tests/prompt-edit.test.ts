@@ -48,6 +48,20 @@ test("prompt editing compiles bounded proposals into validated saved-plan change
   });
   const propose = (plan = makePlan(), prompt = "Change the opening heading to Micrograms vs. milligrams") => proposePromptEdit({ plan, prompt, signal: signal() });
   try {
+    await t.test('saved-result prompts can enable or disable AI upscaling without altering cuts or captions', async () => {
+      const plan = makePlan(), original = structuredClone(plan);
+      reply = { operations: [{ op: 'upscale', target: '2160' }] };
+      const proposal = await propose(plan, 'Upscale to 4K with local AI');
+      assert.equal(proposal.changes.framing?.upscale, '2160');
+      const next = applyEditPlanChanges(plan, proposal.changes);
+      assert.deepEqual(next.cuts, plan.cuts);
+      assert.deepEqual(next.captions, plan.captions);
+      assert.deepEqual(plan, original);
+      assert.match(proposal.summary.join(' '), /Real-ESRGAN/);
+      reply = { operations: [{ op: 'upscale', target: 'off' }] };
+      const disabled = await propose(next, 'Turn off the upscaler');
+      assert.equal(disabled.changes.framing?.upscale, 'off');
+    });
     await t.test("saved-export prompts style either band without changing captions, source cuts or original text", async () => {
       const plan = makePlan();
       plan.settings.blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, bottomText: "Keep footer", bottomStyle: { color: "#00ff00" } };

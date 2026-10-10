@@ -31,6 +31,21 @@ test('source prompts expose supported editing controls and preserve reviewable d
     return proposeAutoPrompt({ options, variants, source, signal, prompt, assets });
   };
   try {
+    await t.test('AI upscaling is reviewable in Auto and Manual without changing unrelated edits', async () => {
+      const manualBefore = { ...DEFAULT_SETTINGS, speed: 1.2, volume: .6 };
+      const result = await manual({ upscale: '2160' }, manualBefore, 'Upscale to 4K with local AI');
+      assert.deepEqual(result.settings, { ...manualBefore, upscale: '2160' });
+      assert.match(result.summary.join(' '), /Real-ESRGAN/);
+      assert.equal(manualBefore.upscale, undefined);
+      const autoBefore = { ...DEFAULT_AUTO_OPTIONS, aspect: 'original' as const, audio: 'original' as const };
+      const autoResult = await auto({ upscale: '1440' }, autoBefore, 3, undefined, 'Upscale to 1440p');
+      assert.deepEqual(autoResult.options, { ...autoBefore, upscale: '1440' });
+      assert.equal(autoResult.variants, 3);
+      assert.match(autoResult.summary.join(' '), /1440/);
+      const disabled = await manual({ upscale: 'off' }, result.settings, 'Turn off AI upscaling');
+      assert.equal(disabled.settings.upscale, 'off');
+      await assert.rejects(manual({ upscale: '8K' }), /unsupported or invalid/);
+    });
     await t.test('text edits preserve painted masks without sending or inventing source coordinates', async () => {
       const watermarkRemoval: WatermarkRemoval = { enabled: true, mode: 'timed', masks: [{ id: 'mark', start: 1, end: 2,
         strokes: [{ kind: 'brush', size: .04, points: [{ x: .2, y: .3 }] }] }] };

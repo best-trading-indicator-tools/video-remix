@@ -18,6 +18,7 @@
     "setup:visuals": "puppeteer browsers install chrome",
     "build:remotion": "node scripts/build-remotion.mjs",
     "setup:focus": "node scripts/setup-focus.mjs",
+    "setup:upscale": "node scripts/setup-upscale.mjs",
     "setup:watermark": "node scripts/setup-watermark.mjs",
     "setup:speaker": "node scripts/setup-speaker.mjs",
     "measure:audio": "node --import tsx scripts/measure-audio.mjs",

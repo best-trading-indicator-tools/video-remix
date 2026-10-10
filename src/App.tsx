@@ -1,3 +1,5 @@
+import { upscaleSchema } from "../shared/upscale";
+import UpscaleControl from "./UpscaleControl";
 import SourceProtection from './SourceProtection';
 import LibraryFilters from './LibraryFilters';
 import ProjectField from './ProjectField';
@@ -144,6 +146,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
       blackBands: blackBandsSchema.safeParse(options?.blackBands).success ? options?.blackBands : undefined,
+      upscale: upscaleSchema.safeParse(options?.upscale).success ? options?.upscale : undefined,
       watermarkRemoval: watermarkRemovalSchema.safeParse(options?.watermarkRemoval).success ? options?.watermarkRemoval : undefined,
       finishedReview: options?.finishedReview !== false,
       editorialMode: options?.editorialMode === "off" || options?.editorialMode === "check" ? options.editorialMode : "repair",
@@ -1166,7 +1169,7 @@ export default function App() {
     brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE, brollMatching: "tags", stockVideoType: "all", blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
-  ).length + (settings.watermarkRemoval?.enabled ? 1 : 0);
+  ).length + (settings.watermarkRemoval?.enabled ? 1 : 0) + (settings.upscale && settings.upscale !== "off" ? 1 : 0);
   const edited = adjustedCount > 0;
   const previewFilter = manualLive
     ? `saturate(${settings.saturation}) brightness(${Math.max(0, 1 + settings.brightness)}) contrast(${settings.contrast}) hue-rotate(${settings.hue}deg)`
@@ -1945,6 +1948,7 @@ export default function App() {
                               <option value="720">720p</option>
                             </SelectField>
                           </div>
+                          <UpscaleControl value={settings.upscale} onChange={upscale => updateSettings({ upscale })} />
                           <BlackBandsEditor value={settings.blackBands} onChange={blackBands => updateSettings({ blackBands })} />
                           {watermark.controls}
                           <Slider

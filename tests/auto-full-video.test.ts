@@ -47,6 +47,7 @@ test("a full-video batch renders 15s and 30s sources intact and appends the comp
     await saveStore();
     const response = await fetch(`${base}/api/auto/jobs`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
       items: sources.map(source => ({ sourceId: source.id, variants: 3, options: {
+        ownFootageSourceId: source.id,
         durationMode: "full", targetDuration: 5, versionMode: "angles", narration: true, aspect: "original",
         captions: "keep", audio: "off", pacing: { mode: "tight" }, editorialMode: "repair", finishedReview: false, supportingVisuals: "off",
         ownFootage: [{ id: randomUUID(), assetId: outro.id, appendToEnd: true, mode: "insert", at: 0, start: 0, end: 2, audio: "clip", fit: "contain" }],

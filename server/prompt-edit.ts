@@ -1,3 +1,4 @@
+import { upscaleSchema, upscaleSummary, upscalePromptInstructions } from "../shared/upscale.js";
 import { providerApiKey } from "./api-keys.js";
 import { z } from "zod";
 import { MAX_BROLL_COUNT } from "../shared/types.js";
@@ -27,6 +28,7 @@ const operationSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("remove_captions"), ids: z.union([z.literal("all"), z.array(id).min(1).max(300)]) }).strict(),
   captionStyleSchema.partial().extend({ op: z.literal("caption_style") }).strict().refine(hasPatch),
   blackBandsPatchSchema.extend({ op: z.literal("black_bands") }).strict().refine(hasPatch),
+  z.object({ op: z.literal("upscale"), target: upscaleSchema }).strict(),
   z.object({ op: z.literal("framing"), fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional() }).strict().refine(hasPatch),
   z.object({ op: z.literal("cut_focal_point"), index: z.number().int().nonnegative(), focalPoint: focalPointSchema }).strict(),
   z.object({ op: z.literal("trim"), start: seconds.optional(), end: seconds.optional() }).strict().refine(hasPatch),
@@ -70,6 +72,7 @@ Support ONLY these operations, with exactly these fields:
 {"op":"remove_captions","ids":["existing caption ID"]} or {"op":"remove_captions","ids":"all"}
 {"op":"caption_style","fontSize":20,"bottomPercent":18,"fontFamily":"poppins","color":"#ffffff","bold":true,"italic":false,"uppercase":false,"outlineWidth":1.2,"outlineColor":"#151515","shadow":0,"letterSpacing":0,"alignment":"center","background":"none","backgroundColor":"#10151c","backgroundOpacity":80} (each optional; fontSize 12–40, bottomPercent 5–80 moving UP with larger values; fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans), six-digit hex colors, outlineWidth and shadow 0–5, letterSpacing 0–4, alignment left/center/right, background none/box, backgroundOpacity 0–100; a box replaces the outline. Only added captions can be styled; captions baked into source pixels cannot be restyled.)
 caption_style also accepts cyrillicMode off/words/all and cyrillicWords (complete list of at most 50 literal words/phrases, each 1–80 characters without newlines). This swaps similar-looking Latin letters for Cyrillic only when drawn, preserving caption text and speech timing. Enable only for explicit lookalike requests, never for translation or ordinary Cyrillic-language captions. Specific words use "words" and the requested list; preserve existing entries when adding more. Use "all" only when requested for all caption text and "off" to restore original spelling. If words/scope are missing, ask for them; never invent terms or claim platform moderation outcomes. Use this style operation rather than rewriting individual caption cues for lookalikes.
+{"op":"upscale","target":"off|1080|1440|2160"}. ${upscalePromptInstructions}
 {"op":"framing","fit":"crop|contain|blur","focalPoint":{"x":0.5,"y":0.5}} (each optional; global focalPoint also replaces existing source-cut overrides)
 {"op":"black_bands","enabled":true,"topText":"BPC157","topStyle":{"cyrillic":true,"color":"#ffffff","fontPercent":5.4}} (all fields except op optional; at least one change). ${blackBandPromptInstructions}
 {"op":"cut_focal_point","index":0,"focalPoint":{"x":0.5,"y":0.5}} (zero-based index in resulting cuts; x/y 0–1, left/top 0, center 0.5, right/bottom 1)
@@ -79,7 +82,7 @@ caption_style also accepts cyrillicMode off/words/all and cyrillicWords (complet
 {"op":"refresh_broll","total":4} (total optional, total supporting shots including cards; searches for replacements when rendered)
 {"op":"add_broll","count":2} (adds exactly this many additional stock shots while retaining existing shots; use for "2 more B-rolls", not refresh_broll)
 Both stock operations require canRefreshBroll=true. Use at most one stock operation, never combine with visual operations. Generic requests to add more B-roll are supported, even if this video has no existing stock. Search occurs only when the user renders. Use pendingBrollCount as the already-requested total when continuing a draft. Never expose internal field names in clarification; explain missing setup in plain language.
-All caption/visual start/end times reference the RESULTING OUTPUT after any trim/cuts. sourceStart refers to the supporting clip, not the main source. Trimming automatically retimes existing complete captions and supporting shots; do not restate unchanged captions/visuals. Operations changing a caption/shot use its existing ID. Changing a shot's media/timing/crop explicitly unlocks only that shot. Disabling a shot preserves its lock. Do not invent media IDs; new stock is requested with add_broll or refresh_broll. Replacing a clip must use the supplied media ID and a valid interval within that clip. At most ${MAX_BROLL_COUNT} shots can be enabled; enabled shots cannot overlap. Each shot is at least 0.5 seconds. Captions cannot overlap. Each source cut is at least 0.04 seconds. Narration is locked: its total duration cannot change. No audio/narration/voice changes, music, color/filter/speed changes, output resolution/aspect changes, generation, upload, publishing, or other settings are supported here.
+All caption/visual start/end times reference the RESULTING OUTPUT after any trim/cuts. sourceStart refers to the supporting clip, not the main source. Trimming automatically retimes existing complete captions and supporting shots; do not restate unchanged captions/visuals. Operations changing a caption/shot use its existing ID. Changing a shot's media/timing/crop explicitly unlocks only that shot. Disabling a shot preserves its lock. Do not invent media IDs; new stock is requested with add_broll or refresh_broll. Replacing a clip must use the supplied media ID and a valid interval within that clip. At most ${MAX_BROLL_COUNT} shots can be enabled; enabled shots cannot overlap. Each shot is at least 0.5 seconds. Captions cannot overlap. Each source cut is at least 0.04 seconds. Narration is locked: its total duration cannot change. No audio/narration/voice changes, music, color/filter/speed changes, other output resolution/aspect changes, generation, upload, publishing, or other settings are supported here.
 For explicit instructions, change only requested fields. Relative requests like 'slightly larger' may use a small reasonable adjustment within limits. For vague requests like 'make it better', unavailable media, a specific new stock subject, or any unsupported/ambiguous part, return operations:[] and a short clarification; do not partially fulfill mixed requests. If a requested value is already set, return operations:[]. Never claim to have rendered, searched, generated, saved, or applied anything. No URLs or paths. Use the request's language for clarification.`;
 
 function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?: Transcript, pendingBrollCount?: number) {
@@ -98,7 +101,7 @@ function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?:
     playbackSpeed: plan.settings.speed, narrationLocked: plan.narration, canRefreshBroll, pendingBrollCount,
     hook: plan.settings.hookText, fit: plan.settings.fit, focalPoint: plan.settings.focalPoint ?? { x: 0.5, y: 0.5 },
     captionStyle: plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 },
-    blackBands: plan.settings.blackBands,
+    blackBands: plan.settings.blackBands, upscale: plan.settings.upscale ?? "off",
     cuts: plan.cuts.map((cut, index) => ({ index, ...cut })),
     captions: plan.captions.map(({ id, start, end, text }) => ({ id, start, end, text })),
     selectedSpeech,
@@ -124,6 +127,7 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
   let captions = baseline.captions, visuals = baseline.visuals, cuts = baseline.cuts;
   for (const operation of operations) {
     switch (operation.op) {
+      case "upscale": changes.framing = { ...changes.framing, upscale: operation.target }; break;
       case "hook": changes.hookText = operation.text; break;
       case "caption": {
         const caption = captions.find(cue => cue.id === operation.id);
@@ -196,6 +200,7 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
   if (same(changes.captions, baseline.captions)) delete changes.captions;
   if (same(changes.visuals, baseline.visuals)) delete changes.visuals;
   if (changes.framing) {
+    if ((changes.framing.upscale ?? "off") === (plan.settings.upscale ?? "off")) delete changes.framing.upscale;
     if (changes.framing.fit === plan.settings.fit) delete changes.framing.fit;
     if (same(changes.framing.focalPoint, plan.settings.focalPoint ?? { x: 0.5, y: 0.5 })) delete changes.framing.focalPoint;
     if (same(changes.framing.captionStyle, plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 })) delete changes.framing.captionStyle;
@@ -218,6 +223,7 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
     if (removed) summary.push(`Remove ${removed} caption${removed === 1 ? "" : "s"}.`);
     if (edited.length) summary.push(`Correct ${edited.length} caption${edited.length === 1 ? "" : "s"}: ${edited.map(cue => `${displaySeconds(cue.start)}–${displaySeconds(cue.end)}s “${excerpt(cue.text)}”`).join("; ")}.`);
   }
+  if (changes.framing?.upscale) summary.push(upscaleSummary(changes.framing.upscale));
   if (changes.framing?.fit) summary.push(`Set the picture fit to ${changes.framing.fit}.`);
   if (changes.framing?.blackBands) summary.push(...blackBandChangeSummary(plan.settings.blackBands, changes.framing.blackBands));
   if (changes.framing?.focalPoint) summary.push(`Set the source focal point to ${Math.round(changes.framing.focalPoint.x * 100)}% across and ${Math.round(changes.framing.focalPoint.y * 100)}% down.`);

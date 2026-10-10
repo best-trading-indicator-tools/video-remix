@@ -1,3 +1,4 @@
+import UpscaleControl from "./UpscaleControl";
 import SourceRecovery, { type SourceStatus } from "./SourceRecovery";
 import { DraftWriter, draftKey as resultDraftKey, parseDraft, type SavedDraft, type DraftBackup, type ResultDraft } from "./result-drafts";
 import { exportTitle } from "../shared/export-presentation";
@@ -52,6 +53,7 @@ function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: bool
     } else if (differs(plan[key], draft[key])) Object.assign(changes, { [key]: draft[key] });
   }
   const framing: NonNullable<EditPlanChanges["framing"]> = {};
+  if ((plan.settings.upscale ?? "off") !== (draft.settings.upscale ?? "off")) framing.upscale = draft.settings.upscale ?? "off";
   if (plan.settings.fit !== draft.settings.fit) framing.fit = draft.settings.fit;
   if (differs(plan.settings.focalPoint, draft.settings.focalPoint)) framing.focalPoint = draft.settings.focalPoint;
   if (differs(plan.settings.captionStyle, draft.settings.captionStyle)) framing.captionStyle = draft.settings.captionStyle;
@@ -545,6 +547,7 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                     <label className="edit-framing-slider"><span>Right occupied area<output>{guideRight}%</output></span><input type="range" min={5} max={30} value={guideRight} onChange={event => setGuideRight(event.target.valueAsNumber)} /></label>
                     <p className="edit-plan-note">Preview guides only. Platform controls vary by device.</p>
                   </div>}
+                  <UpscaleControl value={draft.settings.upscale} onChange={upscale => updateFraming({ upscale })} />
                   <BlackBandsEditor value={draft.settings.blackBands} onChange={blackBands => updateFraming({ blackBands })} />
                   {!draft.settings.blackBands?.enabled && <label className="edit-plan-field">Fit source footage
                     <select value={draft.settings.fit} onChange={(event) => updateFraming({ fit: event.target.value as RemixSettings["fit"] })}>

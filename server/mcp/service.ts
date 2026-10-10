@@ -1,3 +1,4 @@
+import { upscaleSummary } from "../../shared/upscale.js";
 import { randomUUID } from 'node:crypto';
 import { openAsBlob } from 'node:fs';
 import { stat } from 'node:fs/promises';
@@ -28,6 +29,7 @@ export class RemixMcpService {
       const settings = item.options ?? item.settings!;
       return { sourceId: item.sourceId, name: item.name, exports: item.variants,
         description: [draft.mode === 'auto' ? `${item.options?.durationMode === 'full' ? 'Full video' : 'Auto excerpt'} · ${settings.aspect}` : `Manual edit · ${settings.aspect}`,
+          ...(settings.upscale && settings.upscale !== "off" ? [upscaleSummary(settings.upscale)] : []),
           ...(settings.blackBands ? blackBandChangeSummary(undefined, settings.blackBands) : []),
           ...(settings.captionStyle ? [captionStyleDescription(settings.captionStyle)] : []),
           ...(settings.ownFootage ?? []).map(clip => `${clip.appendToEnd ? 'Append whole ending clip' : `${clip.mode} at ${clip.at}s`}: ${clip.assetId} · ${clip.audio} audio`)],

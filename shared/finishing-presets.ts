@@ -1,3 +1,4 @@
+import { upscaleSchema } from "./upscale.js";
 import { NATURAL_PACING, pacingOptionsSchema } from "./pacing.js";
 import { z } from "zod";
 import { captionStyleSchema } from "./caption-style.js";
@@ -18,6 +19,7 @@ const soundLook = {
   fadeIn: z.number().min(0).max(MAX_AUDIO_FADE).default(0), fadeOut: z.number().min(0).max(MAX_AUDIO_FADE).default(0),
 };
 const framing = {
+  upscale: upscaleSchema.optional(),
   aspect, fit: z.enum(["crop", "contain", "blur"]), resolution: z.enum(["source", "720", "1080"]),
   zoom: z.number().min(1).max(2), layout: z.enum(["single", "split", "presentation"]).default("single"),
   normalizeAudio: z.boolean().default(false), qualityCleanup: z.boolean().default(false),
@@ -28,7 +30,7 @@ const visuals = {
   brollMaxCoverage: z.number().int().min(0).max(100).default(DEFAULT_BROLL_MAX_COVERAGE),
   brollMatching: z.enum(["tags", "ai"]).default("tags"), stockVideoType: z.enum(["all", "animation"]).default("all"),
 };
-const autoSchema = z.object({ aspect, pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
+const autoSchema = z.object({ aspect, upscale: upscaleSchema.optional(), pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
   blackBands: blackBandFinishSchema.optional(),
   captionStyle: captionStyleSchema.optional(),
   ...visuals,

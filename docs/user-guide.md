@@ -4,6 +4,22 @@
 
 Detailed workflows, controls, setup options, and troubleshooting for the current private installation. For a first visit, start with the repository README.
 
+## AI video upscaling
+
+Install the local model once with `npm run setup:upscale`. This creates an isolated Python environment, downloads the checksum-verified Real-ESRGAN general x4v3 model, and runs an inference check. Apple Silicon Macs use Metal through PyTorch MPS; the default Linux/Windows installation uses CPU. An existing CUDA-enabled PyTorch installation in `.venv-upscale` is also supported by the worker. No media is sent to a provider.
+
+1. Import your videos and choose **Apply changes to → Selected videos** (or **All videos**).
+2. In Auto Quick setup, All settings, or Manual, set **AI video upscaler** to **1080p**, **1440p**, or **2160p · 4K**.
+3. Render normally. Each video keeps its unrelated settings. The control also appears in Short clips and **Edit this result**, and finishing presets retain it.
+
+Auto and Manual prompts accept “Upscale these videos to 4K with local AI.” Saved-result prompts can change or disable upscaling too. Review and apply the proposal, then render. Prompt planning still uses the app's DeepSeek key; the AI upscaling itself is free. Local MCP `create_draft` and `update_draft` accept `upscale: "1080"`, `"1440"`, `"2160"`, or `"off"` in both modes without a prompt-planning charge.
+
+The target is a minimum short edge, preserving your chosen framing: landscape 4K is 3840×2160, portrait 4K is 2160×3840, and square uses 2160×2160. This overrides the ordinary Resolution selector while enabled. Larger native pictures keep their size and do not need an AI enlargement pass. Switching Off restores normal resolution behavior.
+
+Real-ESRGAN reconstructs the selected main source frames before framing and added captions, titles, bands, or supporting shots. The original soundtrack follows the same cuts and speed. The model has a 4× reconstruction scale; very small inputs needing more than 4× also receive ordinary resizing to reach the target. Uploaded inserts/outros, supporting shots, and graphics are fitted normally. AI estimates detail, so fine textures can change and frame-to-frame flicker is possible. It cannot guarantee recovery of the original detail.
+
+Use Manual's sample preview to compare quality; AI previews retain the source detail and chosen target rather than using the usual smaller preview. Large videos take longer and need temporary disk space for a lossless reconstructed video. Jobs share one inference slot within the running server to avoid competing for GPU memory. Frames stream through memory instead of accumulating as thousands of image files. Cancelled or failed jobs clean up their temporary files. If setup is missing or inference fails, the export reports an error rather than silently substituting ordinary resizing.
+
 ### Find a topic
 
 | Area | Detailed instructions |

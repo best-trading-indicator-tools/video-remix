@@ -1,3 +1,4 @@
+import UpscaleControl from "./UpscaleControl";
 import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
@@ -209,6 +210,7 @@ export default function AutoPanel({
           </label>
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
+        <UpscaleControl value={options.upscale} onChange={upscale => onChange({ ...options, upscale })} />
         {watermarkControls}
         <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope} onChange={onFootageChange} disabled={footageDisabled || !selectedId}
           selectedVideos={selectedVideos} onApplySelected={onApplySelectedFootage} />
