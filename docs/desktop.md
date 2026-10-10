@@ -14,7 +14,7 @@ The app creates its own workspace, separate from a source checkout:
 
 `workspace/` contains the database, footage, exports and encrypted API settings. `engine/` contains managed Python environments, model files, renderer downloads and installation markers. Updating the app preserves this directory. First-time model installation can download several GB; video storage needs additional space. The Downloader remains a free standalone utility, separate from the editing workflow.
 
-The UI uses a private random localhost port with a per-launch token. Renderer Node access is disabled, context isolation and sandboxing are enabled, and only explicit setup commands are exposed through the preload bridge. External HTTPS links open in your normal browser.
+The UI uses a private localhost port chosen on first launch and retained for browser drafts, with a new per-launch token. Renderer Node access is disabled, context isolation and sandboxing are enabled, and only explicit setup commands are exposed through the preload bridge. External HTTPS links open in your normal browser.
 
 ## Build and verify
 

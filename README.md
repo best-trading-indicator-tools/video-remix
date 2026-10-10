@@ -144,6 +144,8 @@ The control appears in Auto Quick setup, All settings, Manual, Short clips, and 
 
 **Preview the real result in the center.** In Auto and Manual, enabling upscaling automatically renders a short sample at the selected resolution. The central player switches to **AI upscaled** when ready; **Original** remains available for comparison. While it renders, the player clearly says it is showing the source. Auto previews cover picture settings only: the final AI-selected edit, generated captions and stock footage still appear in the export. No separate batch approval step is added.
 
+![Central player showing an actual AI-upscaled sample alongside the 1080p upscaler setting](docs/screenshots/central-ai-preview.png)
+
 **Inspect the details.** These comparisons use the app's actual exports: ordinary Lanczos resizing on the left, Real-ESRGAN on the right. Each pair shows the same frame and the same 640 × 480 crop at the output resolution. The PNG stills have no extra sharpening, blur, or JPEG compression. Click an image to see the crop in motion.
 
 **Live action · 360p → 1080p.** Look at the jacket folds and the metallic arm's outline. Edges are cleaner, while skin and background textures become smoother too.

@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
-const { access, writeFile } = require('node:fs/promises');
+const { access, readFile, writeFile } = require('node:fs/promises');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 
@@ -35,7 +35,10 @@ async function startEngine() {
     child.once('error', () => { clearTimeout(timer); reject(new Error('Could not start the bundled local engine.')); });
     child.on('message', message => {
       if (message?.type !== 'ready' || !Number.isSafeInteger(message.port) || message.port < 1 || message.port > 65535) return;
-      origin = `http://127.0.0.1:${message.port}`; clearTimeout(timer); publish({ engineReady: true }); resolve();
+      origin = `http://127.0.0.1:${message.port}`; clearTimeout(timer);
+      // A stable origin preserves browser drafts, preferences and tour completion.
+      writeFile(path.join(context.runtime, 'engine-port'), String(message.port), { mode: 0o600 })
+        .then(() => { publish({ engineReady: true }); resolve(); }, reject);
     });
     child.once('exit', () => {
       clearTimeout(timer); engine = undefined; publish({ engineReady: false });
@@ -52,6 +55,10 @@ async function initialize() {
   context = { root, runtime, executable: process.execPath, env: runtimeApi.desktopEnvironment(root, runtime, data, binaries) };
   publish({ phase: 'Preparing your private workspace' });
   await runtimeApi.prepareRuntime(root, runtime);
+  try {
+    const port = Number(await readFile(path.join(runtime, 'engine-port'), 'utf8'));
+    if (Number.isInteger(port) && port > 1024 && port <= 65535) context.env.PORT = String(port);
+  } catch { /* Allocate a free port on first launch. */ }
   for (const binary of ['ffmpeg', 'ffprobe', 'uv']) await runtimeApi.run(path.join(binaries, binary + (process.platform === 'win32' ? '.exe' : '')), ['-version'].map(flag => binary === 'uv' ? '--version' : flag), { cwd: runtime, env: context.env });
   await startEngine();
   publish({ phase: 'Ready for local editing', completed: 1, components: await runtimeApi.componentState(runtime) });

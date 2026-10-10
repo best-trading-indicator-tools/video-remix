@@ -29,3 +29,5 @@ Changes to the sample inputs: excerpted, downsampled, and compressed. The app di
 ## Desktop and guided setup
 
 `desktop-setup.png` and `api-setup.png` were captured from the packaged Apple Silicon app on October 10, 2026. The desktop setup shows successful local installation, and Settings shows the provider links and connection controls with no saved credentials.
+
+`central-ai-preview.png` shows a real 1080p AI sample in the packaged desktop player. The sample uses the same licensed Tears of Steel excerpt credited in the upscaler examples. No API key or paid generation was used.

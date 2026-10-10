@@ -1729,7 +1729,7 @@ export default function App() {
                         <CircleHelp size={12} />
                         <span>
                           {watermark.editing ? "Mark on the original picture. These areas follow this source through your edits and exports."
-                            : sourcePreview ? "Your original footage. Switch to Live to see your changes."
+                            : sourcePreview ? upscaledPreview && previewCurrent ? "Your original footage. Choose AI upscaled to compare the rendered result." : "Your original footage. Switch to Live to see your changes."
                             : usingRendered ? upscaledPreview
                               ? `Actual AI-upscaled sample at your selected ${activePreviewSettings.upscale}p target.${mode === "auto" ? " Auto cuts, generated captions and supporting visuals are added on export." : " Includes your effects, text and audio."}`
                               : "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
@@ -1746,7 +1746,7 @@ export default function App() {
                       </div>
                       {(mode === "manual" || upscaledPreview) && !watermark.editing && <>
                         <div className="manual-preview-actions">
-                          <p>{previewBusy ? upscaledPreview ? "Preparing the AI-upscaled preview locally… CPU rendering can take several minutes." : "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of ${mode === "auto" ? "this source" : "this edit"}` : upscaledPreview ? "The AI result appears here when ready. Original and Live show the source picture." : "Review the first five seconds before exporting."}</p>
+                          <p>{previewBusy ? upscaledPreview ? "Preparing the AI-upscaled preview locally… CPU rendering can take several minutes." : "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of ${mode === "auto" ? "this source" : "this edit"}` : upscaledPreview ? previewCurrent ? "Your AI sample is ready. Choose AI upscaled above to view it." : "The AI result appears here when ready. Original and Live show the source picture." : "Review the first five seconds before exporting."}</p>
                           {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || (mode === "manual" && !liveInterval)} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />{upscaledPreview ? "Refresh AI preview" : "Render 5s preview"}</button>}
                         </div>
                       </>}
