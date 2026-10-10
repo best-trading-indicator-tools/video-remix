@@ -28,7 +28,7 @@ npm run desktop:pack   # unpacked app for testing
 npm run desktop:build  # installer for the current supported OS / architecture
 ```
 
-`desktop/build-resources.mjs` verifies pinned checksums for FFmpeg, matching FFprobe and uv. It checks required filters and includes upstream licenses and source locations. Dependencies and models installed later use the same setup scripts as source installations, in a writable app-owned directory. No developer `.env`, media workspace or predownloaded model weights are packaged.
+`desktop/build-resources.mjs` verifies pinned checksums for FFmpeg, matching FFprobe and uv. It checks required filters and includes upstream licenses and source locations. Dependencies and models installed later use the same setup scripts as source installations, in a writable app-owned directory. No developer `.env`, media workspace or downloaded large AI weights are packaged. The small tracked YuNet face model and its license are included.
 
 `.github/workflows/desktop.yml` builds all three platforms. Its smoke test starts the **packaged** Node engine in an empty workspace, verifies localhost token protection, imports a generated video, renders text, checks audio/video output and shuts down cleanly. This catches missing binaries, resource paths and runtime dependencies; it does not certify every OS desktop or GPU driver. Upscaler inference has a separate compatibility workflow.
 

@@ -15,6 +15,8 @@ test('desktop preparation copies public runtime assets, preserves models, and ne
     await writeFile(path.join(root, '.env'), 'PRIVATE_KEY=secret');
     await writeFile(path.join(root, 'data/private.mp4'), 'personal media');
     await writeFile(path.join(root, 'scripts/models/developer.pth'), 'developer model');
+    await writeFile(path.join(root, 'scripts/models/face_detection_yunet_2023mar.onnx'), 'bundled face model');
+    await writeFile(path.join(root, 'scripts/models/LICENSE-YUNET.txt'), 'public license');
     await writeFile(path.join(root, 'scripts/setup.mjs'), 'public script');
     await writeFile(path.join(root, 'dist/index.html'), '<html>public app</html>');
     await writeFile(path.join(root, 'requirements-upscale.txt'), 'torch');
@@ -22,7 +24,7 @@ test('desktop preparation copies public runtime assets, preserves models, and ne
     await writeFile(path.join(runtime, 'scripts/models/user.pth'), 'downloaded model');
     await prepareRuntime(root, runtime);
     assert.deepEqual((await readdir(runtime)).sort(), ['dist', 'requirements-upscale.txt', 'scripts']);
-    assert.deepEqual(await readdir(path.join(runtime, 'scripts/models')), ['user.pth']);
+    assert.deepEqual((await readdir(path.join(runtime, 'scripts/models'))).sort(), ['LICENSE-YUNET.txt', 'face_detection_yunet_2023mar.onnx', 'user.pth']);
     assert.equal(await readFile(path.join(runtime, 'scripts/setup.mjs'), 'utf8'), 'public script');
     const env = desktopEnvironment(root, runtime, path.join(directory, 'workspace'), path.join(root, 'tools'));
     assert.equal(env.PORT, '0'); assert.equal(env.HOST, '127.0.0.1');

@@ -20,6 +20,7 @@ let child;
 try {
   await prepareRuntime(root, runtime);
   assert.ok(!(await readdir(runtime)).includes('.env'));
+  assert.ok((await readFile(path.join(runtime, 'scripts/models/face_detection_yunet_2023mar.onnx'))).length > 100_000);
   const extension = process.platform === 'win32' ? '.exe' : '';
   for (const binary of ['ffmpeg', 'ffprobe', 'uv']) execFileSync(path.join(binaries, binary + extension), [binary === 'uv' ? '--version' : '-version'], { env, stdio: 'pipe' });
   // No system Node/Python/FFmpeg installation is used by the packaged engine.

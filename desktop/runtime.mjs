@@ -27,6 +27,10 @@ export async function prepareRuntime(root, runtime) {
   // Copy only bundled, public runtime files. Never copy a developer's workspace or secrets.
   await cp(path.join(root, 'scripts'), path.join(runtime, 'scripts'), { recursive: true,
     filter: source => !/[/\\](?:__pycache__|models)(?:[/\\]|$)/u.test(source) || source.endsWith('models') });
+  // YuNet is a small, tracked runtime asset. Keep downloaded AI weights private,
+  // but copy this bundled model and its license for face-framing setup checks.
+  for (const name of ['face_detection_yunet_2023mar.onnx', 'LICENSE-YUNET.txt'])
+    await cp(path.join(root, 'scripts/models', name), path.join(runtime, 'scripts/models', name));
   for (const name of await readdir(root)) if (/^requirements-[\w-]+\.txt$/u.test(name)) await cp(path.join(root, name), path.join(runtime, name));
   await cp(path.join(root, 'dist'), path.join(runtime, 'dist'), { recursive: true });
 }
