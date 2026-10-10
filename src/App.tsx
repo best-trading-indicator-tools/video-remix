@@ -429,6 +429,16 @@ export default function App() {
     setView(previous.view); setMode(previous.mode); setTab(previous.tab); setAutoView(previous.autoView);
     requestAnimationFrame(() => window.scrollTo({ left: previous.scrollX, top: previous.scrollY, behavior: "instant" }));
   }, []);
+  const exitTourTo = useCallback((destination: TourDestination) => {
+    setShowHelp(false);
+    navigateTour(destination);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, behavior: "instant" });
+      // The tour normally restores the previous view. An explicit action stays
+      // at its destination and returns keyboard focus to the relevant navigation.
+      document.querySelector<HTMLElement>('.main-nav [aria-current="page"]')?.focus({ preventScroll: true });
+    });
+  }, [navigateTour]);
   const [previewJob, setPreviewJob] = useState<RenderJob | null>(null);
   const [editingJob, setEditingJob] = useState<RenderJob | null>(null);
   const [publishing, setPublishing] = useState<{ job: RenderJob | null } | null>(null);
@@ -3046,7 +3056,7 @@ export default function App() {
           </section>
         </div>
       )}
-      {showHelp && <OnboardingTour initialTopic={tourTopic} onNavigate={navigateTour} onClose={closeTour} />}
+      {showHelp && <OnboardingTour initialTopic={tourTopic} onNavigate={navigateTour} onExitTo={exitTourTo} onClose={closeTour} />}
     </div>
   );
 }

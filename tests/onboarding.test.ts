@@ -26,15 +26,21 @@ test("every topic has a stable unique identity and destinations cover all editin
   assert.equal(TOUR_STEPS[0].id, "welcome");
   assert.equal(TOUR_STEPS.at(-1)?.id, "ready");
   for (const mode of ["auto", "manual", "shorts"]) assert.ok(TOUR_STEPS.some(step => step.destination?.mode === mode));
-  for (const view of ["studio", "exports", "history"]) assert.ok(TOUR_STEPS.some(step => step.destination?.view === view));
+  for (const view of ["studio", "exports", "history", "settings"]) assert.ok(TOUR_STEPS.some(step => step.destination?.view === view));
   for (const step of TOUR_STEPS.slice(1)) {
     assert.ok(step.target, step.id);
     assert.ok(step.destination, step.id);
   }
 });
 
-test("first-use introduction includes optional chat editing with contextual detailed help retained", () => {
-  assert.equal(INTRO_STEPS.length, 4);
-  assert.deepEqual(INTRO_STEPS.map(step => step.destination?.view), ["studio", "studio", "exports", "exports"]);
+test("first-use introduction starts at API setup before importing and retains optional chat editing", () => {
+  assert.equal(INTRO_STEPS.length, 5);
+  assert.deepEqual(INTRO_STEPS.map(step => step.destination?.view), ["settings", "studio", "studio", "exports", "exports"]);
+  const setup = INTRO_STEPS[0];
+  assert.equal(setup.id, "intro-api-keys");
+  assert.equal(setup.action?.destination.view, "settings", "The setup action must leave users in the editable Settings page");
+  assert.equal(setup.action?.label, "Open Settings");
+  assert.ok(TOUR_STEPS.some(step => step.id === "api-keys" && step.action?.destination.view === "settings"));
+  assert.equal(INTRO_STEPS.at(-1)?.helpTopic?.id, "mcp");
   assert.ok(TOUR_STEPS.length > INTRO_STEPS.length);
 });

@@ -259,7 +259,9 @@ Open **http://127.0.0.1:5173**. The API runs on port **8787**. Keep the developm
 
 The first speech setup downloads its model; subsequent transcription uses the cached model locally. You can skip speech setup for basic Manual edits and URL downloads. No API key is needed to start the app.
 
-The first-run tour introduces imports, output settings, review, and MCP. Reopen it through **Quick guide**, or use the contextual help for a detailed walkthrough.
+The first-run tour starts with **API keys in Settings**: DeepSeek unlocks prompt editing and AI matching; add Pixabay or Pexels for stock B-roll. **Open Settings** closes the tour so you can save each key. Keys are optional for local editing and upscaling. The remaining steps cover imports, output settings, review, and MCP. Reopen the tour through **Quick guide**, or use the contextual help for a detailed walkthrough.
+
+![First onboarding step explaining DeepSeek, stock B-roll keys, and the Open Settings action](docs/screenshots/onboarding-api-keys.jpg)
 
 For the built app:
 

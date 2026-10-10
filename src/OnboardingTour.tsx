@@ -5,9 +5,10 @@ import { rememberOnboarding, TOUR_STEPS, INTRO_STEPS, type TourDestination } fro
 import "./onboarding.css";
 
 type Rect = { left: number; top: number; width: number; height: number };
-export default function OnboardingTour({ onNavigate, onClose, initialTopic }: {
+export default function OnboardingTour({ onNavigate, onExitTo, onClose, initialTopic }: {
   initialTopic?: string;
   onNavigate: (destination: TourDestination) => void;
+  onExitTo: (destination: TourDestination) => void;
   onClose: () => void;
 }) {
   const [detailed, setDetailed] = useState(Boolean(initialTopic));
@@ -162,6 +163,9 @@ export default function OnboardingTour({ onNavigate, onClose, initialTopic }: {
         <h2 ref={heading} id="onboarding-title" tabIndex={-1}>{step.title}</h2>
         <p id="onboarding-description">{step.description}</p>
         <dl>{step.options.map(([label, description]) => <div key={label}><dt>{label}</dt><dd>{description}</dd></div>)}</dl>
+        {step.action && <button type="button" className="primary-button onboarding-action" onClick={() => onExitTo(step.action!.destination)}>
+          {step.action.label}<ArrowRight size={15} />
+        </button>}
         {detailed ? <label className="onboarding-topics">Jump to topic
           <select value={index} onChange={event => setIndex(Number(event.target.value))}>
             {Array.from(new Set(TOUR_STEPS.map(item => item.chapter))).map(chapter => <optgroup label={chapter} key={chapter}>

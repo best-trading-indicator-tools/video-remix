@@ -10,7 +10,7 @@ export function rememberOnboarding(storage?: SessionStorage) {
 }
 
 export type TourDestination = {
-  view: "studio" | "exports" | "history" | "downloader";
+  view: "studio" | "exports" | "history" | "downloader" | "settings";
   mode?: "auto" | "manual" | "shorts";
   tab?: "essentials" | "color" | "advanced" | "all";
   autoView?: "quick" | "all";
@@ -26,6 +26,7 @@ export interface TourStep {
   destination?: TourDestination;
   reveal?: string;
   helpTopic?: { id: string; label: string };
+  action?: { label: string; destination: TourDestination };
 }
 const auto = { view: "studio", mode: "auto" } as const;
 const autoQuick = { view: "studio", mode: "auto", autoView: "quick" } as const;
@@ -33,6 +34,20 @@ const autoAll = { view: "studio", mode: "auto", autoView: "all" } as const;
 const manual = (tab: TourDestination["tab"]): TourDestination => ({ view: "studio", mode: "manual", tab });
 const shorts = { view: "studio", mode: "shorts" } as const;
 const history = { view: "history" } as const;
+const apiKeySetup = {
+  chapter: "API setup",
+  title: "Set up your API keys",
+  description: "Start in Settings to unlock prompt edits and automatic B-roll. Configure the services you want to use, then save each key.",
+  target: ".api-settings-intro",
+  destination: { view: "settings" },
+  action: { label: "Open Settings", destination: { view: "settings" } },
+  options: [
+    ["DeepSeek · prompt edits and AI", "Enables prompt editing, AI clip suggestions, editorial checks and visual matching. Requests use your DeepSeek account balance."],
+    ["Pixabay or Pexels · stock B-roll", "Add a key for either stock provider, or both. Automatic stock matching also needs DeepSeek."],
+    ["Save each key", "Paste it into the matching provider card and click Save key. Already configured keys stay in place. Postiz is only needed for scheduling posts."],
+    ["You can start without keys", "Manual editing, uploaded footage and local AI upscaling work without provider keys. Open Quick guide whenever you want to replay the tour."],
+  ],
+} as const satisfies Omit<TourStep, "id">;
 
 export const TOUR_STEPS: readonly TourStep[] = [
   { id: "welcome", chapter: "Welcome", title: "Find your way around Remix Studio",
@@ -41,6 +56,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
       ["Go at your own pace", "Use Next, Back or Jump to topic. No video is needed to follow along."],
       ["Leave whenever you like", "Skip, ×, Escape or a click outside closes the tour. Open Quick guide to replay it."]],
   },
+  { ...apiKeySetup, id: "api-keys" },
   { id: "imports", chapter: "Your footage", title: "Bring in your videos", target: ".import-open", destination: auto,
     description: "Add videos opens a separate import window. Your video list and selections stay in place while you add footage for Auto, Manual and Short clips.",
     options: [["Browse or drop files", "Drop one video or a batch anywhere in the Source videos panel, or use Add videos to browse. The uploader shows your current file and batch limits."],
@@ -91,7 +107,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
       ["Sound and framing", "For inserted footage, keep its audio or mute it. Fit the whole clip or crop it to fill the frame; remove a placement to leave it out."]],
   },
   { id: "auto-prompt", chapter: "Auto", title: "Apply a prompt to your batch", target: ".auto-prompt-editor", destination: autoQuick,
-    description: "Remix with a prompt is available in Quick setup and All settings. Choose This video, Selected videos or All videos in Apply changes to.",
+    description: "Add your DeepSeek API key in Settings to enable Remix with a prompt in Quick setup and All settings. Choose This video, Selected videos or All videos in Apply changes to.",
     options: [["Use your footage", "Upload a clip first, then ask to append it by name, such as Append outro.mp4 in full and add black bands."],
       ["Review every target", "Each proposal uses that video's settings. Review the changes by name, then apply the batch together. A failed request or clarification changes no videos."],
       ["Undo the batch", "Undo last prompt restores all affected videos while those settings are still unchanged. Prompts never start a render or change future-import defaults."]],
@@ -136,7 +152,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   },
   { id: "supporting-visuals", chapter: "Auto", title: "Choose optional supporting visuals", target: ".supporting-visuals", destination: autoAll,
     description: "Choose any combination, or leave every source off to keep only your original footage.",
-    options: [["Pixabay / Pexels", "Add moving stock footage. HyperFrames / Remotion add illustrated explainer cards. My B-roll uses clips from your own library."],
+    options: [["Pixabay / Pexels", "Add a Pixabay or Pexels API key plus DeepSeek in Settings for matched stock B-roll. HyperFrames / Remotion add illustrated explainer cards. My B-roll uses clips from your own library."],
       ["Count, coverage and stock style", "Set the total shot count and maximum percentage of the result they may cover. The animation-only stock filter uses Pixabay."],
       ["Matching and library", "Upload, tag and select library clips; choose tags or AI matching. Stock matching and illustrated explainers need configured DeepSeek access. Unsuitable shots can be skipped; read the export's unfilled requests."]],
   },
@@ -326,18 +342,19 @@ export const TOUR_STEPS: readonly TourStep[] = [
     description: "Import a video, choose a mode, then review your settings before rendering.",
     options: [["Come back whenever you need", "Quick guide and How it works reopen this tour. Jump to topic goes straight to a particular option."],
       ["Your work stays yours", "The tour only moves between views. Your settings, footage and exports are unchanged."],
-      ["Once per browser", "The four-step introduction opens on your first visit. Completion is remembered across tabs and restarts; open help whenever you need it."]],
+      ["Once per browser", "The five-step introduction starts with API setup on your first visit. Completion is remembered across tabs and restarts; open help whenever you need it."]],
   },
 ];
 
 export const INTRO_STEPS: readonly TourStep[] = [
-  { id: 'intro-import', chapter: 'Get started', title: '1. Bring a video', description: 'Browse files, drop footage, or paste a video link.', target: '.import-panel', destination: autoQuick,
+  { ...apiKeySetup, id: 'intro-api-keys', title: '1. Set up your API keys' },
+  { id: 'intro-import', chapter: 'Get started', title: '2. Bring a video', description: 'Browse files, drop footage, or paste a video link.', target: '.import-panel', destination: autoQuick,
     options: [['Your originals', 'Import one recording or a batch. Follow progress in Source videos.']] },
-  { id: 'intro-output', chapter: 'Get started', title: '2. Choose your output', description: 'Pick a format, then keep the full video or choose shorter clips. Check which videos your settings affect.', target: '.quick-auto', destination: autoQuick,
+  { id: 'intro-output', chapter: 'Get started', title: '3. Choose your output', description: 'Pick a format, then keep the full video or choose shorter clips. Check which videos your settings affect.', target: '.quick-auto', destination: autoQuick,
     options: [['Start with Auto', 'Use Quick setup, then Auto remix. Open All settings when you need more control.']] },
-  { id: 'intro-review', chapter: 'Get started', title: '3. Review your clips', description: 'Preview, accept, request edits, or reject. Download accepted clips when you are ready.', target: '.exports-panel', destination: {view: 'exports'},
+  { id: 'intro-review', chapter: 'Get started', title: '4. Review your clips', description: 'Preview, accept, request edits, or reject. Download accepted clips when you are ready.', target: '.exports-panel', destination: {view: 'exports'},
     options: [['Keep your work', 'Editing drafts save automatically. Keep finished exports to protect them from expiry.'], ['Help when you need it', 'Use Help with this workflow or Quick guide to explore detailed topics.']] },
-  { id: 'intro-mcp', chapter: 'Optional · Edit from chat', title: '4. Edit from Claude or Codex', description: 'The local MCP connection lets Claude Code, Claude Desktop or Codex edit several videos for you. Keep Remix Studio running while you use it.', target: '.exports-panel', destination: {view: 'exports'},
+  { id: 'intro-mcp', chapter: 'Optional · Edit from chat', title: '5. Edit from Claude or Codex', description: 'The local MCP connection lets Claude Code, Claude Desktop or Codex edit several videos for you. Keep Remix Studio running while you use it.', target: '.exports-panel', destination: {view: 'exports'},
     options: [['Ask for a batch edit', 'For example: Append outro.mp4 to videos A and B, add white upper-band text, and export both.'], ['Review the results here', 'MCP uses separate drafts, so name your videos instead of relying on browser selections. Finished clips appear in Exports.']],
     helpTopic: { id: 'mcp', label: 'Set up Claude or Codex' } },
 ];

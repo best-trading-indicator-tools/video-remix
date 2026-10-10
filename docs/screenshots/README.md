@@ -1,6 +1,6 @@
 # README screenshots
 
-Actual Remix Studio UI captured in Chrome on October 10, 2026, from app revision `886aa4e`. The screenshots use a separate demonstration workspace and the two sample inputs in [upscale-examples](../upscale-examples/). They are cropped browser captures, with no mock controls or simulated AI results.
+Actual Remix Studio UI captured in Chrome on October 10, 2026. The workspace and editing screenshots use app revision `886aa4e`; the API setup screenshot shows the subsequent onboarding update. The screenshots use separate demonstration workspaces and the two sample inputs in [upscale-examples](../upscale-examples/). They are cropped browser captures, with no mock controls or simulated AI results.
 
 | Image | Shows |
 | --- | --- |
@@ -9,6 +9,7 @@ Actual Remix Studio UI captured in Chrome on October 10, 2026, from app revision
 | [bulk-settings.jpg](bulk-settings.jpg) | Selected-video scope, with future-import defaults unchecked. |
 | [ai-upscaler.jpg](ai-upscaler.jpg) | 4K selected, local processing, and the actual readiness result on an Apple Silicon Mac. Other hosts display their own device. |
 | [prompt-upscale.jpg](prompt-upscale.jpg) | Built-in 4K prompt example targeting two videos. The proposal has not been submitted or applied in this capture. |
+| [onboarding-api-keys.jpg](onboarding-api-keys.jpg) | First-run API setup, with provider dependencies and a direct Open Settings action. No keys are entered. |
 
 ## Refreshing the images
 
@@ -16,6 +17,8 @@ Actual Remix Studio UI captured in Chrome on October 10, 2026, from app revision
 2. Import `docs/upscale-examples/closeup-1080p-before.mp4` and `docs/upscale-examples/motion-4k-before.mp4`. In Auto, check both videos, select **Selected videos**, choose landscape framing and full length, and set the AI upscaler to **2160p · 4K**.
 3. Capture the workspace and relevant controls through the browser. Use the **AI upscale to 4K** prompt example without submitting a provider request. Capture Add videos before entering any local paths or URLs.
 4. Crop to the section being explained, keep complete labels and controls, and check every image at its README display size. Keep relative image links and descriptive alt text in the root README.
+
+For the API setup screenshot, open **Quick guide** and capture its first step. Use an empty demonstration workspace with no provider keys; leave the fields untouched.
 
 ## Footage credit
 

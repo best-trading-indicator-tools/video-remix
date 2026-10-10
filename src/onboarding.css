@@ -21,6 +21,7 @@
 .onboarding-content dl { display: grid; gap: 15px; margin: 20px 0; }
 .onboarding-content dt { font-size: 12px; font-weight: 650; line-height: 1.5; margin-bottom: 4px; }
 .onboarding-content dd { margin: 0; color: var(--subtle); font-size: 12px; line-height: 1.6; }
+.onboarding-action { width: 100%; min-height: 44px; margin-bottom: 16px; }
 .onboarding-topics { display: grid; gap: 7px; color: var(--subtle); font-size: 11px; }
 .onboarding-topics select { min-width: 0; width: 100%; min-height: 40px; padding: 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--field); color: var(--text); text-overflow: ellipsis; font: inherit; font-size: 12px; }
 .onboarding-footer { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--surface, #151b24); }
