@@ -21,4 +21,6 @@ __pycache__/
 *cookies*.txt
 
 .venv-upscale/
+desktop/resources/
+release/
 scripts/models/realesr-general-x4v3.pth

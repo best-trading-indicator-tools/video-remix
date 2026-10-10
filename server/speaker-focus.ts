@@ -20,10 +20,10 @@ import { paths } from "./config.js";
 const parentDirectory = path.dirname(
   path.dirname(fileURLToPath(import.meta.url)),
 );
-const projectRoot =
+const projectRoot = process.env.REMIX_RUNTIME_DIR || (
   path.basename(parentDirectory) === "dist-server"
     ? path.dirname(parentDirectory)
-    : parentDirectory;
+    : parentDirectory);
 const python = path.join(
   projectRoot,
   ".venv",

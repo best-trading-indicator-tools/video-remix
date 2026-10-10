@@ -1,0 +1,62 @@
+name: Desktop installers
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - 'electron-builder.yml'
+      - 'package*.json'
+      - 'src/**'
+      - 'server/**'
+      - 'shared/**'
+      - '.github/workflows/desktop.yml'
+permissions:
+  contents: read
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  package:
+    name: ${{ matrix.os }} installer and bundled-engine smoke
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            root: 'release/mac-arm64/Remix Studio.app/Contents/Resources/app'
+            executable: 'release/mac-arm64/Remix Studio.app/Contents/MacOS/Remix Studio'
+            binaries: 'release/mac-arm64/Remix Studio.app/Contents/Resources/tools/bin'
+          - os: windows-latest
+            root: release/win-unpacked/resources/app
+            executable: 'release/win-unpacked/Remix Studio.exe'
+            binaries: release/win-unpacked/resources/tools/bin
+          - os: ubuntu-22.04
+            root: release/linux-unpacked/resources/app
+            executable: release/linux-unpacked/video-remix
+            binaries: release/linux-unpacked/resources/tools/bin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run desktop:build
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - name: Verify packaged runtime without system media dependencies
+        run: node desktop/smoke.mjs "${{ matrix.root }}" "${{ matrix.executable }}" "${{ matrix.binaries }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.os }}
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error
+          retention-days: 14

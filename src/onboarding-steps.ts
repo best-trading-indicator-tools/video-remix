@@ -44,7 +44,7 @@ const apiKeySetup = {
   options: [
     ["DeepSeek · low-cost AI", "Prompt edits, clip suggestions, editorial checks and visual matching. Chosen for its much lower cost than many proprietary LLM APIs; usage is billed to your DeepSeek balance."],
     ["Pixabay or Pexels · free stock B-roll", "Both stock APIs and their keys are free, within provider usage limits. Automatic matching also uses paid DeepSeek requests."],
-    ["Save each key", "Paste it into the matching provider card and click Save key. Already configured keys stay in place. Postiz is only needed for scheduling posts."],
+    ["Get a key → test → save", "Each provider card links to its key page. Paste your key, click Test connection, then Save key. Tests generate no AI content. Postiz is only needed for scheduling posts."],
     ["You can start without keys", "Manual editing, uploaded footage and local AI upscaling work without provider keys. Open Quick guide whenever you want to replay the tour."],
   ],
 } as const satisfies Omit<TourStep, "id">;

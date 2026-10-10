@@ -1,0 +1,47 @@
+appId: com.remixstudio.desktop
+productName: Remix Studio
+icon: desktop/resources/icon.png
+asar: false
+npmRebuild: false
+directories:
+  output: release
+files:
+  - desktop/**/*
+  - '!desktop/resources/**'
+  - '!desktop/build-resources.mjs'
+  - '!desktop/smoke.mjs'
+  - dist/**/*
+  - dist-server/**/*
+  - dist-remotion/**/*
+  - scripts/**/*
+  - '!scripts/models/*.pth'
+  - '!scripts/models/*.pt'
+  - '!scripts/**/__pycache__/**'
+  - requirements-*.txt
+  - package.json
+extraResources:
+  - from: desktop/resources/bin
+    to: tools/bin
+  - from: desktop/resources/licenses
+    to: tools/licenses
+mac:
+  category: public.app-category.video
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  deleteAppDataOnUninstall: false
+linux:
+  category: AudioVideo
+  target: [AppImage, deb]
+artifactName: Remix-Studio-${version}-${os}-${arch}.${ext}
+publish: null

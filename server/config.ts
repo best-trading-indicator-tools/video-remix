@@ -15,7 +15,7 @@ const numberEnv = (key: string, fallback: number, min: number, max: number) => {
   return Math.floor(value);
 };
 export const config = {
-  port: numberEnv("PORT", 8787, 1, 65535),
+  port: numberEnv("PORT", 8787, process.env.REMIX_DESKTOP === "1" ? 0 : 1, 65535),
   host: process.env.HOST || "127.0.0.1",
   dataDir: path.resolve(process.env.DATA_DIR || "data"),
   maxFileSize: numberEnv("MAX_FILE_SIZE_MB", 500, 1, 2048) * 1024 * 1024,

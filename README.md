@@ -6,7 +6,7 @@ Remix Studio is a video repurposing app for creators, editors, and teams making 
 
 Work through the visual editor, describe changes in a prompt, or connect Claude Code, Claude Desktop, or Codex through the local MCP server. The **free standalone URL Downloader** is an extra utility outside the core SaaS editing workflow; it saves videos without creating an editing project.
 
-**Current deployment:** a private, self-hosted installation. Media processing runs on the computer hosting the app, with optional external AI and publishing services. The repository does not include user authentication, customer billing, or tenant isolation for a public SaaS.
+**Current deployment:** a private desktop app or self-hosted installation. Media processing runs on the computer hosting the app, with optional external AI and publishing services. The repository does not include user authentication, customer billing, or tenant isolation for a public SaaS.
 
 [Features](#what-you-can-do) · [AI upscaler](#upscale-videos-with-free-local-ai) · [Quick start](#quick-start) · [AI and costs](#ai-integrations-and-costs) · [Claude / Codex MCP](#edit-from-claude-or-codex) · [Docker](#run-with-docker) · [Full user guide](docs/user-guide.md)
 
@@ -131,11 +131,7 @@ Use **Real-ESRGAN** to reconstruct detail in smaller main videos and export at *
 
 *This screenshot is from an Apple Silicon Mac. The readiness message shows the device available on your host.*
 
-Install once on the computer hosting the app:
-
-```bash
-npm run setup:upscale
-```
+In the desktop app, open **Settings → Local tools**, select **Free AI upscaler**, and click **Install selected tools**. For a source installation, run `npm run setup:upscale` once.
 
 To upscale a batch:
 
@@ -145,6 +141,8 @@ To upscale a batch:
 4. Render the selected videos through the usual export controls. Each keeps its unrelated settings.
 
 The control appears in Auto Quick setup, All settings, Manual, Short clips, and the saved-result editor. It follows **This video / Selected videos / All videos** in Auto and Manual, and is saved with finishing presets. You can also ask **“Upscale these videos to 4K with local AI”** in Auto, Manual, or saved-result prompts. Review and apply the proposal, then render. **Prompt planning uses your configured DeepSeek key**; choosing the upscaler directly or updating local MCP drafts with `upscale: "2160"` does not.
+
+**Preview the real result in the center.** In Auto and Manual, enabling upscaling automatically renders a short sample at the selected resolution. The central player switches to **AI upscaled** when ready; **Original** remains available for comparison. While it renders, the player clearly says it is showing the source. Auto previews cover picture settings only: the final AI-selected edit, generated captions and stock footage still appear in the export. No separate batch approval step is added.
 
 **Inspect the details.** These comparisons use the app's actual exports: ordinary Lanczos resizing on the left, Real-ESRGAN on the right. Each pair shows the same frame and the same 640 × 480 crop at the output resolution. The PNG stills have no extra sharpening, blur, or JPEG compression. Click an image to see the crop in motion.
 
@@ -232,7 +230,21 @@ Downloader items stay separate from editing sources and exports. Platform access
 
 ## Quick start
 
-### Requirements
+### Desktop app · no terminal required
+
+[**Download the desktop preview**](https://github.com/best-trading-indicator-tools/video-remix/releases/tag/v1.1.0-preview.1) for **Apple Silicon Macs (macOS 14+)**, **Windows x64**, or **Linux x64**.
+
+1. Install the `.dmg` on Mac, run the `.exe` on Windows, or use the `.AppImage` / `.deb` on Linux. Open **Remix Studio**.
+2. Choose local tools and click **Install selected tools**. Downloads and progress are shown inside the app; you can cancel and retry. Basic Manual editing works immediately.
+3. Click **Open Studio**, then follow **Settings → get a key → test → save** for optional prompt editing and stock B-roll.
+
+![Desktop setup with local tools and installation status](docs/screenshots/desktop-setup.png)
+
+The app includes its own video engine and downloads an isolated Python environment when a selected tool needs one. It does not require a system Node, Python or FFmpeg installation. Captions, URL imports and the AI upscaler are recommended; OCR, animated cards, face framing and object removal are optional. Reopen setup at **Settings → Local tools**. Models need internet for their first download and several GB of free disk space; subsequent processing stays local.
+
+**Preview release:** installers are not yet signed/notarized for public distribution. macOS Gatekeeper and Windows SmartScreen may block or warn on downloaded builds. Do not disable OS protections; use the source installation below if your computer blocks the preview. Intel Macs and native Windows ARM are not included. [Desktop builds, data locations and verification →](docs/desktop.md)
+
+### From source · requirements
 
 - **Node.js 22.13+** and npm.
 - **FFmpeg and ffprobe** on `PATH`, including H.264/AAC encoding, `drawtext`, and `subtitles` support.
@@ -267,7 +279,9 @@ Open **http://127.0.0.1:5173**. The API runs on port **8787**. Keep the developm
 
 The first speech setup downloads its model; subsequent transcription uses the cached model locally. You can skip speech setup for basic Manual edits and URL downloads. No API key is needed to start the app.
 
-The first-run tour starts with **API keys in Settings**: DeepSeek provides low-cost, paid prompt editing and AI matching; Pixabay and Pexels provide free stock B-roll APIs. **Open Settings** closes the tour so you can save each key. Keys are optional for local editing and upscaling. The remaining steps cover imports, output settings, review, and MCP. Reopen the tour through **Quick guide**, or use the contextual help for a detailed walkthrough.
+The first-run tour starts with **API keys in Settings**: DeepSeek provides low-cost, paid prompt editing and AI matching; Pixabay and Pexels provide free stock B-roll APIs. **Open Settings** closes the tour so you can open the provider’s key page, paste a key, **Test connection**, then **Save key**. Connection tests identify invalid keys, missing credit, rate limits and network problems without generating paid AI content. Keys are optional for local editing and upscaling. The remaining steps cover imports, output settings, review, and MCP. Reopen the tour through **Quick guide**, or use the contextual help for a detailed walkthrough.
+
+![API setup with provider links, connection testing and separate Save key buttons](docs/screenshots/api-setup.png)
 
 ![First onboarding step explaining DeepSeek, stock B-roll keys, and the Open Settings action](docs/screenshots/onboarding-api-keys.jpg)
 

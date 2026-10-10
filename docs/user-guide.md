@@ -6,7 +6,7 @@ Detailed workflows, controls, setup options, and troubleshooting for the current
 
 ## AI video upscaling
 
-Install the local model once with `npm run setup:upscale`. This creates an isolated Python environment, downloads the checksum-verified Real-ESRGAN general x4v3 model, and runs an inference check. Apple Silicon Macs use Metal through PyTorch MPS; the default Linux/Windows installation uses CPU. A matching CUDA-enabled PyTorch installation in `.venv-upscale` is preserved by setup and supported by the worker. No media is sent to a provider.
+Install the local model from **Settings → Local tools** in the desktop app, or run `npm run setup:upscale` in a source installation. This creates an isolated Python environment, downloads the checksum-verified Real-ESRGAN general x4v3 model, and runs an inference check. Apple Silicon Macs use Metal through PyTorch MPS; the default Linux/Windows installation uses CPU. A matching CUDA-enabled PyTorch installation in `.venv-upscale` is preserved by setup and supported by the worker. No media is sent to a provider.
 
 1. Import your videos and choose **Apply changes to → Selected videos** (or **All videos**).
 2. In Auto Quick setup, All settings, or Manual, set **AI video upscaler** to **1080p**, **1440p**, or **2160p · 4K**.
@@ -19,6 +19,8 @@ The target is a minimum short edge, preserving your chosen framing: landscape 4K
 Real-ESRGAN reconstructs the selected main source frames before framing and added captions, titles, bands, or supporting shots. The original soundtrack follows the same cuts and speed. The model has a 4× reconstruction scale; very small inputs needing more than 4× also receive ordinary resizing to reach the target. Uploaded inserts/outros, supporting shots, and graphics are fitted normally. AI estimates detail, so fine textures can change and frame-to-frame flicker is possible. It cannot guarantee recovery of the original detail.
 
 Use Manual's sample preview to compare quality; AI previews retain the source detail and chosen target rather than using the usual smaller preview. Large videos take longer and need temporary disk space for a lossless reconstructed video. Jobs share one inference slot within the running server to avoid competing for GPU memory. Frames stream through memory instead of accumulating as thousands of image files. Cancelled or failed jobs clean up their temporary files. If setup is missing or inference fails, the export reports an error rather than silently substituting ordinary resizing.
+
+In the desktop app, install the model from **Settings → Local tools → Free AI upscaler**. In Auto and Manual, activating upscaling automatically prepares a real short sample in the central player. **AI upscaled** shows the rendered result; **Original** shows the input. The sample uses the selected output resolution, so CPU rendering can take several minutes. You can cancel or refresh it. Changing source or settings cancels obsolete work. Auto samples cover picture settings, not AI planning, generated captions or stock selection.
 
 ### Upscaler compatibility
 
@@ -67,7 +69,7 @@ setup, example prompts and troubleshooting.
 
 ## API keys
 
-Open **Settings** in the top navigation to add or replace your **DeepSeek**, **Pixabay**, **Pexels**, and **Postiz** API keys. Each field has its own **Save key** button. Configured keys stay hidden; leaving a field blank keeps its current key. Saving does not contact a provider or verify the key. New provider requests use the saved key without restarting the app.
+Open **Settings** in the top navigation to add or replace your **DeepSeek**, **Pixabay**, **Pexels**, and **Postiz** API keys. Each provider has a direct key-creation link, short instructions, **Test connection**, and **Save key**. Paste a key, test it, then save it. A successful unsaved test says **Key works · save to use**; configured keys can be tested again without re-entering them. Checks distinguish invalid keys, missing credit, provider limits and network problems. They never generate AI content or publish posts; stock checks use one search request. Configured keys stay hidden; leaving a field blank keeps its current key. Saving does not contact a provider or verify the key. New provider requests use the saved key without restarting the app.
 
 **Pixabay and Pexels provide free stock footage APIs and free API keys**, subject to provider limits and content licenses. **DeepSeek is a low-cost paid API**: we chose it for its substantially lower prices than many proprietary LLM APIs. Prompt edits and automatic stock matching use your DeepSeek balance even when the footage itself is free. See [provider costs and current official pricing](../README.md#ai-integrations-and-costs). As of October 10, 2026, [Pexels has paused new API key issuance](https://help.pexels.com/hc/en-us/articles/900004904026-How-do-I-get-an-API-key); use Pixabay if you do not already have a Pexels key.
 
@@ -725,6 +727,8 @@ For a future cloud integration, extract the chosen short intervals locally, enha
 
 ## Run locally
 
+For installation without terminal commands, use the [desktop preview and Local tools setup](../README.md#desktop-app--no-terminal-required). See [desktop data locations, builds and current platform limits](desktop.md). The source setup below remains available.
+
 Requirements: **Node.js 22.13 or newer**, npm, and **FFmpeg / ffprobe** on your `PATH`. Local transcription also needs **Python 3.10–3.13**. Use an FFmpeg build with `libx264`, AAC encoding, `drawtext`, and the libass `subtitles` filter.
 
 On macOS with Homebrew:
@@ -979,7 +983,7 @@ FFmpeg and ffprobe must be installed for media integration tests. Local transcri
 
 The app runs locally on your Mac. GitHub Actions provides optional remote verification:
 
-- Pushes to `main` run only the build and type checks, without installing media tools or running the test suite. Documentation-only pushes are skipped. New pushes cancel superseded automatic checks.
+- Pushes to `main` run build/type checks. Relevant desktop changes also build Mac, Windows and Linux installers and test their bundled engine; relevant upscaler changes run the cross-platform AI compatibility checks. The full test suite remains manual. Documentation-only pushes are skipped. New pushes cancel superseded automatic checks.
 - Full remote tests run only when you explicitly choose **Actions → Build checks and manual tests → Run workflow**, or run `gh workflow run ci.yml --ref main`. A push does not cancel a manually requested test run.
 - Run `npm test` on your Mac for local testing without using GitHub Actions minutes.
 

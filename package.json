@@ -1,6 +1,6 @@
 {
   "name": "video-remix",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "engines": {
@@ -25,7 +25,11 @@
     "setup:speaker": "node scripts/setup-speaker.mjs",
     "measure:audio": "node --import tsx scripts/measure-audio.mjs",
     "mcp": "node scripts/mcp.mjs",
-    "mcp:install": "node scripts/install-mcp.mjs"
+    "mcp:install": "node scripts/install-mcp.mjs",
+    "desktop:prepare": "node desktop/build-resources.mjs",
+    "desktop:dev": "npm run build && npm run desktop:prepare && electron .",
+    "desktop:pack": "npm run build && npm run desktop:prepare && electron-builder --dir",
+    "desktop:build": "npm run build && npm run desktop:prepare && electron-builder"
   },
   "dependencies": {
     "@hyperframes/producer": "0.8.40",
@@ -40,6 +44,7 @@
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "remotion": "4.0.525",
+    "tesseract.js": "7.0.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -52,8 +57,17 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
+    "electron": "44.7.0",
+    "electron-builder": "26.15.3",
+    "extract-zip": "2.0.1",
+    "ffmpeg-static": "5.3.0",
+    "sharp": "0.35.5",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.3.0"
-  }
+  },
+  "description": "Private video editing, bulk remixes and free local AI upscaling.",
+  "author": "Remix Studio contributors",
+  "homepage": "https://github.com/best-trading-indicator-tools/video-remix",
+  "main": "desktop/main.cjs"
 }

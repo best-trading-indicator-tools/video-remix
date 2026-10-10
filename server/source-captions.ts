@@ -18,6 +18,9 @@ interface Sample { time: number; lines: Line[] }
 const VERSION = 1;
 const MAX_FRAMES = 12;
 const BUDGET_MS = 35_000;
+const ocrCommand = (args: string[]) => process.env.REMIX_OCR_SCRIPT
+  ? { binary: process.execPath, args: [process.env.REMIX_OCR_SCRIPT, ...args] }
+  : { binary: "tesseract", args };
 const languages: Record<string, string> = { en: "eng", fr: "fra", es: "spa", de: "deu", it: "ita", pt: "por", nl: "nld",
   ru: "rus", uk: "ukr", pl: "pol", tr: "tur", ar: "ara", hi: "hin", ja: "jpn", ko: "kor", zh: "chi_sim",
   ca: "cat", sv: "swe", da: "dan", no: "nor", fi: "fin", cs: "ces", el: "ell", he: "heb", vi: "vie", id: "ind", ro: "ron", hu: "hun" };
@@ -192,7 +195,8 @@ export async function inspectSourceCaptions({ source, cuts, transcript, signal, 
     } catch { signal.throwIfAborted(); }
     let available: Set<string>;
     try {
-      const result = await runLocal("tesseract", ["--list-langs"], { signal: budget, timeout: 4000 });
+      const command = ocrCommand(["--list-langs"]);
+      const result = await runLocal(command.binary, command.args, { signal: budget, timeout: 4000 });
       available = new Set(`${result.stdout}\n${result.stderr}`.split(/\r?\n/u).map(line => line.trim()));
     } catch {
       signal.throwIfAborted();
@@ -217,7 +221,8 @@ export async function inspectSourceCaptions({ source, cuts, transcript, signal, 
         const width = header.readUInt32BE(16), height = header.readUInt32BE(20);
         if (header.toString("hex", 0, 8) !== "89504e470d0a1a0a" || width < 2 || height < 2 || width > 1280 || height > 1280)
           throw new Error("Invalid sampled image");
-        const { stdout } = await runLocal("tesseract", [frame, "stdout", "-l", model, "--psm", "11", "tsv"], { signal: budget, timeout: 5000 });
+        const command = ocrCommand([frame, "stdout", "-l", model, "--psm", "11", "tsv"]);
+        const { stdout } = await runLocal(command.binary, command.args, { signal: budget, timeout: process.env.REMIX_OCR_SCRIPT ? 10_000 : 5000 });
         samples.push({ time, lines: readLines(stdout, width, height) });
       } catch {
         signal.throwIfAborted();

@@ -139,6 +139,11 @@ let inflightUploads = 0;
 export function createApp() {
   const app = express();
   app.disable("x-powered-by");
+  app.use((req, res, next) => {
+    if (process.env.REMIX_DESKTOP_TOKEN && req.get("x-remix-desktop") !== process.env.REMIX_DESKTOP_TOKEN)
+      return res.status(403).json({ error: "Open this workspace in Remix Studio." });
+    next();
+  });
   app.use(diagnosticMiddleware);
   app.use((req, res, next) => {
     const hosts = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);

@@ -25,3 +25,7 @@ For the API setup screenshot, open **Quick guide** and capture its first step. U
 The workspace preview and source thumbnails contain excerpts from the *Sintel* trailer, © copyright Blender Foundation | [www.sintel.org](https://durian.blender.org/), licensed under [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). [Source video](https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4) · [Attribution details](https://durian.blender.org/sharing/).
 
 Changes to the sample inputs: excerpted, downsampled, and compressed. The app displays a caption-style preview over the main image. No endorsement is implied. The separate comparison stills in [upscale-examples](../upscale-examples/) also show AI enlargement, cropping, and labels; their [manifest](../upscale-examples/manifest.json) records the render details.
+
+## Desktop and guided setup
+
+`desktop-setup.png` and `api-setup.png` were captured from the packaged Apple Silicon app on October 10, 2026. The desktop setup shows successful local installation, and Settings shows the provider links and connection controls with no saved credentials.

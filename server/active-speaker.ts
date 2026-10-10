@@ -8,7 +8,7 @@ import { MEDIA_INPUT_ARGS, runLocal } from "./auto-process.js";
 import { validFocusTrack } from "../shared/focus.js";
 import type { SpeakerFocusOptions, SpeakerFocusResult } from "./speaker-focus.js";
 const parent = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const root = path.basename(parent) === "dist-server" ? path.dirname(parent) : parent;
+const root = process.env.REMIX_RUNTIME_DIR || (path.basename(parent) === "dist-server" ? path.dirname(parent) : parent);
 const python = path.join(root, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
 const script = path.join(root, "scripts/active_speaker.py");
 const weights = path.join(root, "data/models/talknet.model");

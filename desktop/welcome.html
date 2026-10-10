@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+<title>Remix Studio · Local tools</title><link rel="stylesheet" href="welcome.css"></head>
+<body><main>
+  <header><div class="brand">remix studio.</div><span class="pill">PRIVATE · ON YOUR COMPUTER</span></header>
+  <h1>Make yourself at home.</h1><p class="intro">The editor and video tools are included. Choose the extra features you want; we'll download and set them up for you.</p>
+  <div class="included"><strong>Included</strong><span>Video import · Manual editing · MP4 export</span></div>
+  <h2>Choose your local tools</h2><p>Downloads happen once. No API keys or per-video fees. Larger AI models may take several minutes.</p>
+  <div id="tools" class="tools"></div>
+  <div class="actions"><button id="install" disabled>Install selected tools</button><button id="studio" class="secondary" disabled>Open Studio</button><button id="cancel" class="secondary" hidden>Cancel setup</button></div>
+  <section class="progress" aria-live="polite"><strong id="phase">Starting the local engine…</strong><progress id="progress" max="1" value="0"></progress><p id="error" role="alert"></p></section>
+  <details><summary>Installation details</summary><pre id="logs"></pre></details>
+  <footer>You can start with Manual editing and install more tools later from <strong>Settings → Local tools</strong>. API services for prompts and stock footage are optional and configured in Studio.</footer>
+</main><script src="welcome.js"></script></body></html>

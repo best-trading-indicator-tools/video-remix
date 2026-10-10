@@ -5,6 +5,7 @@ import LibraryFilters from './LibraryFilters';
 import ProjectField from './ProjectField';
 import ExportDecision from './ExportDecision';
 import { DeepSeekBalancePanel, DeepSeekUsageSummary } from "./DeepSeekUsage";
+import { autoPicturePreview } from "../shared/preview-settings";
 import RetentionNotice, { expiryText } from './RetentionNotice';
 import { EMPTY_FILTERS, matchesExport, reviewStatus } from '../shared/library';
 import { MAX_EXPORT_SELECTION, exportRevisionFamilies, selectableExports } from '../shared/export-selection';
@@ -505,11 +506,14 @@ export default function App() {
     sameAutoPreset(preset, selectedAuto),
   );
   const sourcePreview = original;
-  const previewSignature = JSON.stringify({ sourceId: selected?.id, settings });
-  const previewCurrent = renderedPreview?.signature === previewSignature;
-  const usingRendered = mode === "manual" && !original && showRendered && previewCurrent;
-  const manualLive = mode === "manual" && !sourcePreview && !usingRendered;
+  const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
   const activePreviewSettings = mode === "auto" ? autoOptions : settings;
+  const renderedSettings = mode === "auto" ? autoPicturePreview(autoOptions, selected) : settings;
+  const upscaledPreview = !!activePreviewSettings.upscale && activePreviewSettings.upscale !== "off";
+  const previewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: renderedSettings });
+  const previewCurrent = renderedPreview?.signature === previewSignature;
+  const usingRendered = !original && showRendered && previewCurrent;
+  const manualLive = mode === "manual" && !sourcePreview && !usingRendered;
   const liveFootage = !sourcePreview && !usingRendered && !!activePreviewSettings.ownFootage?.length;
   const livePreviewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: activePreviewSettings });
   useEffect(() => setFootageJump(null), [selected?.id, mode, view]);
@@ -539,7 +543,7 @@ export default function App() {
     return () => { previewRequest.current?.abort(); };
   }, [previewSignature, mode, view]);
 
-  const renderManualPreview = async () => {
+  const renderManualPreview = async (automatic = false) => {
     if (!selected || previewRequest.current) return;
     const controller = new AbortController();
     previewRequest.current = controller;
@@ -548,11 +552,11 @@ export default function App() {
     try {
       const result = await api<{ id: string; url: string; duration: number }>("/api/previews", {
         method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
-        body: JSON.stringify({ sourceId: selected.id, settings }),
+        body: JSON.stringify({ sourceId: selected.id, settings: renderedSettings }),
       });
       if (!controller.signal.aborted) {
         setRenderedPreview({ ...result, signature: previewSignature });
-        setOriginal(false);
+        if (!automatic) setOriginal(false);
         setShowRendered(true);
       }
     } catch (error) {
@@ -561,6 +565,12 @@ export default function App() {
       if (previewRequest.current === controller) { previewRequest.current = null; setPreviewBusy(false); }
     }
   };
+  useEffect(() => {
+    if (!selected || !upscaledPreview || previewCurrent || !engineReady || view !== "studio" || watermark.editing || mode === "shorts") return;
+    // Wait for a pause in editing; reuse the server's sample cache for unchanged settings.
+    const timer = window.setTimeout(() => { void renderManualPreview(true); }, 1200);
+    return () => { window.clearTimeout(timer); previewRequest.current?.abort(); };
+  }, [previewSignature, engineReady, view, watermark.editing]);
   useEffect(() => {
     window.scrollTo(0, 0);
     if (view !== "studio") videoRef.current?.pause();
@@ -1198,7 +1208,6 @@ export default function App() {
     mode === "auto"
       ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
       : renderScope === "selected" && selected ? 1 : sources.length;
-  const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
   const renderTargets = mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources;
   const renderFootageCount = renderTargets.reduce((count, source) => count + ((mode === "auto"
     ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings).ownFootage?.length ?? 0), 0);
@@ -1565,7 +1574,7 @@ export default function App() {
                       >
                         Original
                       </button>
-                      {mode === "manual" && previewCurrent && <button aria-pressed={usingRendered} className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>Rendered</button>}
+                      {previewCurrent && <button aria-pressed={usingRendered} className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>{upscaledPreview ? "AI upscaled" : "Rendered"}</button>}
                     </div>}
                 </div>
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
@@ -1576,7 +1585,7 @@ export default function App() {
                     <>
                       <div className="preview-label">
                         <span />
-                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? "RENDERED SAMPLE" : manualLive && sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
+                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? upscaledPreview ? "AI UPSCALED · RENDERED SAMPLE" : "RENDERED SAMPLE" : previewBusy && upscaledPreview ? "PREPARING AI PREVIEW · SHOWING SOURCE" : manualLive && sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
                       </div>
                       <div
                         ref={previewFrameRef}
@@ -1721,22 +1730,24 @@ export default function App() {
                         <span>
                           {watermark.editing ? "Mark on the original picture. These areas follow this source through your edits and exports."
                             : sourcePreview ? "Your original footage. Switch to Live to see your changes."
+                            : usingRendered ? upscaledPreview
+                              ? `Actual AI-upscaled sample at your selected ${activePreviewSettings.upscale}p target.${mode === "auto" ? " Auto cuts, generated captions and supporting visuals are added on export." : " Includes your effects, text and audio."}`
+                              : "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
                             : liveFootage ? mode === 'auto'
                               ? "Live includes your added clips, framing and clip audio. Auto preview uses the full source; final Auto cuts, generated captions and sound are ready after export."
                               : "Live plays your source cuts and added footage in order, with framing and clip audio. Render to see every effect and hear the final sound."
                             : mode === "auto"
                             ? "Live format, black bands and text. Auto cuts, generated captions and sound are ready after export."
-                            : usingRendered ? "Rendered sample with your effects, text and audio. Preview quality is capped at 720p."
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
                           {!watermark.editing && sampleCaptions && " Sample caption text shows the selected style and placement."}
                           {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Open watermark editor, then Preview removal to check it."}
                         </span>
                       </div>
-                      {mode === "manual" && !watermark.editing && <>
+                      {(mode === "manual" || upscaledPreview) && !watermark.editing && <>
                         <div className="manual-preview-actions">
-                          <p>{previewBusy ? "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of this edit` : "Review the first five seconds before exporting."}</p>
-                          {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || !liveInterval} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />Render 5s preview</button>}
+                          <p>{previewBusy ? upscaledPreview ? "Preparing the AI-upscaled preview locally… CPU rendering can take several minutes." : "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of ${mode === "auto" ? "this source" : "this edit"}` : upscaledPreview ? "The AI result appears here when ready. Original and Live show the source picture." : "Review the first five seconds before exporting."}</p>
+                          {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || (mode === "manual" && !liveInterval)} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />{upscaledPreview ? "Refresh AI preview" : "Render 5s preview"}</button>}
                         </div>
                       </>}
                       {manualPreviewError && <ProblemNotice message={manualPreviewError} operation="Preview video" />}

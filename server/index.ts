@@ -19,10 +19,13 @@ async function maintainWorkspace() {
 await maintainWorkspace();
 const app = createApp();
 const server = app.listen(config.port, config.host, () => {
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : config.port;
   console.log(
-    `Remix Studio is ready at http://${config.host === "0.0.0.0" ? "localhost" : config.host}:${config.port}`,
+    `Remix Studio is ready at http://${config.host === "0.0.0.0" ? "localhost" : config.host}:${port}`,
   );
   pumpQueue();
+  process.send?.({ type: "ready", port });
 });
 server.requestTimeout = 30 * 60 * 1000;
 server.on("error", (error) => {
@@ -48,7 +51,9 @@ async function shutdown() {
   await stopQueue();
   stopIntelligence();
   server.closeAllConnections();
+  if (process.connected) process.disconnect?.();
 }
+process.on("message", message => { if ((message as { type?: string })?.type === "shutdown") void shutdown(); });
 process.on("SIGTERM", () => {
   void shutdown();
 });

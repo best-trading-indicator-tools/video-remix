@@ -7,6 +7,7 @@ import {
   mkdir,
   readFile,
   realpath,
+  rename,
   rm,
   stat,
   writeFile,
@@ -30,7 +31,7 @@ import { wrapEditorialText as wrapHook } from "../shared/framing.js";
 import { footageTimeline, ownFootageSchema, resolveFootagePlacement } from "../shared/own-footage.js";
 import { composeFootage, type ResolvedFootage } from "./footage-composition.js";
 import { prepareConcatSource } from "./concat-source.js";
-import { assertCleanExportMetadata, CLEAN_EXPORT_METADATA_ARGS } from "./export-metadata.js";
+import { assertCleanExportMetadata, CLEAN_EXPORT_METADATA_ARGS, type ExportMetadata } from "./export-metadata.js";
 
 export interface MediaInfo {
   duration: number;
@@ -38,6 +39,28 @@ export interface MediaInfo {
   height: number;
   fps: number;
   hasAudio: boolean;
+}
+
+async function verifyExportMetadata(file: string, signal?: AbortSignal) {
+  const info: ExportMetadata = await probe(file, signal);
+  const regenerated = info.streams?.some(stream => stream.tags?.encoder === "Lavc libx264" || stream.tags?.encoder === "Lavc aac");
+  if (!regenerated) { assertCleanExportMetadata(info); return; }
+  // FFmpeg 6 adds these neutral codec labels after applying metadata options.
+  // A stream-copy pass removes them without another lossy encode. Everything
+  // else must already pass the same strict guard before we attempt that repair.
+  const inspected = structuredClone(info);
+  for (const stream of inspected.streams ?? []) {
+    if (stream.tags?.encoder === "Lavc libx264" || stream.tags?.encoder === "Lavc aac") delete stream.tags.encoder;
+  }
+  assertCleanExportMetadata(inspected);
+  const clean = `${file}.${randomUUID()}.clean.mp4`;
+  try {
+    await run("ffmpeg", ["-v", "error", "-nostdin", "-y", ...SAFE_INPUT, "-i", file,
+      "-map", "0:V:0", "-map", "0:a:0?", "-c", "copy", "-map_metadata", "-1", "-map_metadata:s", "-1",
+      "-map_chapters", "-1", "-fflags", "+bitexact", "-metadata", "encoder=", "-metadata:s", "encoder=", "-movflags", "+faststart", clean], { signal });
+    assertCleanExportMetadata(await probe(clean, signal));
+    await rename(clean, file);
+  } finally { await rm(clean, { force: true }).catch(() => {}); }
 }
 interface RunOptions {
   cwd?: string;
@@ -242,7 +265,7 @@ export async function cleanVideoDownload(options: {
         // Source SEI can contain software signatures and embedded captions. Picture packets remain unchanged.
         "-bsf:v", "filter_units=remove_types=6", ...CLEAN_EXPORT_METADATA_ARGS, output],
       { signal: options.signal, timeout: 45 * 60_000 });
-      assertCleanExportMetadata(await probe(output, options.signal));
+      await verifyExportMetadata(output, options.signal);
       options.onProgress(100);
       return;
     } catch (error) {
@@ -628,7 +651,7 @@ export async function burnOutputCaptions(options: { input: string; output: strin
       "-c:v", "libx264", "-preset", "veryfast", "-tune", "zerolatency", "-crf", "18", "-pix_fmt", "yuv420p", "-threads", "2",
       "-c:a", "copy", ...CLEAN_EXPORT_METADATA_ARGS, output],
       { cwd: workDir, signal: options.signal });
-    assertCleanExportMetadata(await probe(output, options.signal));
+    await verifyExportMetadata(output, options.signal);
   } catch (error) {
     await rm(output, { force: true }).catch(() => {});
     throw error;
@@ -1118,7 +1141,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     const outputInfo = await stat(output);
     if (outputInfo.size < 100)
       throw new Error("The export did not produce a valid video");
-    assertCleanExportMetadata(await probe(output, signal));
+    await verifyExportMetadata(output, signal);
     options.onProgress(100);
   } catch (error) {
     await rm(output, { force: true }).catch(() => {});

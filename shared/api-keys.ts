@@ -6,3 +6,8 @@ export interface ApiKeyStatus {
   hasEnvironmentKey: boolean;
 }
 export interface ApiKeySettings { providers: ApiKeyStatus[] }
+export interface ApiConnectionResult {
+  status: "ready" | "missing" | "invalid" | "no-credit" | "rate-limited" | "unavailable";
+  message: string;
+  checkedAt: string;
+}

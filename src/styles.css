@@ -191,6 +191,9 @@ img {
 }
 
 .api-settings { max-width: 1050px; margin: 0 auto 40px; }
+.desktop-tools-card { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 18px; padding: 22px; margin-bottom: 26px; }
+.desktop-tools-card h2 { margin: 0 0 6px; font-size: 18px; }
+.desktop-tools-card p { margin: 0; color: var(--subtle); font-size: 13px; }
 .api-settings-intro { display: flex; gap: 13px; align-items: flex-start; margin-bottom: 12px; }
 .api-settings-intro > svg { color: var(--accent); margin-top: 3px; flex-shrink: 0; }
 .api-settings-intro h2 { font-size: 18px; margin: 0 0 7px; }
@@ -209,6 +212,13 @@ img {
 .api-key-card label { display: block; margin: 18px 0 8px; font-size: 12px; color: var(--subtle); }
 .api-key-card input { width: 100%; min-width: 0; padding: 12px; font-size: 13px; border-radius: 8px; background: var(--field); color: var(--text); border: 1px solid var(--line); }
 .api-key-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 18px; }
+.api-key-link { display: inline-flex; align-items: center; gap: 7px; margin: 14px 0 8px; color: var(--accent); font-size: 13px; }
+.api-key-card > .api-key-help { min-height: 0; font-size: 12px; }
+.api-key-card > .api-connection-result { display: flex; align-items: flex-start; gap: 8px; min-height: 0; margin-top: 16px; }
+.api-connection-result.ready { color: var(--accent); }
+.api-connection-result.attention { color: #e6bf85; }
+.api-connection-result svg { flex-shrink: 0; margin-top: 3px; }
+.api-connection-result small { display: block; margin-top: 4px; color: var(--subtle); }
 @media (max-width: 680px) {
   .api-keys-grid { grid-template-columns: 1fr; }
   .api-key-card { padding: 20px; }

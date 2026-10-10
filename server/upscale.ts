@@ -5,7 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { runLocal } from './auto-process.js';
 
 const parent = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
-const root = path.basename(parent) === 'dist-server' ? path.dirname(parent) : parent;
+const root = process.env.REMIX_RUNTIME_DIR || (path.basename(parent) === 'dist-server' ? path.dirname(parent) : parent);
 const python = path.join(root, '.venv-upscale', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
 const script = path.join(root, 'scripts/upscale_video.py');
 const model = path.join(root, 'scripts/models/realesr-general-x4v3.pth');

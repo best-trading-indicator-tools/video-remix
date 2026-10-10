@@ -2,8 +2,9 @@ import { json, Router, type ErrorRequestHandler, type Express } from "express";
 import { z } from "zod";
 import { API_PROVIDERS } from "../shared/api-keys.js";
 import { apiKeys, apiKeySchema, type ApiKeyStore } from "./api-keys.js";
+import { ApiConnectionService } from "./api-connection.js";
 
-export function installApiKeyRoutes(app: Express, store: ApiKeyStore = apiKeys) {
+export function installApiKeyRoutes(app: Express, store: ApiKeyStore = apiKeys, connections = new ApiConnectionService()) {
   const router = Router();
   router.use((req, res, next) => {
     // The app's existing host guard applies to this private installation.
@@ -20,6 +21,13 @@ export function installApiKeyRoutes(app: Express, store: ApiKeyStore = apiKeys) 
   router.get("/", (_req, res) => res.json(store.status()));
   const providerSchema = z.enum(API_PROVIDERS);
   const bodySchema = z.object({ apiKey: apiKeySchema }).strict();
+  router.post("/:provider/test", async (req, res) => {
+    const provider = providerSchema.safeParse(req.params.provider);
+    const body = bodySchema.partial().safeParse(req.body);
+    if (!provider.success || !body.success)
+      return res.status(400).json({ error: "Choose a provider and enter a valid API key without spaces or line breaks." });
+    res.json(await connections.check(provider.data, body.data.apiKey ?? store.get(provider.data)));
+  });
   router.put("/:provider", async (req, res) => {
     const provider = providerSchema.safeParse(req.params.provider);
     const body = bodySchema.safeParse(req.body);
