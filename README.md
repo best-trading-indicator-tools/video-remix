@@ -2,13 +2,17 @@
 
 **Turn your footage into finished videos, individually or in bulk.**
 
-Remix Studio is a video repurposing app for creators, editors, and teams making content for TikTok, Instagram Reels, YouTube Shorts, and other formats. Import recordings, keep them full length or find shorter moments, add captions and footage, review the results, and export ready-to-share MP4s.
+Remix Studio is a video repurposing app for creators, editors, and teams making content for TikTok, Instagram Reels, YouTube Shorts, and other formats. Import recordings, keep them full length or find shorter moments, add captions and footage, upscale with free local AI, and export ready-to-share MP4s.
 
 Work through the visual editor, describe changes in a prompt, or connect Claude Code, Claude Desktop, or Codex through the local MCP server. A separate **free URL Downloader** saves videos without creating an editing project.
 
 **Current deployment:** a private, self-hosted installation. Media processing runs on the computer hosting the app, with optional external AI and publishing services. The repository does not include user authentication, customer billing, or tenant isolation for a public SaaS.
 
-[Features](#what-you-can-do) · [Quick start](#quick-start) · [AI and costs](#ai-integrations-and-costs) · [Claude / Codex MCP](#edit-from-claude-or-codex) · [Docker](#run-with-docker) · [Full user guide](docs/user-guide.md)
+[Features](#what-you-can-do) · [AI upscaler](#upscale-videos-with-free-local-ai) · [Quick start](#quick-start) · [AI and costs](#ai-integrations-and-costs) · [Claude / Codex MCP](#edit-from-claude-or-codex) · [Docker](#run-with-docker) · [Full user guide](docs/user-guide.md)
+
+![Auto workspace with two selected source videos, a live preview, a 4K upscaling prompt, and bulk render controls](docs/screenshots/workspace.jpg)
+
+*The actual Auto workspace with sample footage. Focused screenshots below show the controls at a readable size. [Screenshot details and footage credits →](docs/screenshots/README.md)*
 
 ## Choose your workflow
 
@@ -18,6 +22,7 @@ Work through the visual editor, describe changes in a prompt, or connect Claude 
 | **Manual** | Choose exact cuts and adjust framing, speed, color, sound, captions, overlays, and added footage. |
 | **Short clips** | Turn long recordings into approved short drafts using timestamps, transcript selections, or AI suggestions. |
 | **Edit this result** | Refine an existing export on a timeline and render a new revision while retaining the previous result. |
+| **AI upscaler** | Enlarge main footage to 1080p, 1440p, or 4K with free local Real-ESRGAN. Apply it individually, in bulk, or through a prompt. |
 | **Downloader** | Save full videos from YouTube, YouTube Shorts, TikTok, and Instagram, individually or as a bulk ZIP. |
 | **Local MCP** | Let Claude or Codex import local media, prepare bulk edits, append footage, render, and check results. |
 
@@ -25,7 +30,7 @@ Work through the visual editor, describe changes in a prompt, or connect Claude 
 
 ### Import a video or a whole library
 
-- **Upload or drag and drop files.** Source imports support resumable uploads, with defaults of **100 videos per batch**, **50 GiB per file**, and **200 sources** in the workspace.
+- **Upload or drag and drop files.** Drop one or several videos anywhere in the **Source videos** panel, including over existing cards. The panel highlights, then opens import progress. Source imports support resumable uploads, with defaults of **100 videos per batch**, **50 GiB per file**, and **200 sources** in the workspace.
 - **Paste video links.** Import YouTube videos and Shorts, TikTok videos and share links, and Instagram Reels/video posts. Mix supported platforms in one batch.
 - **Link large local originals.** Read recordings from absolute paths without making another full copy. Keep those originals in place while editing.
 - **Manage background work.** Follow preparation, retry failures, cancel imports, and resume interrupted uploads. URL downloads run on the server; browser file uploads need the tab to remain open.
@@ -33,9 +38,13 @@ Work through the visual editor, describe changes in a prompt, or connect Claude 
 
 Supported source containers include MP4, MOV, M4V, WebM, MKV, AVI, and MPEG, with recordings up to 24 hours long. Browser preview support also depends on the codec. [Import details and limits →](docs/user-guide.md#import-long-recordings)
 
+![Add videos dialog with a multi-file drop area, bulk URL import, and local file linking](docs/screenshots/import-videos.jpg)
+
 ### Apply changes to selected videos
 
 In the workspace, check the source videos you want to change, then choose **Apply changes to → Selected videos**. The scope selector also offers **This video** and **All videos**. Future-import defaults have their own checkbox.
+
+![Apply changes to set to Selected videos (2), with future-import defaults left unchecked](docs/screenshots/bulk-settings.jpg)
 
 **Auto Quick setup and All settings share the same bulk controls.** You can change formats, captions, black bands, sound, pacing, and other preferences across a selection while preserving unrelated settings.
 
@@ -115,9 +124,11 @@ Masks belong to individual sources and do not copy through bulk settings or pres
 
 ### Upscale videos with free local AI
 
-**Watch examples:** [360p → 1080p comparison](docs/upscale-examples/closeup-1080p-comparison.mp4) · [540p → 4K comparison](docs/upscale-examples/motion-4k-comparison.mp4). Open `docs/upscale-examples/index.html` in your browser for the full before/after gallery. These are controlled tests using short, reduced-resolution excerpts of Blender's *Sintel* trailer (CC BY 3.0), with ordinary resizing and AI shown side by side. Run `npm run examples:upscale` to reproduce them.
+Use **Real-ESRGAN** to reconstruct detail in smaller main videos and export at **1080p, 1440p, or 4K (2160p)**. Upscaling runs on the computer hosting the app, with **no API key, subscription, credits, or video upload** required for the upscaler itself.
 
-Choose **AI video upscaler** in Auto Quick setup, All settings, Manual, Short clips, or the saved-result editor. Targets are **1080p, 1440p, and 4K (2160p)**. The control follows the existing **This video / Selected videos / All videos** scope in Auto and Manual, and is saved with finishing presets. Prompts such as **“Upscale these videos to 4K with local AI”** work in Auto, Manual, and saved-result editing; local MCP drafts accept `upscale: "2160"` too.
+![AI video upscaler set to 2160p · 4K, showing Free · Local and a successful Apple GPU readiness check](docs/screenshots/ai-upscaler.jpg)
+
+*This screenshot is from an Apple Silicon Mac. The readiness message shows the device available on your host.*
 
 Install once on the computer hosting the app:
 
@@ -125,7 +136,25 @@ Install once on the computer hosting the app:
 npm run setup:upscale
 ```
 
-The free [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) `realesr-general-x4v3` model reconstructs the selected main footage locally, before added captions and overlays. Apple Silicon uses the GPU through PyTorch MPS; CPU execution is also supported. Processing needs no API key, subscription, credits, or video upload. The app's existing DeepSeek prompt planner still uses its configured key; choosing the control or updating MCP draft settings does not.
+To upscale a batch:
+
+1. Import your videos and check their source cards.
+2. Choose **Apply changes to → Selected videos** (or **All videos**).
+3. Set **AI video upscaler** to **1080p**, **1440p**, or **2160p · 4K**.
+4. Render the selected videos through the usual export controls. Each keeps its unrelated settings.
+
+The control appears in Auto Quick setup, All settings, Manual, Short clips, and the saved-result editor. It follows **This video / Selected videos / All videos** in Auto and Manual, and is saved with finishing presets. You can also ask **“Upscale these videos to 4K with local AI”** in Auto, Manual, or saved-result prompts. Review and apply the proposal, then render. **Prompt planning uses your configured DeepSeek key**; choosing the upscaler directly or updating local MCP drafts with `upscale: "2160"` does not.
+
+**See the difference.** These stills show ordinary resizing on the left and AI on the right. Click either image to open its comparison video.
+
+| 360p → 1080p · Close-up | 540p → 4K · Motion |
+| --- | --- |
+| [![Close-up comparison: ordinary resizing on the left and Real-ESRGAN AI on the right](docs/upscale-examples/closeup-1080p-poster.jpg)](docs/upscale-examples/closeup-1080p-comparison.mp4) | [![Motion comparison: ordinary resizing on the left and Real-ESRGAN AI on the right](docs/upscale-examples/motion-4k-poster.jpg)](docs/upscale-examples/motion-4k-comparison.mp4) |
+| [Original 360p](docs/upscale-examples/closeup-1080p-before.mp4) · [AI result 1080p](docs/upscale-examples/closeup-1080p-ai.mp4) | [Original 540p](docs/upscale-examples/motion-4k-before.mp4) · [AI result 4K](docs/upscale-examples/motion-4k-ai.mp4) |
+
+Open `docs/upscale-examples/index.html` locally for the full before/after gallery. These are controlled tests using short, reduced-resolution excerpts of Blender's *Sintel* trailer, © Blender Foundation, [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The clips were excerpted, downsampled, compressed, and AI enlarged; comparison views are cropped and labelled. Results on your recordings may differ. [Source and attribution →](https://durian.blender.org/sharing/) Run `npm run examples:upscale` to reproduce the examples.
+
+The free [Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN) `realesr-general-x4v3` model reconstructs the selected main footage locally, before added captions and overlays. Apple Silicon uses the GPU through PyTorch MPS; CPU execution is also supported.
 
 The installer targets 64-bit Windows/Linux and Apple Silicon on macOS 14+. Python 3.10–3.13 is supported (3.12 recommended). A dedicated graphics card is optional: GPU failures retry the same frame using CPU AI, and memory pressure reduces tile size automatically. The control shows the device after a real startup check. Run `npm run check:upscale` to diagnose setup or `npm run check:upscale -- --device cpu` to test CPU operation. Intel Macs, 32-bit systems, and native Windows ARM Python are not supported by the current dependency wheels. [Compatibility and troubleshooting →](docs/user-guide.md#upscaler-compatibility)
 
@@ -137,6 +166,8 @@ Use **Remix with a prompt** in Auto, **Edit with a prompt** in Manual, or the pr
 
 Examples:
 
+> “Upscale these videos to 4K with local AI. Keep all other settings.”
+>
 > “Keep the full video, add black bands, and append outro.mp4 in full.”
 >
 > “Use TikTok Sans captions, white text, and highlight each spoken word.”
@@ -144,6 +175,8 @@ Examples:
 > “Use 01:10 to 01:35, make it a little warmer, and mute the audio.”
 >
 > “Put ‘Three things to remember’ in medium white text in the upper band.”
+
+![Remix with a prompt targeting two videos, with the built-in AI upscale to 4K example filled in](docs/screenshots/prompt-upscale.jpg)
 
 Review the proposed changes before applying them, then render through the normal controls. Auto prompts follow the selected-video scope and show changes for each target; a failed or ambiguous proposal leaves the batch unchanged. Manual prompts change the current video, with copy controls available afterward. Upload any named footage first.
 
@@ -246,6 +279,7 @@ Open **http://127.0.0.1:8787**; one server serves the frontend and API.
 | `npm run setup:focus` | Local face detection and speaker-centering support. |
 | `npm run setup:speaker` | Local active-speaker tracking using TalkNet; also prepares face detection. |
 | `npm run setup:watermark` | Local LaMa reconstruction for selected overlay areas. |
+| `npm run setup:upscale` | Free local Real-ESRGAN video upscaling to 1080p, 1440p, or 4K. Check readiness with `npm run check:upscale`. |
 | `npm run setup:visuals` | Chromium for local animated cards if browser installation was skipped. |
 
 Model installers need internet access initially. Local model processing has no per-video API charge. Optional generated narration uses installed macOS voices; it is unavailable in Windows, Linux, and Docker.
@@ -260,7 +294,7 @@ Manage provider keys in **Settings** or use a private root `.env` based on [.env
 | **Pixabay / Pexels** | Search and download stock footage. Current stock matching also requires DeepSeek. | Stock search queries; selected assets are downloaded locally. |
 | **Postiz** | Schedule posts to connected social accounts. | The finished MP4, reviewed post copy, account selection, and scheduling settings. |
 
-**Local media processing and the URL Downloader do not consume AI credits.** Enabled AI steps in an editing or export workflow use your own provider accounts and their applicable charges. A Claude/Codex client may also have its own separate usage costs.
+**Local media processing, Real-ESRGAN upscaling, and the URL Downloader do not consume AI credits.** Enabled provider-backed AI steps in an editing or export workflow use your own provider accounts and their applicable charges. A Claude/Codex client may also have its own separate usage costs.
 
 Exports show recorded DeepSeek **input/output tokens**, request counts, model names, and **estimated USD cost**. A separate balance panel retrieves the account's remaining funds and shows when it was checked. This is an account-wide monetary balance, not a separate Remix Studio credit system. Estimates can be incomplete, and prompts made before an export exists are outside that export's total. [Usage accounting details →](docs/user-guide.md#deepseek-usage-and-remaining-balance)
 
