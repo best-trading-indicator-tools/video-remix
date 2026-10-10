@@ -200,7 +200,8 @@ Downloader items stay separate from editing sources and exports. Platform access
 On macOS with Homebrew:
 
 ```sh
-brew install node ffmpeg tesseract python@3.12
+brew install node ffmpeg-full tesseract python@3.12
+export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
 ```
 
 See the [Linux and Windows setup instructions](docs/user-guide.md#run-locally) for platform-specific details.

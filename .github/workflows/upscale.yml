@@ -57,7 +57,9 @@ jobs:
         run: choco install ffmpeg --no-progress -y
       - name: Install FFmpeg (Mac)
         if: runner.os == 'macOS'
-        run: brew install ffmpeg
+        run: |
+          brew install ffmpeg-full
+          echo "$(brew --prefix ffmpeg-full)/bin" >> "$GITHUB_PATH"
       - run: npm ci
       - run: npm run setup:upscale
         env:

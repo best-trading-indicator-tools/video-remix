@@ -39,6 +39,9 @@ if sys.platform == 'darwin':
     assert platform.machine() == 'arm64', 'This PyTorch release requires an Apple Silicon Mac and native ARM Python. Intel Macs are not supported by this installer.'
     assert int(platform.mac_ver()[0].split('.')[0]) >= 14, 'AI upscaling requires macOS 14 or newer.'
 `]);
+  // Older bundled pip versions reject normalized package names in the PyTorch
+  // index metadata (notably typing_extensions on Python 3.10 installations).
+  await run(python, ['-m', 'pip', 'install', '--disable-pip-version-check', '--upgrade', 'pip==25.3']);
   // CPU wheels avoid downloading NVIDIA libraries on machines without CUDA.
   // Keep a matching CUDA installation when the user has explicitly installed it.
   let torchInstalled = false;

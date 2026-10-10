@@ -10,6 +10,7 @@ import json
 import math
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -52,6 +53,17 @@ def stop(child):
         except subprocess.TimeoutExpired:
             child.kill()
     child.wait()
+
+
+def check_ffmpeg():
+    subprocess.run(['ffprobe', '-version'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=15)
+    for option, required in [('-filters', ('scale', 'fps', 'format', 'movie', 'drawtext', 'subtitles')),
+                             ('-encoders', ('ffv1', 'libx264', 'aac'))]:
+        result = subprocess.run(['ffmpeg', '-hide_banner', option], check=True, capture_output=True, text=True, timeout=15)
+        missing = [name for name in required if not re.search(r'\s' + name + r'\s', result.stdout)]
+        if missing:
+            raise RuntimeError('FFmpeg is missing ' + ', '.join(missing) +
+                               '. Install a full FFmpeg build. On Mac: brew install ffmpeg-full, then put its bin folder first on PATH.')
 
 
 def enhance(frame, net, device, torch, np, tile=192):
@@ -154,8 +166,7 @@ def main():
     upscaler = Upscaler(net.eval(), torch, np, args.device)
     # Actually execute the model so setup catches incompatible GPU runtimes.
     if args.check:
-        for binary in ('ffmpeg', 'ffprobe'):
-            subprocess.run([binary, '-version'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=15)
+        check_ffmpeg()
         sample = upscaler(np.full((32, 32, 3), 127, dtype=np.uint8))
         if sample.shape != (128, 128, 3) or not sample.any():
             raise RuntimeError('Real-ESRGAN self-check failed.')

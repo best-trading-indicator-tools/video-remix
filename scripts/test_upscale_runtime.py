@@ -52,6 +52,11 @@ class RecoveryTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Incomplete frame'):
             worker.read_frame(BytesIO(b'abc'), 4)
 
+    def test_incomplete_ffmpeg_is_rejected_before_rendering(self):
+        with patch.object(worker.subprocess, 'run', side_effect=[None, SimpleNamespace(stdout=' scale V->V\n fps V->V\n')]):
+            with self.assertRaisesRegex(RuntimeError, 'FFmpeg is missing.*drawtext'):
+                worker.check_ffmpeg()
+
 
 if __name__ == '__main__':
     unittest.main()

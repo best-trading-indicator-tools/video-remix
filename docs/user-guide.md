@@ -30,7 +30,7 @@ Use Manual's sample preview to compare quality; AI previews retain the source de
 
 Use Python 3.10–3.13, preferably 3.12, and FFmpeg/ffprobe on PATH. The installer uses prebuilt wheels and version-specific NumPy pins. The pinned PyTorch wheels do not cover Intel Macs, 32-bit systems, or native Windows ARM Python; these need another backend before they can be supported. The official [PyTorch release matrix](https://github.com/pytorch/pytorch/blob/main/RELEASE.md) and [wheel files](https://pypi.org/project/torch/2.14.1/#files) determine these limits.
 
-The app checks model integrity, executes a small AI inference, and checks FFmpeg/ffprobe before declaring the upscaler ready. This result is cached for one minute; failed checks are cached for five seconds. The selector reports **Apple GPU**, **NVIDIA GPU**, or **CPU**. Run `npm run check:upscale` for diagnostic errors. To isolate GPU problems, run `npm run check:upscale -- --device cpu`; set `UPSCALE_DEVICE=cpu` in the server's environment to force CPU exports (PowerShell: `$env:UPSCALE_DEVICE='cpu'`). Restart the server after changing its environment.
+The app checks model integrity, executes a small AI inference, and checks FFmpeg/ffprobe plus the required video encoders and filters before declaring the upscaler ready. On Mac, use `brew install ffmpeg-full` and put `$(brew --prefix ffmpeg-full)/bin` first on PATH; the basic Homebrew formula omits text filters. This result is cached for one minute; failed checks are cached for five seconds. The selector reports **Apple GPU**, **NVIDIA GPU**, or **CPU**. Run `npm run check:upscale` for diagnostic errors. To isolate GPU problems, run `npm run check:upscale -- --device cpu`; set `UPSCALE_DEVICE=cpu` in the server's environment to force CPU exports (PowerShell: `$env:UPSCALE_DEVICE='cpu'`). Restart the server after changing its environment.
 
 GPU allocation failures reduce inference tiles from 192 to 96 to 48 pixels. Other GPU failures, or memory failures at the smallest tile, retry the complete current frame on CPU and keep subsequent frames on CPU. The job status shows the active device. CPU memory retries are bounded; if CPU inference also fails, the export stops with an error. Fallback still runs Real-ESRGAN. It never silently substitutes simple sharpening or resizing. Cancellation applies while the worker is running or waiting for the shared inference slot.
 
@@ -726,7 +726,8 @@ Requirements: **Node.js 22.13 or newer**, npm, and **FFmpeg / ffprobe** on your 
 On macOS with Homebrew:
 
 ```sh
-brew install node ffmpeg tesseract python@3.12
+brew install node ffmpeg-full tesseract python@3.12
+export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
 ```
 
 On Debian/Ubuntu, install Node.js 22.13+ using your preferred method, then:
