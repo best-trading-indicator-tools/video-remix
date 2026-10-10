@@ -1,3 +1,5 @@
+import { timingProfile, observeWork, observePhase } from "../shared/processing-time.js";
+import { timingMachine } from "./processing-time.js";
 import { historyRecords, historyMatches } from "./store.js";
 import { withJobUsage } from "./job-usage.js";
 import { reviewJobFinished } from "./finished-review-jobs.js";
@@ -89,6 +91,8 @@ export function pumpQueue() {
     running.set(job.id, controller);
     if (job.auto && !job.editPlan) selecting.add(job.id);
     job.status = "processing";
+    const source = state.sources.find(source => source.id === job.sourceId);
+    job.timing = source ? { ...timingProfile(job, source, timingMachine), startedAt: Date.now() } : undefined;
     if (job.retry) delete job.retry.nextRetryAt;
     job.phase = job.retry ? `Starting automatic retry ${job.retry.count} of ${job.retry.limit}` : "Preparing your edit";
     const promise = runWithRelease(job, controller);
@@ -350,7 +354,8 @@ async function run(job: StoredJob, controller: AbortController) {
     if (automaticManual) job.phase = "Preparing the soundtrack for automatic captions";
     await saveStore();
     await renderVideo({
-      onPhase: phase => { job.phase = phase; },
+      onPhase: phase => { job.phase = phase; if (job.timing) observePhase(job.timing, phase); },
+      onWorkProgress: (stage, progress) => { if (job.timing) observeWork(job.timing, stage, progress); },
       ownFootage,
       input: source.filePath,
       output: job.outputPath,
@@ -369,6 +374,7 @@ async function run(job: StoredJob, controller: AbortController) {
         );
       },
     });
+    if (job.timing) delete job.timing.work;
     if (controller.signal.aborted) throw new Error("Cancelled");
     if (automaticManual) {
       const result = await addManualCaptions({ output: job.outputPath, settings: job.settings, workDir,
@@ -468,6 +474,11 @@ async function run(job: StoredJob, controller: AbortController) {
     } else if (status === "failed") {
       scheduleJobRetry(job, errorMessage || "Rendering failed.", "failure", retryable);
       status = job.status as typeof status;
+    }
+    if (job.timing) {
+      delete job.timing.work;
+      if (status === "completed" && job.timing.startedAt) job.timing.elapsedMs = Math.max(1, Date.now() - job.timing.startedAt - (job.timing.waitingMs || 0));
+      else delete job.timing.elapsedMs;
     }
     job.status = status;
     job.phase =

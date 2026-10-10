@@ -428,6 +428,7 @@ export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  timing?: import("./processing-time.js").ProcessingTiming;
   deepseekUsage?: import("./deepseek-usage.js").DeepSeekUsage;
   project?: string;
   review?: ExportReview;

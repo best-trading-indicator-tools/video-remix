@@ -40,5 +40,5 @@ export default function AutoPromptEditor({ targets, scopeKey, disabled, onApply,
     applyLabel={`Apply to ${targets.length} video${targets.length === 1 ? '' : 's'}`}
     loadingMessage={`Preparing proposals: ${completed} of ${targets.length} videos…`}
     appliedMessage={`Prompt applied to ${appliedCount} video${appliedCount === 1 ? '' : 's'}. Start Auto remix when ready.`}
-    undoBlockedMessage="Your newer settings are kept. Undo is available while the prompt is the latest edit." /></div>;
+    undoBlockedMessage="Use workspace Undo to step back through newer edits and this prompt." /></div>;
 }

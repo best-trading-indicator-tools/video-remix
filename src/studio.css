@@ -246,3 +246,20 @@ h1, .page-heading h1 { font-size: clamp(28px, 2.3vw, 34px); line-height: 1.2; le
   .site-footer { align-items: flex-start; gap: 12px; font-size: 11px; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+.workspace-undo { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin: 0 0 16px; }
+.workspace-undo button { display:inline-flex; align-items:center; gap:7px; border:1px solid var(--border, #30343b); border-radius:9px; padding:9px 12px; background:var(--panel, #191c21); color:inherit; cursor:pointer; }
+.workspace-undo button:disabled { opacity:.4; cursor:default; }
+.workspace-undo button:focus-visible { outline:2px solid #d5a879; outline-offset:3px; }
+.workspace-undo span { font-size:12px; color:var(--muted, #a3a9b3); margin-left:4px; }
+.batch-progress-summary { display:grid; gap:7px; padding:16px 18px; margin:0 0 16px; border:1px solid #3c424b; border-radius:12px; background:#191d23; }
+.batch-progress-summary strong { color:#e9c6a1; font-size:14px; }
+.batch-progress-summary > span, .batch-progress-summary small { color:#aab0b9; font-size:12px; }
+.batch-progress-summary p { margin:0; font-size:14px; line-height:1.6; }
+.batch-progress-summary small { display:block; }
+.batch-notifications { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 0; }
+.batch-notifications > span, .batch-notifications p { font-size:12px; color:#aab0b9; }
+.batch-notifications p { flex-basis:100%; margin:0; }
+.batch-completion-notice { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:12px 0; padding:14px; border:1px solid #4c705d; border-radius:12px; background:#1d2b24; }
+.batch-completion-notice > span { flex:1; min-width:180px; }
+@media(max-width:600px) { .workspace-undo span { flex-basis:100%; margin-top:3px; } }

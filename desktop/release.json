@@ -1,8 +1,8 @@
 {
-  "version": "1.2.0-preview.1",
+  "version": "1.3.0-preview.1",
   "notes": [
-    "Completed features now publish Mac, Windows and Linux installers automatically after packaged checks pass; small fixes wait for the next feature release.",
-    "The desktop app checks for updates, shows a dismissible View update notice, and adds manual update checks in Settings.",
-    "Workflow help now uses clear How it works buttons and opens the relevant interactive guide."
+    "Undo and redo workspace settings, bulk edits, applied prompts, finishing presets and short-clip drafts with visible controls and keyboard shortcuts.",
+    "See processing stages and approximate remaining times learned from actual speed and comparable exports on this computer.",
+    "Opt into completion notifications for long export collections, with in-app notices and desktop fallbacks."
   ]
 }

@@ -1,3 +1,4 @@
+import { useWorkspaceState, workspaceHistory } from "./workspace-history";
 import UpscaleControl from "./UpscaleControl";
 import { apiRequest } from "./api-client";
 import ProblemNotice from "./ProblemNotice";
@@ -44,7 +45,7 @@ async function post<T>(url: string, body: unknown, signal?: AbortSignal): Promis
 }
 
 export default function LongFormPanel({ defaultPacing, active, sources, selectedSource: source, engineReady, onSelectSource, onQueued, onNotice }: Props) {
-  const [drafts, setDrafts] = useState<ShortDraft[]>(initialDrafts);
+  const [drafts, setDrafts, rebaseDrafts] = useWorkspaceState<ShortDraft[]>("shorts", initialDrafts, "Short clip drafts");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [cutId, setCutId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -88,6 +89,12 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
   const clockOwner = useRef<"source" | "sample" | null>(null);
   const previewRequest = useRef<AbortController | null>(null);
   const draft = drafts.find(item => item.id === activeId);
+  useEffect(() => workspaceHistory.subscribe(() => {
+    const context = workspaceHistory.restoredContext;
+    if (context?.mode === "shorts" && context.draftId) setActiveId(context.draftId);
+    workspaceHistory.restoredContext = undefined;
+  }), []);
+  if (active) workspaceHistory.context = { mode: "shorts", sourceId: source?.id, draftId: activeId || undefined };
   const draftSource = draft ? sources.find(item => item.id === draft.sourceId) : undefined;
   const currentCut = draft?.cuts.find(cut => cut.id === cutId) || draft?.cuts[0];
   const validation = draft ? validateShortDraft(draft, draftSource) : null;
@@ -133,7 +140,7 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
     setFocusBusyId(id);
     const save = (result: FocusResult) => {
       if (controller.signal.aborted) return;
-      setDrafts(current => current.map(item => {
+      rebaseDrafts(current => current.map(item => {
         if (item.id !== id || !item.autoFocus || item.fit !== "crop" || shortFocusSignature(item) !== focusSignature) return item;
         return { ...item, cuts: item.cuts.map((cut, index) => {
           const { focusTrack: _oldTrack, ...manualCut } = cut;
@@ -266,7 +273,7 @@ export default function LongFormPanel({ defaultPacing, active, sources, selected
           focusTrack: result.tracks.find(track => track.cutIndex === index)?.keyframes })),
           focusAnalysis: { signature: shortFocusSignature(item), status: result.status, reason: result.reason, multipleFaces: result.multipleFaces } };
         prepared.push(ready);
-        setDrafts(current => current.map(value => value.id === ready.id && shortFocusSignature(value) === shortFocusSignature(item) ? ready : value));
+        rebaseDrafts(current => current.map(value => value.id === ready.id && shortFocusSignature(value) === shortFocusSignature(item) ? ready : value));
       }
       const checked = prepared.map(item => ({ draft: item, result: validateShortDraft(item, sources.find(source => source.id === item.sourceId)) }));
       const failure = checked.find(item => !item.result.settings);

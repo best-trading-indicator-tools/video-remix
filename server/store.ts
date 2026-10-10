@@ -1,3 +1,5 @@
+import { timingProfile } from "../shared/processing-time.js";
+import { timingMachine } from "./processing-time.js";
 import { apiKeys } from "./api-keys.js";
 import { mkdir, rm } from "node:fs/promises";
 import path from "node:path";
@@ -209,7 +211,7 @@ export function publicJob(job: StoredJob): RenderJob {
   const entry = historyRecords({ jobId: job.id })[0];
   const source = state.sources.find(source => source.id === job.sourceId);
   const scheduled = database?.publicationsForJob<import('../shared/publishing.js').Publication>(job.id) ?? [];
-  return { ...value, project: job.project ?? source?.project ?? entry?.project, review: entry?.measurements?.review ?? job.review,
+  return { ...value, timing: job.status === "queued" && source ? timingProfile(job, source, timingMachine) : job.timing, project: job.project ?? source?.project ?? entry?.project, review: entry?.measurements?.review ?? job.review,
     downloadUrl: job.status === 'completed' ? `/api/jobs/${job.id}/download` : undefined,
     captionUrl: job.status === 'completed' && job.captionPath ? `/api/jobs/${job.id}/captions` : undefined,
     sourceAvailable: Boolean(source), draftSavedAt: job.editorDraft?.savedAt,

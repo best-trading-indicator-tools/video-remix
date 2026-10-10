@@ -894,3 +894,13 @@ test("normalization raises quiet audio and cuts also support replacement audio o
     /valid source clips/,
   );
 });
+
+test("encoding reports raw stage progress independently of weighted display progress", async () => {
+  const work: { stage: string; progress: number }[] = [];
+  await renderVideo({ input: landscape, output: path.join(directory, "timed-render.mp4"), source: await probeMedia(landscape),
+    settings: { ...DEFAULT_SETTINGS }, workDir: directory, signal: new AbortController().signal, onProgress: () => {},
+    onWorkProgress: (stage, progress) => work.push({ stage, progress }) });
+  assert.deepEqual(work[0], { stage: "render", progress: 0 });
+  assert.ok(work.some(value => value.stage === "render" && value.progress > 0));
+  assert.ok(work.every(value => Number.isFinite(value.progress) && value.progress >= 0 && value.progress <= 100));
+});

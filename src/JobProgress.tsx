@@ -1,6 +1,7 @@
+import { stageEstimate, timeRange } from "../shared/processing-time";
 import type { RenderJob } from "../shared/types";
 
-type ProgressJob = Pick<RenderJob, "progress" | "phase" | "visualSearch" | "editorialProgress">;
+type ProgressJob = Pick<RenderJob, "progress" | "phase" | "visualSearch" | "editorialProgress" | "timing">;
 const elapsed = (startedAt: string) => {
   const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(startedAt)) / 1000)) || 0;
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -15,12 +16,14 @@ export function jobProgressLabel(job: ProgressJob): string {
 export default function JobProgress({ job }: { job: ProgressJob }) {
   const { visualSearch: visuals, editorialProgress: editorial } = job;
   const waiting = Boolean(visuals || editorial);
+  const estimate = !waiting && stageEstimate(job.timing);
   return <>
     <div className={`job-progress${waiting ? " is-searching" : ""}`} role="progressbar"
       aria-label={visuals ? "Preparing supporting visuals" : editorial ? job.phase || "Checking edit" : "Export progress"}
       aria-valuenow={waiting ? undefined : Math.round(job.progress)}>
       <span style={waiting ? undefined : { width: `${Math.max(1, Math.min(100, job.progress))}%` }} />
     </div>
+    {estimate && <p className="job-search-detail">{job.timing?.work?.stage === "upscale" ? "AI upscaling" : "Encoding"}: approximately {timeRange(estimate)} remaining for this stage.</p>}
     {visuals && <p className="job-search-detail">
       Pass {visuals.pass}/{visuals.maxPasses} · {visuals.placed}/{visuals.requested} shots placed · {elapsed(visuals.startedAt)} elapsed
       <span>Visual preparation can take up to {Math.round(visuals.budgetMs / 60000)} minutes. Rendering follows.</span>

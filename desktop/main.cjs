@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, Notification } = require('electron');
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
 const { access, readFile, writeFile } = require('node:fs/promises');
@@ -77,6 +77,9 @@ app.whenReady().then(async () => {
   window.webContents.on('will-navigate', (event, url) => {
     if (url !== setupUrl && (!origin || new URL(url).origin !== origin)) { event.preventDefault(); external(url); }
   });
+  const { showBatchNotification } = require('./notifications.cjs');
+  ipcMain.handle('workspace:text-history', (event, direction) => { trusted(event); if (direction === 'redo') window.webContents.redo(); else if (direction === 'undo') window.webContents.undo(); });
+  ipcMain.handle('batches:notify', (event, body) => { trusted(event); return showBatchNotification({ Notification, window, app, body }); });
   ipcMain.handle('setup:state', event => { trusted(event); return state; });
   const { createUpdateChecker, fetchPublishedReleases } = await import('./updates.mjs');
   updateChecker = createUpdateChecker({ currentVersion: app.getVersion(), fetchReleases: fetchPublishedReleases,
@@ -105,7 +108,7 @@ app.whenReady().then(async () => {
   Menu.setApplicationMenu(Menu.buildFromTemplate([
     ...(process.platform === 'darwin' ? [{ label: app.name, submenu: [{ role: 'about' }, { role: 'quit' }] }] : []),
     { label: 'File', submenu: [{ label: 'Local tools', click: () => void setup() }, { role: 'close' }] },
-    { role: 'editMenu' }, { role: 'viewMenu' },
+    require('./edit-menu.cjs').workspaceEditMenu(window), { role: 'viewMenu' },
   ]));
   await setup();
   if (app.isPackaged) {

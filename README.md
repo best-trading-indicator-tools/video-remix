@@ -59,6 +59,14 @@ For example, to add the same ending to ten videos:
 
 **Apply footage to selected videos** can also explicitly copy the displayed placements. Bulk changes offer undo. Footage placements and watermark masks have their own scope rules; they are not silently saved as future-import defaults. [Bulk editing and draft behavior →](docs/user-guide.md#drafts-review-queue-and-library-browsing)
 
+### Experiment with Undo and Redo
+
+The workspace has visible **Undo / Redo** buttons and **⌘/Ctrl+Z**, **⌘/Ctrl+Shift+Z** (or **Ctrl+Y**). Auto and Manual settings, applied prompts, presets, your saved style, and short-clip drafts share one history. A bulk edit is one step, and a slider drag is one step.
+
+Text fields keep their normal text Undo; the result timeline keeps its own editing history. Workspace history holds the latest 100 editing actions for this session. Reloading keeps saved settings and drafts but starts a new history. Importing or deleting media, rendering, publishing, and API-key changes are outside Undo.
+
+![Workspace Undo and Redo beside bulk editing controls](docs/screenshots/workspace-history.png)
+
 ### Let Auto prepare the edit
 
 Auto starts with **Quick setup**, with **All settings** available for finer control.
@@ -209,6 +217,16 @@ Adjust captions, hooks, framing, cuts, and supporting shots; compare the live dr
 - Record posts and measured outcomes, compare settings, and export measurement data as JSON/CSV. These records describe observed results; they do not establish what caused them.
 
 Every newly rendered export strips source metadata, chapters, and software tags, including after captions are added. Only neutral playback information remains, and a final check verifies cleanup. This does not remove marks encoded into the image or soundtrack. [History →](docs/user-guide.md#export-history) · [Finished picture and sound review →](docs/user-guide.md#review-the-finished-picture-and-sound)
+
+### Follow processing time and get notified
+
+An active export collection shows **Video N of total**, the current stage, and how many exports have finished. AI upscaling and encoding estimate their remaining stage time from measured progress on the computer running Remix Studio. After a comparable export completes, the app also estimates the collection's remaining time, including queued videos.
+
+Estimates are ranges, not promises. New workflows, stalled processing, CPU fallbacks, and unpredictable AI planning can need more measurement; the app says when it is still learning. Recent successful exports on this machine provide the comparison data.
+
+In **Exports**, choose **Notify me when finished** for collections taking over a minute. Keep the app open. You get an in-app completion notice with ready/failed/cancelled counts; optional system alerts open Exports when clicked. Browser alerts need permission. Unsigned macOS builds may use a Dock alert instead of a system notification.
+
+![An export collection with processing stage and a measured remaining-time estimate](docs/screenshots/processing-time.png)
 
 ### Prepare post copy and schedule publication
 

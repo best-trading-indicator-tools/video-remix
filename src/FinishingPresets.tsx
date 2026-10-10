@@ -1,7 +1,8 @@
+import { useWorkspaceState, workspaceHistory, useWorkspaceHistory } from "./workspace-history";
 import ProblemNotice from "./ProblemNotice";
 import { useEffect, useId, useState } from "react";
 import { Bookmark, Check, Trash2 } from "lucide-react";
-import { captureFinishingPreset, FINISHING_PRESET_EVENT, FINISHING_PRESET_STORAGE, migrateManualPresets, restoreFinishingPresets, type FinishingPreset, type PresetMode, type PresetValues } from "../shared/finishing-presets";
+import { captureFinishingPreset, FINISHING_PRESET_STORAGE, migrateManualPresets, restoreFinishingPresets, type FinishingPreset, type PresetMode, type PresetValues } from "../shared/finishing-presets";
 import "./finishing-presets.css";
 const load = () => {
   try {
@@ -18,23 +19,24 @@ export default function FinishingPresets<M extends PresetMode>({ mode, settings,
   mode: M; settings: unknown; disabled?: boolean; onApply: (settings: PresetValues[M]) => void;
   onApplySelected?: (settings: PresetValues[M]) => void;
 }) {
-  const [presets, setPresets] = useState(load);
+  const [presets, setPresets, rebasePresets] = useWorkspaceState("presets", load, "Saved finishing presets", value => localStorage.setItem(FINISHING_PRESET_STORAGE, JSON.stringify({ version: 1, presets: value })));
+  const history = useWorkspaceHistory();
+  useEffect(() => { setMessage(""); setError(""); }, [history.restoreSequence]);
   const [selected, setSelected] = useState("");
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const id = useId();
   useEffect(() => {
-    const update = () => setPresets(load());
-    window.addEventListener("storage", update); window.addEventListener(FINISHING_PRESET_EVENT, update);
-    return () => { window.removeEventListener("storage", update); window.removeEventListener(FINISHING_PRESET_EVENT, update); };
+    const update = (event: StorageEvent) => { if (event.key === FINISHING_PRESET_STORAGE) rebasePresets(() => load()); };
+    window.addEventListener("storage", update);
+    return () => { window.removeEventListener("storage", update); };
   }, []);
   const items = presets.filter(preset => preset.mode === mode);
   const current = items.find(preset => preset.id === selected);
   const persist = (next: FinishingPreset[]) => {
     try {
-      localStorage.setItem(FINISHING_PRESET_STORAGE, JSON.stringify({ version: 1, presets: next }));
-      setPresets(next); window.dispatchEvent(new Event(FINISHING_PRESET_EVENT)); setError(""); return true;
+      setPresets(next); setError(""); return true;
     } catch { setError("Browser storage is full or unavailable. This preset was not saved."); return false; }
   };
   const save = () => {
@@ -47,6 +49,7 @@ export default function FinishingPresets<M extends PresetMode>({ mode, settings,
   };
   const apply = (selectedShorts = false) => {
     if (!current) return;
+    workspaceHistory.label(`Apply preset “${current.name}”`);
     (selectedShorts ? onApplySelected : onApply)?.(structuredClone(current.settings) as PresetValues[M]);
     setMessage(`Applied “${current.name}”${selectedShorts ? " to selected shorts" : ""}.`); setError("");
   };

@@ -659,6 +659,7 @@ export async function burnOutputCaptions(options: { input: string; output: strin
 }
 
 export interface RenderOptions {
+  onWorkProgress?: (stage: "upscale" | "render", progress: number) => void;
   onPhase?: (phase: string) => void;
   maximumOutputDuration?: number;
   ownFootage?: ResolvedFootage[];
@@ -812,6 +813,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
           duration: Math.min(duration, options.maximumOutputDuration ?? duration),
         }, workDir, temporary, signal, progress => {
           options.onPhase?.("Upscaling with local Real-ESRGAN AI");
+          options.onWorkProgress?.("upscale", progress);
           options.onProgress(progressStart + progress * (85 - progressStart) / 100);
         }, options.onPhase);
         options.onPhase?.("Rendering the AI-upscaled video");
@@ -1119,6 +1121,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     );
     let buffered = "";
     let lastProgress = 0;
+    options.onWorkProgress?.("render", 0);
     options.onProgress(renderProgressBase);
     await run("ffmpeg", args, {
       cwd: workDir,
@@ -1133,6 +1136,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
           const progress = clamp((seconds / exportDuration) * 100, 0, 99);
           if (Number.isFinite(progress) && progress > lastProgress) {
             lastProgress = progress;
+            options.onWorkProgress?.("render", progress);
             options.onProgress(renderProgressBase + progress * (100 - renderProgressBase) / 100);
           }
         }

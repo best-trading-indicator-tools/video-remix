@@ -1,5 +1,9 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('remixDesktop', {
+  editTextHistory: direction => ipcRenderer.invoke('workspace:text-history', direction),
+  onHistory: callback => { const listener = (_event, direction) => callback(direction); ipcRenderer.on('workspace:history', listener); return () => ipcRenderer.removeListener('workspace:history', listener); },
+  notifyBatch: body => ipcRenderer.invoke('batches:notify', body),
+  onOpenExports: callback => { const listener = () => callback(); ipcRenderer.on('batches:open', listener); return () => ipcRenderer.removeListener('batches:open', listener); },
   getState: () => ipcRenderer.invoke('setup:state'),
   openSetup: () => ipcRenderer.invoke('setup:open'),
   openStudio: () => ipcRenderer.invoke('setup:studio'),
