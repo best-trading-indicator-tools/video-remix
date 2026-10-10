@@ -58,7 +58,8 @@ def stop(child):
 def check_ffmpeg():
     subprocess.run(['ffprobe', '-version'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=15)
     for option, required in [('-filters', ('scale', 'fps', 'format', 'movie', 'drawtext', 'subtitles')),
-                             ('-encoders', ('ffv1', 'libx264', 'aac'))]:
+                             ('-encoders', ('ffv1', 'libx264', 'aac')),
+                             ('-bsfs', ('filter_units',))]:
         result = subprocess.run(['ffmpeg', '-hide_banner', option], check=True, capture_output=True, text=True, timeout=15)
         missing = [name for name in required if not re.search(r'\s' + name + r'\s', result.stdout)]
         if missing:

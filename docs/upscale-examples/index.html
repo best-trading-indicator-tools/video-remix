@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video Remix · AI upscale examples</title>
+<style>
+  :root{color-scheme:dark;font:16px/1.6 system-ui,sans-serif;background:#101216;color:#eee}
+  body{max-width:1100px;margin:0 auto;padding:40px 24px}h1{font-size:clamp(28px,5vw,44px);line-height:1.15}
+  h2{margin-bottom:8px}a{color:#b7d9ff}p{max-width:850px;color:#bbc2ce}section{margin:40px 0}
+  video{width:100%;background:#000;border-radius:12px;display:block}nav{display:flex;gap:24px;flex-wrap:wrap;margin-top:14px}
+  small{color:#a8b1be}footer{border-top:1px solid #353a45;margin-top:48px;padding-top:20px}code{color:#eee}
+</style>
+<body>
+<small>VIDEO REMIX / LOCAL REAL-ESRGAN</small>
+<h1>See what the upscaler changes.</h1>
+<p>Two short examples rendered through the app. Each comparison shows the same crop at the target resolution: ordinary Lanczos resizing on the left, AI on the right. Use fullscreen to inspect texture; the full-frame files are linked below.</p>
+<p>These are controlled tests made by reducing an animated trailer to 360p or 540p first. Results on your recordings may differ. AI can smooth or invent detail and flicker between frames; higher pixel counts do not guarantee better footage.</p>
+<section>
+  <h2>Close-up · 360p → 1080p</h2>
+  <p>2.5 seconds · 24 fps · original audio · 640 × 360 input → 1920 × 1080 output</p>
+  <video controls loop muted playsinline preload="metadata" poster="closeup-1080p-poster.jpg" src="closeup-1080p-comparison.mp4"></video>
+  <nav><a href="closeup-1080p-before.mp4">Before · 360p</a><a href="closeup-1080p-ai.mp4">AI result · 1080p</a><a href="closeup-1080p-comparison.mp4">Comparison video</a></nav>
+</section>
+<section>
+  <h2>Motion · 540p → 4K</h2>
+  <p>2.5 seconds · 24 fps · original audio · 960 × 540 input → 3840 × 2160 output</p>
+  <video controls loop muted playsinline preload="metadata" poster="motion-4k-poster.jpg" src="motion-4k-comparison.mp4"></video>
+  <nav><a href="motion-4k-before.mp4">Before · 540p</a><a href="motion-4k-ai.mp4">AI result · 4K</a><a href="motion-4k-comparison.mp4">Comparison video</a></nav>
+</section>
+<footer>
+  <p>Source: <a href="https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4">Sintel trailer</a>.
+    © copyright Blender Foundation | <a href="https://durian.blender.org/">www.sintel.org</a>.
+    <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a> · <a href="https://durian.blender.org/sharing/">Attribution details</a>.
+    Changes: excerpted, downsampled, compressed, AI enlarged; comparisons cropped and labelled. No endorsement implied.</p>
+  <p>Reproduce from the repository with <code>npm run examples:upscale</code> after setup. <a href="manifest.json">Render details</a>.</p>
+</footer>
+</body>
+</html>

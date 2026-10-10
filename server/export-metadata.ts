@@ -11,9 +11,11 @@ export const CLEAN_EXPORT_METADATA_ARGS = [
   "-metadata", "encoder=",
   "-metadata:s", "encoder=",
   "-metadata:s:v:0", "rotate=0",
-  // Do not import source unregistered SEI or embedded broadcast captions.
+  // Remove SEI from the encoded bitstream, including source unregistered data.
+  // -udu_sei is unavailable in FFmpeg 4.4 (Ubuntu 22.04); the bitstream filter
+  // works there too and also covers stream-copy cleanup.
   // Burned captions remain pixels. Pixel/audio watermarks are not metadata.
-  "-udu_sei", "0",
+  "-bsf:v", "filter_units=remove_types=6",
   "-a53cc", "0",
   "-movflags", "+faststart",
 ];

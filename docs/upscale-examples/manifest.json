@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-10-10T05:43:20.273Z",
+  "runtime": {
+    "installed": true,
+    "ready": true,
+    "device": "mps"
+  },
+  "sourceUrl": "https://download.blender.org/durian/trailer/sintel_trailer-1080p.mp4",
+  "attribution": "© copyright Blender Foundation | www.sintel.org",
+  "license": "https://creativecommons.org/licenses/by/3.0/",
+  "changes": "2.5-second excerpts, downsampled and compressed to make controlled inputs; AI enlarged by the app; comparisons cropped and labelled.",
+  "samples": [
+    {
+      "id": "closeup-1080p",
+      "title": "Close-up · 360p → 1080p",
+      "start": 14,
+      "inputWidth": 640,
+      "inputHeight": 360,
+      "target": "1080",
+      "seconds": 40,
+      "before": {
+        "width": 640,
+        "height": 360
+      },
+      "after": {
+        "duration": 2.458333,
+        "width": 1920,
+        "height": 1080,
+        "fps": 24,
+        "hasAudio": true
+      },
+      "generatedAt": "2026-10-10T05:43:20.271Z",
+      "files": {
+        "before": "closeup-1080p-before.mp4",
+        "ai": "closeup-1080p-ai.mp4",
+        "comparison": "closeup-1080p-comparison.mp4"
+      }
+    },
+    {
+      "id": "motion-4k",
+      "title": "Motion · 540p → 4K",
+      "start": 27,
+      "inputWidth": 960,
+      "inputHeight": 540,
+      "target": "2160",
+      "seconds": 88,
+      "before": {
+        "width": 960,
+        "height": 540
+      },
+      "after": {
+        "duration": 2.458333,
+        "width": 3840,
+        "height": 2160,
+        "fps": 24,
+        "hasAudio": true
+      },
+      "files": {
+        "before": "motion-4k-before.mp4",
+        "ai": "motion-4k-ai.mp4",
+        "comparison": "motion-4k-comparison.mp4"
+      }
+    }
+  ]
+}

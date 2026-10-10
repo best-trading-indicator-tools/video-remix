@@ -10,6 +10,7 @@ on:
       - 'requirements-upscale.txt'
       - 'server/upscale.ts'
       - 'server/engine.ts'
+      - 'server/export-metadata.ts'
       - 'tests/upscale.test.ts'
       - '.github/workflows/upscale.yml'
   workflow_dispatch:
@@ -68,3 +69,10 @@ jobs:
       - run: python scripts/test_upscale_runtime.py
       - name: Real model exports, bulk, audio and cancellation
         run: node --import ./tests/setup.mjs --import tsx --test tests/upscale.test.ts
+      - name: Metadata cleanup across FFmpeg versions
+        # The separate rotation fixture uses a newer input CLI flag. These tests
+        # exercise the shared metadata arguments, including on Ubuntu's FFmpeg 4.4.
+        run: >-
+          node --import ./tests/setup.mjs --import tsx --test
+          --test-name-pattern="^(all rendered exports|final captioning|standalone download cleanup|the final metadata guard)"
+          tests/export-metadata.test.ts

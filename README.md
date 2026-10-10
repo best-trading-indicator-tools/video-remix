@@ -115,6 +115,8 @@ Masks belong to individual sources and do not copy through bulk settings or pres
 
 ### Upscale videos with free local AI
 
+**Watch examples:** [360p → 1080p comparison](docs/upscale-examples/closeup-1080p-comparison.mp4) · [540p → 4K comparison](docs/upscale-examples/motion-4k-comparison.mp4). Open `docs/upscale-examples/index.html` in your browser for the full before/after gallery. These are controlled tests using short, reduced-resolution excerpts of Blender's *Sintel* trailer (CC BY 3.0), with ordinary resizing and AI shown side by side. Run `npm run examples:upscale` to reproduce them.
+
 Choose **AI video upscaler** in Auto Quick setup, All settings, Manual, Short clips, or the saved-result editor. Targets are **1080p, 1440p, and 4K (2160p)**. The control follows the existing **This video / Selected videos / All videos** scope in Auto and Manual, and is saved with finishing presets. Prompts such as **“Upscale these videos to 4K with local AI”** work in Auto, Manual, and saved-result editing; local MCP drafts accept `upscale: "2160"` too.
 
 Install once on the computer hosting the app:

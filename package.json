@@ -20,6 +20,7 @@
     "setup:focus": "node scripts/setup-focus.mjs",
     "setup:upscale": "node scripts/setup-upscale.mjs",
     "check:upscale": "node scripts/check-upscale.mjs",
+    "examples:upscale": "node --import tsx scripts/upscale-examples.mjs",
     "setup:watermark": "node scripts/setup-watermark.mjs",
     "setup:speaker": "node scripts/setup-speaker.mjs",
     "measure:audio": "node --import tsx scripts/measure-audio.mjs",
