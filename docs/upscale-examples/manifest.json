@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-10T05:43:20.273Z",
+  "generatedAt": "2026-10-10T05:50:30.320Z",
   "runtime": {
     "installed": true,
     "ready": true,
@@ -17,19 +17,19 @@
       "inputWidth": 640,
       "inputHeight": 360,
       "target": "1080",
-      "seconds": 40,
+      "seconds": 41.9,
       "before": {
         "width": 640,
         "height": 360
       },
       "after": {
-        "duration": 2.458333,
+        "duration": 2.5,
         "width": 1920,
         "height": 1080,
         "fps": 24,
         "hasAudio": true
       },
-      "generatedAt": "2026-10-10T05:43:20.271Z",
+      "generatedAt": "2026-10-10T05:48:57.278Z",
       "files": {
         "before": "closeup-1080p-before.mp4",
         "ai": "closeup-1080p-ai.mp4",
@@ -43,18 +43,19 @@
       "inputWidth": 960,
       "inputHeight": 540,
       "target": "2160",
-      "seconds": 88,
+      "seconds": 89.6,
       "before": {
         "width": 960,
         "height": 540
       },
       "after": {
-        "duration": 2.458333,
+        "duration": 2.5,
         "width": 3840,
         "height": 2160,
         "fps": 24,
         "hasAudio": true
       },
+      "generatedAt": "2026-10-10T05:50:30.320Z",
       "files": {
         "before": "motion-4k-before.mp4",
         "ai": "motion-4k-ai.mp4",
