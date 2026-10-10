@@ -453,6 +453,7 @@ export default function App() {
   const [autoPromptUndo, setAutoPromptUndo] = useState<{ before: WorkspaceSettingsSnapshot; after: WorkspaceSettingsSnapshot; count: number } | null>(null);
   useEffect(() => { try { localStorage.setItem('remix-settings-scope', settingsScope); } catch { /* Current scope remains usable. */ } }, [settingsScope]);
   const videoInput = useRef<HTMLInputElement>(null);
+  const sourcePanel = useRef<HTMLElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -1374,7 +1375,7 @@ export default function App() {
             <div
               className={`studio-grid ${mode === "auto" ? "auto-studio" : mode === "shorts" ? "shorts-studio" : tab === "all" ? "manual-all-controls" : ""}`}
             >
-              <aside className="source-panel panel">
+              <aside ref={sourcePanel} className="source-panel panel">
                 <div className="panel-heading">
                   <h2>
                     <Layers3 size={16} />
@@ -1384,7 +1385,7 @@ export default function App() {
                     {sources.length.toString().padStart(2, "0")}
                   </span>
                 </div>
-                <ImportPanel health={health} connected={connected} inputRef={videoInput}
+                <ImportPanel health={health} connected={connected} inputRef={videoInput} dropTargetRef={sourcePanel}
                   onImported={importedSources} onBusyChange={busy => setUploadProgress(busy ? 0 : null)}
                   onError={(message, diagnostic) => notify(message, "error", diagnostic)} />
                 {!!sources.length && <div className="source-ready-heading">
@@ -1414,7 +1415,7 @@ export default function App() {
                         making something new.
                       </p>
                       <div className="source-tip">
-                        <span>TIP</span>Drop several videos at once.
+                        <span>TIP</span>Drop videos anywhere in this panel.
                         <br />
                         Give each its own settings.
                       </div>

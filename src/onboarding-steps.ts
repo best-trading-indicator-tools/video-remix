@@ -43,7 +43,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   },
   { id: "imports", chapter: "Your footage", title: "Bring in your videos", target: ".import-open", destination: auto,
     description: "Add videos opens a separate import window. Your video list and selections stay in place while you add footage for Auto, Manual and Short clips.",
-    options: [["Browse or drop files", "Import one video or a batch. The uploader shows your current file and batch limits."],
+    options: [["Browse or drop files", "Drop one video or a batch anywhere in the Source videos panel, or use Add videos to browse. The uploader shows your current file and batch limits."],
       ["Pause and resume", "Large files upload in chunks. After reloading, select the same unchanged file to resume."],
       ["Import status", "Open Activity beside Add videos for progress, pause/resume, retries and completed imports. Closing the window keeps uploads running; keep the browser tab open."]],
   },

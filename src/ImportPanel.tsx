@@ -9,12 +9,14 @@ import { checkImportFile, createUploadImport, formatFileSize as size, importRequ
 import { reportProblem } from "./diagnostics-store";
 import { ApiError } from "./api-client";
 import type { Diagnostic } from "../shared/diagnostics";
+import { bindFileDrop } from "./file-drop";
 import "./imports.css";
 
 type Props = {
   health: Health | null;
   connected: boolean;
   inputRef: RefObject<HTMLInputElement | null>;
+  dropTargetRef: RefObject<HTMLElement | null>;
   onImported: (sources: VideoSource[]) => void;
   onBusyChange: (busy: boolean) => void;
   onError: (message: string, diagnostic?: Diagnostic) => void;
@@ -29,6 +31,7 @@ export default function ImportPanel(props: Props) {
   const [preparationNotice, setPreparationNotice] = useState("");
   const [preparationProblems, setPreparationProblems] = useState<{ name: string; diagnostic: Diagnostic }[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [panelDragging, setPanelDragging] = useState(false);
   const [localOpen, setLocalOpen] = useState(false);
   const [localPaths, setLocalPaths] = useState("");
   const [localBusy, setLocalBusy] = useState(false);
@@ -233,6 +236,18 @@ export default function ImportPanel(props: Props) {
     }
   };
 
+  const fileSelection = useRef(selectFiles);
+  fileSelection.current = selectFiles;
+  useEffect(() => {
+    const target = props.dropTargetRef.current;
+    if (!target) return;
+    return bindFileDrop(target, {
+      canDrop: () => callbacks.current.connected && !preparation.current,
+      onDragging: setPanelDragging,
+      onFiles: selected => { openImportDialog("activity"); void fileSelection.current(selected); },
+    });
+  }, [props.dropTargetRef]);
+
   const remove = async (session: ImportSession) => {
     if (transfer.current?.id === session.id) transfer.current.controller.abort();
     files.current.delete(session.id);
@@ -307,10 +322,13 @@ export default function ImportPanel(props: Props) {
   }
 
   return <div className="import-panel">
+    {panelDragging && <div className="source-drop-overlay" role="status">
+      <Upload size={28} aria-hidden="true" />
+      <strong>Drop videos to import</strong>
+      <span>Add several videos at once.</span>
+    </div>}
     <div className="import-launcher">
-      <button ref={addButton} type="button" className={`import-open ${dragging ? "dragging" : ""}`} aria-haspopup="dialog" onClick={() => openImportDialog("add")}
-        onDragOver={event => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)}
-        onDrop={event => { event.preventDefault(); setDragging(false); if (props.connected && !choosing) { openImportDialog("activity"); void selectFiles(Array.from(event.dataTransfer.files)); } }}>
+      <button ref={addButton} type="button" className="import-open" aria-haspopup="dialog" onClick={() => openImportDialog("add")}>
         <Upload size={15} />Add videos
       </button>
       <button type="button" className={`import-activity-toggle ${issueCount ? "has-issues" : ""}`} aria-label="View import activity" aria-describedby="import-status-summary" aria-haspopup="dialog" title={activitySummary} onClick={() => openImportDialog("activity")}>
