@@ -4,7 +4,7 @@
 
 Remix Studio is a video repurposing app for creators, editors, and teams making content for TikTok, Instagram Reels, YouTube Shorts, and other formats. Import recordings, keep them full length or find shorter moments, add captions and footage, upscale with free local AI, and export ready-to-share MP4s.
 
-Work through the visual editor, describe changes in a prompt, or connect Claude Code, Claude Desktop, or Codex through the local MCP server. A separate **free URL Downloader** saves videos without creating an editing project.
+Work through the visual editor, describe changes in a prompt, or connect Claude Code, Claude Desktop, or Codex through the local MCP server. The **free standalone URL Downloader** is an extra utility outside the core SaaS editing workflow; it saves videos without creating an editing project.
 
 **Current deployment:** a private, self-hosted installation. Media processing runs on the computer hosting the app, with optional external AI and publishing services. The repository does not include user authentication, customer billing, or tenant isolation for a public SaaS.
 
@@ -23,8 +23,9 @@ Work through the visual editor, describe changes in a prompt, or connect Claude 
 | **Short clips** | Turn long recordings into approved short drafts using timestamps, transcript selections, or AI suggestions. |
 | **Edit this result** | Refine an existing export on a timeline and render a new revision while retaining the previous result. |
 | **AI upscaler** | Enlarge main footage to 1080p, 1440p, or 4K with free local Real-ESRGAN. Apply it individually, in bulk, or through a prompt. |
-| **Downloader** | Save full videos from YouTube, YouTube Shorts, TikTok, and Instagram, individually or as a bulk ZIP. |
 | **Local MCP** | Let Claude or Codex import local media, prepare bulk edits, append footage, render, and check results. |
+
+**Free standalone extra:** the [URL Downloader](#download-videos-without-editing) saves full videos from YouTube, YouTube Shorts, TikTok, and Instagram, individually or as a bulk ZIP. It operates separately from the editing workflows above.
 
 ## What you can do
 
@@ -219,7 +220,7 @@ Scheduling records persist, show per-account success or failure, and support sta
 
 ### Download videos without editing
 
-The separate **Downloader** tab is a free extra tool. It uses the same supported links as the workspace importer, which remains available under **Workspace → Add videos**.
+The **Downloader** tab is a **free standalone tool**, not part of the core SaaS video-editing workflow. Use it independently to save videos, without creating an editing project or running an AI edit. To import a video into the editing workflow instead, use **Workspace → Add videos**, which supports the same links.
 
 - Paste up to **100 URLs per batch**, including regular YouTube links and **YouTube Shorts**.
 - Keep full videos with their original audio. No AI requests or credits are needed.
