@@ -4,6 +4,7 @@ Plans are internal server files. The original soundtrack is handled by the main
 renderer; this worker only reconstructs the selected, retimed source pictures.
 """
 import argparse
+import gc
 import hashlib
 import json
 import math
@@ -53,11 +54,11 @@ def stop(child):
     child.wait()
 
 
-def enhance(frame, net, device, torch, np):
+def enhance(frame, net, device, torch, np, tile=192):
     height, width = frame.shape[:2]
     output = np.empty((height * 4, width * 4, 3), dtype=np.uint8)
     # 34 convolutions need 34 pixels of context. Overlap prevents tile seams.
-    tile, pad = 192, 36
+    pad = 36
     with torch.inference_mode():
         for y in range(0, height, tile):
             for x in range(0, width, tile):
@@ -75,10 +76,71 @@ def enhance(frame, net, device, torch, np):
     return output
 
 
+class Upscaler:
+    """Retry the same frame with less memory, then keep using CPU after GPU failure."""
+    def __init__(self, net, torch, np, requested='auto', report=None):
+        if requested not in ('auto', 'cpu', 'mps', 'cuda'):
+            raise ValueError('UPSCALE_DEVICE must be auto, cpu, mps, or cuda.')
+        self.net, self.torch, self.np = net, torch, np
+        self.device = requested if requested != 'auto' else (
+            'mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu')
+        self.tile = 192
+        self.report = report or (lambda message: print(json.dumps({'status': message}), flush=True))
+        self.fallback = None
+        try:
+            self.net.to(self.device)
+        except (RuntimeError, NotImplementedError, AssertionError):
+            if self.device == 'cpu':
+                raise
+            self.use_cpu()
+
+    def clear_cache(self):
+        gc.collect()
+        try:
+            if self.device == 'mps':
+                self.torch.mps.empty_cache()
+            elif self.device == 'cuda':
+                self.torch.cuda.empty_cache()
+        except (RuntimeError, AssertionError):
+            pass
+
+    def use_cpu(self):
+        self.net.to('cpu')
+        self.clear_cache()
+        self.device = 'cpu'
+        self.fallback = 'GPU unavailable; continuing with CPU AI (slower).'
+        self.report(self.fallback)
+
+    def __call__(self, frame):
+        while True:
+            # Exit the exception block before retrying, releasing tensors held by
+            # the traceback. Never send a partially reconstructed frame to FFmpeg.
+            retry = None
+            try:
+                return enhance(frame, self.net, self.device, self.torch, self.np, self.tile)
+            except (RuntimeError, NotImplementedError, MemoryError) as error:
+                memory_error = isinstance(error, MemoryError) or any(word in str(error).lower()
+                    for word in ('out of memory', 'allocate memory', 'allocation failed'))
+                if memory_error and self.tile > 48:
+                    retry = 'smaller'
+                elif self.device != 'cpu':
+                    retry = 'cpu'
+                else:
+                    raise RuntimeError('CPU AI upscaling failed. Close other applications or try a smaller source video. '
+                                       + str(error)) from error
+            self.clear_cache()
+            if retry == 'smaller':
+                self.tile //= 2
+                self.report('Reducing AI tile size to fit available memory.')
+            else:
+                self.use_cpu()
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--check', action='store_true')
     parser.add_argument('--plan')
+    parser.add_argument('--device', choices=['auto', 'cpu', 'mps', 'cuda'], default=os.getenv('UPSCALE_DEVICE', 'auto'))
     args = parser.parse_args()
     import numpy as np
     import torch
@@ -86,17 +148,18 @@ def main():
     from vendor.realesrgan.srvgg_arch import SRVGGNetCompact
 
     torch.set_num_threads(min(6, os.cpu_count() or 1))
-    device = 'mps' if torch.backends.mps.is_available() else 'cuda' if torch.cuda.is_available() else 'cpu'
     net = SRVGGNetCompact(num_conv=32)
     weights = torch.load(verified_model(), map_location='cpu', weights_only=True)
     net.load_state_dict(weights.get('params_ema', weights.get('params', weights)), strict=True)
-    net = net.eval().to(device)
+    upscaler = Upscaler(net.eval(), torch, np, args.device)
     # Actually execute the model so setup catches incompatible GPU runtimes.
     if args.check:
-        sample = enhance(np.full((16, 16, 3), 127, dtype=np.uint8), net, device, torch, np)
-        if sample.shape != (64, 64, 3) or not sample.any():
+        for binary in ('ffmpeg', 'ffprobe'):
+            subprocess.run([binary, '-version'], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, timeout=15)
+        sample = upscaler(np.full((32, 32, 3), 127, dtype=np.uint8))
+        if sample.shape != (128, 128, 3) or not sample.any():
             raise RuntimeError('Real-ESRGAN self-check failed.')
-        print(json.dumps({'available': True, 'device': device}), flush=True)
+        print(json.dumps({'available': True, 'device': upscaler.device, 'fallback': upscaler.fallback}), flush=True)
         return
     if not args.plan:
         parser.error('--plan is required')
@@ -128,12 +191,12 @@ def main():
                 if raw is None:
                     break
                 frame = np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 3)
-                restored = Image.fromarray(enhance(frame, net, device, torch, np))
+                restored = Image.fromarray(upscaler(frame))
                 if restored.size != (out_width, out_height):
                     restored = restored.resize((out_width, out_height), Image.Resampling.LANCZOS)
                 encoder.stdin.write(restored.tobytes())
                 count += 1
-                print(json.dumps({'progress': min(99, 100 * count / expected), 'device': device}), flush=True)
+                print(json.dumps({'progress': min(99, 100 * count / expected), 'device': upscaler.device}), flush=True)
             encoder.stdin.close()
             decode_code, encode_code = decoder.wait(), encoder.wait()
             if decode_code or encode_code or count == 0:
@@ -146,7 +209,7 @@ def main():
         finally:
             stop(decoder)
             stop(encoder)
-    print(json.dumps({'progress': 100, 'device': device}), flush=True)
+    print(json.dumps({'progress': 100, 'device': upscaler.device}), flush=True)
 
 
 if __name__ == '__main__':

@@ -790,7 +790,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         }, workDir, temporary, signal, progress => {
           options.onPhase?.("Upscaling with local Real-ESRGAN AI");
           options.onProgress(progressStart + progress * (85 - progressStart) / 100);
-        });
+        }, options.onPhase);
         options.onPhase?.("Rendering the AI-upscaled video");
         // Keep the original input for its soundtrack. Replace only its selected
         // picture timeline, before framing, supporting shots and any added text.

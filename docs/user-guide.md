@@ -6,7 +6,7 @@ Detailed workflows, controls, setup options, and troubleshooting for the current
 
 ## AI video upscaling
 
-Install the local model once with `npm run setup:upscale`. This creates an isolated Python environment, downloads the checksum-verified Real-ESRGAN general x4v3 model, and runs an inference check. Apple Silicon Macs use Metal through PyTorch MPS; the default Linux/Windows installation uses CPU. An existing CUDA-enabled PyTorch installation in `.venv-upscale` is also supported by the worker. No media is sent to a provider.
+Install the local model once with `npm run setup:upscale`. This creates an isolated Python environment, downloads the checksum-verified Real-ESRGAN general x4v3 model, and runs an inference check. Apple Silicon Macs use Metal through PyTorch MPS; the default Linux/Windows installation uses CPU. A matching CUDA-enabled PyTorch installation in `.venv-upscale` is preserved by setup and supported by the worker. No media is sent to a provider.
 
 1. Import your videos and choose **Apply changes to → Selected videos** (or **All videos**).
 2. In Auto Quick setup, All settings, or Manual, set **AI video upscaler** to **1080p**, **1440p**, or **2160p · 4K**.
@@ -19,6 +19,24 @@ The target is a minimum short edge, preserving your chosen framing: landscape 4K
 Real-ESRGAN reconstructs the selected main source frames before framing and added captions, titles, bands, or supporting shots. The original soundtrack follows the same cuts and speed. The model has a 4× reconstruction scale; very small inputs needing more than 4× also receive ordinary resizing to reach the target. Uploaded inserts/outros, supporting shots, and graphics are fitted normally. AI estimates detail, so fine textures can change and frame-to-frame flicker is possible. It cannot guarantee recovery of the original detail.
 
 Use Manual's sample preview to compare quality; AI previews retain the source detail and chosen target rather than using the usual smaller preview. Large videos take longer and need temporary disk space for a lossless reconstructed video. Jobs share one inference slot within the running server to avoid competing for GPU memory. Frames stream through memory instead of accumulating as thousands of image files. Cancelled or failed jobs clean up their temporary files. If setup is missing or inference fails, the export reports an error rather than silently substituting ordinary resizing.
+
+### Upscaler compatibility
+
+| Computer | Default execution | Requirements |
+| --- | --- | --- |
+| Windows x64 (Intel/AMD CPU) | CPU | 64-bit Python; no NVIDIA card required |
+| Linux x64 or ARM64 | CPU | glibc 2.28+; no GPU driver required |
+| Apple Silicon Mac | Apple GPU, with CPU fallback | macOS 14+ and native ARM64 Python |
+
+Use Python 3.10–3.13, preferably 3.12, and FFmpeg/ffprobe on PATH. The installer uses prebuilt wheels and version-specific NumPy pins. The pinned PyTorch wheels do not cover Intel Macs, 32-bit systems, or native Windows ARM Python; these need another backend before they can be supported. The official [PyTorch release matrix](https://github.com/pytorch/pytorch/blob/main/RELEASE.md) and [wheel files](https://pypi.org/project/torch/2.14.1/#files) determine these limits.
+
+The app checks model integrity, executes a small AI inference, and checks FFmpeg/ffprobe before declaring the upscaler ready. This result is cached for one minute; failed checks are cached for five seconds. The selector reports **Apple GPU**, **NVIDIA GPU**, or **CPU**. Run `npm run check:upscale` for diagnostic errors. To isolate GPU problems, run `npm run check:upscale -- --device cpu`; set `UPSCALE_DEVICE=cpu` in the server's environment to force CPU exports (PowerShell: `$env:UPSCALE_DEVICE='cpu'`). Restart the server after changing its environment.
+
+GPU allocation failures reduce inference tiles from 192 to 96 to 48 pixels. Other GPU failures, or memory failures at the smallest tile, retry the complete current frame on CPU and keep subsequent frames on CPU. The job status shows the active device. CPU memory retries are bounded; if CPU inference also fails, the export stops with an error. Fallback still runs Real-ESRGAN. It never silently substitutes simple sharpening or resizing. Cancellation applies while the worker is running or waiting for the shared inference slot.
+
+CPU processing can be slow, especially in 4K. Start with a short 1080p preview on a modest laptop and leave enough disk space for the temporary lossless video. Tiling bounds model working memory, but a complete reconstructed frame still occupies RAM. A passing startup check proves the software can execute the model; it does not guarantee that every long or high-resolution input fits a particular computer.
+
+The **AI upscaler compatibility** GitHub Actions workflow installs the model and runs real CPU exports on Windows, Linux, and Apple Silicon macOS, covering Python 3.10, 3.12, and 3.13. It checks bulk jobs, audio, output dimensions, cleanup and cancellation; separate fault-injection tests exercise GPU failures and memory retries. Hosted CPU checks do not certify every GPU driver. Local Apple GPU testing is still required for MPS changes.
 
 ### Find a topic
 

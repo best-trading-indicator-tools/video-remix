@@ -1,0 +1,68 @@
+name: AI upscaler compatibility
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/*upscale*'
+      - 'scripts/setup-python.mjs'
+      - 'scripts/vendor/realesrgan/**'
+      - 'requirements-upscale.txt'
+      - 'server/upscale.ts'
+      - 'server/engine.ts'
+      - 'tests/upscale.test.ts'
+      - '.github/workflows/upscale.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upscale-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  inference:
+    name: ${{ matrix.os }} / Python ${{ matrix.python }} / CPU
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            python: '3.10'
+          - os: windows-latest
+            python: '3.12'
+          - os: macos-15
+            python: '3.13'
+    env:
+      UPSCALE_DEVICE: cpu
+      REQUIRE_UPSCALE_TESTS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install FFmpeg (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - name: Install FFmpeg (Windows)
+        if: runner.os == 'Windows'
+        run: choco install ffmpeg --no-progress -y
+      - name: Install FFmpeg (Mac)
+        if: runner.os == 'macOS'
+        run: brew install ffmpeg
+      - run: npm ci
+      - run: npm run setup:upscale
+        env:
+          PYTHON_BIN: ${{ steps.python.outputs.python-path }}
+      - run: npm run check:upscale -- --device cpu
+      - run: python scripts/test_upscale_runtime.py
+      - name: Real model exports, bulk, audio and cancellation
+        run: node --import ./tests/setup.mjs --import tsx --test tests/upscale.test.ts

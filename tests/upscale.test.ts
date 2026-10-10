@@ -15,6 +15,11 @@ import { stat } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 
 const source = { width: 640, height: 360, duration: 10, fps: 24, hasAudio: true };
+async function modelReady() {
+  const capability = await upscaleCapabilities();
+  if (process.env.REQUIRE_UPSCALE_TESTS === 'true') assert.equal(capability.ready, true, capability.error);
+  return capability.ready;
+}
 test('AI targets preserve orientation, never downscale native pictures and override ordinary resolution', () => {
   assert.deepEqual(geometry(source, { ...DEFAULT_SETTINGS, upscale: '2160', resolution: '720' }), { width: 3840, height: 2160 });
   assert.deepEqual(geometry({ ...source, width: 360, height: 640 }, { ...DEFAULT_SETTINGS, upscale: '1080' }), { width: 1080, height: 1920 });
@@ -39,7 +44,7 @@ test('upscaling persists in both modes and presets, validates targets and previe
 });
 
 test('Real-ESRGAN renders selected cuts with audio and text, cleans temporary files and reports monotonic progress', { timeout: 120_000 }, async t => {
-  if (!(await upscaleCapabilities()).installed) return t.skip('Install the optional local model with npm run setup:upscale');
+  if (!await modelReady()) return t.skip('Install the optional local model with npm run setup:upscale');
   const directory = await mkdtemp(path.join(os.tmpdir(), 'remix-upscale-'));
   try {
     const input = path.join(directory, "source ' with spaces.mp4"), output = path.join(directory, 'output.mp4');
@@ -64,13 +69,13 @@ test('Real-ESRGAN renders selected cuts with audio and text, cleans temporary fi
     const controller = new AbortController();
     await assert.rejects(renderVideo({ input, output: path.join(directory, 'cancelled.mp4'), source, workDir,
       signal: controller.signal, settings: { ...DEFAULT_SETTINGS, upscale: '2160' },
-      onProgress: () => controller.abort() }), /Cancelled|aborted/i);
+      onProgress: value => { if (value > 0) controller.abort(); } }), /Cancelled|aborted/i);
     assert.deepEqual(await readdir(workDir), [], 'Cancelling inference removes its plan and lossless video');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('a real Auto batch upscales both videos to 4K without cloud requests or losing per-video settings', { timeout: 120_000 }, async t => {
-  if (!(await upscaleCapabilities()).installed) return t.skip('Install the optional local model with npm run setup:upscale');
+  if (!await modelReady()) return t.skip('Install the optional local model with npm run setup:upscale');
   const { initStore, state, saveStore } = await import('../server/store.js');
   const { paths } = await import('../server/config.js');
   const { createApp } = await import('../server/app.js');

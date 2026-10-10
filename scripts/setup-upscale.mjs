@@ -32,10 +32,20 @@ try {
     const selected = await findPython(run);
     await run(selected.command, [...selected.args, "-m", "venv", path.join(root, ".venv-upscale")]);
   }
+  await run(python, ['-c', `import platform, struct, sys
+assert (3, 10) <= sys.version_info[:2] < (3, 14), 'Use Python 3.10-3.13 (3.12 recommended). Recreate .venv-upscale if necessary.'
+assert struct.calcsize('P') == 8, 'AI upscaling requires 64-bit Python.'
+if sys.platform == 'darwin':
+    assert platform.machine() == 'arm64', 'This PyTorch release requires an Apple Silicon Mac and native ARM Python. Intel Macs are not supported by this installer.'
+    assert int(platform.mac_ver()[0].split('.')[0]) >= 14, 'AI upscaling requires macOS 14 or newer.'
+`]);
   // CPU wheels avoid downloading NVIDIA libraries on machines without CUDA.
-  if (process.platform !== "darwin") await run(python, ["-m", "pip", "install", "--disable-pip-version-check",
+  // Keep a matching CUDA installation when the user has explicitly installed it.
+  let torchInstalled = false;
+  try { await run(python, ['-c', "import torch; assert torch.__version__.split('+')[0] == '2.14.1'"], true); torchInstalled = true; } catch { /* Install below. */ }
+  if (process.platform !== "darwin" && !torchInstalled) await run(python, ["-m", "pip", "install", "--disable-pip-version-check", "--only-binary=:all:",
     "torch==2.14.1", "--index-url", "https://download.pytorch.org/whl/cpu"]);
-  await run(python, ["-m", "pip", "install", "--disable-pip-version-check", "-r", "requirements-upscale.txt"]);
+  await run(python, ["-m", "pip", "install", "--disable-pip-version-check", "--only-binary=:all:", "-r", "requirements-upscale.txt"]);
   if (!await matches(destination)) {
     console.log("Downloading the free Real-ESRGAN model (5 MiB). Videos stay on this computer.");
     await mkdir(path.dirname(destination), { recursive: true });

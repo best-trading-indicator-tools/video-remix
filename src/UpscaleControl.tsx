@@ -6,13 +6,13 @@ export default function UpscaleControl({ value, onChange, disabled = false }: {
   value?: Upscale; onChange: (value: Upscale) => void; disabled?: boolean;
 }) {
   const id = useId();
-  const [installed, setInstalled] = useState<boolean | null>(null);
+  const [capability, setCapability] = useState<{ installed: boolean; ready: boolean; device?: string; error?: string } | null>(null);
   useEffect(() => {
     const controller = new AbortController();
     void fetch('/api/upscale/capabilities', { signal: controller.signal }).then(response => {
       if (!response.ok) throw new Error('Unavailable');
       return response.json();
-    }).then(value => setInstalled(value.installed === true)).catch(() => {});
+    }).then(setCapability).catch(() => {});
     return () => controller.abort();
   }, []);
   return <div className="upscale-control">
@@ -22,7 +22,9 @@ export default function UpscaleControl({ value, onChange, disabled = false }: {
       {(['off', '1080', '1440', '2160'] as const).map(key => <option key={key} value={key}>{UPSCALE_LABELS[key]}</option>)}
     </select>
     <p id={`${id}-help`}>Real-ESRGAN reconstructs detail in smaller main videos. No credits or uploads. Larger originals keep their size.</p>
-    {installed === false && <p role="status">One-time setup needed on this computer: <code>npm run setup:upscale</code>. Then refresh this page.</p>}
+    {capability?.ready && <p role="status">Ready · {capability.device === 'mps' ? 'Apple GPU' : capability.device === 'cuda' ? 'NVIDIA GPU' : 'CPU · slower, no graphics card needed'}. GPU problems automatically retry on CPU.</p>}
+    {capability?.installed === false && <p role="status">One-time setup needed on this computer: <code>npm run setup:upscale</code>. Then refresh this page.</p>}
+    {capability?.installed && !capability.ready && <p role="status">The upscaler could not pass its startup check. Run <code>npm run check:upscale</code> for details, or <code>npm run setup:upscale</code> to repair it.</p>}
     {value && value !== 'off' && <p>Uses at least {value}px on the shorter edge, overriding Resolution. 4K takes longer and uses more disk space. AI can change fine details; preview a sample first.</p>}
   </div>;
 }
