@@ -81,7 +81,7 @@ Saved keys are encrypted in `DATA_DIR/private/api-keys.enc`, with a local encryp
 
 A five-step introduction opens once per browser, starting with **API setup in Settings**. It explains why DeepSeek was chosen for low-cost paid AI, and that Pixabay and Pexels stock APIs and keys are free. DeepSeek enables prompt edits, AI clip suggestions and visual matching; automatic stock B-roll also needs a Pixabay or Pexels key. **Open Settings** closes the overlay and stays on the editable Settings page so you can paste and save each key. Already configured keys stay in place, Postiz is only for scheduling, and local editing and AI upscaling remain available without provider keys.
 
-The next steps cover importing footage, choosing output settings, reviewing clips, and optionally editing from Claude or Codex through the local MCP connection. The last step's **Set up Claude or Codex** button opens connection instructions and bulk-edit examples; the same topic is available under **Edit from chat** in detailed help. Dismiss the tour at any point; completion is remembered across tabs and restarts. **Quick guide** and **How it works** replay it, while **Help with Auto / Manual / Short clips / exports / history** opens detailed help for the current workflow. **Browse all help topics** retains the complete reference tour, including API setup. Closing or skipping help restores the original view without changing edit settings or starting renders; the explicit **Open Settings** action keeps Settings open.
+The next steps cover importing footage, choosing output settings, reviewing clips, and optionally editing from Claude or Codex through the local MCP connection. The last step's **Set up Claude or Codex** button opens connection instructions and bulk-edit examples; the same topic is available under **Edit from chat** in detailed help. Dismiss the tour at any point; completion is remembered across tabs and restarts. **Quick guide** and **How it works** replay it. The outlined **How Auto works** button opens a step-by-step walkthrough; its label and starting topic follow the current workflow, including Manual, Short clips, Exports and History. **Browse all help topics** retains the complete reference tour, including API setup. Closing or skipping help restores the original view without changing edit settings or starting renders; the explicit **Open Settings** action keeps Settings open.
 
 Topics cover Auto preferences, black bands, captions, sound, reviews and supporting visuals; Manual framing, color, sound modifiers, captions, footage placements, presets, prompt edits and batch exports; the complete long-form-to-short workflow from discovery through sequences, tracking, pacing, approval and rendering; and History's settings, publications, review notes and measured outcomes. Controls that need a source, draft or export are explained beside their containing panel until that item exists. Presets are saved separately for each editing mode.
 
@@ -136,7 +136,7 @@ its existing importer. Downloader files do not become editing sources or exports
 
 The tool uses the same platform downloader, login cookies, file limits and
 network recovery as the workspace URL importer. A platform restriction or login
-requirement affects both tools. **Help with downloader** opens its interactive
+requirement affects both tools. **How Downloader works** opens its interactive
 help topic.
 
 ## Import long recordings

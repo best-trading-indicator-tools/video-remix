@@ -1231,6 +1231,12 @@ export default function App() {
     return hasLibraryVisuals(options) && getVisualSources(options).length === 1 && !options.brollIds?.length && (mode === "auto" || options.brollMaxCoverage !== 0);
   });
   const noBrollSelected = missingBrollSources.length > 0;
+  const workflowGuide = view === "downloader" ? { label: "How Downloader works", topic: "url-downloader" }
+    : view === "history" ? { label: "How History works", topic: "history" }
+    : view === "exports" ? { label: "How exports work", topic: "exports" }
+    : mode === "shorts" ? { label: "How Short clips work", topic: "shorts-discovery" }
+    : mode === "manual" ? { label: "How Manual works", topic: "manual-frame" }
+    : { label: "How Auto works", topic: "quick-setup" };
 
   return (
     <div className="app-shell">
@@ -1323,7 +1329,18 @@ export default function App() {
           </div>
         </div>
 
-        {view !== "settings" && <button className="text-button contextual-help" onClick={() => openTour(view === 'downloader' ? 'url-downloader' : view === 'history' ? 'history' : view === 'exports' ? 'exports' : mode === 'shorts' ? 'shorts-discovery' : mode === 'manual' ? 'modes' : 'quick-setup')}>Help with {view === 'studio' ? mode === 'shorts' ? 'Short clips' : mode === 'auto' ? 'Auto' : 'Manual' : view}</button>}
+        {view !== "settings" && (
+          <div className="workflow-guide">
+            <button type="button" className="contextual-help" aria-haspopup="dialog"
+              aria-describedby="workflow-guide-hint" disabled={brollBusy}
+              onClick={() => openTour(workflowGuide.topic)}>
+              <CircleHelp size={16} aria-hidden="true" />
+              {workflowGuide.label}
+              <ArrowRight size={15} aria-hidden="true" />
+            </button>
+            <span id="workflow-guide-hint">Step-by-step walkthrough</span>
+          </div>
+        )}
         {!loading && !engineReady && (
           connected && health
             ? <ProblemNotice operation="Set up video engine" message="FFmpeg is not ready. Install FFmpeg and ffprobe, then restart the server." />

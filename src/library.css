@@ -4,7 +4,11 @@
 .settings-scope-bar input, .settings-scope-bar select, .library-filters input, .library-filters select, .source-filters input, .source-filters select, .project-field input, .export-decision select { padding:8px 10px; min-height:36px; border:1px solid var(--line-strong); background:var(--field); color:var(--text); border-radius:7px; max-width:100%; min-width:0; }
 .settings-scope-bar .scope-future { flex-direction:row; align-items:center; }
 .scope-future input { min-height:18px; accent-color:var(--accent); }
-.contextual-help { display:flex; justify-content:flex-end; margin-bottom:12px; }
+.workflow-guide { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin-bottom:16px; }
+.contextual-help { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 14px; border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); color:var(--accent); font-size:12px; font-weight:600; }
+.contextual-help:hover:not(:disabled) { background:var(--surface-hover); border-color:var(--accent); color:var(--accent-bright); }
+.contextual-help:active:not(:disabled) { background:var(--accent-dark); }
+.workflow-guide > span { color:var(--subtle); font-size:12px; line-height:1.5; }
 .library-filters { display:flex; flex-wrap:wrap; align-items:end; gap:12px; margin:20px 0 12px; padding:16px; border:1px solid var(--line); border-radius:12px; background:var(--surface-raised); }
 .library-filters .library-search { flex:1 1 240px; }
 .library-result-count { color:var(--subtle); font-size:12px; }
