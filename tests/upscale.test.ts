@@ -49,7 +49,7 @@ test('Real-ESRGAN renders selected cuts with audio and text, cleans temporary fi
   try {
     const input = path.join(directory, "source ' with spaces.mp4"), output = path.join(directory, 'output.mp4');
     const workDir = path.join(directory, 'work');
-    await runLocal('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=12:duration=1',
+    await runLocal('ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=24:duration=1',
       '-f', 'lavfi', '-i', 'sine=frequency=440:duration=1', '-c:v', 'libx264', '-threads', '1', '-c:a', 'aac', input]);
     const source = await probeMedia(input);
     const progress: number[] = [];
@@ -57,7 +57,9 @@ test('Real-ESRGAN renders selected cuts with audio and text, cleans temporary fi
       settings: { ...DEFAULT_SETTINGS, upscale: '1080', segments: [{ start: .5, end: 1 }, { start: 0, end: .25 }], hookText: 'AI sample' },
       onProgress: value => progress.push(value) });
     const result = await probeMedia(output);
-    assert.deepEqual([result.width, result.height, result.hasAudio, result.fps], [1920, 1080, true, 12]);
+    assert.deepEqual([result.width, result.height, result.hasAudio, result.fps], [1920, 1080, true, 24]);
+    const frames = await runLocal('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=nb_frames', '-of', 'csv=p=0', output]);
+    assert.equal(Number(frames.stdout.trim()), 18, 'AI exports must preserve every frame of the selected 0.75 seconds');
     assert.ok(Math.abs(result.duration - .75) < .1, `Unexpected duration: ${result.duration}`);
     assert.equal(progress.at(-1), 100);
     assert.ok(progress.every((value, index) => !index || value >= progress[index - 1]!));

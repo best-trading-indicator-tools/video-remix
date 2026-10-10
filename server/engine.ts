@@ -794,7 +794,10 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         options.onPhase?.("Rendering the AI-upscaled video");
         // Keep the original input for its soundtrack. Replace only its selected
         // picture timeline, before framing, supporting shots and any added text.
-        filters.splice(0, filters.length, `nullsink;movie=filename=${enhanced},setpts=PTS-STARTPTS,setsar=1`);
+        // FFmpeg's movie source can report EOF at the last frame's timestamp.
+        // Give the following fps filter one frame of lookahead so it emits that
+        // final picture. The existing output duration still clips the padding.
+        filters.splice(0, filters.length, `nullsink;movie=filename=${enhanced},setpts=PTS-STARTPTS,tpad=stop_mode=clone:stop_duration=${decimal(1 / fps)},setsar=1`);
         renderProgressBase = 85;
       }
     }

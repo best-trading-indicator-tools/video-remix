@@ -63,7 +63,9 @@ for (const sample of samples) {
   assert.equal(result.width, Number(sample.target) * 16 / 9);
   assert.equal(result.hasAudio, true);
   assert.equal(result.fps, source.fps);
-  assert.ok(Math.abs(result.duration - source.duration) < .1);
+  assert.ok(Math.abs(result.duration - source.duration) < 1 / source.fps / 2);
+  const frames = await runLocal('ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=nb_frames', '-of', 'csv=p=0', output]);
+  assert.equal(Number(frames.stdout.trim()), Math.round(source.duration * source.fps));
   // Same pixels and crop on both sides. Left is ordinary resizing, right is AI.
   const crop = 'crop=960:1080:(iw-960)/2:(ih-1080)/2,setsar=1';
   const label = "fontcolor=white:fontsize=30:box=1:boxcolor=black@0.75:boxborderw=12:x=24:y=24";
