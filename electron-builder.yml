@@ -42,6 +42,7 @@ nsis:
   deleteAppDataOnUninstall: false
 linux:
   category: AudioVideo
+  maintainer: Remix Studio contributors
   target: [AppImage, deb]
 artifactName: Remix-Studio-${version}-${os}-${arch}.${ext}
 publish: null
