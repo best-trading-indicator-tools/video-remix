@@ -8,7 +8,7 @@ Detailed workflows, controls, setup options, and troubleshooting for the current
 
 Install the local model from **Settings → Local tools** in the desktop app, or run `npm run setup:upscale` in a source installation. This creates an isolated Python environment, downloads the checksum-verified Real-ESRGAN general x4v3 model, and runs an inference check. Apple Silicon Macs use Metal through PyTorch MPS; the default Linux/Windows installation uses CPU. A matching CUDA-enabled PyTorch installation in `.venv-upscale` is preserved by setup and supported by the worker. No media is sent to a provider.
 
-1. Import your videos and choose **Apply changes to → Selected videos** (or **All videos**).
+1. Import your videos and choose **Working on N videos → Checked videos** (or **All videos**).
 2. In Auto Quick setup, All settings, or Manual, set **AI video upscaler** to **1080p**, **1440p**, or **2160p · 4K**.
 3. Render normally. Each video keeps its unrelated settings. The control also appears in Short clips and **Edit this result**, and finishing presets retain it.
 
@@ -89,9 +89,9 @@ Topics cover Auto preferences, black bands, captions, sound, reviews and support
 
 - **Edit this result** autosaves changes to the workspace with a browser backup while the server is unavailable. Close and reopen to continue. **Resume saved draft** identifies unfinished work. Saving protects the export and its editing files from expiry; **Reset changes** discards the draft, and rendering a revision clears it. Conflicting browser/server drafts require an explicit choice before editing continues.
 - Missing or changed originals open a recovery screen. Import the unchanged original and reconnect a matching source; matching uses its import fingerprint so saved cut timings remain valid. Older exports without fingerprints remain downloadable but need a fresh edit if their original is missing.
-- **Apply changes to** has the same meaning in Quick setup, All settings and Manual. Choose this video, checked videos or all videos; future import defaults have a separate checkbox. Individual control changes preserve each video's other settings. The explicit copy-all controls copy the full configuration, and workspace **Undo** restores the previous state.
-- **Add my own footage**, in both Auto Quick setup and All settings, follows **Apply changes to**. Check videos, choose **Selected videos**, then place a clip and enable **Add the whole clip at the end** to append it to each target's own ending. Adding, changing or removing placements replaces only the targets' footage lists and preserves their other settings. The panel names the video whose placements are shown. **Apply footage to N selected videos** also explicitly copies the displayed placements to the checked videos, regardless of the settings scope. workspace **Undo** restores the previous settings. Footage never becomes a future-import default; general copy-all settings controls preserve each video's footage.
-- **Remix with a prompt** is available in both Auto views and follows **Apply changes to**. For example: “Append outro.mp4 in full and add black bands to every target video.” Upload the clip first. Each video gets its own proposal using its current settings, and the review lists the changes by video name. Apply the reviewed batch together, or undo it with **Undo last prompt**. Missing media, clarification or a failed request leaves the entire batch unchanged; videos already matching the request are skipped. Changing the target selection or settings invalidates an older proposal. Prompts affect existing target videos only, not future-import defaults.
+- **Working on N videos** is the persistent shared selection for settings and exports in Quick setup, All settings and Manual. Choose **This video**, **Checked videos** or **All videos**. Source checkboxes always show the actual working selection; checking or unchecking a source updates both editing and export targets. In Checked videos or All videos, opening another preview does not change the batch. An empty selection disables export. Checked IDs and scope are remembered in this browser; deleted or expired sources are ignored. Future import defaults have a separate checkbox. Individual control changes preserve each video's other settings. The explicit copy-all controls copy the full configuration to the same working selection, and workspace **Undo** restores the previous state.
+- **Add my own footage**, in both Auto Quick setup and All settings, follows **Working on N videos**. Check videos, confirm the working count, then place a clip and enable **Add the whole clip at the end** to append it to each target's own ending. Adding, changing or removing placements replaces only the targets' footage lists and preserves their other settings. The panel names the video whose placements are shown. **Apply footage to N selected videos** also explicitly copies the displayed placements to the working selection. workspace **Undo** restores the previous settings. Footage never becomes a future-import default; general copy-all settings controls preserve each video's footage.
+- **Remix with a prompt** is available in both Auto views and follows **Working on N videos**. For example: “Append outro.mp4 in full and add black bands to every target video.” Upload the clip first. Each video gets its own proposal using its current settings, and the review lists the changes by video name. Apply the reviewed batch together, or undo it with **Undo last prompt**. Missing media, clarification or a failed request leaves the entire batch unchanged; videos already matching the request are skipped. Changing the target selection or settings invalidates an older proposal. Prompts affect existing target videos only, not future-import defaults.
 - Exports have human decisions: **Unreviewed**, **Accepted**, **Needs edits**, and **Rejected**. Automated checks remain separate. Reviews also work for older completed exports without a History entry. **Review unreviewed** starts with undecided clips, **E / Edit** marks a clip as needing edits, and **Download accepted** bundles accepted clips matching your filters (up to 300 at a time).
 - Source videos appear beneath **Select videos** (or **Choose a video** in Short clips). Click a card to open it, or check its box to work on several. **Search & filter** expands name/project filters; an active filter keeps its result count visible when collapsed. **More videos** and **Previous videos** appear when the list needs scrolling. **Add videos** opens a separate dialog for files, URLs and linked originals. You can also drop one or several video files anywhere in the **Source videos** panel, including over existing cards; the panel highlights and opens import progress for the batch. **Activity**, beside it, shows progress, retries, pause/resume and completed imports; its indicator highlights problems. Closing the dialog keeps imports running and preserves the video list, selected videos and unfinished URL/path inputs. Keep the browser tab open for file uploads. Newly imported videos join the end of the current list so existing cards stay in place. Assign a source project to organize its existing exports and future edits; individual History records can be reassigned separately. Exports and History filter by text, project, decision, publication state, format and dates. History filters apply before pagination. Earlier revisions are collapsed; History groups the revisions present on each page.
 - On **Exports**, use the checkboxes to select up to 300 exports across collections. **Select all shown** respects filters and collapsed revisions; filtering or collapsing a selected card clears its selection. **Keep selected**, **Download selected** (ZIP with available SRT captions), and **Review selected** work on finished exports. **Delete selected** also works on failed, cancelled, or skipped exports, lists the exact selection for confirmation, and explicitly includes selected kept copies and saved editing drafts. Original videos, History records and scheduled posts remain. Running exports cannot be selected.
@@ -166,7 +166,7 @@ Failed link imports have a **Retry import** button that requests a fresh downloa
 
 ### Quick setup and your style
 
-Auto opens on **Quick setup**, with choices that follow **Apply changes to**.
+Auto opens on **Quick setup**, with choices that follow **Working on N videos**.
 Choose this video, selected videos or all videos; future imports have a separate
 checkbox. Choose **where you will post** (TikTok, Reels & Shorts 9:16, Instagram feed 4:5,
 square, or YouTube 16:9), then choose **Keep the full video** or **Let Auto choose a shorter clip**.
@@ -192,7 +192,7 @@ your style's pacing. The style is stored in this browser.
 
 For shorter clips, optional output preferences let you enter **any whole-number maximum excerpt length from 1 second**, type **1–10 maximum versions per video**, and choose **9:16, square, 4:5, 16:9, or original framing**. The maximum limits the source excerpt; inserted footage adds time. Length mode and custom limits are saved per video and survive reloading.
 
-Select a source video and use **This video** to change only its Auto settings, including format, length mode, narration, supporting visuals, selected B-roll clips, and maximum versions. **Copy all Auto settings to all N videos** copies the selected video's complete settings to the other sources. Future imports change only when their checkbox is enabled. One Auto remix click processes the selected batch, with each video using its own saved settings. Manual settings remain separate.
+Select a source video and use **This video** to change only its Auto settings, including format, length mode, narration, supporting visuals, selected B-roll clips, and maximum versions. **Copy all Auto settings to N working videos** copies the previewed video's complete settings to the working selection. Future imports change only when their checkbox is enabled. One Auto remix click processes the selected batch, with each video using its own saved settings. Manual settings remain separate.
 
 **What changes between versions** decides how versions of one video differ. **A different moment** (the default) looks for another excerpt each time. **New angles on the same moment** keeps version 1's excerpt and builds up to three more versions from it, each with its own opening, on-screen text and caption look:
 
@@ -362,7 +362,7 @@ case. TikTok Sans supports the replacement characters. The effect starts off and
 applies to added captions in previews and MP4 exports, including imported SRTs.
 Original editable captions, downloadable SRT text and speech timings stay unchanged.
 Built-in looks preserve this setting; finishing presets, My style and saved revisions
-retain it. In Auto, choose **Apply changes to → Selected videos** before changing it
+retain it. In Auto, choose **Working on N videos → Checked videos** before changing it
 to apply it in bulk (in Quick, open **All settings** for caption appearance).
 Prompts can also request “Use Cyrillic lookalikes only for Sample-12 in captions”
 or “Turn off Cyrillic lookalikes.” Changing spelling does not guarantee a platform's
@@ -374,7 +374,7 @@ In Auto Quick or All settings, Manual, or a saved export's prompt editor, try:
 the bands and displays **ВРС157** in white, centered in the upper band throughout
 the video. Medium is 5.4% of the shorter canvas dimension, shrinking if needed to fit.
 The editable text stays `BPC157`; the lower band and speech-caption styles stay
-unchanged. In Auto, **Apply changes to → Selected videos** applies the reviewed
+unchanged. In Auto, **Working on N videos → Checked videos** applies the reviewed
 prompt to the checked videos. Per-band appearance also follows My style and presets.
 
 ### DeepSeek usage and remaining balance
@@ -540,7 +540,7 @@ Each saved card records its renderer, scene type, explanation, quoted speech and
 
 Uploaded B-roll clips persist until you remove them from the library; the ordinary source/export retention timer does not delete them. The library holds up to 100 clips and uses `MAX_FILE_SIZE_MB` for its per-file upload limit. Remove unused library clips to reclaim disk space. Clips referenced by active jobs cannot be removed until those jobs finish or are cancelled.
 
-In Manual, these options decorate your chosen trim or cut sequence without selecting new source cuts or changing your speed, framing or audio settings. Speech matching follows the trimmed, reordered and speed-adjusted timeline; replacement audio is matched on its own output timeline. Without usable speech, local library matching falls back to the source filename. Supporting shots are assembled during the full export and are not included in Live or five-second previews. Manual preferences remain separate from Auto, persist per video, work with **Apply settings to all videos**, and are included in finishing presets (selected library clip IDs stay with each video).
+In Manual, these options decorate your chosen trim or cut sequence without selecting new source cuts or changing your speed, framing or audio settings. Speech matching follows the trimmed, reordered and speed-adjusted timeline; replacement audio is matched on its own output timeline. Without usable speech, local library matching falls back to the source filename. Supporting shots are assembled during the full export and are not included in Live or five-second previews. Manual preferences remain separate from Auto, persist per video, work with **Copy all settings to working videos**, and are included in finishing presets (selected library clip IDs stay with each video).
 
 Supporting visuals are **off by default**. **Total supporting shots** accepts **1–10**, defaults to **4**, and requests that many visuals in total across the selected sources. Up to **three passes within eight minutes** keep successful placements and search for the missing ones. Later passes try more stock pages and alternate visual ideas, and fit shorter shots into unused intervals. A failed card tries another selected renderer. Unselected sources are never enabled to fill a count.
 
@@ -589,7 +589,7 @@ and framing changes while keeping saved narration, animations and uploaded libra
 available. If no suitable replacement is found, existing supporting shots stay
 in place. Render or reset manual shot changes before requesting a new search.
 
-Auto can render the current video, checked videos, or all videos. Saved plans and
+Auto and Manual render the videos named by the Working on N videos bar; there is no separate render selector. Saved plans and
 their media snapshots follow the export retention period; choose **Keep** to retain
 an export and its source for further revisions. Older exports created before this feature
 need a new Auto edit to gain a saved plan.
@@ -655,7 +655,7 @@ Switch to **Manual** for direct control. Its saved settings are separate from Au
 - File metadata cleanup does not remove visible or invisible watermarks encoded into source pixels or audio and cannot guarantee that a platform will not identify AI-generated content or limit its reach. The app does not add an AI watermark.
 - Track render progress, cancel jobs, and download completed videos individually or together. Manual makes one export per video; for versions built differently, use Auto's **New angles on the same moment**. Randomized "subtle variations" (small speed, zoom and color changes) were removed: they changed how a copy looks, not what it says.
 
-**Auto remix → Quick setup and All settings** have **Remix with a prompt**, near the top. It follows **Apply changes to → This video / Selected videos / All videos** and controls length mode, maximum versions, version differences, captions and word highlighting, black bands and their written text, stock B-roll and animation sources, shot count/coverage, uploaded footage, pacing, sound, narration and review options. For example: “Add yellow captions, black bands and append outro.mp4 in full.” Each target's changes are prepared separately and reviewed by video name before **Apply to N videos**. A clarification or failed request blocks the whole batch; matching videos need no changes.
+**Auto remix → Quick setup and All settings** have **Remix with a prompt**, near the top. It follows **Working on N videos → This video / Checked videos / All videos** and controls length mode, maximum versions, version differences, captions and word highlighting, black bands and their written text, stock B-roll and animation sources, shot count/coverage, uploaded footage, pacing, sound, narration and review options. For example: “Add yellow captions, black bands and append outro.mp4 in full.” Each target's changes are prepared separately and reviewed by video name before **Apply to N videos**. A clarification or failed request blocks the whole batch; matching videos need no changes.
 
 Manual prompts support the Manual editing controls: color, texture, speed, sound modifiers, framing/layout, output size/rate, source cuts, literal titles and timed overlays, automatic or imported captions, black bands, B-roll/animation preferences, uploaded footage and replacement audio. Manual prompt changes apply to the current video; the ordinary copy-to-all controls remain available afterwards. Both editors show the complete proposal before applying and preserve unrelated settings. Changes within a workspace offer **Undo last prompt** while that prompt remains the latest edit; Auto undo also survives switching between Quick setup and All settings. Suggestions and applying them do not start exports or change future-import defaults.
 
@@ -1226,7 +1226,7 @@ video, then either append it automatically or place a selected part:
   cover takes priority over an automatic supporting shot at that time.
 
 Choose crop or contain framing for each placement. In Auto Quick setup and All
-settings, footage controls follow **Apply changes to** and replace the target
+settings, footage controls follow **Working on N videos** and replace the target
 videos' placements while preserving other settings. **Apply footage to N selected
 videos** explicitly copies the displayed placements to checked videos. General
 **Copy all Auto settings** preserves each video's footage. In Manual, footage

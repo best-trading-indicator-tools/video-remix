@@ -1,8 +1,7 @@
 {
-  "version": "1.3.0-preview.1",
+  "version": "1.4.0-preview.1",
   "notes": [
-    "Undo and redo workspace settings, bulk edits, applied prompts, finishing presets and short-clip drafts with visible controls and keyboard shortcuts.",
-    "See processing stages and approximate remaining times learned from actual speed and comparable exports on this computer.",
-    "Opt into completion notifications for long export collections, with in-app notices and desktop fallbacks."
+    "Choose videos once with the persistent Working on N videos bar; Auto and Manual edits and exports share the same selection.",
+    "Source checkboxes show the working selection, remember checked videos, and prevent exports when no videos are selected."
   ]
 }

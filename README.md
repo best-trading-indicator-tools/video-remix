@@ -43,16 +43,14 @@ Supported source containers include MP4, MOV, M4V, WebM, MKV, AVI, and MPEG, wit
 
 ### Apply changes to selected videos
 
-In the workspace, check the source videos you want to change, then choose **Apply changes to → Selected videos**. The scope selector also offers **This video** and **All videos**. Future-import defaults have their own checkbox.
-
-![Apply changes to set to Selected videos (2), with future-import defaults left unchecked](docs/screenshots/bulk-settings.jpg)
+Check the source videos you want to edit and export. The persistent **Working on N videos** bar shows the shared selection in Auto Quick setup, All settings and Manual. It also offers **This video** and **All videos**. Changing a checkbox updates both settings and export targets; there is no separate render selection. Future-import defaults have their own checkbox.
 
 **Auto Quick setup and All settings share the same bulk controls.** You can change formats, captions, black bands, sound, pacing, and other preferences across a selection while preserving unrelated settings.
 
 For example, to add the same ending to ten videos:
 
 1. Import the ten videos and check their source cards.
-2. Choose **Apply changes to → Selected videos**.
+2. Confirm the selected count in **Working on N videos**.
 3. Open **Add my own footage** and upload the ending clip.
 4. Enable **Add the whole clip at the end**.
 5. Render the selected videos. Each receives the clip after its own ending.
@@ -144,11 +142,11 @@ In the desktop app, open **Settings → Local tools**, select **Free AI upscaler
 To upscale a batch:
 
 1. Import your videos and check their source cards.
-2. Choose **Apply changes to → Selected videos** (or **All videos**).
+2. Choose **Working on N videos → Checked videos** (or **All videos**).
 3. Set **AI video upscaler** to **1080p**, **1440p**, or **2160p · 4K**.
 4. Render the selected videos through the usual export controls. Each keeps its unrelated settings.
 
-The control appears in Auto Quick setup, All settings, Manual, Short clips, and the saved-result editor. It follows **This video / Selected videos / All videos** in Auto and Manual, and is saved with finishing presets. You can also ask **“Upscale these videos to 4K with local AI”** in Auto, Manual, or saved-result prompts. Review and apply the proposal, then render. **Prompt planning uses your configured DeepSeek key**; choosing the upscaler directly or updating local MCP drafts with `upscale: "2160"` does not.
+The control appears in Auto Quick setup, All settings, Manual, Short clips, and the saved-result editor. It follows **This video / Checked videos / All videos** in Auto and Manual, and is saved with finishing presets. You can also ask **“Upscale these videos to 4K with local AI”** in Auto, Manual, or saved-result prompts. Review and apply the proposal, then render. **Prompt planning uses your configured DeepSeek key**; choosing the upscaler directly or updating local MCP drafts with `upscale: "2160"` does not.
 
 **Preview the real result in the center.** In Auto and Manual, enabling upscaling automatically renders a short sample at the selected resolution. The central player switches to **AI upscaled** when ready; **Original** remains available for comparison. While it renders, the player clearly says it is showing the source. Auto previews cover picture settings only: the final AI-selected edit, generated captions and stock footage still appear in the export. No separate batch approval step is added.
 

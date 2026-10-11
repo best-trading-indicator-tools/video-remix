@@ -4,6 +4,23 @@
 .settings-scope-bar input, .settings-scope-bar select, .library-filters input, .library-filters select, .source-filters input, .source-filters select, .project-field input, .export-decision select { padding:8px 10px; min-height:36px; border:1px solid var(--line-strong); background:var(--field); color:var(--text); border-radius:7px; max-width:100%; min-width:0; }
 .settings-scope-bar .scope-future { flex-direction:row; align-items:center; }
 .scope-future input { min-height:18px; accent-color:var(--accent); }
+.working-selection { position:sticky; top:8px; z-index:25; box-shadow:0 4px 16px #0003; }
+.working-selection-summary { display:grid; gap:3px; flex:1 1 220px; min-width:0; }
+.working-selection-summary strong { font-size:14px; color:var(--text); }
+.working-selection-summary > span { color:var(--subtle); font-size:12px; }
+.working-selection .scope-future { max-width:250px; }
+.preview-selection-note { padding:12px 18px; margin:0; font-size:12px; color:var(--subtle); border-bottom:1px solid var(--line); }
+.preview-selection-note button { display:block; }
+.manual-working-scope { margin:16px 24px 0; color:var(--subtle); font-size:12px; }
+.video-specific-controls { padding:0; margin:0; border:0; min-width:0; }
+@media (min-width:981px) and (min-height:800px) {
+  .working-selection ~ .studio-grid .preview-panel { top:calc(var(--working-selection-height, 90px) + 20px); }
+}
+@media (max-width:640px) {
+  .working-selection { gap:10px; top:4px; }
+  .working-selection-summary { flex-basis:100%; }
+  .working-selection .scope-future { flex:1 1 140px; font-size:11px; }
+}
 .workflow-guide { display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; margin-bottom:16px; }
 .contextual-help { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; padding:10px 14px; border:1px solid var(--line-strong); border-radius:9px; background:var(--surface); color:var(--accent); font-size:12px; font-weight:600; }
 .contextual-help:hover:not(:disabled) { background:var(--surface-hover); border-color:var(--accent); color:var(--accent-bright); }

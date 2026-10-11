@@ -10,6 +10,7 @@ import ProjectField from './ProjectField';
 import ExportDecision from './ExportDecision';
 import { DeepSeekBalancePanel, DeepSeekUsageSummary } from "./DeepSeekUsage";
 import { autoPicturePreview } from "../shared/preview-settings";
+import { workingVideos, toggleWorkingVideo, type WorkingScope } from "../shared/working-selection";
 import RetentionNotice, { expiryText } from './RetentionNotice';
 import { EMPTY_FILTERS, matchesExport, reviewStatus } from '../shared/library';
 import { MAX_EXPORT_SELECTION, exportRevisionFamilies, selectableExports } from '../shared/export-selection';
@@ -456,19 +457,21 @@ export default function App() {
   const [liveOutputTime, setLiveOutputTime] = useState(0);
   const previewRequest = useRef<AbortController | null>(null);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [renderScope, setRenderScope] = useState<"all" | "selected">("all");
-  const [autoRenderScope, setAutoRenderScope] = useState<"all" | "current" | "selected">("all");
-  const [autoSelectedIds, setAutoSelectedIds] = useState<string[]>([]);
-  const [settingsScope, setSettingsScope] = useState<'current' | 'selected' | 'all'>(() => {
+  const [selectedSourceIds, setSelectedSourceIds] = useState<string[]>(() => {
+    try { const ids: unknown = JSON.parse(localStorage.getItem('remix-working-videos') || '[]'); return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string') : []; } catch { return []; }
+  });
+  const [workingScope, setWorkingScope] = useState<WorkingScope>(() => {
     try { const value = localStorage.getItem('remix-settings-scope'); return value === 'all' || value === 'selected' ? value : 'current'; } catch { return 'current'; }
   });
   const [futureSettings, setFutureSettings] = useState(false);
   const history = useWorkspaceHistory();
   history.context = { mode, sourceId: selectedId || sources[0]?.id };
   const [autoPromptApplied, setAutoPromptApplied] = useState<{ id?: number; count: number } | null>(null);
-  useEffect(() => { try { localStorage.setItem('remix-settings-scope', settingsScope); } catch { /* Current scope remains usable. */ } }, [settingsScope]);
+  useEffect(() => { try { localStorage.setItem('remix-settings-scope', workingScope); } catch { /* Current scope remains usable. */ } }, [workingScope]);
+  useEffect(() => { try { localStorage.setItem('remix-working-videos', JSON.stringify(selectedSourceIds)); } catch { /* Selection remains usable for this session. */ } }, [selectedSourceIds]);
   const videoInput = useRef<HTMLInputElement>(null);
   const sourcePanel = useRef<HTMLElement>(null);
+  const selectionBar = useRef<HTMLElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -476,11 +479,30 @@ export default function App() {
   const [previewHeight, setPreviewHeight] = useState(465);
   const selected =
     sources.find((source) => source.id === selectedId) || sources[0];
-  const settingTargets = settingsScope === 'all' ? sources : settingsScope === 'selected' ? sources.filter(source => autoSelectedIds.includes(source.id)) : selected ? [selected] : [];
-  const scopeDescription = !sources.length ? 'Starting settings for new imports' : settingsScope === 'current' ? `Changing this video: ${selected?.name}` : `Changing ${settingTargets.length} ${settingsScope === 'selected' ? 'selected ' : ''}video${settingTargets.length === 1 ? '' : 's'}`;
-  const rememberScopeChange = () => history.labelDefault(`${mode === "auto" ? "Auto" : "Manual"} settings${settingTargets.length > 1 ? ` · ${settingTargets.length} videos` : ""}`);
-  const autoTargets = autoRenderScope === "current" ? (selected ? [selected] : []) :
-    autoRenderScope === "selected" ? sources.filter((source) => autoSelectedIds.includes(source.id)) : sources;
+  const workingTargets = workingVideos(sources, selected?.id, workingScope, selectedSourceIds);
+  const previewIncluded = workingTargets.some(source => source.id === selected?.id);
+  const scopeDescription = !sources.length ? 'Starting settings for new imports' : `Working on ${workingTargets.length} video${workingTargets.length === 1 ? '' : 's'}`;
+  const changeWorkingScope = (scope: WorkingScope) => {
+    // Switching to checked videos starts from the set already shown in the bar.
+    if (scope === 'selected') setSelectedSourceIds(workingTargets.map(source => source.id));
+    setWorkingScope(scope);
+  };
+  const toggleSource = (id: string, checked: boolean) => {
+    setSelectedSourceIds(toggleWorkingVideo(workingTargets, id, checked));
+    setWorkingScope('selected');
+  };
+  const showWorkingEdit = () => {
+    // After browsing an excluded source, show the actual edit as soon as a batch control changes.
+    // Otherwise controlled fields would keep displaying that excluded video's unchanged values.
+    if (!previewIncluded && workingTargets.length) {
+      setSelectedId(workingTargets[0]!.id);
+      history.context = { mode, sourceId: workingTargets[0]!.id };
+    }
+  };
+  const rememberScopeChange = () => {
+    showWorkingEdit();
+    history.labelDefault(`${mode === "auto" ? "Auto" : "Manual"} settings${workingTargets.length > 1 ? ` · ${workingTargets.length} videos` : ""}`);
+  };
   const settings = selected
     ? settingsById[selected.id] || defaultSettings
     : defaultSettings;
@@ -488,27 +510,33 @@ export default function App() {
     ? autoById[selected.id] || defaultAuto
     : defaultAuto;
   const autoOptions = selectedAuto.options;
-  const footageSource = settingTargets.find(source => source.id === selected?.id) || settingTargets[0];
+  const footageSource = workingTargets.find(source => source.id === selected?.id) || workingTargets[0];
   const scopedFootage = footageSource ? (autoById[footageSource.id] || defaultAuto).options.ownFootage : autoOptions.ownFootage;
-  const footageScope = !footageSource ? 'Check videos in the source list, or change Apply changes to.'
-    : `${scopeDescription}. Showing placements from ${footageSource.name}. Changes replace the footage placements on ${settingTargets.length === 1 ? 'this target video' : 'these target videos'}; other settings stay the same. Footage is not saved for future imports.`;
-  const watermark = useWatermarkRemoval({ source: selected, workspaceKey: `${mode}:${view}:${autoView}`,
+  const footageScope = !footageSource ? 'Check videos in the source list to edit and export them.'
+    : `${scopeDescription}. Showing placements from ${footageSource.name}. Changes replace the footage placements on ${workingTargets.length === 1 ? 'this target video' : 'these target videos'}; other settings stay the same. Footage is not saved for future imports.`;
+  const watermark = useWatermarkRemoval({ source: selected, workspaceKey: `${mode}:${view}:${autoView}:${previewIncluded}`,
     value: (mode === "auto" ? autoOptions : settings).watermarkRemoval,
     onChange: watermarkRemoval => {
-      if (!selected) return;
+      if (!selected || !previewIncluded || starting) return;
       // Painted source coordinates and timestamps belong to this video, regardless of batch scope.
       if (mode === "auto") setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...(current[selected.id] || defaultAuto),
         options: { ...(current[selected.id] || defaultAuto).options, watermarkRemoval } }) }));
       else setSettingsById(current => ({ ...current, [selected.id]: { ...(current[selected.id] || defaultSettings), watermarkRemoval } }));
     } });
-  const lengthTargets = [...settingTargets.map(source => autoById[source.id] || defaultAuto), ...(futureSettings ? [defaultAuto] : [])];
+  const watermarkControls = <fieldset className="video-specific-controls" disabled={!previewIncluded || starting}>
+    {!previewIncluded && selected && <p className="auto-preferences-note">Include the previewed video in your working selection to mark its watermark areas.</p>}
+    {watermark.controls}
+  </fieldset>;
+  const lengthTargets = [...workingTargets.map(source => autoById[source.id] || defaultAuto), ...(futureSettings ? [defaultAuto] : [])];
   const mixedAutoLength = lengthTargets.some(preset => (preset.options.durationMode ?? "excerpt") !== (autoOptions.durationMode ?? "excerpt"));
   const autoPresets = sources.map(
     (source) => autoById[source.id] || defaultAuto,
   );
-  const uniformAuto = autoPresets.every((preset) =>
-    sameAutoPreset(preset, selectedAuto),
+  const uniformAuto = workingTargets.every((source) =>
+    sameAutoPreset(autoById[source.id] || defaultAuto, selectedAuto),
   );
+  const workingAuto = workingTargets.length ? autoById[workingTargets[0]!.id] || defaultAuto : defaultAuto;
+  const uniformWorkingAuto = workingTargets.every(source => sameAutoPreset(autoById[source.id] || defaultAuto, workingAuto));
   const sourcePreview = original;
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
   const activePreviewSettings = mode === "auto" ? autoOptions : settings;
@@ -525,6 +553,13 @@ export default function App() {
     setOriginal(false);
     setShowRendered(false);
   }, [livePreviewSignature]);
+  useEffect(() => {
+    const bar = selectionBar.current;
+    if (!bar) return;
+    const observer = new ResizeObserver(() => bar.parentElement?.style.setProperty('--working-selection-height', `${bar.getBoundingClientRect().height}px`));
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [mode, view]);
   useEffect(() => {
     const frame = previewFrameRef.current;
     if (!frame) return;
@@ -803,19 +838,21 @@ export default function App() {
   }, [previewJob]);
 
   const updateSettings = (patch: Partial<RemixSettings>) => {
-    if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
+    if (sources.length && !workingTargets.length && !futureSettings) { notify("Check videos in the source list to edit and export them.", "info"); return; }
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
     rememberScopeChange();
-    setSettingsById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, { ...mergeSourceSettings(current[source.id] || defaultSettings, patch, source.id),
+    setSettingsById(current => ({ ...current, ...Object.fromEntries(workingTargets.map(source => [source.id, { ...mergeSourceSettings(current[source.id] || defaultSettings, patch, source.id),
       ...(source.id !== selected?.id ? { watermarkRemoval: current[source.id]?.watermarkRemoval } : {}) }])) }));
     if (!sources.length || futureSettings) setDefaultSettings(current => footageForSource({ ...current, ...patch, watermarkRemoval: undefined }));
   };
   const replaceSettings = (value: RemixSettings) => updateSettings({ ...DEFAULT_SETTINGS, watermarkRemoval: undefined, ...value });
   const applyAll = () => {
+    if (!workingTargets.length) return;
+    showWorkingEdit();
     history.label("Apply settings to videos");
     setSettingsById((current) =>
-      Object.fromEntries(
-        sources.map((source) => [
+      ({ ...current, ...Object.fromEntries(
+        workingTargets.map((source) => [
           source.id,
           {
             ...mergeSourceSettings(current[source.id] || defaultSettings, settings, source.id),
@@ -830,24 +867,24 @@ export default function App() {
                 : (current[source.id]?.trimEnd ?? null),
           },
         ]),
-      ),
+      ) }),
     );
     if (futureSettings) setDefaultSettings(footageForSource({ ...settings, watermarkRemoval: undefined, trimStart: 0, trimEnd: null }));
     notify(
-      `Settings applied to ${sources.length} video${sources.length === 1 ? "" : "s"}. Each video's trim is kept.`,
+      `Settings applied to ${workingTargets.length} video${workingTargets.length === 1 ? "" : "s"}. Each video's trim is kept.`,
       "success",
     );
   };
 
   const updateScopedAuto = (patch: QuickPatch) => {
-    if (sources.length && !settingTargets.length && !futureSettings) { notify("Check videos in the source list, or change Apply changes to.", "info"); return; }
+    if (sources.length && !workingTargets.length && !futureSettings) { notify("Check videos in the source list to edit and export them.", "info"); return; }
     rememberScopeChange();
     const merge = (preset: AutoPreset, sourceId: string) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...mergeSourceSettings(preset.options, patch.options || {}, sourceId), watermarkRemoval: preset.options.watermarkRemoval } });
-    setAutoById(current => ({ ...current, ...Object.fromEntries(settingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto, source.id)])) }));
+    setAutoById(current => ({ ...current, ...Object.fromEntries(workingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto, source.id)])) }));
     if (!sources.length || futureSettings) setDefaultAuto(current => merge(current, ""));
   };
   const updateCurrentFootage = (ownFootage: OwnFootagePlacement[]) => {
-    if (!selected) return;
+    if (!selected || !previewIncluded) return;
 
     if (mode === "auto") setAutoById(current => {
       const preset = current[selected.id] || defaultAuto;
@@ -856,13 +893,13 @@ export default function App() {
     else setSettingsById(current => ({ ...current, [selected.id]: { ...(current[selected.id] || defaultSettings), ownFootage, ownFootageSourceId: selected.id } }));
   };
   const updateScopedFootage = (ownFootage: OwnFootagePlacement[]) => {
-    if (!settingTargets.length || starting || brollBusy) return;
+    if (!workingTargets.length || starting || brollBusy) return;
     history.label("Apply settings to videos");
-    setAutoById(current => applyAutoFootage(current, defaultAuto, settingTargets.map(source => source.id), ownFootage));
+    setAutoById(current => applyAutoFootage(current, defaultAuto, workingTargets.map(source => source.id), ownFootage));
   };
   const updateAuto = (patch: Partial<AutoPreset>) => updateScopedAuto({ ...patch, options: patch.options ? Object.fromEntries(Object.entries(patch.options).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(autoOptions[key as keyof AutoOptions]))) : undefined });
   const applyFootageToSelected = (ownFootage: NonNullable<AutoOptions['ownFootage']>) => {
-    const targets = sources.filter(source => autoSelectedIds.includes(source.id));
+    const targets = workingTargets;
     if (!targets.length || starting || brollBusy) return;
     history.label("Apply settings to videos");
     setAutoById(current => applyAutoFootage(current, defaultAuto, targets.map(source => source.id), ownFootage));
@@ -870,7 +907,7 @@ export default function App() {
   };
   const canUndoAutoPrompt = !!autoPromptApplied && history.undoId === autoPromptApplied.id;
   const applyAutoPrompt = (value: AutoBatchProposal) => {
-    if (value.clarification || !value.changes.length || starting || brollBusy || value.changes.some(change => !settingTargets.some(source => source.id === change.id))) return;
+    if (value.clarification || !value.changes.length || starting || brollBusy || value.changes.some(change => !workingTargets.some(source => source.id === change.id))) return;
     history.label("Apply prompt to videos");
     const nextAuto = { ...autoById }, nextManual = { ...settingsById };
     const manual = value.changes.every(change => !!change.proposal.manual);
@@ -883,21 +920,23 @@ export default function App() {
     if (manual) { history.navigateOnRedo({ mode: 'manual', sourceId: selected?.id }); setMode('manual'); }
     notify(`Prompt applied to ${value.changes.length} video${value.changes.length === 1 ? '' : 's'}${manual ? ' in Manual' : ''}. Review the drafts and render when ready.`, 'success');
   };
-  const autoPromptEditor = <AutoPromptEditor scopeKey={settingsScope}
-    targets={settingTargets.map(source => ({ id: source.id, name: source.name, draft: autoById[source.id] || defaultAuto }))}
+  const autoPromptEditor = <AutoPromptEditor scopeKey={workingScope}
+    targets={workingTargets.map(source => ({ id: source.id, name: source.name, draft: autoById[source.id] || defaultAuto }))}
     disabled={starting || brollBusy} onApply={applyAutoPrompt} appliedCount={history.isApplied(autoPromptApplied?.id) ? autoPromptApplied?.count || 0 : 0} canUndo={canUndoAutoPrompt}
     onUndo={() => { if (canUndoAutoPrompt) { history.undo(); setAutoPromptApplied(null); } }} />;
   const applyAutoAll = () => {
+    if (!workingTargets.length) return;
+    showWorkingEdit();
     history.label("Apply settings to videos");
     setAutoById((current) => ({
       ...current,
       ...Object.fromEntries(
-        sources.map((source) => [source.id, autoPreset({ ...selectedAuto, options: { ...mergeSourceSettings((current[source.id] || defaultAuto).options, selectedAuto.options, source.id), watermarkRemoval: current[source.id]?.options.watermarkRemoval } })]),
+        workingTargets.map((source) => [source.id, autoPreset({ ...selectedAuto, options: { ...mergeSourceSettings((current[source.id] || defaultAuto).options, selectedAuto.options, source.id), watermarkRemoval: current[source.id]?.options.watermarkRemoval } })]),
       ),
     }));
     if (futureSettings) setDefaultAuto(autoPreset({ ...selectedAuto, options: footageForSource({ ...selectedAuto.options, watermarkRemoval: undefined }) }));
     notify(
-      `Auto settings applied to all ${sources.length} videos${futureSettings ? " and new imports" : ""}.`,
+      `Auto settings applied to ${workingTargets.length} video${workingTargets.length === 1 ? '' : 's'}${futureSettings ? " and new imports" : ""}.`,
       "success",
     );
   };
@@ -959,7 +998,7 @@ export default function App() {
     try {
       await api(`/api/sources/${source.id}`, { method: "DELETE" });
       setSources((current) => current.filter((item) => item.id !== source.id));
-      setAutoSelectedIds((current) => current.filter((id) => id !== source.id));
+      setSelectedSourceIds((current) => current.filter((id) => id !== source.id));
       if (selected?.id === source.id) setSelectedId(null);
       rebaseManual((current) => {
         const next = { ...current };
@@ -977,7 +1016,7 @@ export default function App() {
   };
 
   const uploadAttachment = async (file: File, kind: Attachment["kind"]) => {
-    if (!selected) return;
+    if (!selected || !previewIncluded) return;
     const sourceId = selected.id;
     setAttachmentBusy(kind);
     setAttachmentError(null);
@@ -1014,7 +1053,7 @@ export default function App() {
 
   const startRender = async () => {
     if (mode === "auto") {
-      if (!autoTargets.length) return;
+      if (!workingTargets.length) return;
       setStarting(true);
       try {
         const result = await api<{ jobs: RenderJob[]; batchId: string }>(
@@ -1023,7 +1062,7 @@ export default function App() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              items: autoTargets.map((source) => {
+              items: workingTargets.map((source) => {
                 const preset = autoById[source.id] || defaultAuto;
                 return {
                   sourceId: source.id,
@@ -1042,7 +1081,7 @@ export default function App() {
         ]);
         setView("exports");
         notify(
-          `${autoTargets.length} video${autoTargets.length === 1 ? "" : "s"} queued for automatic editing. Follow each cut below.`,
+          `${workingTargets.length} video${workingTargets.length === 1 ? "" : "s"} queued for automatic editing. Follow each cut below.`,
           "success",
         );
       } catch (error) {
@@ -1052,8 +1091,7 @@ export default function App() {
       }
       return;
     }
-    const targets =
-      renderScope === "selected" && selected ? [selected] : sources;
+    const targets = workingTargets;
     if (!targets.length) return;
     for (const source of targets) {
       const value = settingsById[source.id] || defaultSettings;
@@ -1204,13 +1242,12 @@ export default function App() {
     : !!settings.subtitleId || (!!settings.automaticCaptions && settings.automaticCaptions !== "off"));
   const exportCount =
     mode === "auto"
-      ? autoTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
-      : renderScope === "selected" && selected ? 1 : sources.length;
-  const renderTargets = mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources;
-  const renderFootageCount = renderTargets.reduce((count, source) => count + ((mode === "auto"
+      ? workingTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
+      : workingTargets.length;
+  const renderFootageCount = workingTargets.reduce((count, source) => count + ((mode === "auto"
     ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings).ownFootage?.length ?? 0), 0);
   const removePreviewFootage = (id: string) => {
-    if (!selected) return;
+    if (!selected || !previewIncluded) return;
     // This button identifies one video's insert; it must never edit the batch or future imports.
      setFootageJump(null);
     if (mode === "auto") setAutoById(current => {
@@ -1224,7 +1261,7 @@ export default function App() {
     });
   };
   useEffect(() => { if (health) setDiagnosticEnvironment(health.runtime, health); }, [health]);
-  const missingBrollSources = (mode === "auto" ? autoTargets : renderScope === "selected" && selected ? [selected] : sources).filter(source => {
+  const missingBrollSources = workingTargets.filter(source => {
     const options = mode === "auto" ? (autoById[source.id] || defaultAuto).options : settingsById[source.id] || defaultSettings;
     return hasLibraryVisuals(options) && getVisualSources(options).length === 1 && !options.brollIds?.length && (mode === "auto" || options.brollMaxCoverage !== 0);
   });
@@ -1403,13 +1440,15 @@ export default function App() {
               <h2 id="shorts-intro-title">Turn long-form videos into short clips</h2>
               <p>Start with a podcast, interview, webinar or other long recording. Find the best moments automatically or choose your own timestamps, then export them as separate clips.</p>
             </section>}
-            {mode !== 'shorts' && <section className="settings-scope-bar" aria-label="Settings scope">
-              <label>Apply changes to<select value={settingsScope} disabled={brollBusy} onChange={event => { setSettingsScope(event.target.value as typeof settingsScope);  }}>
-                <option value="current">This video</option><option value="selected">Selected videos ({autoSelectedIds.length})</option><option value="all">All videos ({sources.length})</option>
+            {mode !== 'shorts' && <section ref={selectionBar} className="settings-scope-bar working-selection" aria-label="Working videos">
+              <div className="working-selection-summary">
+                <strong role="status">{loading ? 'Loading videos…' : scopeDescription}</strong>
+                <span>{!sources.length ? 'Add videos to begin.' : workingTargets.length ? 'Settings and exports use this selection.' : 'Check videos in the source list to edit and export them.'}</span>
+              </div>
+              <label>Videos to edit &amp; export<select aria-label="Videos to edit and export" value={workingScope} disabled={starting || brollBusy || watermark.editing} onChange={event => changeWorkingScope(event.target.value as WorkingScope)}>
+                <option value="current">This video</option><option value="selected">Checked videos</option><option value="all">All videos ({sources.length})</option>
               </select></label>
               <label className="scope-future"><input type="checkbox" checked={futureSettings} onChange={event => setFutureSettings(event.target.checked)} />Also use changes for future imports</label>
-              <span>{scopeDescription}{settingsScope === 'selected' && !settingTargets.length ? ' · Check videos in the source list first.' : ''}</span>
-
             </section>}
             <div
               className={`studio-grid ${mode === "auto" ? "auto-studio" : mode === "shorts" ? "shorts-studio" : tab === "all" ? "manual-all-controls" : ""}`}
@@ -1429,9 +1468,9 @@ export default function App() {
                   onError={(message, diagnostic) => notify(message, "error", diagnostic)} />
                 {!!sources.length && <div className="source-ready-heading">
                   <h3>{mode === "shorts" ? "Choose a video" : "Select videos"}</h3>
-                  <span>{mode === "shorts" ? `${sources.length} available` : `${sources.filter(source => autoSelectedIds.includes(source.id)).length} selected`}</span>
+                  <span>{mode === "shorts" ? `${sources.length} available` : `${workingTargets.length} selected`}</span>
                 </div>}
-                {!!sources.length && <p className="source-selection-help">{mode === "shorts" ? "Click a video below to start clipping." : "Click a video to open it. Check boxes to work on several."}</p>}
+                {!!sources.length && <p className="source-selection-help">{mode === "shorts" ? "Click a video below to start clipping." : workingScope === 'current' ? "Click a video to work on it. Check boxes to work on several." : "Click a video to preview it. Check boxes to include it in edits and exports."}</p>}
                 {!!sources.length && <details className="source-filter-tools">
                   <summary><SlidersHorizontal size={13} />Search &amp; filter{(sourceSearch.trim() || sourceProject) && <span>{visibleSources.length} of {sources.length}</span>}</summary>
                   <div className="source-filters"><label>Find a source<input type="search" placeholder="Name or project…" value={sourceSearch} maxLength={200} onChange={event => setSourceSearch(event.target.value)} /></label><label>Project<select value={sourceProject} onChange={event => setSourceProject(event.target.value)}><option value="">All projects</option>{projects.map(project => <option key={project}>{project}</option>)}</select></label><span>{visibleSources.length} of {sources.length} sources</span>{(sourceSearch.trim() || sourceProject) && <button className="text-button" onClick={() => { setSourceSearch(''); setSourceProject(''); }}>Clear source filters</button>}</div>
@@ -1465,15 +1504,13 @@ export default function App() {
                         className={`source-item ${selected?.id === source.id ? "selected" : ""}`}
                         key={source.id}
                       >
-                        {mode !== "shorts" && <label className="auto-source-check" title={`Include ${source.name} in selected videos`}>
-                          <input type="checkbox" aria-label={`Select ${source.name} for settings or Auto rendering`} checked={autoSelectedIds.includes(source.id)} disabled={starting || brollBusy}
-                            onChange={(event) => {
-                              setAutoSelectedIds((current) => event.target.checked ? [...current, source.id] : current.filter((id) => id !== source.id));
-                              setAutoRenderScope("selected");
-                            }} />
+                        {mode !== "shorts" && <label className="auto-source-check" title={`Include ${source.name} in edits and exports`}>
+                          <input type="checkbox" aria-label={`Include ${source.name} in edits and exports`} checked={workingTargets.some(target => target.id === source.id)} disabled={starting || brollBusy || watermark.editing}
+                            onChange={(event) => toggleSource(source.id, event.target.checked)} />
                         </label>}
                         <button
                           className="source-select"
+                          aria-label={`${mode === 'shorts' ? 'Open' : 'Preview'} ${source.name}`}
                           onClick={() => {
                             setSelectedId(source.id);
                             setOriginal(false);
@@ -1597,6 +1634,10 @@ export default function App() {
                       {previewCurrent && <button aria-pressed={usingRendered} className={usingRendered ? "active" : ""} onClick={() => { setOriginal(false); setShowRendered(true); }}>{upscaledPreview ? "AI upscaled" : "Rendered"}</button>}
                     </div>}
                 </div>
+                {selected && !previewIncluded && <p className="preview-selection-note">
+                  Previewing a video outside your selection. Settings changes apply to the {workingTargets.length} working video{workingTargets.length === 1 ? '' : 's'}.
+                  <button type="button" className="text-button" disabled={starting || brollBusy || watermark.editing} onClick={() => toggleSource(selected.id, true)}>Include this video</button>
+                </p>}
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
                   {watermark.editing ? watermark.preview : selected && liveFootage ? <FootageSequencePreview key={`${selected.id}:${mode}`}
                     source={selected} placements={activePreviewSettings.ownFootage!} settings={manualLive ? settings : undefined}
@@ -1799,7 +1840,7 @@ export default function App() {
               {mode === "auto" ? (
                 autoView === "quick" ? (
                 <QuickAutoPanel
-                  watermarkControls={watermark.controls}
+                  watermarkControls={watermarkControls}
                   options={autoOptions}
                   variants={selectedAuto.variants}
 
@@ -1812,14 +1853,14 @@ export default function App() {
                   onChange={updateScopedAuto}
                   onView={setAutoView}
                   selectedId={selected?.id}
-                  selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
+                  selectedVideos={workingTargets}
                   onApplySelectedFootage={applyFootageToSelected}
                   onFootageChange={updateScopedFootage}
-                  disabled={starting || brollBusy || !settingTargets.length}
+                  disabled={starting || brollBusy || !workingTargets.length}
                 />
                 ) : (
                 <AutoPanel
-                  watermarkControls={watermark.controls}
+                  watermarkControls={watermarkControls}
                   scopeDescription={scopeDescription}
                   promptEditor={autoPromptEditor}
                   footageValue={scopedFootage}
@@ -1834,10 +1875,11 @@ export default function App() {
                   selectedId={selected?.id}
                   onSourceChange={setSelectedId}
                   onApplyAll={applyAutoAll}
-                  selectedVideos={sources.filter(source => autoSelectedIds.includes(source.id))}
+                  workingCount={workingTargets.length}
+                  selectedVideos={workingTargets}
                   onApplySelectedFootage={applyFootageToSelected}
                   onFootageChange={updateScopedFootage}
-                  footageDisabled={starting || brollBusy || !settingTargets.length}
+                  footageDisabled={starting || brollBusy || !workingTargets.length}
                   libraryBusy={brollBusy}
                   capabilities={autoCapabilities}
                   variants={selectedAuto.variants}
@@ -1869,8 +1911,9 @@ export default function App() {
                       )}
                     </span>
                   </div>
-                  {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} settings={settings}
-                    disabled={starting || brollBusy || attachmentBusy !== null}
+                  <p className="manual-working-scope">{scopeDescription}. Only the settings you change are copied.</p>
+                  {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} sourceName={selected.name} settings={settings}
+                    disabled={starting || brollBusy || attachmentBusy !== null || !previewIncluded}
                     onApply={value => setSettingsById(current => ({ ...current, [selected.id]: { ...value, ownFootageSourceId: selected.id } }))}
                     onSwitchAuto={value => { setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...value, options: { ...value.options, ownFootageSourceId: selected.id } }) })); history.navigateOnRedo({ mode: "auto", sourceId: selected.id }); setMode("auto"); setAutoView("all"); notify("Prompt applied in Auto. Review the preferences and start remixing when ready.", "success"); }} />}
                   <div
@@ -1992,7 +2035,7 @@ export default function App() {
                           </div>
                           <UpscaleControl value={settings.upscale} onChange={upscale => updateSettings({ upscale })} />
                           <BlackBandsEditor value={settings.blackBands} onChange={blackBands => updateSettings({ blackBands })} />
-                          {watermark.controls}
+                          {watermarkControls}
                           <Slider
                             label="Zoom"
                             value={settings.zoom}
@@ -2080,7 +2123,7 @@ export default function App() {
                           ) : (
                             <button
                               className="attachment-button"
-                              disabled={!selected || attachmentBusy !== null}
+                              disabled={!selected || !previewIncluded || attachmentBusy !== null}
                               onClick={() => audioInput.current?.click()}
                             >
                               {attachmentBusy === "audio" ? (
@@ -2399,7 +2442,7 @@ export default function App() {
                             <button
                               className="attachment-button"
                               onClick={() => subtitleInput.current?.click()}
-                              disabled={!selected || attachmentBusy !== null}
+                              disabled={!selected || !previewIncluded || attachmentBusy !== null}
                             >
                               {attachmentBusy === "subtitle" ? (
                                 <LoaderCircle size={14} className="spin" />
@@ -2453,18 +2496,19 @@ export default function App() {
                     <p className="auto-preferences-note">Supporting shots are added during export over your manual edit. Your cuts, speed and sound settings stay in control. Live and five-second previews show your footage without these shots.</p>
                   </section>
                   <div className="manual-workflow-tools">
-                    <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={updateCurrentFootage} disabled={starting || !selected} />
+                    <OwnFootagePanel key={`footage-${selected?.id || "default"}`} value={settings.ownFootage} onChange={updateCurrentFootage} disabled={starting || !selected || !previewIncluded}
+                      scopeDescription={selected ? `Manual placements apply only to ${selected.name}.${previewIncluded ? '' : ' Include this video in the working selection to edit its placements.'}` : undefined} />
                     <FinishingPresets mode="manual" settings={settings} disabled={starting || brollBusy || attachmentBusy !== null} onApply={patch => updateSettings({ ...patch, blackBands: applyBandFinish(settings.blackBands, patch.blackBands) })} />
                   </div>
                   <div className="settings-footer">
                     <button
                       className="apply-all-button"
-                      disabled={sources.length < 2 || brollBusy}
+                      disabled={!workingTargets.length || sources.length < 2 || brollBusy}
                       onClick={applyAll}
                     >
                       <Copy size={14} />
-                      Apply settings to all videos
-                      <span>{sources.length || "—"}</span>
+                      Copy all settings to working videos
+                      <span>{workingTargets.length || "—"}</span>
                     </button>
                   </div>
                 </aside>
@@ -2481,9 +2525,9 @@ export default function App() {
                 </span>
                 <div>
                   <h2>One click. Every cut.</h2>
-                  <p className="render-source-target" title={renderTargets.length === 1 ? renderTargets[0]!.name : undefined}>
+                  <p className="render-source-target" title={workingTargets.length === 1 ? workingTargets[0]!.name : undefined}>
                     {sources.length
-                      ? renderTargets.length === 1 ? `Exporting: ${renderTargets[0]!.name}` : `${renderTargets.length} videos selected for export.`
+                      ? workingTargets.length === 1 ? `Exporting: ${workingTargets[0]!.name}` : `${workingTargets.length} videos selected for export.`
                       : "Add your videos to put the studio to work."}
                   </p>
                   {renderFootageCount > 0 && <p className="render-footage-summary">Includes {renderFootageCount} added clip{renderFootageCount === 1 ? "" : "s"} · Review beside the preview</p>}
@@ -2498,47 +2542,25 @@ export default function App() {
                 <div className="auto-render-summary">
                   <span>
                     <Check size={12} />
-                    {uniformAuto
-                      ? AUTO_FORMAT_NAMES[autoOptions.aspect]
+                    {uniformWorkingAuto
+                      ? AUTO_FORMAT_NAMES[workingAuto.options.aspect]
                       : "Individual video settings"}
                   </span>
                   <span>
-                    {uniformAuto
-                      ? autoOptions.durationMode === "full" ? "Full length for each video · " : `Up to ${autoOptions.targetDuration}s · `
+                    {uniformWorkingAuto
+                      ? workingAuto.options.durationMode === "full" ? "Full length for each video · " : `Up to ${workingAuto.options.targetDuration}s · `
                       : ""}
                     Up to {exportCount} exports total
                   </span>
-                  {uniformAuto && <span>{visualSourceSummary(autoOptions)}{getVisualSources(autoOptions).length > 0 ? ` · ${autoOptions.brollCount ?? DEFAULT_BROLL_COUNT} supporting shots target` : ""}</span>}
+                  {uniformWorkingAuto && <span>{visualSourceSummary(workingAuto.options)}{getVisualSources(workingAuto.options).length > 0 ? ` · ${workingAuto.options.brollCount ?? DEFAULT_BROLL_COUNT} supporting shots target` : ""}</span>}
                 </div>
               )}
               <div className="render-cta">
-                {mode === "auto" && <>
-                  <label className="auto-render-scope">Render
-                    <select aria-label="Auto videos to render" value={autoRenderScope} disabled={starting} onChange={(event) => setAutoRenderScope(event.target.value as "all" | "current" | "selected")}>
-                      <option value="current">This video</option>
-                      <option value="selected">Selected videos ({sources.filter((source) => autoSelectedIds.includes(source.id)).length})</option>
-                      <option value="all">All videos ({sources.length})</option>
-                    </select>
-                  </label>
-                  {autoRenderScope === "selected" && !autoTargets.length && <p className="auto-selection-hint">Check videos in the source list to include them.</p>}
-                </>}
-                {mode === "manual" && sources.length > 1 && (
-                  <select
-                    aria-label="Videos to render"
-                    value={renderScope}
-                    onChange={(event) =>
-                      setRenderScope(event.target.value as "all" | "selected")
-                    }
-                  >
-                    <option value="all">All videos</option>
-                    <option value="selected">Selected video</option>
-                  </select>
-                )}
                 <button
                   className="primary-button"
                   disabled={
                     !sources.length ||
-                    (mode === "auto" && !autoTargets.length) ||
+                    !workingTargets.length ||
                     starting ||
                     !engineReady ||
                     attachmentBusy !== null ||
@@ -2556,7 +2578,7 @@ export default function App() {
                     {starting
                       ? "Preparing exports…"
                       : mode === "auto"
-                        ? `Auto remix ${autoTargets.length} video${autoTargets.length === 1 ? "" : "s"}`
+                        ? `Auto remix ${workingTargets.length} video${workingTargets.length === 1 ? "" : "s"}`
                         : `Create ${exportCount || ""} ${exportCount === 1 ? "remix" : "remixes"}`}
                   </span>
                   <ArrowRight size={17} />

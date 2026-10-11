@@ -30,7 +30,7 @@ export async function suggestAutoBatch(targets: AutoPromptTarget[], prompt: stri
   progress: (completed: number) => void = () => {},
 ): Promise<AutoBatchProposal> {
   signal.throwIfAborted();
-  if (!targets.length) throw new Error('Check videos in the source list, or change Apply changes to.');
+  if (!targets.length) throw new Error('Check videos in the source list to edit and export them.');
   const controller = new AbortController();
   const abort = () => controller.abort(signal.reason);
   signal.addEventListener('abort', abort, { once: true });

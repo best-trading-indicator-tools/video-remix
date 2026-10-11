@@ -28,7 +28,7 @@ export default function AutoPromptEditor({ targets, scopeKey, disabled, onApply,
   return <div className="auto-prompt-editor">
     {!!targets.length && <details className="auto-prompt-targets"><summary>Prompt targets: {targets.length} video{targets.length === 1 ? '' : 's'}</summary><ul>{targets.map(target => <li key={target.id}>{target.name}</li>)}</ul></details>}
     <PromptEditor<AutoBatchProposal> title="Remix with a prompt" contextKey={`${scopeKey}:${identityOf(targets)}`} disabled={disabled || !targets.length}
-    description={targets.length ? `Describe changes for ${targets.length === 1 ? targets[0]!.name : `all ${targets.length} target videos`}. Review each video's proposal before applying.` : 'Check videos in the source list, or change Apply changes to.'}
+    description={targets.length ? `Describe changes for ${targets.length === 1 ? targets[0]!.name : `all ${targets.length} target videos`}. Review each video's proposal before applying.` : 'Check videos in the source list to edit and export them.'}
     placeholder="e.g. Add black bands and append outro.mp4 in full to every target video"
     scope="AI upscaling, Length, versions, captions, black bands, B-roll, uploaded footage, pacing, sound and reviews. Each video keeps its unrelated settings. Prompts change the listed videos only; future import defaults stay unchanged. Edits needing Manual include a workspace switch in the proposal."
     examples={examples} onSuggest={(prompt, signal) => {

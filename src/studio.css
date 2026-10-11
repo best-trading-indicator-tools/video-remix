@@ -163,10 +163,7 @@ h1, .page-heading h1 { font-size: clamp(28px, 2.3vw, 34px); line-height: 1.2; le
 @media (min-width: 1500px) { .studio-grid { grid-template-columns: 268px minmax(400px, 1fr) 430px; } }
 @media (min-width: 981px) and (min-height: 800px) { .preview-panel { position: sticky; top: 20px; } }
 @media (min-width: 1181px) {
-  .auto-render-bar .render-cta { display: grid; grid-template-columns: minmax(150px, 180px) minmax(190px, 230px); gap: 6px 14px; }
-  .auto-render-bar .auto-render-scope { display: grid; grid-row: 1 / span 2; align-self: start; gap: 6px; font-size: 12px; }
-  .auto-render-bar .auto-render-scope select { width: 100%; }
-  .auto-render-bar .primary-button, .auto-render-bar .render-fineprint { grid-column: 2; }
+  .auto-render-bar .render-cta { display: grid; grid-template-columns: minmax(190px, 230px); gap: 6px; }
 }
 @media (max-width: 1180px) and (min-width: 981px) {
   .studio-grid { grid-template-columns: 210px minmax(245px, 1fr) 330px; gap: 12px; }

@@ -62,6 +62,7 @@ export default function AutoPanel({
   selectedId,
   onSourceChange,
   onApplyAll,
+  workingCount,
   selectedVideos,
   onApplySelectedFootage,
   onFootageChange,
@@ -91,6 +92,7 @@ export default function AutoPanel({
   selectedId?: string;
   onSourceChange: (id: string) => void;
   onApplyAll: () => void;
+  workingCount: number;
   selectedVideos: FootageTarget[];
   onApplySelectedFootage: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
   onFootageChange: (placements: NonNullable<AutoOptions['ownFootage']>) => void;
@@ -138,7 +140,7 @@ export default function AutoPanel({
         <div className="auto-scope">
           <label htmlFor="auto-source">
             {sources.length
-              ? "Editing preferences for"
+              ? "Previewing settings from"
               : "Starting preferences"}
           </label>
           {sources.length > 0 && (
@@ -161,13 +163,13 @@ export default function AutoPanel({
               : "Add footage when you're ready. These preferences will apply to new videos."}
           </p>
           {sources.length > 1 && (
-            <button type="button" disabled={libraryBusy} onClick={onApplyAll}>
-              <Copy size={14} /> Copy all Auto settings to all {sources.length} videos
+            <button type="button" disabled={libraryBusy || !workingCount} onClick={onApplyAll}>
+              <Copy size={14} /> Copy all Auto settings to {workingCount} working video{workingCount === 1 ? '' : 's'}
             </button>
           )}
           {sources.length > 1 && (
             <small>
-              Copies format, captions, sound and version count to every imported video. Added clips and watermark areas stay with each video. Future imports change only when selected above.
+              Copies format, captions, sound and version count to the working selection. Added clips and watermark areas stay with each video. Future imports change only when selected above.
             </small>
           )}
           {onSaveStyle && (

@@ -23,8 +23,9 @@ const examples: PromptExample[] = [
 ];
 
 /** Key by source ID so prompts and undo always belong to the selected video. */
-export default function ManualPromptEditor({ sourceId, settings, disabled = false, onApply, onSwitchAuto }: {
+export default function ManualPromptEditor({ sourceId, sourceName, settings, disabled = false, onApply, onSwitchAuto }: {
   sourceId: string;
+  sourceName: string;
   settings: RemixSettings;
   disabled?: boolean;
   onApply: (settings: RemixSettings) => void;
@@ -49,7 +50,7 @@ export default function ManualPromptEditor({ sourceId, settings, disabled = fals
   return <div className="manual-prompt-editor">
     <PromptEditor<ManualPromptProposal> contextKey={`${sourceId}:${identity}`} disabled={disabled} onSuggest={suggest} onApply={apply}
       examples={examples} placeholder="e.g. Add captions, black bands and 4 B-roll shots"
-      description="Describe a change for the selected video."
+      description={`Describe a change for ${sourceName}. Manual prompts apply to this previewed video only.`}
       scope="AI upscaling, Captions, black bands, B-roll, animations, uploaded footage, cuts, color, sound and output settings. Automatic selection or narration can propose a switch to Auto. Apply changes to this video after reviewing."
       appliedMessage="Settings applied to this video. Preview or render when ready."
       undoBlockedMessage="Use workspace Undo to step back through newer edits and this prompt."
