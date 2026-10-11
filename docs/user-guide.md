@@ -304,7 +304,8 @@ currently saved; marks removed with Undo or Clear stay removed.
 
 LaMa installs automatically when the first preview or export needs it. Setup progress
 appears in the preview or export, then processing continues. The desktop app downloads
-its own Python; source installations need Python 3.10–3.13 (3.12 recommended) or `uv`.
+its own Python; source installations prepare private Python 3.12 during `npm install`
+or `npm ci`. If that download was skipped or interrupted, run `npm run setup:python`.
 You can also preinstall or repair it in **Settings → Local tools → Local object removal**
 on desktop, or run this in a source installation:
 
@@ -737,12 +738,12 @@ For a future cloud integration, extract the chosen short intervals locally, enha
 
 For installation without terminal commands, use the [desktop preview and Local tools setup](../README.md#desktop-app--no-terminal-required). See [desktop data locations, builds and current platform limits](desktop.md). The source setup below remains available.
 
-Requirements: **Node.js 22.13 or newer**, npm, and **FFmpeg / ffprobe** on your `PATH`. Local transcription also needs **Python 3.10–3.13**. Use an FFmpeg build with `libx264`, AAC encoding, `drawtext`, and the libass `subtitles` filter.
+Requirements: **Node.js 22.13 or newer**, npm, and **FFmpeg / ffprobe** on your `PATH`. On Windows x64, Linux x64 and Apple Silicon, `npm install` or `npm ci` downloads private **Python 3.12** into `.remix-python/` automatically. It does not need admin access or change system Python, PATH or the Windows registry. Use an FFmpeg build with `libx264`, AAC encoding, `drawtext`, and the libass `subtitles` filter.
 
 On macOS with Homebrew:
 
 ```sh
-brew install node ffmpeg-full tesseract python@3.12
+brew install node ffmpeg-full tesseract
 export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
 ```
 
@@ -750,7 +751,7 @@ On Debian/Ubuntu, install Node.js 22.13+ using your preferred method, then:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr python3 python3-venv
+sudo apt-get install -y ffmpeg fonts-dejavu-core tesseract-ocr
 ```
 
 Install dependencies, prepare local transcription, and start development servers:
@@ -765,11 +766,11 @@ Open **http://127.0.0.1:5173**. Vite forwards API requests to the backend on por
 
 ### Windows setup
 
-Install Node.js 22.13+ and Python 3.12, plus a Windows FFmpeg build containing
+Install Node.js 22.13+, plus a Windows FFmpeg build containing
 `ffmpeg.exe` and `ffprobe.exe`. Add FFmpeg's `bin` folder to your user `PATH`, then
 open a new PowerShell window in the cloned repository. Check `node --version`,
-`npm --version`, `py -3.12 --version`, `ffmpeg -version`, and `ffprobe -version`.
-The setup scripts also recognize `python` on PATH if the `py` launcher is absent.
+`npm --version`, `ffmpeg -version`, and `ffprobe -version`.
+The npm installation below prepares Python automatically; a system `py` launcher is not required.
 If PowerShell blocks `npm.ps1`, use `npm.cmd` instead of `npm` in the commands below.
 
 ```powershell
@@ -780,7 +781,8 @@ npm run dev
 ```
 
 `setup:imports` is needed for TikTok, Instagram and YouTube links. Face framing is
-optional: run `npm run setup:focus` to enable it. If Python is installed in a
+optional: run `npm run setup:focus` to enable it. If the Python download fails,
+the editor still installs; run `npm run setup:python` to retry it. If Python is installed in a
 custom location, set `$env:PYTHON_BIN = 'C:\Path\To\Python312\python.exe'` before
 running setup. Python 3.14+ is not supported by the current transcription/face
 setup; the link downloader accepts Python 3.10+.

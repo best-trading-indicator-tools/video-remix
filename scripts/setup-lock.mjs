@@ -3,7 +3,7 @@ import path from 'node:path';
 import { setTimeout } from 'node:timers/promises';
 
 /** Coordinate the desktop wizard, engine and CLI; recover after a killed installer. */
-export async function withSetupLock(directory, work, waiting = () => {}) {
+export async function withSetupLock(directory, work, waiting = () => {}, name = 'LaMa') {
   const owner = path.join(directory, 'owner');
   const old = async file => {
     try { return Date.now() - (await stat(file)).birthtimeMs > 10_000; }
@@ -40,7 +40,7 @@ export async function withSetupLock(directory, work, waiting = () => {}) {
         if (error.code === 'EEXIST' && await old(reap)) await rm(reap, { recursive: true, force: true });
       }
     }
-    if (Date.now() >= deadline) throw new Error('Another LaMa installation is still running. Wait for it to finish, then retry.');
+    if (Date.now() >= deadline) throw new Error(`Another ${name} installation is still running. Wait for it to finish, then retry.`);
     await setTimeout(500);
   }
   try { await writeFile(owner, String(process.pid)); return await work(); }

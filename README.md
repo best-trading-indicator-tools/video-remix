@@ -270,14 +270,14 @@ The app includes its own video engine and downloads an isolated Python environme
 
 - **Node.js 22.13+** and npm.
 - **FFmpeg and ffprobe** on `PATH`, including H.264/AAC encoding, `drawtext`, and `subtitles` support.
-- **Python 3.10–3.13** for local speech/face tools; **Python 3.12 is recommended**. The URL downloader accepts Python 3.10+.
+- **Python is prepared automatically by `npm install` / `npm ci`** on Windows x64, Linux x64 and Apple Silicon. You can also use Python 3.10–3.13 via `PYTHON_BIN`.
 - **Tesseract OCR** for detecting captions already present in source footage.
 - Disk space for sources, renders, dependencies, and any optional local models.
 
 On macOS with Homebrew:
 
 ```sh
-brew install node ffmpeg-full tesseract python@3.12
+brew install node ffmpeg-full tesseract
 export PATH="$(brew --prefix ffmpeg-full)/bin:$PATH"
 ```
 
@@ -298,6 +298,10 @@ npm run dev
 ```
 
 Open **http://127.0.0.1:5173**. The API runs on port **8787**. Keep the development command running while you use the app.
+
+`npm install` and `npm ci` download a private Python 3.12 runtime into `.remix-python/`. No administrator access, system Python installation, PATH changes or Windows registry changes are needed. Local tool setup automatically uses it, and repeat installs reuse it offline. LaMa downloads its dependencies and model on first use.
+
+If the Python download fails, npm finishes installing the editor and prints a retry message: run `npm run setup:python` once the connection or disk-space issue is fixed. To skip this download for a custom build, set `REMIX_SKIP_PYTHON_SETUP=1`; `npm --ignore-scripts` also skips it. An explicit `PYTHON_BIN` takes precedence over the private runtime.
 
 The first speech setup downloads its model; subsequent transcription uses the cached model locally. You can skip speech setup for basic Manual edits and URL downloads. No API key is needed to start the app.
 
@@ -320,6 +324,7 @@ Open **http://127.0.0.1:8787**; one server serves the frontend and API.
 
 | Command | Enables |
 | --- | --- |
+| `npm run setup:python` | Prepare or repair the private Python runtime (normally done by npm install). |
 | `npm run setup:auto` | Local Whisper transcription, speech captions, and transcript-based editing. |
 | `npm run setup:imports` | yt-dlp for YouTube, Shorts, TikTok, and Instagram links. Run again to update platform support. |
 | `npm run setup:focus` | Local face detection and speaker-centering support. |

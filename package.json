@@ -1,12 +1,15 @@
 {
   "name": "video-remix",
-  "version": "1.5.0-preview.1",
+  "version": "1.6.0-preview.1",
   "private": true,
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
+    "postinstall": "node scripts/setup-python-runtime.mjs --optional",
+    "setup:python": "node scripts/setup-python-runtime.mjs",
+    "check:python-install": "node scripts/check-python-install.mjs",
     "dev": "concurrently -k -n api,web \"tsx watch server/index.ts\" \"vite --host 127.0.0.1\"",
     "build": "npm run typecheck && vite build && tsc -p tsconfig.server.json && npm run build:remotion",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.remotion.json",
@@ -40,6 +43,7 @@
     "archiver": "^8.0.0",
     "cheerio": "1.2.0",
     "express": "^5.2.1",
+    "extract-zip": "2.0.1",
     "lucide-react": "^1.46.0",
     "multer": "^2.4.0",
     "react": "^19.3.0",
@@ -60,7 +64,6 @@
     "concurrently": "^10.0.5",
     "electron": "44.7.0",
     "electron-builder": "26.15.3",
-    "extract-zip": "2.0.1",
     "ffmpeg-static": "5.3.0",
     "sharp": "0.35.5",
     "tsx": "^4.23.13",

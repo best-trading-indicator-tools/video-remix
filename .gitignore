@@ -27,3 +27,4 @@ release/
 scripts/models/realesr-general-x4v3.pth
 .watermark-setup-lock/
 ready-watermark.json
+.remix-python/

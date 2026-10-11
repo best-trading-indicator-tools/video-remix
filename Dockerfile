@@ -2,7 +2,9 @@ FROM node:22-bookworm-slim AS build
 
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN PUPPETEER_SKIP_DOWNLOAD=true npm ci
+COPY scripts/setup-python-runtime.mjs scripts/python-runtime.mjs scripts/setup-lock.mjs ./scripts/
+# The runtime image installs its own Python below; keep the dependency layer small.
+RUN REMIX_SKIP_PYTHON_SETUP=1 PUPPETEER_SKIP_DOWNLOAD=true npm ci
 COPY . .
 RUN npm run build && npm prune --omit=dev
 

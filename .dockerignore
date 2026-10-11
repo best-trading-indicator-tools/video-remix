@@ -21,3 +21,4 @@ coverage
 .codex
 test-results
 playwright-report
+.remix-python/

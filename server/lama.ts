@@ -44,7 +44,7 @@ const setup = createLamaSetup(async (signal, report) => {
     console.error("Automatic LaMa setup failed:", error);
     throw new LamaError("Local LaMa could not be installed automatically. Check your internet connection and free disk space, then retry the preview or export. " +
       (process.env.REMIX_DESKTOP === "1" ? "You can also retry Local object removal in Settings → Local tools." :
-        "Source installations need Python 3.10–3.13 or uv. Run npm run setup:watermark for installation details.") +
+        "Run npm run setup:python to retry Python setup, or npm run setup:watermark for installation details.") +
       " To continue without a download, choose Blend surrounding pixels in Area fill.");
   }
 });

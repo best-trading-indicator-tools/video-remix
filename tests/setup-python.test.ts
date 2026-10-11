@@ -22,7 +22,7 @@ test("setup checks each interpreter version and preserves explicit executable pa
   const calls: string[] = [];
   await assert.rejects(findPython(async (command: string) => {
     calls.push(command); throw new Error("Unsupported Python version");
-  }, { platform: "win32", pythonBin: executable }), /Install Python 3.10–3.13/u);
+  }, { platform: "win32", pythonBin: executable }), /install Python 3.10–3.13/u);
   assert.deepEqual(calls, [executable]);
   assert.deepEqual(await findPython(async (command: string, args: string[]) => {
     assert.equal(command, executable);

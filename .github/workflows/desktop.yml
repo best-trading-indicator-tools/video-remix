@@ -56,7 +56,9 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Check release selection and private runtime behavior
-        run: npx tsx --import ./tests/setup.mjs --test tests/desktop-runtime.test.ts tests/desktop-updates.test.ts tests/desktop-release.test.ts tests/desktop-notifications.test.ts tests/workspace-history.test.ts tests/processing-time.test.ts tests/lama-setup.test.ts tests/setup-python.test.ts
+        run: npx tsx --import ./tests/setup.mjs --test tests/desktop-runtime.test.ts tests/desktop-updates.test.ts tests/desktop-release.test.ts tests/desktop-notifications.test.ts tests/workspace-history.test.ts tests/processing-time.test.ts tests/lama-setup.test.ts tests/setup-python.test.ts tests/python-runtime.test.ts
+      - name: Verify npm installs Python without a system interpreter
+        run: npm run check:python-install
       - run: npm run desktop:build
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'

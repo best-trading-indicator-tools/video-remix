@@ -1,7 +1,7 @@
 {
-  "version": "1.5.0-preview.1",
+  "version": "1.6.0-preview.1",
   "notes": [
-    "Local LaMa installs automatically on the first watermark preview or export, including private Python setup on desktop.",
-    "See installation progress, cancel safely, and retry interrupted setup without terminal commands."
+    "Source installs now prepare private Python automatically during npm install or npm ci, with no separate Python or uv installation.",
+    "Local tool setup reuses private Python, supports offline repeat installs, and offers a retry command when the download cannot finish."
   ]
 }
