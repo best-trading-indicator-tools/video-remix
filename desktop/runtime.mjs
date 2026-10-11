@@ -9,7 +9,7 @@ export const components = [
   { id: 'ocr', name: 'Detect existing captions', description: 'English and French OCR models. Helps avoid adding captions over existing ones.', recommended: false },
   { id: 'graphics', name: 'Animated cards', description: 'Download the local renderer for animated explainers and supporting visuals.', recommended: false },
   { id: 'focus', name: 'Face framing', description: 'Follow faces while reframing your videos.', script: 'setup-focus.mjs', recommended: false },
-  { id: 'watermark', name: 'Local object removal', description: 'Optional LaMa model for cleaning marked areas.', script: 'setup-watermark.mjs', recommended: false },
+  { id: 'watermark', name: 'Local object removal', description: 'LaMa for cleaning marked areas. Also installs automatically on your first preview or export.', script: 'setup-watermark.mjs', recommended: true },
 ];
 export function desktopEnvironment(root, runtime, data, binaries, executable = process.execPath) {
   return { ...process.env, ELECTRON_RUN_AS_NODE: '1', REMIX_RUNTIME_DIR: runtime,
@@ -29,7 +29,7 @@ export async function prepareRuntime(root, runtime) {
     filter: source => !/[/\\](?:__pycache__|models)(?:[/\\]|$)/u.test(source) || source.endsWith('models') });
   // YuNet is a small, tracked runtime asset. Keep downloaded AI weights private,
   // but copy this bundled model and its license for face-framing setup checks.
-  for (const name of ['face_detection_yunet_2023mar.onnx', 'LICENSE-YUNET.txt'])
+  for (const name of ['face_detection_yunet_2023mar.onnx', 'LICENSE-YUNET.txt', 'LICENSE-LAMA.txt'])
     await cp(path.join(root, 'scripts/models', name), path.join(runtime, 'scripts/models', name));
   for (const name of await readdir(root)) if (/^requirements-[\w-]+\.txt$/u.test(name)) await cp(path.join(root, name), path.join(runtime, name));
   await cp(path.join(root, 'dist'), path.join(runtime, 'dist'), { recursive: true });

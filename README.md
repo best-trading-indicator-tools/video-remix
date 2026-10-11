@@ -129,6 +129,8 @@ Select a rectangle or paint a mask, erase parts of the selection, and undo chang
 
 Masks belong to individual sources and do not copy through bulk settings or presets. Timed areas are fixed within their ranges, rather than automatically following a moving watermark. [Setup, controls, and limitations →](docs/user-guide.md#watermark-removal)
 
+LaMa installs automatically on the first preview or export that uses it. Progress appears while its dependencies and 196 MiB model download; allow several minutes and an internet connection the first time. The desktop app also installs its own Python. Later runs reuse the local installation offline.
+
 ### Upscale videos with free local AI
 
 Use **Real-ESRGAN** to reconstruct detail in smaller main videos and export at **1080p, 1440p, or 4K (2160p)**. Upscaling runs on the computer hosting the app, with **no API key, subscription, credits, or video upload** required for the upscaler itself.
@@ -260,7 +262,7 @@ Completed features get a new desktop release automatically after all three platf
 
 ![Desktop setup with local tools and installation status](docs/screenshots/desktop-setup.png)
 
-The app includes its own video engine and downloads an isolated Python environment when a selected tool needs one. It does not require a system Node, Python or FFmpeg installation. Captions, URL imports and the AI upscaler are recommended; OCR, animated cards, face framing and object removal are optional. Reopen setup at **Settings → Local tools**. Models need internet for their first download and several GB of free disk space; subsequent processing stays local.
+The app includes its own video engine and downloads an isolated Python environment when a selected tool needs one. It does not require a system Node, Python or FFmpeg installation. Captions, URL imports, the AI upscaler and object removal are recommended; OCR, animated cards and face framing are optional. Object removal also installs automatically when first used. Reopen setup at **Settings → Local tools**. Models need internet for their first download and several GB of free disk space; subsequent processing stays local.
 
 **Preview release:** installers are not yet signed/notarized for public distribution. macOS Gatekeeper and Windows SmartScreen may block or warn on downloaded builds. Do not disable OS protections; use the source installation below if your computer blocks the preview. Intel Macs and native Windows ARM are not included. [Desktop builds, data locations and verification →](docs/desktop.md)
 
@@ -322,7 +324,7 @@ Open **http://127.0.0.1:8787**; one server serves the frontend and API.
 | `npm run setup:imports` | yt-dlp for YouTube, Shorts, TikTok, and Instagram links. Run again to update platform support. |
 | `npm run setup:focus` | Local face detection and speaker-centering support. |
 | `npm run setup:speaker` | Local active-speaker tracking using TalkNet; also prepares face detection. |
-| `npm run setup:watermark` | Local LaMa reconstruction for selected overlay areas. |
+| `npm run setup:watermark` | Preinstall or repair local LaMa; also installs automatically on first use. |
 | `npm run setup:upscale` | Free local Real-ESRGAN video upscaling to 1080p, 1440p, or 4K. Check readiness with `npm run check:upscale`. |
 | `npm run setup:visuals` | Chromium for local animated cards if browser installation was skipped. |
 

@@ -10,8 +10,8 @@ import { config } from "./config.js";
 import { geometry, probeMedia, renderVideo, type MediaInfo } from "./engine.js";
 import { settingsSchema } from "./schema.js";
 import { state } from "./store.js";
-import { WatermarkRemovalError } from "./watermark-removal.js";
-import { LamaError } from "./lama.js";
+import { preflightWatermarkRemoval, WatermarkRemovalError } from "./watermark-removal.js";
+import { LamaError, lamaSetupStatus } from "./lama.js";
 import { removalMasks } from "../shared/watermark-removal.js";
 import { footageForSource } from "../shared/own-footage.js";
 import { assertLinkedSourceUnchanged, ImportError } from "./media-imports.js";
@@ -88,6 +88,7 @@ interface Preview {
 }
 
 export function installManualPreviewRoutes(app: Express) {
+  app.get("/api/watermark/setup", (_req, res) => res.json(lamaSetupStatus()));
   const directory = path.join(config.dataDir, "previews");
   const previews = new Map<string, Preview>();
   let active: string | undefined;
@@ -132,8 +133,8 @@ export function installManualPreviewRoutes(app: Express) {
     const controller = new AbortController();
     let timedOut = false;
     const usesLama = removalMasks(settings.watermarkRemoval).some(mask => mask.fill === "lama" && mask.strokes.length);
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, parsed.data.settings.upscale && parsed.data.settings.upscale !== "off" ? 30 * 60_000 : usesLama ? 5 * 60_000 : TIMEOUT_MS);
-    timeout.unref();
+    const renderTimeout = parsed.data.settings.upscale && parsed.data.settings.upscale !== "off" ? 30 * 60_000 : usesLama ? 5 * 60_000 : TIMEOUT_MS;
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     const disconnected = () => { if (!res.writableFinished) controller.abort(); };
     res.once("close", disconnected);
     try {
@@ -150,6 +151,10 @@ export function installManualPreviewRoutes(app: Express) {
       const key = createHash("sha256").update(JSON.stringify({ settings, files })).digest("hex");
       const cached = [...previews.values()].find(item => item.key === key);
       if (cached) return res.status(201).json({ id: cached.id, url: `/api/previews/${cached.id}/video`, duration: cached.duration });
+      // Setup has its own bounded download budget; it must not consume render time.
+      await preflightWatermarkRemoval(bounded.settings.watermarkRemoval, bounded.source.width, bounded.source.height, source.duration, controller.signal);
+      timeout = setTimeout(() => { timedOut = true; controller.abort(); }, renderTimeout);
+      timeout.unref();
       const folder = path.join(directory, id);
       const output = path.join(folder, "preview.mp4");
       await renderVideo({

@@ -797,6 +797,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         segments ?? [{ start, end: start + clipLength }], s.speed, workDir, temporary, signal, { input, duration: source.duration, fps: source.fps,
           timeline: { inputArgs: sourceInputArgs, filters: [...sourceFilters, `fps=${fps}:start_time=0`], fps,
             duration: Math.min(duration, options.maximumOutputDuration ?? duration),
+            onPhase: options.onPhase,
             onProgress: progress => { renderProgressBase = aiUpscale ? 30 : 75; options.onProgress(progress * renderProgressBase / 100); } } }),
       // Clean the selected source pixels before scaling; no external service.
       ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),

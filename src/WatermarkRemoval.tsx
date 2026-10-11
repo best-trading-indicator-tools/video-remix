@@ -89,7 +89,7 @@ export function useWatermarkRemoval({ value, onChange, source, workspaceKey }: {
           <option value="lama">AI reconstruction · LaMa (local)</option>
           <option value="surroundings">Blend surrounding pixels · fast</option><option value="reference">Copy from a clean frame</option>
         </select></label>
-        {mask.fill === "lama" && <p>Rebuilds the marked background with free, local AI. Slower than blending; fine details and moving backgrounds can still change or flicker. Preview a short sample first.</p>}
+        {mask.fill === "lama" && <p>Rebuilds the marked background with free, local AI. Installs automatically on first use; the one-time download needs internet and can take several minutes. Fine details and moving backgrounds can still change or flicker. Preview a short sample first.</p>}
         {mask.fill === "reference" && <>
           <p>Use real background detail from a nearby frame where this area is clear. Best for short removals on a steady background; the patch does not follow camera or subject movement.</p>
           <TimeField label="Clean frame (source seconds)" value={mask.referenceTime ?? 0} max={Math.max(0, source.duration - 1 / (source.fps || 30))}
@@ -144,6 +144,24 @@ function WatermarkWorkspace({ source, value, mask, onStrokes, tool, size, seek, 
   const [time, setTime] = useState(seek.time), [playing, setPlaying] = useState(false), [draft, setDraft] = useState<MaskStroke[] | null>(null);
   const [preview, setPreview] = useState<{ url: string; signature: string } | null>(null), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const request = useRef<AbortController | null>(null);
+  const [setupPhase, setSetupPhase] = useState("");
+  const usesLama = value.enabled && value.masks.some(item => item.fill === "lama" && item.strokes.length);
+  useEffect(() => {
+    setSetupPhase("");
+    if (!busy || !usesLama) return;
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const status = await apiRequest<{ busy: boolean; phase: string }>("/api/watermark/setup", { signal: controller.signal });
+        if (controller.signal.aborted) return;
+        setSetupPhase(status.busy ? status.phase : "Rendering cleaned sample…");
+        timer = setTimeout(() => void poll(), 1000);
+      } catch { /* The preview request reports failures; status is supplementary. */ }
+    };
+    void poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [busy, usesLama]);
   const gesture = useRef<{ id: number; start: MaskPoint; original: MaskStroke[]; strokes: MaskStroke[]; index: number; move?: MaskStroke; corner?: MaskPoint } | null>(null);
   const signature = JSON.stringify(value);
   const cleaned = preview?.signature === signature;
@@ -262,6 +280,7 @@ function WatermarkWorkspace({ source, value, mask, onStrokes, tool, size, seek, 
         : busy ? <button type="button" className="secondary-button" onClick={() => request.current?.abort()}><LoaderCircle size={15} className="spin" />Cancel preview<X size={14} /></button>
           : <button type="button" className="secondary-button" disabled={!value.masks.some(item => item.strokes.length)} onClick={() => void renderPreview()}>Preview removal · 3s</button>}
     </div>
+    {busy && <p role="status">{usesLama ? setupPhase || "Preparing local LaMa… First setup can take several minutes." : "Rendering cleaned sample…"}</p>}
     <p>{cleaned ? "Processed sample from the selected source time. Return to marking to compare or refine the area." : "Colored areas are the removal mask. Preview removal to see the cleaned pixels. Your export applies the masks before the rest of the edit."}</p>
     {error && <ProblemNotice message={error} operation="Preview watermark removal" />}
   </div>;

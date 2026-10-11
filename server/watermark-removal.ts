@@ -3,7 +3,7 @@ import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DEFAULT_WATERMARK_FEATHER, featherMask, rasterizeMask, removalIntervals, removalMasks, type WatermarkRemoval } from "../shared/watermark-removal.js";
 import { runLocal, MEDIA_INPUT_ARGS } from "./auto-process.js";
-import { assertLamaInstalled, renderLama, type LamaArea, type LamaTimeline } from "./lama.js";
+import { ensureLamaInstalled, renderLama, type LamaArea, type LamaTimeline } from "./lama.js";
 
 export class WatermarkRemovalError extends Error {
   readonly status = 422;
@@ -46,10 +46,11 @@ export function validateWatermarkRemoval(value: WatermarkRemoval | undefined, wi
   }
 }
 
-export async function preflightWatermarkRemoval(value: WatermarkRemoval | undefined, width: number, height: number, duration: number) {
+export async function preflightWatermarkRemoval(value: WatermarkRemoval | undefined, width: number, height: number, duration: number,
+  signal: AbortSignal, onPhase?: (phase: string) => void) {
   validateWatermarkRemoval(value, width, height, duration);
   if (removalMasks(value).some(mask => mask.fill === "lama" && rasterizeMask(mask.strokes, width, height).some(Boolean)))
-    await assertLamaInstalled();
+    await ensureLamaInstalled(signal, onPhase);
 }
 
 /** Only the marked patch is stored; a larger source crop supplies reconstruction context. */

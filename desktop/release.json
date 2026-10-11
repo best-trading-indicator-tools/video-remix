@@ -1,7 +1,7 @@
 {
-  "version": "1.4.0-preview.1",
+  "version": "1.5.0-preview.1",
   "notes": [
-    "Choose videos once with the persistent Working on N videos bar; Auto and Manual edits and exports share the same selection.",
-    "Source checkboxes show the working selection, remember checked videos, and prevent exports when no videos are selected."
+    "Local LaMa installs automatically on the first watermark preview or export, including private Python setup on desktop.",
+    "See installation progress, cancel safely, and retry interrupted setup without terminal commands."
   ]
 }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
+import { access, mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -51,7 +51,32 @@ try {
   assert.equal(video.status, 200); const output = path.join(directory, 'rendered.mp4'); await writeFile(output, Buffer.from(await video.arrayBuffer()));
   const info = JSON.parse(execFileSync(path.join(binaries, 'ffprobe' + extension), ['-v', 'error', '-show_streams', '-of', 'json', output], { encoding: 'utf8' }));
   assert.ok(info.streams.some(stream => stream.codec_type === 'audio')); assert.ok(info.streams.some(stream => stream.codec_type === 'video' && stream.width === 320));
-  console.log(`Desktop smoke passed: bundled Node ${runtimeInfo.node}, SQLite, FFmpeg, private server, import, text rendering and audio.`);
+  // Exercise the actual first-use path with no preinstalled Python or LaMa environment.
+  const removal = { enabled: true, mode: 'fixed', masks: [{ id: 'smoke-area', start: 0, end: 1, fill: 'lama',
+    strokes: [{ kind: 'rect', size: .04, points: [{ x: .2, y: .2 }, { x: .25, y: .25 }] }] }] };
+  let setupSeen = false;
+  const poll = setInterval(() => {
+    void fetch(`${base}/api/watermark/setup`, { headers }).then(response => response.json()).then(status => {
+      if (status.busy) { setupSeen = true; console.log(status.phase); }
+    }).catch(() => {});
+  }, 5000);
+  try {
+    const cleaned = await fetch(`${base}/api/previews`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId: source.id, settings: { ...DEFAULT_SETTINGS, trimEnd: .25, watermarkRemoval: removal } }) });
+    assert.equal(cleaned.status, 201, `${await cleaned.clone().text()}\n${logs}`);
+    const result = await cleaned.json();
+    const cleanedVideo = await fetch(base + result.url, { headers });
+    assert.equal(cleanedVideo.status, 200);
+    assert.ok((await cleanedVideo.arrayBuffer()).byteLength > 0);
+    assert.ok(setupSeen, 'First preview reports automatic LaMa installation');
+    await access(path.join(runtime, 'ready-watermark.json'));
+    await access(path.join(runtime, '.venv-watermark', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python'));
+    // A second request uses a different cache key and renders with the saved installation.
+    const again = await fetch(`${base}/api/previews`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId: source.id, settings: { ...DEFAULT_SETTINGS, trimEnd: .3, watermarkRemoval: removal } }) });
+    assert.equal(again.status, 201, `${await again.clone().text()}\n${logs}`);
+  } finally { clearInterval(poll); }
+  console.log(`Desktop smoke passed: bundled Node ${runtimeInfo.node}, SQLite, FFmpeg, private server, import, text, audio and automatic LaMa install/preview.`);
 } finally {
   if (child && child.exitCode === null) {
     await new Promise(resolve => {

@@ -17,6 +17,7 @@ api-keys.enc.*.tmp
 .venv-imports/
 .venv-watermark/
 scripts/models/big-lama.pt
+scripts/models/big-lama.pt.*.tmp
 __pycache__/
 *cookies*.txt
 
@@ -24,3 +25,5 @@ __pycache__/
 desktop/resources/
 release/
 scripts/models/realesr-general-x4v3.pth
+.watermark-setup-lock/
+ready-watermark.json

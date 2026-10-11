@@ -5,6 +5,7 @@ import { cleanupExpired, pumpQueue, stopQueue } from "./queue.js";
 import { initStore, state } from "./store.js";
 import { stopIntelligence } from "./intelligence.js";
 import { initMediaImports, stopMediaImports } from "./media-imports.js";
+import { stopLamaSetup } from "./lama.js";
 await initStore();
 await initMediaImports();
 let maintaining = false;
@@ -51,6 +52,7 @@ async function shutdown() {
   await stopQueue();
   stopIntelligence();
   server.closeAllConnections();
+  await stopLamaSetup();
   if (process.connected) process.disconnect?.();
 }
 process.on("message", message => { if ((message as { type?: string })?.type === "shutdown") void shutdown(); });

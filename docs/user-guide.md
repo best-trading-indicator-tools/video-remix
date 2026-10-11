@@ -302,7 +302,11 @@ currently saved; marks removed with Undo or Clear stay removed.
   player. **Back to marking** restores the source for comparison. The colored
   selection is a mask, not the cleaned result.
 
-Install LaMa once on the machine running the video engine:
+LaMa installs automatically when the first preview or export needs it. Setup progress
+appears in the preview or export, then processing continues. The desktop app downloads
+its own Python; source installations need Python 3.10–3.13 (3.12 recommended) or `uv`.
+You can also preinstall or repair it in **Settings → Local tools → Local object removal**
+on desktop, or run this in a source installation:
 
 ```sh
 npm run setup:watermark
@@ -312,8 +316,12 @@ This creates a separate `.venv-watermark` Python environment and downloads the
 196 MiB TorchScript model after verifying its SHA-256 hash. Python 3.12 is
 recommended. The model uses the [Apache 2.0 license](https://github.com/advimman/lama/blob/main/LICENSE),
 which permits commercial use; attribution and the license are in `scripts/models/`.
-There are no API keys, credits or per-video fees. Rendering stays offline and never
-downloads models automatically. The other two fills work without this installation.
+There are no API keys, credits or per-video fees. First setup needs internet, several
+GB of free space and can take several minutes; subsequent processing reuses the
+installation offline. Videos stay on the computer. Concurrent previews and exports
+share setup; cancelling one leaves setup running if another still needs it. If setup
+fails, check the connection and disk space, then retry. The other two fills work
+without this installation.
 
 LaMa uses Apple Metal when available, with CPU fallback. Only one local model worker
 runs at a time across previews and exports. It streams frames, processes a surrounding

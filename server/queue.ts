@@ -176,7 +176,9 @@ async function run(job: StoredJob, controller: AbortController) {
     const upscale = job.auto && !job.editPlan ? job.auto.upscale : job.settings.upscale;
     if (upscale && upscale !== "off") await assertUpscaleInstalled();
     await preflightWatermarkRemoval(job.auto && !job.editPlan ? job.auto.watermarkRemoval : job.settings.watermarkRemoval,
-      Math.max(2, Math.floor(source.width / 2) * 2), Math.max(2, Math.floor(source.height / 2) * 2), source.duration);
+      Math.max(2, Math.floor(source.width / 2) * 2), Math.max(2, Math.floor(source.height / 2) * 2), source.duration,
+      controller.signal, phase => { job.phase = phase; });
+    job.phase = "Preparing your edit";
     if (!source.fingerprint) {
       source.fingerprint = await fingerprintFile(source.filePath, controller.signal);
       // Known, different sources may now use the remaining worker slots.

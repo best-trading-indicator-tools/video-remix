@@ -26,7 +26,7 @@ def verified_model():
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
     if digest.hexdigest() != manifest["sha256"]:
-        raise RuntimeError("LaMa model integrity check failed. Run npm run setup:watermark again.")
+        raise RuntimeError("LaMa model integrity check failed. Retry the preview or export to repair the local installation automatically.")
     return model
 
 

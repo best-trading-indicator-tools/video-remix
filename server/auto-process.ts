@@ -9,6 +9,7 @@ export async function runLocal(
   return new Promise((resolve, reject) => {
     const child = spawn(binary, args, {
       cwd: options.cwd,
+      windowsHide: true,
       detached: options.processGroup && process.platform !== "win32",
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -20,7 +21,7 @@ export async function runLocal(
       if (options.processGroup && child.pid && process.platform !== "win32") {
         try { process.kill(-child.pid, signal); } catch { /* Already exited. */ }
       } else if (options.processGroup && child.pid && process.platform === "win32") {
-        spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore" }).on("error", () => child.kill(signal));
+        spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], { stdio: "ignore", windowsHide: true }).on("error", () => child.kill(signal));
       } else child.kill(signal);
     };
     const abort = () => {
