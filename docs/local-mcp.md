@@ -78,7 +78,8 @@ valid; a failure or clarification leaves all settings unchanged. Larger prompt
 batches may need to be split into smaller selections. Enabled AI rendering
 features may also use paid providers. Credentials remain in the app.
 
-Only `render_draft` queues exports. The response contains a batch ID and job IDs;
+`render_draft` queues source-draft exports and returns a batch ID and job IDs;
+`render_saved_edit` queues a saved-result revision and returns its new job.
 `get_export` and `list_exports` report progress, usage and completed download
 links. Results appear in the app's ordinary **Exports** tab. Rendering the same
 submitted draft again returns the original receipt. Use `clone_draft` to make an
@@ -87,23 +88,117 @@ intentional new batch or variation.
 An interrupted submission can leave a draft marked `submitting`. Check Exports
 before cloning it: the batch may already be running. The MCP blocks resubmission
 of that draft to avoid duplicate renders. Source and export retention still
-follow the app's normal rules; an MCP draft does not keep its media indefinitely.
+follow the app's normal rules. Use `protect_sources` with the draft ID as owner to
+keep its sources while editing; release that owner’s pins with an empty list.
 
-## Available tools
+## Feature coverage
 
-| Purpose | Tools |
+The server exposes 81 typed tools. `get_editing_catalog` describes title designs,
+animations, fonts and caption looks. `create_draft` / `update_draft` accept every
+Auto and Manual rendering setting, including watermark masks, focus tracks,
+text overlays, bulk caption corrections, audio modifiers and metadata options.
+The server fills `ownFootageSourceId` from the target video rather than trusting
+it as a client setting.
+
+| Workflow | MCP tools |
 | --- | --- |
-| Check the engine and library | `get_status`, `list_videos`, `list_footage` |
-| Import local media | `import_videos`, `list_imports`, `import_footage` |
-| Prepare and inspect edits | `create_draft`, `list_drafts`, `get_draft`, `clone_draft` |
-| Change selected videos | `update_draft`, `append_footage`, `apply_prompt_to_draft` |
-| Render and check progress | `render_draft`, `list_exports`, `get_export`, `cancel_export` |
-| Check provider balance | `get_deepseek_balance` |
+| Engine, providers and models | `get_status`, `get_provider_status`, `test_provider`, `get_local_models`, `get_deepseek_balance` |
+| Local sources, footage and SRT/audio | `list_videos`, `list_footage`, `list_attachments`, `import_videos`, `import_footage`, `import_attachment`, `tag_footage`, `remove_media` |
+| Social imports and standalone downloader | `import_links`, `download_videos`, `list_imports`, `list_downloads`, `retry_import`, `cancel_import` |
+| Batch editing and prompts | `create_draft`, `get_draft`, `list_drafts`, `clone_draft`, `update_draft`, `append_footage`, `apply_prompt_to_draft`, `get_editing_catalog` |
+| Persistent Undo/Redo | `list_draft_history`, `restore_draft` |
+| Reusable styles | `list_finishing_presets`, `save_finishing_preset`, `apply_finishing_preset`, `remove_finishing_preset` |
+| Short discovery, transcription, pacing and speaker/face focus | `start_analysis`, `get_analysis`, `cancel_analysis`, `get_transcript`, `check_clip_history` |
+| Preview and inspect media | `preview_manual`, `get_media_links`, `get_waveform` |
+| Saved-result edits and prompts | `get_saved_edit`, `preview_saved_edit`, `prompt_saved_edit`, `render_saved_edit` |
+| Saved drafts and source recovery | `get_saved_draft`, `save_saved_draft`, `discard_saved_draft`, `get_source_status`, `reconnect_source`, `protect_sources`, `release_source_protection` |
+| Export lifecycle | `render_draft`, `list_exports`, `get_export`, `cancel_export`, `retry_export`, `rename_export`, `keep_exports`, `release_export`, `delete_exports`, `get_download_links` |
+| Human and AI review | `get_export_review`, `set_export_review`, `review_export` |
+| History, projects and measurements | `list_history`, `list_projects`, `set_project`, `get_measurements`, `set_measurements`, `set_publication_records` |
+| Promotion profiles and post copy | `get_publishing`, `save_promotion_profile`, `import_store_profile`, `get_post_draft`, `save_post_draft`, `generate_post_copy` |
+| Explicitly requested scheduling | `schedule_posts`, `refresh_publication`, `cancel_publication`, `resolve_publication` |
 
-The tools do not publish posts, delete originals or expose API keys. Local file
-imports are the only file-input operations; there is no generic shell, filesystem
-or HTTP tool. This setup is for local clients. It does not create a remotely
-accessible connector for a hosted chat service.
+### Text and caption examples
+
+Use `update_draft` with the current revision and optional `sourceIds` to select
+which draft videos change. Omit `sourceIds` to edit the entire draft.
+
+```json
+{
+  "auto": {
+    "textEdits": [{"action":"add","text":"YOUR TITLE","design":"bold","start":0,"end":3}],
+    "captionStyle": {"animation":"words"},
+    "captionCorrections": [{"find":"acme","replace":"ACME","wholeWord":true,"caseSensitive":false}]
+  }
+}
+```
+
+Use `manual` instead of `auto` for Manual drafts. Title designs are `bold`,
+`editorial`, `label` (Lower third), and `announcement`. Resize or animate existing
+text with a sparse update:
+
+```json
+{"auto":{"textEdits":[{"action":"update","index":0,"style":{"fontSize":30,"animation":"pop"},"widthPercent":85}]}}
+```
+
+`index:0` selects each target video's first text object, even when their IDs differ.
+An explicit existing `id` can be used instead. Other words, timings and styles stay
+unchanged. Missing targets reject the whole draft update. Remove with
+`{"action":"remove","index":0}` or `{"action":"remove","id":"all"}`.
+Do not combine sparse `textEdits` with a complete `textOverlays` replacement.
+
+The same capabilities work through the app's AI prompts in Quick/Auto, Manual
+and saved results. Prompt proposals include reviewable summaries. Saved-result
+bulk corrections change the existing cues immediately in the proposed draft;
+source-draft rules apply to added captions and SRT at export. Neither changes
+speech or text already baked into source pixels.
+
+### Analysis, saved edits and bulk behavior
+
+`start_analysis` returns immediately and runs its explicit request list in order.
+Poll `get_analysis` for progress and each video's result/error. Apply returned cuts
+or focus tracks through a draft after review; analysis does not render. Analysis
+jobs live in the MCP process, while drafts, revision history and finishing presets
+persist across client restarts. Cancellation preserves completed analysis results.
+
+For saved results, read `get_saved_edit`, then use `preview_saved_edit` or
+`prompt_saved_edit`. Only `render_saved_edit` creates a new export. Preserve the
+returned job ID: unlike a submitted source draft, a revision request is not an
+idempotent render receipt. Do not blindly resubmit after a timeout.
+
+MCP presets are separate from browser-local presets. They use the same finishing
+settings and exclude source-specific words, cuts and media. `restore_draft`
+restores an earlier ready draft's settings as a new revision, supporting Undo/Redo
+without replaying a render. Submitted drafts must be cloned for another export.
+
+Draft edits are atomic across their selected videos. Library operations that use
+several existing API calls report successes and failures per item. Publishing
+reports each channel independently. Inspect those results before retrying.
+
+### Coverage boundaries
+
+The checked inventory is [`server/mcp/coverage.ts`](../server/mcp/coverage.ts).
+[`tests/mcp-coverage.test.ts`](../tests/mcp-coverage.test.ts) checks every registered
+app API route against that inventory, every Auto/Manual setting against the MCP
+patch schemas, and every listed tool against the live MCP protocol. New routes or
+settings fail the check until their coverage is accounted for. Integration tests
+also exercise real app imports, batch MP4 rendering, title styles, SRT corrections,
+saved drafts and reviews.
+
+Credential entry/removal and model/runtime installation remain in local Settings
+or setup commands; MCP reads provider/model status and tests existing connections
+without receiving API keys. Browser resumable-upload chunks are replaced by local
+path imports. Browser-only interactions—checkbox focus, canvas pointer gestures,
+keyboard shortcuts, onboarding and unsaved local storage—are not remote UI
+controls; their editing effects use typed settings, selections and MCP revision
+history. This is functional coverage, not access to the browser's unsaved state.
+
+Scheduling tools can publish through Postiz and deletion tools can remove app
+media, so clients must use them only for explicitly requested actions. Editing
+never implies permission to publish. Required confirmation fields and the app's
+existing validation still apply. Tests use a fixture for external publishing;
+they do not send real posts. There is no generic shell, filesystem or HTTP tool.
+The connection remains local, not a hosted remote connector.
 
 ## Troubleshooting
 

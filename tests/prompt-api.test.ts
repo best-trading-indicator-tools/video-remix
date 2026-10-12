@@ -115,6 +115,18 @@ globalThis.fetch = async (input, init) => {
         assert.ok(!text.includes(directory)); assert.ok(!text.includes("test-private-prompt-key"));
       }
     });
+    await t.test('text and bulk caption prompt changes survive API composition without touching the saved export', async () => {
+      await reply([{ op: 'text_overlays', edits: [{ action: 'add', text: 'PROMPT TITLE', design: 'bold', end: 3 }] },
+        { op: 'caption_corrections', rules: [{ find: 'manual', replace: 'bulk', wholeWord: true, caseSensitive: false }] },
+        { op: 'caption_style', animation: 'typewriter' }]);
+      const response = await request(route, { revision: plan.revision, prompt: 'Add PROMPT TITLE, replace manual with bulk, and use Typewriter captions', draft: proposal.changes });
+      assert.equal(response.status, 200, await response.clone().text());
+      proposal = await response.json();
+      assert.equal(proposal.changes.textOverlays?.[0]?.text, 'PROMPT TITLE');
+      assert.equal(proposal.changes.captions?.[0]?.text, 'My bulk correction');
+      assert.equal(proposal.changes.framing?.captionStyle?.animation, 'typewriter');
+      assert.deepEqual(await planOf(parent.id), plan);
+    });
     await t.test("follow-up prompts preserve unsaved band appearance in the cumulative revision", async () => {
       await reply([{ op: "black_bands", topStyle: { color: "#ffff00" } }]);
       const response = await request(route, { revision: plan.revision, prompt: "Make upper-band text yellow", draft: proposal.changes });
@@ -198,7 +210,7 @@ globalThis.fetch = async (input, init) => {
       const child = await completed((await response.json()).id), next = await planOf(child.id);
       assert.equal((await jobs()).length, beforeJobs + 1);
       assert.equal(next.settings.hookText, "A clearer headline");
-      assert.equal(next.captions[0]!.text, "My manual correction");
+      assert.equal(next.captions[0]!.text, "My bulk correction");
       assert.deepEqual(next.settings.blackBands, proposal.changes.framing?.blackBands);
       assert.deepEqual(next.cuts, plan.cuts);
       assert.deepEqual(next.media, plan.media);

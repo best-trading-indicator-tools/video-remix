@@ -28,7 +28,7 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
     if (route === '/api/sources') result = { sources };
     else if (route === '/api/health') result = { ok: true, ffmpeg: true, ffprobe: true, maxFileSize: 500_000_000 };
     else if (route === '/api/auto/capabilities') result = { intelligence: true };
-    else if (route === '/api/broll') result = { assets: [{ id: assetId, name: 'ending.mp4', duration: 3, hasAudio: false }] };
+    else if (route === '/api/broll') result = { assets: [{ id: assetId, name: 'ending.mp4', duration: 3, hasAudio: false, tags: ['sunset'] }] };
     else if (route.endsWith('/auto-prompt')) result = clarify && route.includes(ids[1]!) ? { options: body.options, variants: 1, summary: [], clarification: 'Choose the text.' }
       : { options: { ...body.options, captionStyle: { fontSize: 24, bottomPercent: 20 },
         ...(promptFootage ? { ownFootage: [{ id: randomUUID(), assetId, mode: 'insert', appendToEnd: true, at: 0, start: 0, end: 3, audio: 'clip', fit: 'contain' }] } : {}),
@@ -63,13 +63,20 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
   };
   let draft: EditDraft;
   try {
-    await t.test('protocol advertises typed tools and no generic HTTP, secrets, publishing or deletion operations', async () => {
+    await t.test('protocol advertises typed workflows and guards explicit publishing/deletion without generic HTTP or secrets', async () => {
       const { tools } = await client.listTools();
       assert.ok(tools.some(tool => tool.name === 'create_draft' && tool.inputSchema.properties?.sourceIds));
       assert.equal(tools.find(tool => tool.name === 'list_videos')?.annotations?.readOnlyHint, true);
       assert.equal(tools.find(tool => tool.name === 'render_draft')?.annotations?.idempotentHint, true);
-      assert.ok(!tools.some(tool => /delete|publish|key|request|shell/u.test(tool.name)));
+      assert.ok(!tools.some(tool => /api_key|request|shell|http_request/u.test(tool.name)));
+      for (const name of ['schedule_posts', 'delete_exports', 'remove_media', 'cancel_publication']) {
+        const tool = tools.find(tool => tool.name === name)!;
+        assert.equal(tool.annotations?.destructiveHint, true);
+        assert.ok(tool.inputSchema.required?.includes('confirm'));
+      }
       assert.equal((await call('list_videos', { search: 'Video 2' })).videos[0].id, ids[1]);
+      const tagged = await call('list_footage', { search: 'SUNSET' });
+      assert.equal(tagged.assets[0].id, assetId); assert.deepEqual(tagged.assets[0].tags, ['sunset']);
       assert.equal((await call('get_status')).health.ok, true);
     });
     await t.test('drafts start without paid/generated features and do not create exports', async () => {
@@ -125,6 +132,27 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
       clarify = false;
       draft = (await call('apply_prompt_to_draft', { draftId: draft.id, revision: draft.revision, prompt: 'Make captions larger' })).draft;
       assert.ok(draft.items.every(item => item.options?.captionStyle?.fontSize === 24));
+    });
+    await t.test('typed batch text edits preserve individual words/styles, support Undo and persist finishing presets', async () => {
+      const before = structuredClone(draft);
+      draft = (await call('update_draft', { draftId: draft.id, revision: draft.revision, auto: { textEdits: [{ action: 'add', text: 'Shared title', design: 'bold' }], captionCorrections: [{ find: 'acme', replace: 'ACME' }] } })).draft;
+      const titles = draft.items.map(item => item.options!.textOverlays![0]!);
+      assert.equal(new Set(titles.map(title => title.id)).size, 3);
+      draft = (await call('update_draft', { draftId: draft.id, revision: draft.revision, sourceIds: ids.slice(0, 2), auto: { textEdits: [{ action: 'update', index: 0, style: { fontSize: 34, animation: 'slide' } }] } })).draft;
+      assert.ok(draft.items.slice(0, 2).every(item => item.options?.textOverlays?.[0]?.style.fontSize === 34));
+      assert.deepEqual(draft.items[2]?.options?.textOverlays?.[0], titles[2]);
+      const updatedRevision = draft.revision;
+      const preset = await call('save_finishing_preset', { draftId: draft.id, sourceId: ids[0], name: 'Caption fixes' });
+      assert.equal(preset.settings.captionCorrections[0].replace, 'ACME');
+      assert.equal('textOverlays' in preset.settings, false);
+      assert.equal((await call('list_finishing_presets')).presets.length, 1);
+      assert.deepEqual(secondStore.presets()[0], preset);
+      assert.ok((await call('list_draft_history', { draftId: draft.id })).revisions.some((item: any) => item.revision === before.revision));
+      draft = (await call('restore_draft', { draftId: draft.id, revision: draft.revision, targetRevision: before.revision })).draft;
+      assert.deepEqual(draft.items, before.items);
+      draft = (await call('restore_draft', { draftId: draft.id, revision: draft.revision, targetRevision: updatedRevision })).draft;
+      assert.equal(draft.items[0]?.options?.textOverlays?.[0]?.style.fontSize, 34);
+      assert.deepEqual(secondStore.get(draft.id), draft);
     });
     await t.test('render submits one atomic batch and concurrent/repeated calls cannot enqueue duplicates', async () => {
       const inputs = { draftId: draft.id, revision: draft.revision };

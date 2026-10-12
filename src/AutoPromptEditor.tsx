@@ -8,6 +8,9 @@ const identityOf = (value: unknown) => JSON.stringify(value, (_key, item: unknow
     ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
 
 const examples = [
+  { label: 'Animated title', prompt: 'Add a Bold hook title saying "YOUR TITLE" for the first 3 seconds, with Pop animation.' },
+  { label: 'Caption animation', prompt: 'Make added captions appear word by word.' },
+  { label: 'Correct captions', prompt: 'Replace "acme" with "ACME" in all added captions.' },
   { label: "AI upscale to 4K", prompt: "Upscale to 4K with the free local AI upscaler. Keep all other settings." },
   { label: 'Captions & bands', prompt: 'Add bold yellow captions and black bands above and below the picture.' },
   { label: 'Upper-band text', prompt: 'Add "YOUR TITLE" in Cyrillic lookalikes, white, medium size, in the upper black band.' },
@@ -30,7 +33,7 @@ export default function AutoPromptEditor({ targets, scopeKey, disabled, onApply,
     <PromptEditor<AutoBatchProposal> title="Remix with a prompt" contextKey={`${scopeKey}:${identityOf(targets)}`} disabled={disabled || !targets.length}
     description={targets.length ? `Describe changes for ${targets.length === 1 ? targets[0]!.name : `all ${targets.length} target videos`}. Review each video's proposal before applying.` : 'Check videos in the source list to edit and export them.'}
     placeholder="e.g. Add black bands and append outro.mp4 in full to every target video"
-    scope="AI upscaling, Length, versions, captions, black bands, B-roll, uploaded footage, pacing, sound and reviews. Each video keeps its unrelated settings. Prompts change the listed videos only; future import defaults stay unchanged. Edits needing Manual include a workspace switch in the proposal."
+    scope="AI upscaling, Length, versions, captions, title designs, text resizing and animation, bulk caption corrections, black bands, B-roll, uploaded footage, pacing, sound and reviews. Each video keeps its unrelated settings. Prompts change the listed videos only; future import defaults stay unchanged. Edits needing Manual include a workspace switch in the proposal."
     examples={examples} onSuggest={(prompt, signal) => {
       setCompleted(0);
       return suggestAutoBatch(targets, prompt, signal, (target, text, requestSignal) => apiRequest(`/api/sources/${target.id}/auto-prompt`, {

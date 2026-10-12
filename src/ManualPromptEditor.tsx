@@ -7,6 +7,9 @@ import PromptEditor, { type PromptExample, type ReviewablePrompt } from "./Promp
 interface ManualPromptProposal extends ReviewablePrompt { settings: RemixSettings; auto?: { options: AutoOptions; variants: number } }
 
 const examples: PromptExample[] = [
+  { label: 'Animated title', prompt: 'Add a Bold hook title saying "YOUR TITLE" for the first 3 seconds, with Pop animation.' },
+  { label: 'Caption animation', prompt: 'Make added captions appear word by word.' },
+  { label: 'Correct captions', prompt: 'Replace "acme" with "ACME" in all added captions.' },
   { label: "AI upscale to 4K", prompt: "Upscale to 4K with the free local AI upscaler. Keep all other settings." },
   { label: "Add captions", prompt: "Add automatic captions in bold yellow Poppins." },
   { label: "Black bands", prompt: "Add black bands above and below the video, keeping the whole picture." },
@@ -51,7 +54,7 @@ export default function ManualPromptEditor({ sourceId, sourceName, settings, dis
     <PromptEditor<ManualPromptProposal> contextKey={`${sourceId}:${identity}`} disabled={disabled} onSuggest={suggest} onApply={apply}
       examples={examples} placeholder="e.g. Add captions, black bands and 4 B-roll shots"
       description={`Describe a change for ${sourceName}. Manual prompts apply to this previewed video only.`}
-      scope="AI upscaling, Captions, black bands, B-roll, animations, uploaded footage, cuts, color, sound and output settings. Automatic selection or narration can propose a switch to Auto. Apply changes to this video after reviewing."
+      scope="AI upscaling, Captions, title designs, text resizing and animation, bulk caption corrections, black bands, B-roll, animations, uploaded footage, cuts, color, sound and output settings. Automatic selection or narration can propose a switch to Auto. Apply changes to this video after reviewing."
       appliedMessage="Settings applied to this video. Preview or render when ready."
       undoBlockedMessage="Use workspace Undo to step back through newer edits and this prompt."
       applied={history.isApplied(appliedId)} canUndo={!!appliedId && history.undoId === appliedId} onUndo={() => {

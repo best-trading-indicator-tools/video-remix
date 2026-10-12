@@ -1,3 +1,5 @@
+import { textEditsSchema, applyTextEdits } from '../../shared/text-edits.js';
+import { restoreFinishingPresets, type FinishingPreset } from '../../shared/finishing-presets.js';
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, chmodSync } from 'node:fs';
@@ -9,7 +11,7 @@ import { captionStyleSchema } from '../../shared/caption-style.js';
 import { pacingOptionsSchema } from '../../shared/pacing.js';
 import type { AutoOptions, RemixSettings } from '../../shared/types.js';
 
-const sharedPatch = { blackBands: blackBandsPatchSchema.optional(), captionStyle: captionStyleSchema.partial().strict().optional() };
+const sharedPatch = { textEdits: textEditsSchema.optional(), blackBands: blackBandsPatchSchema.optional(), captionStyle: captionStyleSchema.partial().strict().optional() };
 export const autoPatchSchema = autoOptionsObject.omit({ ownFootageSourceId: true }).partial().extend({
   ...sharedPatch, aspect: autoOptionsObject.shape.aspect.removeDefault().optional(),
   targetDuration: autoOptionsObject.shape.targetDuration.removeDefault().optional(),
@@ -32,9 +34,11 @@ export const MCP_AUTO_DEFAULTS: AutoOptions = {
 };
 
 export function patchItem(item: DraftItem, mode: EditDraft['mode'], value: unknown, variants?: number): DraftItem {
-  const patch = (mode === 'auto' ? autoPatchSchema : manualPatchSchema).parse(value);
+  const { textEdits, ...patch } = (mode === 'auto' ? autoPatchSchema : manualPatchSchema).parse(value);
+  if (textEdits && patch.textOverlays) throw new Error('Choose textEdits or a complete textOverlays replacement, not both.');
   const current = mode === 'auto' ? item.options! : item.settings!;
   const next = { ...current, ...patch,
+    ...(textEdits ? { textOverlays: applyTextEdits(current.textOverlays, textEdits) } : {}),
     ...(patch.blackBands ? { blackBands: applyBlackBandsPatch(current.blackBands, patch.blackBands) } : {}),
     ...(patch.captionStyle ? { captionStyle: { fontSize: 20, bottomPercent: 100 / 12, ...current.captionStyle, ...patch.captionStyle } } : {}),
     ...(patch.ownFootage ? { ownFootageSourceId: item.sourceId } : {}),
@@ -62,6 +66,8 @@ export class DraftStore {
     mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
     this.db = new DatabaseSync(filename);
     this.db.exec('PRAGMA busy_timeout=3000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS drafts (id TEXT PRIMARY KEY, revision INTEGER NOT NULL, status TEXT NOT NULL, data TEXT NOT NULL)');
+    this.db.exec('CREATE TABLE IF NOT EXISTS draft_history (id TEXT NOT NULL, revision INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(id,revision))');
+    this.db.exec('CREATE TABLE IF NOT EXISTS finishing_presets (id TEXT PRIMARY KEY, data TEXT NOT NULL)');
     chmodSync(filename, 0o600);
   }
   close() { this.db.close(); }
@@ -90,9 +96,37 @@ export class DraftStore {
   }
   replace(current: EditDraft, next: EditDraft): EditDraft {
     const value = { ...next, revision: current.revision + 1, updatedAt: new Date().toISOString() };
-    const saved = this.db.prepare('UPDATE drafts SET revision=?,status=?,data=? WHERE id=? AND revision=? AND status=?')
-      .run(value.revision, value.status, JSON.stringify(value), current.id, current.revision, current.status);
-    if (!saved.changes) throw new Error('This draft changed in another request. Use get_draft before trying again.');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const saved = this.db.prepare('UPDATE drafts SET revision=?,status=?,data=? WHERE id=? AND revision=? AND status=?')
+        .run(value.revision, value.status, JSON.stringify(value), current.id, current.revision, current.status);
+      if (!saved.changes) throw new Error('This draft changed in another request. Use get_draft before trying again.');
+      this.db.prepare('INSERT OR IGNORE INTO draft_history VALUES (?,?,?)').run(current.id, current.revision, JSON.stringify(current));
+      this.db.exec('COMMIT');
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
     return value;
   }
+  history(id: string) {
+    this.get(id);
+    return this.db.prepare('SELECT data FROM draft_history WHERE id=? ORDER BY revision DESC LIMIT 100').all(id).map(row => {
+      const draft = JSON.parse(row.data as string) as EditDraft;
+      return { revision: draft.revision, title: draft.title, mode: draft.mode, status: draft.status, updatedAt: draft.updatedAt };
+    });
+  }
+  atRevision(id: string, revision: number): EditDraft {
+    const row = this.db.prepare('SELECT data FROM draft_history WHERE id=? AND revision=?').get(id, revision);
+    if (!row) throw new Error('Draft revision not found. Use list_draft_history.');
+    return JSON.parse(row.data as string);
+  }
+  presets(): FinishingPreset[] {
+    return restoreFinishingPresets({ version: 1, presets: this.db.prepare('SELECT data FROM finishing_presets ORDER BY rowid DESC LIMIT 60').all().map(row => JSON.parse(row.data as string)) });
+  }
+  savePreset(preset: FinishingPreset) {
+    if (this.presets().length >= 60 && !this.presets().some(item => item.id === preset.id)) throw new Error('Remove an unused finishing preset before adding more than 60.');
+    const validated = restoreFinishingPresets({ version: 1, presets: [preset] })[0];
+    if (!validated) throw new Error('Invalid finishing preset.');
+    this.db.prepare('INSERT OR REPLACE INTO finishing_presets VALUES (?,?)').run(validated.id, JSON.stringify(validated));
+    return validated;
+  }
+  removePreset(id: string) { this.db.prepare('DELETE FROM finishing_presets WHERE id=?').run(id); }
 }

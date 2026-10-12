@@ -544,6 +544,7 @@ export function createApp() {
     ]);
     res.json({ ok: true });
   });
+  app.get("/api/attachments", (_req, res) => res.json({ attachments: state.attachments.map(({ id, name, kind, createdAt }) => ({ id, name, kind, createdAt })) }));
   app.post("/api/attachments", attachmentUpload, async (req, res) => {
     const file = req.file;
     if (!file) throw new HttpError(400, "Choose a file.");

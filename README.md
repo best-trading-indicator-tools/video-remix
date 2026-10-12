@@ -379,9 +379,9 @@ Try:
 >
 > “Render the draft, check progress, and give me the MP4 download links.”
 
-MCP drafts are shared across local clients and kept separate from browser selections. Direct typed setting changes do not call DeepSeek; the app's prompt tool and enabled AI export features can. Rendered results appear in the ordinary **Exports** tab.
+MCP supports the full Auto/Manual settings, title designs and animations, caption corrections, saved-result revisions, short-clip analysis, library review and explicit publishing workflows. MCP drafts are shared across local clients and kept separate from browser selections. Direct typed setting changes do not call DeepSeek; the app's prompt tool and enabled AI export features can. Rendered results appear in the ordinary **Exports** tab.
 
-See the [MCP guide](docs/local-mcp.md) for all 18 tools, manual registration, example requests, and troubleshooting.
+See the [MCP guide](docs/local-mcp.md) for all 81 tools, the feature-coverage audit, manual registration, example requests, and troubleshooting.
 
 ## Configuration, storage, and hosting
 

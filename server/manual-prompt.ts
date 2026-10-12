@@ -1,3 +1,4 @@
+import { hasUngroundedTextEdits } from '../shared/text-edits.js';
 import { sourcePromptShape, sourcePromptInstructions, applySourcePrompt, sourcePromptSummary, sourcePromptContext, promptAssetCatalog, attachmentFromRef, hasUngroundedBandText, EMPTY_PROMPT_ASSETS, type PromptAssets } from "./source-prompt-controls.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
 import { footageTimeline } from "../shared/own-footage.js";
@@ -199,6 +200,7 @@ export async function proposeManualPrompt({ settings, source, prompt, signal, as
   if (parsed.data.clarification) return unchanged(parsed.data.clarification);
   if (parsed.data.switchTo) return { settings: structuredClone(settings), summary: [], switchTo: parsed.data.switchTo };
   const patch = parsed.data.patch;
+  if (hasUngroundedTextEdits(parsed.data.patch.textEdits, settings.textOverlays, prompt)) return { settings: structuredClone(settings), summary: [], clarification: 'Include the exact words for the new or replacement text.' };
   if (hasUngroundedBandText(patch, settings, prompt)) return unchanged("Include the exact text you want in the black bands.");
   if (patch.callouts?.some(cue => !settings.callouts?.some(existing => existing.text === cue.text) && !normalized(prompt).includes(normalized(cue.text))))
     return unchanged("Include the exact text for each on-screen overlay.");

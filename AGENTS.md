@@ -9,6 +9,7 @@
 - Quick mode is a primary workflow: expose new editing capabilities there and let users apply them to checked videos or all videos without editing each video individually. Preserve unchecked videos and unrelated settings on each target.
 - Wire AI support through the complete proposal-to-application flow: schemas, model instructions, current-state context, validation, change summaries, and applying the result. Cover Quick/Auto, Manual, and saved-result prompts wherever the feature is available, and preserve the feature when switching modes.
 - Expose each new feature through MCP with the necessary tool schemas, descriptions, validation, execution, and result reporting. MCP clients must be able to discover and use it, including bulk-video targeting, without relying on manual UI steps.
+- Keep `server/mcp/coverage.ts` current when adding API routes or tools. Run `tests/mcp-coverage.test.ts` alongside feature-specific checks; an inventory entry alone does not replace execution tests.
 - Before declaring a feature complete, verify its UI, AI prompt, bulk-video, and MCP paths together, including the requested target selection and existing Undo/persistence behavior. Do not defer prompt, bulk, or MCP support unless the user explicitly narrows the scope.
 
 ## Desktop release policy

@@ -13,6 +13,38 @@ export class RemixApi {
     return this.fetchJson(route, { method: body === undefined ? 'GET' : 'POST',
       ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), signal }, timeoutMs);
   }
+  async mutate<T = Record<string, unknown>>(route: string, method: 'PUT' | 'PATCH' | 'DELETE', body?: unknown, signal?: AbortSignal): Promise<T> {
+    return this.fetchJson(route, { method, ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), signal });
+  }
+  /** NDJSON analysis endpoints emit progress until a final result; never buffer an unbounded stream. */
+  async analysis(route: string, body: unknown, signal: AbortSignal, progress: (value: unknown) => void): Promise<unknown> {
+    if (!['/api/shorts/discover', '/api/shorts/transcript'].includes(route)) return this.request(route, body, signal, 2 * 60 * 60_000);
+    const response = await fetch(`${this.baseUrl}${route}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal, redirect: 'error' });
+    if (!response.ok) throw new LocalApiError((await response.json() as { error?: string }).error || 'Analysis failed', response.status);
+    const reader = response.body!.getReader(), decoder = new TextDecoder();
+    let pending = '', result: unknown, bytes = 0;
+    const consume = (line: string) => {
+      if (!line.trim()) return;
+      const event = JSON.parse(line);
+      if (event.type === 'error') throw new Error(event.message || 'Analysis failed');
+      if (event.type === 'result') result = event.result ?? event.transcript;
+      else progress(event);
+    };
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        bytes += value.length;
+        if (bytes > 8 * 1024 * 1024) throw new Error('Analysis response is too large.');
+        pending += decoder.decode(value, { stream: true });
+        let boundary: number;
+        while ((boundary = pending.indexOf('\n')) >= 0) { consume(pending.slice(0, boundary)); pending = pending.slice(boundary + 1); }
+      }
+      consume(pending + decoder.decode());
+      if (result === undefined) throw new Error('Analysis ended without a result.');
+      return result;
+    } finally { void reader.cancel().catch(() => {}); }
+  }
   async fetchJson<T>(route: string, init: RequestInit, timeoutMs = 25_000): Promise<T> {
     if (!route.startsWith('/api/') || route.startsWith('//')) throw new Error('Only Remix Studio API routes are supported.');
     const signal = AbortSignal.any([...(init.signal ? [init.signal] : []), AbortSignal.timeout(timeoutMs)]);

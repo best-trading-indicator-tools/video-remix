@@ -63,6 +63,7 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
     }
     const asset = (await call(client, 'import_footage', { path: outro })).assets[0];
     let draft = (await call(client, 'create_draft', { sourceIds: videos.map((item: any) => item.id), title: 'MCP integration batch', auto: {
+      textEdits: [{ action: 'add', text: 'MCP TITLE', design: 'bold', end: 1.5, style: { fontSize: 18, bottomPercent: 70 } }],
       blackBands: { enabled: true, topText: 'BPC157', topStyle: { cyrillic: true, color: '#ffffff', fontPercent: 5.4 } },
     } })).draft;
     await client.close();
@@ -85,7 +86,18 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
       await writeFile(output, new Uint8Array(await (await fetch(job.downloadUrl)).arrayBuffer()));
       const metadata = JSON.parse((await exec('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height:format=duration', '-of', 'json', output])).stdout);
       assert.ok(Math.abs(Number(metadata.format.duration) - 3) < .12, 'The entire one-second outro must be appended to each two-second source');
-      const plan = await (await fetch(`${base}/api/jobs/${jobId}/plan`)).json();
+      const plan = await call(second, 'get_saved_edit', { jobId });
+      assert.equal(plan.settings.textOverlays[0].text, 'MCP TITLE');
+      assert.equal(plan.settings.textOverlays[0].style.animation, 'pop');
+      const changed = await call(second, 'preview_saved_edit', { jobId, changes: { revision: plan.revision, textOverlays: plan.settings.textOverlays.map((text: any) => ({ ...text, style: { ...text.style, fontSize: 30 } })) } });
+      assert.equal(changed.settings.textOverlays[0].style.fontSize, 30);
+      assert.equal((await call(second, 'get_saved_edit', { jobId })).settings.textOverlays[0].style.fontSize, 18);
+      const saved = await call(second, 'save_saved_draft', { jobId, revision: plan.revision, content: JSON.stringify({ draft: changed }), token: null });
+      assert.equal((await call(second, 'get_saved_draft', { jobId })).draft.token, saved.draft.token);
+      await call(second, 'discard_saved_draft', { jobId, token: saved.draft.token });
+      assert.equal((await call(second, 'get_saved_draft', { jobId })).draft, null);
+      await call(second, 'set_export_review', { jobIds: [jobId], review: { verdict: 'accepted-unchanged', notes: 'MCP test' } });
+      assert.equal((await call(second, 'get_export_review', { jobId })).review.verdict, 'accepted-unchanged');
       assert.equal(plan.settings.blackBands.topText, 'BPC157'); assert.equal(plan.settings.blackBands.topStyle.cyrillic, true);
       for (const [time, channel] of [[.5, 0], [2.5, 2]] as const) {
         const video = metadata.streams.find((stream: any) => stream.width);
@@ -95,6 +107,29 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
     }
     const appJobs = await (await fetch(`${base}/api/jobs`)).json();
     assert.equal(appJobs.jobs.length, 2, 'Both exports are in the ordinary app queue with no duplicate batch');
+    const captionsFile = path.join(directory, 'captions.srt');
+    await writeFile(captionsFile, '1\n00:00:00,000 --> 00:00:01,500\nacme hello\n');
+    const attachment = await call(second, 'import_attachment', { path: captionsFile, kind: 'subtitle' });
+    const attachments = await call(second, 'list_attachments');
+    assert.equal(attachments.attachments[0].id, attachment.id);
+    assert.equal('filePath' in attachments.attachments[0], false);
+    const manual = (await call(second, 'create_draft', { sourceIds: [videos[0].id], mode: 'manual', manual: {
+      subtitleId: attachment.id, captionCorrections: [{ find: 'acme', replace: 'ACME' }], captionStyle: { animation: 'words' },
+    } })).draft;
+    const rendered = await call(second, 'render_draft', { draftId: manual.id, revision: manual.revision });
+    let corrected;
+    for (let attempt = 0; attempt < 150; attempt++) {
+      corrected = await call(second, 'get_export', { jobId: rendered.jobIds[0] });
+      if (corrected.status === 'completed') break;
+      assert.ok(['queued', 'processing'].includes(corrected.status), JSON.stringify(corrected)); await pause(100);
+    }
+    assert.equal(corrected.status, 'completed'); assert.ok(corrected.captionUrl);
+    assert.match(await (await fetch(corrected.captionUrl)).text(), /ACME hello/);
+    await call(second, 'keep_exports', { jobIds: receipt.jobIds });
+    const accepted = await call(second, 'get_download_links', { jobIds: receipt.jobIds, accepted: true });
+    assert.equal((await fetch(accepted.accepted)).status, 200);
+    const catalog = await call(second, 'get_editing_catalog'); assert.equal(catalog.titleDesigns.length, 4);
+
   } finally {
     for (const client of clients) await client.close().catch(() => {});
     await stop(backend); await rm(directory, { recursive: true, force: true });

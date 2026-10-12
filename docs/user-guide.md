@@ -281,6 +281,14 @@ Rules and animation choices persist in Auto/Manual finishing presets. In **Edit 
 result → Captions**, **Find and replace in all captions** previews the match count
 and corrected wording before **Replace all matches**; Undo restores the change.
 
+AI prompts in Quick/Auto, Manual and **Edit this result** support the same title
+designs, independent text size/position/animation, caption animations and bulk
+corrections. For example: “Add a Bold hook saying NEW ARRIVAL for the first three
+seconds,” “Make the first title larger and use Pop animation,” or “Replace acme
+with ACME in all captions.” Review the proposed changes before applying them.
+Titles and correction rules also survive a proposed switch between Auto and Manual.
+All these edits are available through MCP, including selected-video batches.
+
 **Text → Ready-made titles** offers Bold hook, Editorial, Lower third and Announcement.
 Choose a design, enter **Title words**, and click **Add title**. The title starts at
 0 seconds and normally lasts three seconds. Each design supplies a font, placement,

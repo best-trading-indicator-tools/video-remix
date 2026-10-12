@@ -29,11 +29,12 @@ export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?:
   if (differs(base.cuts, next.cuts)) changes.cuts = next.cuts;
   const retimed = changes.cuts ? applyEditPlanChanges(base, changes, transcript) : base;
   if (differs(base.settings.ownFootage, next.settings.ownFootage)) changes.ownFootage = next.settings.ownFootage || [];
+  if (differs(base.settings.textOverlays, next.settings.textOverlays)) changes.textOverlays = next.settings.textOverlays || [];
   if (base.settings.hookText !== next.settings.hookText) changes.hookText = next.settings.hookText;
   if (differs(retimed.captions, next.captions)) changes.captions = next.captions;
   if (differs(retimed.visuals, next.visuals)) changes.visuals = next.visuals;
   const framing: NonNullable<EditPlanChanges["framing"]> = {};
-  for (const key of ["fit", "focalPoint", "captionStyle", "blackBands"] as const) {
+  for (const key of ["fit", "focalPoint", "captionStyle", "blackBands", "upscale"] as const) {
     if (differs(base.settings[key], next.settings[key])) Object.assign(framing, { [key]: next.settings[key] });
   }
   if (Object.keys(framing).length) changes.framing = framing;

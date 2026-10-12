@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { blackBandsPatchSchema, applyBlackBandsPatch, blackBandChangeSummary } from '../shared/black-bands.js';
 import { blackBandPromptInstructions, hasUngroundedBlackBandText } from './black-band-prompt.js';
 import { captionStyleSchema } from '../shared/caption-style.js';
+import { textEditsSchema, applyTextEdits, textEditsSummary, textEditInstructions } from '../shared/text-edits.js';
 import { captionCorrectionsSchema } from '../shared/caption-corrections.js';
 import { ownFootageSchema, resolveFootagePlacement } from '../shared/own-footage.js';
 import { getVisualSources, VISUAL_SOURCE_LABELS } from '../shared/visual-sources.js';
@@ -23,6 +24,7 @@ export const sourcePromptShape = {
   blackBands: blackBandsPatchSchema.optional(),
   captionStyle: captionStyleSchema.partial().strict().optional(),
   captionCorrections: captionCorrectionsSchema.optional(),
+  textEdits: textEditsSchema.optional(),
   visualSources: settingsSchema.shape.visualSources,
   stockVideoType: settingsSchema.shape.stockVideoType,
   brollMatching: settingsSchema.shape.brollMatching,
@@ -33,6 +35,7 @@ export const sourcePromptShape = {
 };
 export const sourcePromptInstructions = `
 Common editing controls in both workspaces:
+${textEditInstructions}
 ${upscalePromptInstructions}
 blackBands is a sparse object supported in Auto and Manual, including written band text; do not switch workspaces for it. ${blackBandPromptInstructions}
 captionStyle is a sparse object: fontSize 12–40, bottomPercent 5–80 (larger moves UP), fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans); color, outlineColor, backgroundColor six-digit #RRGGBB; bold, italic, uppercase booleans; outlineWidth/shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100; wordHighlight boolean and highlightColor six-digit #RRGGBB highlight each spoken word. Only added captions can be styled.
@@ -66,9 +69,10 @@ export function sourcePromptContext<T extends SupportingVisualOptions & Pick<Rem
   })) };
 }
 type SharedPatch = z.infer<z.ZodObject<typeof sourcePromptShape>>;
-export function applySourcePrompt<T extends SupportingVisualOptions & Pick<RemixSettings, 'upscale' | 'blackBands' | 'captionStyle' | 'captionCorrections' | 'ownFootage'>>(current: T, patch: SharedPatch, assets: PromptAssets): T {
-  const { blackBands, captionStyle, footage, brollClips, ...simple } = patch;
+export function applySourcePrompt<T extends SupportingVisualOptions & Pick<RemixSettings, 'upscale' | 'blackBands' | 'captionStyle' | 'captionCorrections' | 'textOverlays' | 'ownFootage'>>(current: T, patch: SharedPatch, assets: PromptAssets): T {
+  const { blackBands, captionStyle, textEdits, footage, brollClips, ...simple } = patch;
   const next = { ...structuredClone(current), ...simple };
+  if (textEdits) next.textOverlays = applyTextEdits(current.textOverlays, textEdits);
   if (blackBands) next.blackBands = applyBlackBandsPatch(current.blackBands, blackBands);
   if (captionStyle) next.captionStyle = captionStyleSchema.parse({ fontSize: 20, bottomPercent: 100 / 12, ...current.captionStyle, ...captionStyle });
   const video = (reference: string) => {
@@ -88,7 +92,7 @@ export function applySourcePrompt<T extends SupportingVisualOptions & Pick<Remix
   return next;
 }
 export function sourcePromptSummary(before: Parameters<typeof applySourcePrompt>[0], after: Parameters<typeof applySourcePrompt>[0], assets: PromptAssets): string[] {
-  const summary: string[] = [];
+  const summary: string[] = textEditsSummary(before.textOverlays, after.textOverlays);
   if ((before.upscale ?? 'off') !== (after.upscale ?? 'off')) summary.push(upscaleSummary(after.upscale ?? 'off'));
   if (after.blackBands) summary.push(...blackBandChangeSummary(before.blackBands, after.blackBands));
   if (!same(before.captionCorrections, after.captionCorrections)) summary.push(`Caption correction rules: ${after.captionCorrections?.length ?? 0}.`);

@@ -1,3 +1,4 @@
+import { textEditsSummary } from '../../shared/text-edits.js';
 import { upscaleSummary } from "../../shared/upscale.js";
 import { randomUUID } from 'node:crypto';
 import { openAsBlob } from 'node:fs';
@@ -31,12 +32,14 @@ export class RemixMcpService {
         description: [draft.mode === 'auto' ? `${item.options?.durationMode === 'full' ? 'Full video' : 'Auto excerpt'} · ${settings.aspect}` : `Manual edit · ${settings.aspect}`,
           ...(settings.upscale && settings.upscale !== "off" ? [upscaleSummary(settings.upscale)] : []),
           ...(settings.blackBands ? blackBandChangeSummary(undefined, settings.blackBands) : []),
+          ...textEditsSummary([], settings.textOverlays),
+          ...(settings.captionCorrections?.length ? [`Caption correction rules: ${settings.captionCorrections.map(rule => `${rule.find} → ${rule.replace || '(remove)'}`).join('; ')}`] : []),
           ...(settings.captionStyle ? [captionStyleDescription(settings.captionStyle)] : []),
           ...(settings.ownFootage ?? []).map(clip => `${clip.appendToEnd ? 'Append whole ending clip' : `${clip.mode} at ${clip.at}s`}: ${clip.assetId} · ${clip.audio} audio`)],
       };
     });
     return { draft, summary, totalExports: draft.items.reduce((sum, item) => sum + item.variants, 0),
-      note: 'MCP drafts are shared between local MCP clients and are separate from unsaved browser settings. Only render_draft creates exports; results appear in the app’s Exports tab.' };
+      note: 'MCP drafts are shared between local MCP clients and are separate from unsaved browser settings. render_draft and render_saved_edit create exports; results appear in the app’s Exports tab.' };
   }
   async create(input: { sourceIds: string[]; mode: 'auto' | 'manual'; title?: string; auto?: unknown; manual?: unknown; variants?: number }, signal?: AbortSignal) {
     if (input.mode === 'auto' && input.manual || input.mode === 'manual' && (input.auto || input.variants && input.variants !== 1))
@@ -156,6 +159,7 @@ export class RemixMcpService {
   jobSummary(job: RenderJob) {
     return { id: job.id, sourceId: job.sourceId, sourceName: job.sourceName, batchId: job.batchId, status: job.status, phase: job.phase,
       progress: job.progress, createdAt: job.createdAt, finishedAt: job.finishedAt, error: job.error, summary: job.summary,
+      qualityReport: job.qualityReport, editorialReport: job.editorialReport, finishedReviewReport: job.finishedReviewReport, review: job.review, exportName: job.exportName, keptAt: job.keptAt,
       deepseekUsage: job.deepseekUsage, downloadUrl: job.downloadUrl ? `${this.api.baseUrl}${job.downloadUrl}` : undefined,
       captionUrl: job.captionUrl ? `${this.api.baseUrl}${job.captionUrl}` : undefined };
   }
