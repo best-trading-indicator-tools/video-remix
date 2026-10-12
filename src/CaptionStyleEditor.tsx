@@ -152,7 +152,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
   const s = resolveCaptionStyle(value);
   const patch = (change: Partial<CaptionStyle>) => onChange({ ...s, ...change });
   return <section className="caption-styler" aria-label={textMode ? "Text styling" : "Caption styling"}>
-    <header><div><h4>{textMode ? "Text look" : "Caption look"}</h4><p>{textMode ? "Style this text independently." : "One style for all added captions."}</p></div>
+    <header><div><h4>{textMode ? "Text look" : "Caption look"}</h4><p>{textMode ? "Font, color, background, outline, shadow and letter spacing for this text." : "One style for all added captions."}</p></div>
       <button type="button" className="caption-reset" aria-label={textMode ? "Reset text style" : "Reset caption style"} onClick={() => onChange({ ...DEFAULT_CAPTION_STYLE, ...(textMode ? { bottomPercent: s.bottomPercent, fontFamily: "poppins" } : {}) })}><RotateCcw size={14} />Reset</button></header>
     {showHighlight && <WordHighlightToggle value={value} onChange={onChange} />}
     <div className="caption-looks" role="group" aria-label={textMode ? "Text look presets" : "Caption look presets"}>
@@ -184,7 +184,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
     <CyrillicControl style={s} onChange={patch} sample={sample} textMode={textMode} />
     <NumberControl label={textMode ? "Text font size" : "Caption font size"} value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
     <p className="caption-style-note">Size scales with your export resolution.</p>
-    <details className="caption-more"><summary>Outline, shadow &amp; placement</summary>
+    <details className="caption-more" open={textMode}><summary>{textMode ? "Outline, shadow & spacing" : "Outline, shadow, spacing & placement"}</summary>
       <label className="caption-field">Text alignment<select value={s.alignment} onChange={event => patch({ alignment: event.target.value as CaptionStyle["alignment"] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
       {s.background === "box" ? <p className="caption-style-note">The box replaces the text outline.</p> : <>
         <ColorControl label="Outline color" value={s.outlineColor} onChange={outlineColor => patch({ outlineColor })} />

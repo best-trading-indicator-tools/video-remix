@@ -265,10 +265,11 @@ text list shown in the controls, including words, timing, position and styling,
 to every target. Other settings stay as they are; unchecked videos stay unchanged.
 Choose **This video** for individual text. Workspace **Undo** restores a batch edit.
 
-Open **Style & position** for Top/Center/Bottom presets, horizontal position,
-distance from the bottom, text width, and the same font, color, size, emphasis,
-outline, shadow, spacing and background controls as captions. Each text has its
-own style. **Background** sits alongside the font and text color: choose **None**
+**Style & position** opens by default with the same font, color, size, emphasis,
+outline, shadow, spacing and background controls as captions. Position controls
+follow the styling: Top/Center/Bottom presets, horizontal position, distance from
+the bottom and text width. Each text has its own style. **Background** sits
+alongside the font and text color: choose **None**
 for plain text or **Solid box** to show **Background color** and **Background opacity**.
 The box covers the whole text block with one rectangle, including wrapped lines.
 Use the color picker or enter a hex color. Speech-caption styling stays separate.

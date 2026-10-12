@@ -38,14 +38,14 @@ export default function TextOverlaysEditor({ value = [], onChange, duration, cur
           {onSeek && <button type="button" className="secondary-button" onClick={() => onSeek(item.start)}>Preview at start</button>}
           <button type="button" className="secondary-button" aria-label={`Remove text ${index + 1}`} onClick={() => onChange(value.filter(other => other.id !== item.id))}><Trash2 size={13} />Remove</button>
         </div>
-        <details className="text-editor-appearance"><summary>Style &amp; position</summary>
+        <details className="text-editor-appearance" open><summary>Style &amp; position</summary>
+          <CaptionStyleEditor value={item.style} sample={item.text} showHighlight={false} showPreview={false} textMode onChange={style => update(item.id, { style: { ...style, wordHighlight: false } })} />
           <div className="text-position-presets" aria-label={`Text ${index + 1} position presets`}>
             {([['Top', 75], ['Center', 45], ['Bottom', 10]] as const).map(([label, bottomPercent]) => <button type="button" className="secondary-button" key={label} onClick={() => update(item.id, { xPercent: 50, style: { ...item.style, bottomPercent } })}>{label}</button>)}
           </div>
           <NumberControl label="Horizontal position" value={item.xPercent} min={5} max={95} suffix="%" onChange={xPercent => update(item.id, { xPercent })} />
           <NumberControl label="Distance from bottom" value={item.style.bottomPercent} min={5} max={80} suffix="%" onChange={bottomPercent => update(item.id, { style: { ...item.style, bottomPercent } })} />
           <NumberControl label="Text width" value={item.widthPercent} min={10} max={90} suffix="%" onChange={widthPercent => update(item.id, { widthPercent })} />
-          <CaptionStyleEditor value={item.style} sample={item.text} showHighlight={false} showPreview={false} textMode onChange={style => update(item.id, { style: { ...style, wordHighlight: false } })} />
         </details>
       </details>)}
       <button type="button" className="secondary-button text-editor-add" disabled={value.length >= MAX_TEXT_OVERLAYS || disabled} onClick={() => {
