@@ -213,7 +213,8 @@ export default function AutoPanel({
           </label>
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
-        <TextOverlaysEditor value={options.textOverlays} onChange={textOverlays => onChange({ ...options, textOverlays })} disabled={libraryBusy} />
+        <TextOverlaysEditor value={options.textOverlays} onChange={textOverlays => onChange({ ...options, textOverlays })}
+          scopeDescription={workingCount ? scopeDescription : undefined} disabled={libraryBusy} />
         <UpscaleControl value={options.upscale} onChange={upscale => onChange({ ...options, upscale })} />
         {watermarkControls}
         <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope} onChange={onFootageChange} disabled={footageDisabled || !selectedId}

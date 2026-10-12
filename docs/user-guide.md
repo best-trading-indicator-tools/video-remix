@@ -251,8 +251,14 @@ Use your own footage or footage you have permission to repurpose. Review the res
 ### Timed text overlays
 
 Open **Text → Add text** in Manual (Essentials, Advanced or All controls),
-Auto **All settings**, or **Edit this result**. Enter your words and set Start and
+Auto **Quick setup** or **All settings**, or **Edit this result**. Enter your words and set Start and
 End in seconds. Text appears directly over the picture without adding black bands.
+
+For batch text in Auto or Manual, choose **Working on N videos → Checked videos**
+or **All videos** before adding or editing text. Each text edit copies the complete
+text list shown in the controls, including words, timing, position and styling,
+to every target. Other settings stay as they are; unchecked videos stay unchanged.
+Choose **This video** for individual text. Workspace **Undo** restores a batch edit.
 
 Open **Style & position** for Top/Center/Bottom presets, horizontal position,
 distance from the bottom, text width, and the same font, color, size, emphasis,

@@ -6,6 +6,7 @@ import { MAX_AUTO_VERSIONS } from "../shared/types";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
 import AutoLengthMode from "./AutoLengthMode";
+import TextOverlaysEditor from "./TextOverlaysEditor";
 import "./quick-auto.css";
 
 export type AutoView = "quick" | "all";
@@ -89,6 +90,8 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
       </>}
+      <TextOverlaysEditor value={options.textOverlays} onChange={textOverlays => onChange({ options: { textOverlays } })}
+        scopeDescription={selectedVideos.length ? scopeDescription : undefined} disabled={disabled} />
       <UpscaleControl value={options.upscale} onChange={upscale => onChange({ options: { upscale } })} />
       {watermarkControls}
       <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope}

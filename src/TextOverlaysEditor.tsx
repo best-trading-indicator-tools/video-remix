@@ -27,13 +27,14 @@ function TimeField({ label, value, min, onChange }: { label: string; value: numb
     onBlur={commit} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} /></label>;
 }
 
-export default function TextOverlaysEditor({ value = [], onChange, duration, currentTime = 0, onSeek, disabled = false }: {
+export default function TextOverlaysEditor({ value = [], onChange, duration, currentTime = 0, onSeek, disabled = false, scopeDescription }: {
   value?: TextOverlay[]; onChange: (items: TextOverlay[]) => void; duration?: number; currentTime?: number;
-  onSeek?: (time: number) => void; disabled?: boolean;
+  onSeek?: (time: number) => void; disabled?: boolean; scopeDescription?: string;
 }) {
   const update = (id: string, patch: Partial<TextOverlay>) => onChange(value.map(item => item.id === id ? { ...item, ...patch } : item));
   return <section className="text-editor" aria-label="Text overlays">
     <header><div><h3><Type size={17} />Text</h3><p>Add words directly over the video, with or without black bands.</p></div></header>
+    {scopeDescription && <p className="text-editor-note">{scopeDescription}. Text edits copy all words, timings and styles shown here to this selection.</p>}
     <fieldset disabled={disabled}>
       {value.map((item, index) => <details className="text-editor-item" key={item.id} open>
         <summary>Text {index + 1} <span>{item.start.toFixed(1)}–{item.end.toFixed(1)}s</span></summary>
