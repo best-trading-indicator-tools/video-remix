@@ -38,22 +38,34 @@ npm run desktop:build  # installer for the current supported OS / architecture
 
 `desktop/build-resources.mjs` verifies pinned checksums for FFmpeg, matching FFprobe and uv. It checks required filters and includes upstream licenses and source locations. Dependencies and models installed later use the same setup scripts as source installations, in a writable app-owned directory. No developer `.env`, media workspace or downloaded large AI weights are packaged. The small tracked YuNet face model and its license are included.
 
-`.github/workflows/desktop.yml` builds all three platforms. Its smoke test starts the **packaged** Node engine in an empty workspace, verifies localhost token protection, imports a generated video, renders text, checks audio/video output and shuts down cleanly. This catches missing binaries, resource paths and runtime dependencies; it does not certify every OS desktop or GPU driver. Upscaler inference has a separate compatibility workflow.
+The manually dispatched `.github/workflows/desktop.yml` builds all three platforms. Its smoke test starts the **packaged** Node engine in an empty workspace, verifies localhost token protection, imports a generated video, renders text, checks audio/video output and shuts down cleanly. This catches missing binaries, resource paths and runtime dependencies; it does not certify every OS desktop or GPU driver. Upscaler inference has a separate compatibility workflow.
 
 The local Mac verification also exercises the native first-launch installer, API Settings and a real AI-upscaled central preview. Source tests cover API errors/no-credit/timeouts, unsaved-key checks, cancellation, private runtime preparation, and real FFmpeg preview rendering and metadata cleanup.
 
 Installer artifacts are available on successful Actions runs for 14 days. Public preview assets are attached to the release. Publishing stable installers additionally requires Apple Developer ID signing + notarization and Windows code signing; CI deliberately uses unsigned builds until those credentials are configured.
 
-## Automatic feature releases
+## Requested desktop builds and releases
 
-Normal pushes run build/type checks. Desktop packaging and publication run only when `desktop/release.json` changes on `main`. A completed substantial feature gets one new version; small UI, copy, documentation, refactoring and routine bug fixes wait for the next feature release. The standing agent instructions in [AGENTS.md](../AGENTS.md) apply this rule without another publish request.
+Normal pushes run build/type checks. Desktop packaging and publication require an explicit user request, as recorded in [AGENTS.md](../AGENTS.md). Completing a feature or changing `desktop/release.json` never starts an installer build. Changes accumulate until the next requested build or release.
 
-After completing and verifying a feature, prepare a higher version and concrete release notes:
+For a requested installer build without publication, run the **Desktop builds and releases** workflow on `main` with `publish` left off. No release version change is needed:
 
 ```sh
-npm run desktop:release -- 1.3.0-preview.1 "Describe the completed feature" "Describe bundled improvements"
+gh workflow run desktop.yml --ref main -f publish=false
 ```
 
-Commit the feature, `package.json`, `package-lock.json` and `desktop/release.json` together, then push directly to `main`. The workflow builds that exact commit on Mac, Windows and Linux and checks each packaged engine. Only when all three succeed does it create a draft, upload all five installers plus SHA-256 checksums, verify GitHub's asset digests, and publish the release. The version file is an intentional release signal; commit-message wording and the number of commits do not trigger publication.
+When a desktop release is requested, first prepare a version newer than `package.json` and concrete release notes:
 
-If a build or upload fails, no new public release appears. Rerun the failed workflow for transient failures; if a code fix is needed, prepare a higher version. A published version's files are never replaced. Separate feature releases do not cancel one another. The manual **Desktop feature releases** workflow can build installers for investigation without publication; its `publish` option defaults to false and is only for a prepared release on `main`.
+```sh
+npm run desktop:release -- <new-version> "Describe the completed feature" "Describe bundled improvements"
+```
+
+Commit `package.json`, `package-lock.json` and `desktop/release.json` together with any pending changes, then push directly to `main`. Explicitly start publication with:
+
+```sh
+gh workflow run desktop.yml --ref main -f publish=true
+```
+
+The workflow builds the commit selected by that dispatch on Mac, Windows and Linux and checks each packaged engine. Only when all three succeed does it create a draft, upload all five installers plus SHA-256 checksums, verify GitHub's asset digests, and publish the release. The `publish` option defaults to false; the version file and a push alone do not authorize publication.
+
+If a release build or upload fails, no new public release appears. Rerun the failed workflow for transient failures; if a code fix is needed, prepare a higher version. A published version's files are never replaced. Separate requested builds do not cancel one another.

@@ -10,4 +10,4 @@ pkg.version = version; lock.version = version; lock.packages[''].version = versi
 await writeFile('package.json', JSON.stringify(pkg, null, 2) + '\n');
 await writeFile('package-lock.json', JSON.stringify(lock, null, 2) + '\n');
 await writeFile('desktop/release.json', JSON.stringify({ version, notes }, null, 2) + '\n');
-console.log(`Prepared v${version}. Commit the feature, version files and release.json together; pushing main builds, tests and publishes it.`);
+console.log(`Prepared v${version}. Commit and push the version files and release.json to main, then explicitly run: gh workflow run desktop.yml --ref main -f publish=true. Pushing alone does not build or publish installers.`);

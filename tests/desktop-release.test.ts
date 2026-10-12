@@ -25,7 +25,7 @@ test('version ordering is numeric and rejects ambiguous or unsafe release tags',
   for (const value of ['v1.2.0', '../1.2.0', '01.2.0', '1.2.0-preview.0', '1.2.0\n', '1.2.0-beta.1']) assert.equal(parseVersion(value), null);
 });
 
-test('preparing a feature release updates both package versions and the trigger together; invalid requests leave them untouched', async () => {
+test('preparing a release updates both package versions and the manifest together; invalid requests leave them untouched', async () => {
   const directory = await mkdtemp(path.join(tmpdir(), 'remix-release-test-'));
   const script = path.resolve('scripts/prepare-desktop-release.mjs');
   try {
