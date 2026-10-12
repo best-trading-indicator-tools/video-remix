@@ -1,8 +1,9 @@
 {
-  "version": "1.7.0-preview.1",
+  "version": "1.8.0-preview.1",
   "notes": [
-    "Add text over your video with start and end times, position, fonts, colors and optional backgrounds.",
-    "Style each text independently from speech captions and black bands in Auto, Manual and Edit this result.",
-    "Drag and trim text on its own timeline track, with saved drafts, Undo and timing across added clips."
+    "Drag text directly on the video preview and double-click to edit its words, with Undo and Redo.",
+    "Use the same text settings across this video, checked videos or all videos in Quick setup and Manual.",
+    "Choose a text background color and opacity, with one continuous box around wrapped text in previews and exports.",
+    "Keep caption style samples off until requested, including when toggling watermark removal."
   ]
 }
