@@ -268,8 +268,9 @@ Choose **This video** for individual text. Workspace **Undo** restores a batch e
 Open **Style & position** for Top/Center/Bottom presets, horizontal position,
 distance from the bottom, text width, and the same font, color, size, emphasis,
 outline, shadow, spacing and background controls as captions. Each text has its
-own style. Choose **Background → None** for plain text or **Solid box** for a
-colored background with adjustable opacity. Speech-caption styling stays separate.
+own style. **Background** sits alongside the font and text color: choose **None**
+for plain text or **Solid box** to show **Background color** and **Background opacity**.
+Use the color picker or enter a hex color. Speech-caption styling stays separate.
 
 Times refer to the finished video, including inserted clips and outros. They stay
 fixed when you change cuts or playback speed, so review them after changing the

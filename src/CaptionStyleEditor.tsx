@@ -170,23 +170,19 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
         {Object.entries(CAPTION_FONTS).filter(([id]) => !textMode || id !== "classic").map(([id, font]) => <option key={id} value={id}>{font.label}</option>)}
       </select></label>
       <ColorControl label="Text color" value={s.color} onChange={color => patch({ color })} />
+      <label className="caption-field">Background<select value={s.background} onChange={event => patch({ background: event.target.value as CaptionStyle["background"] })}><option value="none">None · transparent</option><option value="box">Solid box</option></select></label>
+      {s.background === "box" && <ColorControl label="Background color" value={s.backgroundColor} onChange={backgroundColor => patch({ backgroundColor })} />}
     </div>
+    {s.background === "box" && <NumberControl label="Background opacity" value={s.backgroundOpacity} min={0} max={100} suffix="%" onChange={backgroundOpacity => patch({ backgroundOpacity })} />}
     <div className="caption-emphasis" role="group" aria-label={textMode ? "Text emphasis" : "Caption emphasis"}>
       {([['bold', 'Bold'], ['italic', 'Italic'], ['uppercase', 'ALL CAPS']] as const).map(([key, name]) => <button type="button" key={key} aria-pressed={s[key]} onClick={() => patch({ [key]: !s[key] })}>{name}</button>)}
     </div>
     <CyrillicControl style={s} onChange={patch} sample={sample} textMode={textMode} />
     <NumberControl label={textMode ? "Text font size" : "Caption font size"} value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
     <p className="caption-style-note">Size scales with your export resolution.</p>
-    <details className="caption-more"><summary>Outline, background &amp; placement</summary>
-      <div className="caption-style-grid">
-        <label className="caption-field">Background<select value={s.background} onChange={event => patch({ background: event.target.value as CaptionStyle["background"] })}><option value="none">None · use outline</option><option value="box">Solid box</option></select></label>
-        <label className="caption-field">Text alignment<select value={s.alignment} onChange={event => patch({ alignment: event.target.value as CaptionStyle["alignment"] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
-      </div>
-      {s.background === "box" ? <>
-        <ColorControl label="Background color" value={s.backgroundColor} onChange={backgroundColor => patch({ backgroundColor })} />
-        <NumberControl label="Background opacity" value={s.backgroundOpacity} min={0} max={100} suffix="%" onChange={backgroundOpacity => patch({ backgroundOpacity })} />
-        <p className="caption-style-note">The box replaces the text outline.</p>
-      </> : <>
+    <details className="caption-more"><summary>Outline, shadow &amp; placement</summary>
+      <label className="caption-field">Text alignment<select value={s.alignment} onChange={event => patch({ alignment: event.target.value as CaptionStyle["alignment"] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>
+      {s.background === "box" ? <p className="caption-style-note">The box replaces the text outline.</p> : <>
         <ColorControl label="Outline color" value={s.outlineColor} onChange={outlineColor => patch({ outlineColor })} />
         <NumberControl label="Outline thickness" value={s.outlineWidth} min={0} max={5} step={0.1} onChange={outlineWidth => patch({ outlineWidth })} />
       </>}
