@@ -26,6 +26,7 @@ import { VISUAL_SOURCE_LABELS } from "../shared/visual-sources";
 import PromptEditor, { savedEditExamples, type PromptProposal } from "./PromptEditor";
 import EditorialReportSummary from "./EditorialReportSummary";
 import CaptionStyleEditor from "./CaptionStyleEditor";
+import { BulkCaptionCorrection } from './CaptionCorrectionsEditor';
 import "./edit-plan.css";
 
 
@@ -576,6 +577,7 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                 <fieldset disabled={saving || cutTimingsChanged}>
                   <legend className="visually-hidden">Caption corrections</legend>
                   <CaptionStyleEditor value={draft.settings.captionStyle} showPreview={false} onChange={captionStyle => updateFraming({ captionStyle })} />
+                  <BulkCaptionCorrection captions={draft.captions} onChange={captions => setDraft({ ...draft, captions })} />
                   {!!draft.captions.length && <button type="button" className="secondary-button edit-plan-remove-all-captions" onClick={() => {
                     setDraft({ ...draft, captions: [] }); setPreviewMode("framing"); setError("");
                   }}><X size={14} />Remove added captions</button>}

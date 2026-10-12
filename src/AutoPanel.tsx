@@ -3,6 +3,7 @@ import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
 import { CaptionAppearance } from "./CaptionStyleEditor";
+import CaptionCorrectionsEditor from './CaptionCorrectionsEditor';
 import { useEffect, useState, type ReactNode } from "react";
 import {
   Check,
@@ -330,6 +331,7 @@ export default function AutoPanel({
                   : "Auto checks for captions baked into the selected footage. If found or uncertain, it keeps the original voice and adds no captions, hook or callouts."}
             </p>
             {options.captions !== "keep" && <CaptionAppearance value={options.captionStyle} showPreview={false} onChange={captionStyle => onChange({ ...options, captionStyle })} />}
+            {options.captions !== 'keep' && <CaptionCorrectionsEditor value={options.captionCorrections} scopeDescription={scopeDescription} onChange={captionCorrections => onChange({ ...options, captionCorrections })} />}
             <label className="auto-output-field" data-tour="auto-sound">
               Sound
               <select value={keepOriginalAudio ? "off" : options.audio ?? "auto"} aria-describedby="auto-audio-note"

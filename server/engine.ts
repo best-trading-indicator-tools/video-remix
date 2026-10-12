@@ -27,6 +27,7 @@ import { assertUpscaleInstalled, renderUpscale } from "./upscale.js";
 import { AUDIO_LOOK_KEYS, AUDIO_RANGES, MAX_AUDIO_FADE } from "../shared/audio.js";
 import { audioFadeFilters, audioModifierFilters, audioNormalizationFilters } from "./audio-filters.js";
 import type { CaptionStyle, RemixSettings, TranscriptWord } from "../shared/types.js";
+import { captionCorrectionsSchema, correctCaptionText, type CaptionCorrection } from '../shared/caption-corrections.js';
 import { DEFAULT_SETTINGS, MAX_BROLL_COUNT } from "../shared/types.js";
 import type { SupportingVisual } from "./visuals.js";
 import { wrapEditorialText as wrapHook } from "../shared/framing.js";
@@ -351,6 +352,7 @@ export async function createThumbnail(
 
 function validateSettings(settings: RemixSettings): void {
   textOverlaysSchema.parse(settings.textOverlays ?? []);
+  captionCorrectionsSchema.parse(settings.captionCorrections ?? []);
   const ranges: [keyof RemixSettings, number, number][] = [
     ["speed", 0.5, 2],
     ["volume", 0, 3],
@@ -579,7 +581,7 @@ async function prepareCaptionFonts(workDir: string, temporary: string[]) {
   return name;
 }
 
-async function canonicalSubtitles(filePath: string, displayStyle?: CaptionStyle): Promise<string> {
+export async function canonicalSubtitles(filePath: string, displayStyle?: CaptionStyle, corrections: CaptionCorrection[] = []): Promise<string> {
   const local = await localFile(filePath);
   if ((await stat(local)).size > 2 * 1024 * 1024)
     throw new Error("Subtitles must be smaller than 2 MB");
@@ -618,21 +620,23 @@ async function canonicalSubtitles(filePath: string, displayStyle?: CaptionStyle)
     // Remove embedded styling before display conversion; timings and source text stay saved unchanged.
     const plain = lines.join("\n").replace(/<\/?(?:b|i|u|s|font)(?:\s[^>]*)?>/giu, "")
       .replace(/\{\\[^}]*\}/gu, "");
-    canonical.push(`${canonical.length + 1}\n${beginStamp} --> ${endStamp}\n${captionDisplayText(plain, displayStyle)}`);
+    const corrected = corrections.length ? correctCaptionText(plain, corrections).text : plain;
+    if (corrected.trim()) canonical.push(`${canonical.length + 1}\n${beginStamp} --> ${endStamp}\n${captionDisplayText(corrected, displayStyle)}`);
   }
   // A canonical numeric cue header ensures the subtitle filter's independent
   // demuxer cannot interpret an uploaded file as a playlist or another format.
-  return `${canonical.join("\n\n")}\n`;
+  return canonical.length ? `${canonical.join("\n\n")}\n` : '';
 }
 
-async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefined, workDir: string, temporary: string[], words?: TranscriptWord[]) {
+async function subtitleFilter(subtitlePath: string, style: CaptionStyle | undefined, workDir: string, temporary: string[], words?: TranscriptWord[], corrections?: CaptionCorrection[]) {
   // Word highlighting needs inline color changes, which SRT cannot carry.
-  const highlight = style?.wordHighlight === true;
+  const highlight = style?.wordHighlight === true || (!!style?.animation && style.animation !== 'none');
   const filename = `captions-${randomUUID()}.${highlight ? "ass" : "srt"}`;
   const filePath = path.join(workDir, filename);
   temporary.push(filePath);
   // ASS matches speech timings against original words, then changes only drawn text.
-  const canonical = await canonicalSubtitles(subtitlePath, highlight ? undefined : style);
+  const canonical = await canonicalSubtitles(subtitlePath, highlight ? undefined : style, corrections);
+  if (!canonical.trim()) return 'null';
   await writeFile(filePath, highlight ? captionsAss(parseCanonicalSrt(canonical), style, words) : canonical, "utf8");
   const fontsName = await prepareCaptionFonts(workDir, temporary);
   // The SRT decoder uses a 384 × 288 script canvas at every output resolution.
@@ -958,7 +962,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       }
     }
     if (options.subtitlePath) {
-      const subtitle = await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary, options.captionWords);
+      const subtitle = await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary, options.captionWords, s.captionCorrections);
       (s.blackBands?.enabled ? decorations : filters).push(subtitle);
     }
     if (s.textOverlays?.some(item => item.text.trim() && item.start < exportDuration)) {

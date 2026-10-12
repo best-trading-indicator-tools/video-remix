@@ -31,6 +31,26 @@ export const newTextOverlay = (id: string, start = 0, end = start + 3): TextOver
   style: { ...DEFAULT_CAPTION_STYLE, fontFamily: "poppins", bold: true, bottomPercent: 45 },
 });
 
+export const TITLE_DESIGNS = [
+  { id: 'bold', name: 'Bold hook', sample: 'STOP SCROLLING', style: { fontFamily: 'anton', fontSize: 30, uppercase: true, color: '#ffe66d', bottomPercent: 65, animation: 'pop', outlineWidth: 1.5 } },
+  { id: 'editorial', name: 'Editorial', sample: 'A different perspective', style: { fontFamily: 'serif', fontSize: 27, color: '#fff1dc', bottomPercent: 55, animation: 'fade', shadow: 1, outlineWidth: .5 } },
+  { id: 'label', name: 'Lower third', sample: 'YOUR NAME · YOUR STORY', style: { fontFamily: 'poppins', fontSize: 18, bold: true, color: '#ffffff', alignment: 'left', background: 'box', backgroundColor: '#10151c', bottomPercent: 22, animation: 'slide' } },
+  { id: 'announcement', name: 'Announcement', sample: 'Something new is here', style: { fontFamily: 'tiktok-sans', fontSize: 26, bold: true, background: 'box', backgroundColor: '#f5dcac', color: '#171717', backgroundOpacity: 100, bottomPercent: 45, animation: 'typewriter' } },
+] as const;
+export function titleOverlay(id: string, design: typeof TITLE_DESIGNS[number]['id'], text: string, start = 0, end = start + 3): TextOverlay {
+  const preset = TITLE_DESIGNS.find(item => item.id === design)!;
+  const base = newTextOverlay(id, start, end);
+  return { ...base, text, style: { ...base.style, ...preset.style } };
+}
+
+/** Resize around the existing anchor, independent of preview dimensions. */
+export function resizeTextOverlay(from: { fontSize: number; widthPercent: number }, dx: number, dy: number, boxWidth: number, boxHeight: number) {
+  if (![dx, dy, boxWidth, boxHeight].every(Number.isFinite) || boxWidth <= 0 || boxHeight <= 0) return from;
+  const factor = Math.max(.1, 1 + (Math.abs(dx / boxWidth) > Math.abs(dy / boxHeight) ? dx / boxWidth : dy / boxHeight));
+  const round = (n: number) => Math.round(n * 100) / 100;
+  return { fontSize: round(Math.min(40, Math.max(12, from.fontSize * factor))), widthPercent: round(Math.min(90, Math.max(10, from.widthPercent * factor))) };
+}
+
 export type TextOverlayPosition = { xPercent: number; bottomPercent: number };
 /** Pointer distances use the displayed canvas size, independent of export resolution. */
 export function moveTextOverlay(from: TextOverlayPosition, dx: number, dy: number, width: number, height: number): TextOverlayPosition {

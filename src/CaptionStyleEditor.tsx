@@ -2,11 +2,13 @@ import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { RotateCcw, Check, ChevronDown, Type } from "lucide-react";
 import { CAPTION_FONTS, CAPTION_PRESETS, DEFAULT_CAPTION_STYLE, captionLines, captionWordStarts, captionStyleSchema, contrastingHighlight, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
 import { captionDisplayText } from "../shared/caption-text";
+import { TEXT_ANIMATIONS, textMotion, typewriterCount } from '../shared/text-animation';
 import "./caption-style.css";
 
 export function CaptionAppearance(props: Parameters<typeof CaptionStyleEditor>[0]) {
   return <>
     <WordHighlightToggle value={props.value} onChange={props.onChange} />
+    <CaptionAnimationControl value={props.value} onChange={props.onChange} />
     <details className="caption-appearance">
       <summary>
         <Type size={20} className="caption-appearance-icon" aria-hidden="true" />
@@ -16,7 +18,7 @@ export function CaptionAppearance(props: Parameters<typeof CaptionStyleEditor>[0
         </span>
         <ChevronDown size={20} className="caption-appearance-chevron" aria-hidden="true" />
       </summary>
-      <CaptionStyleEditor {...props} showHighlight={false} />
+      <CaptionStyleEditor {...props} showHighlight={false} showAnimation={false} />
     </details>
   </>;
 }
@@ -43,7 +45,7 @@ export function activeCaptionWord(text: string, start: number, end: number, time
   return active;
 }
 
-export function CaptionOverlay({ style, height, text, activeWord, placement, displayed = false, blockBackground = false }: { style?: CaptionStyle; height: number; text: string; activeWord?: number; placement?: CSSProperties; displayed?: boolean; blockBackground?: boolean }) {
+export function CaptionOverlay({ style, height, text, activeWord, placement, displayed = false, blockBackground = false, time = 1, start = 0, end = 4 }: { style?: CaptionStyle; height: number; text: string; activeWord?: number; placement?: CSSProperties; displayed?: boolean; blockBackground?: boolean; time?: number; start?: number; end?: number }) {
   const s = resolveCaptionStyle(style), scale = height / 288;
   const box = s.background === "box";
   const color = s.backgroundColor;
@@ -61,10 +63,24 @@ export function CaptionOverlay({ style, height, text, activeWord, placement, dis
       : { backgroundColor: background, padding: `${3 * scale}px`, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" } : {}),
   };
   const shown = displayed ? text : captionDisplayText(text, s);
+  const motion = textMotion(s, start, end, time);
+  if (s.animation !== 'none') Object.assign(lettering, { display: 'inline-block', opacity: motion.opacity,
+    transform: `translateY(${motion.y * scale}px) scale(${motion.scale})`, transformOrigin: `${s.alignment} bottom` });
   let index = 0;
-  const words = s.wordHighlight && activeWord !== undefined ? captionLines(shown).map((row, rowIndex) => <Fragment key={rowIndex}>
+  const active = activeWord ?? activeCaptionWord(text, start, end, time);
+  let characters = 0;
+  const visible = typewriterCount(shown, start, end, time);
+  let inWord = false, typedWord = -1;
+  const words = s.animation === 'typewriter' ? Array.from(shown).map((char, i) => {
+    const whitespace = /\s/u.test(char);
+    if (!whitespace && !inWord) typedWord++;
+    inWord = !whitespace;
+    return <span key={i} style={{ visibility: characters++ < visible ? 'visible' : 'hidden', color: s.wordHighlight && typedWord === active && !whitespace ? s.highlightColor : undefined }}>{char}</span>;
+  })
+    : s.wordHighlight || s.animation === 'words' ? captionLines(shown).map((row, rowIndex) => <Fragment key={rowIndex}>
     {rowIndex > 0 && "\n"}{row.map((word, wordIndex) => { const current = index++; return <Fragment key={wordIndex}>{wordIndex > 0 && " "}
-      {current === activeWord ? <span className="caption-word-active" style={{ color: s.highlightColor }}>{word}</span> : word}</Fragment>; })}
+      <span className={s.wordHighlight && current === active ? 'caption-word-active' : undefined} style={{ color: s.wordHighlight && current === active ? s.highlightColor : undefined,
+        visibility: s.animation === 'words' && current > active ? 'hidden' : 'visible' }}>{word}</span></Fragment>; })}
   </Fragment>) : shown;
   return <div className="caption-overlay" style={{ bottom: `${s.bottomPercent}%`, textAlign: s.alignment, ...placement }}><span style={lettering}>{words}</span></div>;
 }
@@ -98,11 +114,22 @@ export function SampleCaptionOverlay({ style, height, sample = "Caption style pr
   const wordCount = captionLines(previewText).flat().length;
   const [tick, setTick] = useState(0);
   useEffect(() => {
-    if (!s.wordHighlight || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    const timer = window.setInterval(() => setTick(value => value + 1), 450);
+    if ((!s.wordHighlight && s.animation === 'none') || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    const timer = window.setInterval(() => setTick(value => value + 1), 33);
     return () => clearInterval(timer);
-  }, [s.wordHighlight]);
-  return <CaptionOverlay style={s} height={height} text={previewText} activeWord={wordCount ? tick % wordCount : undefined} />;
+  }, [s.wordHighlight, s.animation]);
+  const time = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 2 : tick * .033 % 4;
+  return <CaptionOverlay style={s} height={height} text={previewText} time={time} activeWord={wordCount ? activeCaptionWord(previewText, 0, 4, time) : undefined} />;
+}
+
+export function CaptionAnimationControl({ value, onChange }: { value?: CaptionStyle; onChange: (style: CaptionStyle) => void }) {
+  const s = resolveCaptionStyle(value);
+  return <div className="caption-animation"><label className="caption-field">Animation
+    <select aria-label="Text animation" value={s.animation} onChange={event => onChange({ ...s, animation: event.target.value as CaptionStyle['animation'] })}>
+      {TEXT_ANIMATIONS.map(animation => <option key={animation.id} value={animation.id}>{animation.label}</option>)}
+    </select>
+  </label>{['fade', 'pop', 'slide'].includes(s.animation) && <NumberControl label="Animation duration" min={.1} max={1} step={.05} value={s.animationDuration} suffix="s" onChange={animationDuration => onChange({ ...s, animationDuration })} />}
+  {s.animation === 'words' && <p className="caption-style-note">Words appear as they are spoken. Imported or corrected wording uses estimated timing.</p>}</div>;
 }
 
 const parseSpellingWords = (text: string) => [...new Set(text.split(/[,\n]/u).map(word => word.trim()).filter(Boolean))];
@@ -146,8 +173,8 @@ function CyrillicControl({ style, onChange, sample, textMode = false }: { style:
   </div>;
 }
 
-export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true, showPreview = true, textMode = false }: {
-  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean; showPreview?: boolean; textMode?: boolean;
+export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true, showPreview = true, showAnimation = true, textMode = false }: {
+  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean; showPreview?: boolean; showAnimation?: boolean; textMode?: boolean;
 }) {
   const s = resolveCaptionStyle(value);
   const patch = (change: Partial<CaptionStyle>) => onChange({ ...s, ...change });
@@ -155,6 +182,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
     <header><div><h4>{textMode ? "Text look" : "Caption look"}</h4><p>{textMode ? "Font, color, background, outline, shadow and letter spacing for this text." : "One style for all added captions."}</p></div>
       <button type="button" className="caption-reset" aria-label={textMode ? "Reset text style" : "Reset caption style"} onClick={() => onChange({ ...DEFAULT_CAPTION_STYLE, ...(textMode ? { bottomPercent: s.bottomPercent, fontFamily: "poppins" } : {}) })}><RotateCcw size={14} />Reset</button></header>
     {showHighlight && <WordHighlightToggle value={value} onChange={onChange} />}
+    {showAnimation && <CaptionAnimationControl value={value} onChange={onChange} />}
     <div className="caption-looks" role="group" aria-label={textMode ? "Text look presets" : "Caption look presets"}>
       {CAPTION_PRESETS.map(preset => {
         const selected = Object.entries(preset.style).every(([key, v]) => s[key as keyof CaptionStyle] === v);

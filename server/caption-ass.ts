@@ -1,6 +1,7 @@
 import { captionLines, captionWordStarts, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style.js";
 import { captionDisplayText } from "../shared/caption-text.js";
 import type { TranscriptWord } from "../shared/types.js";
+import { animatedAssText, animatedTextFrames } from './text-animation.js';
 
 export interface TimedCaption { start: number; end: number; text: string }
 
@@ -41,6 +42,15 @@ export function captionsAss(captions: TimedCaption[], style: CaptionStyle | unde
   const events: string[] = [];
   const dialogue = (from: number, to: number, text: string) => events.push(`Dialogue: 0,${stamp(from)},${stamp(to)},Default,,0,0,0,,${text}`);
   for (const caption of captions) {
+    if (s.animation !== 'none') {
+      const text = captionDisplayText(caption.text.replace(/\r/gu, ''), s);
+      const x = { left: 10, center: 192, right: 374 }[s.alignment], y = 288 - Math.round(s.bottomPercent * 288 / 100);
+      for (const frame of animatedTextFrames(text, caption.text, s, caption.start, caption.end, words)) {
+        const motion = `\\pos(${x},${(y + frame.y).toFixed(3)})\\fscx${(frame.scale * 100).toFixed(3)}\\fscy${(frame.scale * 100).toFixed(3)}`;
+        dialogue(centiseconds(frame.start), centiseconds(frame.end), `{${motion}}${animatedAssText(text, s, frame)}`);
+      }
+      continue;
+    }
     const rows = captionLines(captionDisplayText(caption.text.replace(/\r/gu, ""), s));
     const count = rows.flat().length;
     const begin = centiseconds(caption.start), finish = centiseconds(caption.end);

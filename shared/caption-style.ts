@@ -26,6 +26,8 @@ export const captionStyleSchema = z.object({
   backgroundOpacity: z.number().finite().min(0).max(100).optional(),
   /** Light up each word while it is spoken. Off for every existing export and preset. */
   wordHighlight: z.boolean().optional(), highlightColor: color.optional(),
+  animation: z.enum(['none', 'fade', 'pop', 'slide', 'typewriter', 'words']).optional(),
+  animationDuration: z.number().finite().min(.1).max(1).optional(),
 }).strict();
 export type CaptionStyle = z.infer<typeof captionStyleSchema>;
 export const DEFAULT_CAPTION_STYLE: Required<CaptionStyle> = {
@@ -34,15 +36,22 @@ export const DEFAULT_CAPTION_STYLE: Required<CaptionStyle> = {
   shadow: 0, letterSpacing: 0, alignment: "center", background: "none", backgroundColor: "#10151c", backgroundOpacity: 80,
   wordHighlight: false, highlightColor: "#ffe14d",
   cyrillicMode: "off", cyrillicWords: [],
+  animation: 'none', animationDuration: .3,
 };
 /** Built-in looks keep highlighting and spelling choices separate. */
-export type CaptionLook = Omit<CaptionStyle, "wordHighlight" | "highlightColor" | "cyrillicMode" | "cyrillicWords">;
-const { wordHighlight: _wordHighlight, highlightColor: _highlightColor, cyrillicMode: _mode, cyrillicWords: _words, ...LOOK_BASE } = DEFAULT_CAPTION_STYLE;
-export const captionLook = ({ wordHighlight: _on, highlightColor: _color, cyrillicMode: _mode, cyrillicWords: _words, ...look }: CaptionStyle): CaptionLook => look;
+export type CaptionLook = Omit<CaptionStyle, "wordHighlight" | "highlightColor" | "cyrillicMode" | "cyrillicWords" | 'animation' | 'animationDuration'>;
+const { wordHighlight: _wordHighlight, highlightColor: _highlightColor, cyrillicMode: _mode, cyrillicWords: _words, animation: _animation, animationDuration: _duration, ...LOOK_BASE } = DEFAULT_CAPTION_STYLE;
+export const captionLook = ({ wordHighlight: _on, highlightColor: _color, cyrillicMode: _mode, cyrillicWords: _words, animation: _animation, animationDuration: _duration, ...look }: CaptionStyle): CaptionLook => look;
 export const resolveCaptionStyle = (style?: CaptionStyle): Required<CaptionStyle> => ({ ...DEFAULT_CAPTION_STYLE, ...style });
+/** A bulk control changes only the fields edited on the displayed video. */
+export function applyCaptionStyleChange(target: CaptionStyle | undefined, before: CaptionStyle | undefined, after: CaptionStyle): CaptionStyle {
+  const previous = resolveCaptionStyle(before), next = resolveCaptionStyle(after);
+  const changed = Object.fromEntries(Object.entries(next).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(previous[key as keyof CaptionStyle])));
+  return { ...resolveCaptionStyle(target), ...changed };
+}
 export function captionStyleDescription(style?: CaptionStyle): string {
   const s = resolveCaptionStyle(style);
-  return `Caption look: ${CAPTION_FONTS[s.fontFamily].family}, ${s.color}, ${s.bold ? "bold" : "regular"}${s.italic ? ", italic" : ""}${s.uppercase ? ", uppercase" : ""}, ${s.alignment} aligned; ${s.background === "box" ? `${s.backgroundColor} box at ${s.backgroundOpacity}% opacity` : `${s.outlineColor} outline at ${s.outlineWidth}`}; shadow ${s.shadow}, spacing ${s.letterSpacing}${s.wordHighlight ? `; each spoken word highlighted in ${s.highlightColor}` : ""}; Cyrillic lookalikes ${s.cyrillicMode === "off" ? "off" : s.cyrillicMode === "all" ? "in all caption text" : `for ${s.cyrillicWords.length ? s.cyrillicWords.join(", ") : "no listed words yet"}`}.`;
+  return `Caption look: ${CAPTION_FONTS[s.fontFamily].family}, ${s.color}, ${s.bold ? "bold" : "regular"}${s.italic ? ", italic" : ""}${s.uppercase ? ", uppercase" : ""}, ${s.alignment} aligned; ${s.background === "box" ? `${s.backgroundColor} box at ${s.backgroundOpacity}% opacity` : `${s.outlineColor} outline at ${s.outlineWidth}`}; shadow ${s.shadow}, spacing ${s.letterSpacing}${s.wordHighlight ? `; each spoken word highlighted in ${s.highlightColor}` : ""}; animation ${s.animation}; Cyrillic lookalikes ${s.cyrillicMode === "off" ? "off" : s.cyrillicMode === "all" ? "in all caption text" : `for ${s.cyrillicWords.length ? s.cyrillicWords.join(", ") : "no listed words yet"}`}.`;
 }
 /** A highlight that stays visible against the chosen text color. */
 export function contrastingHighlight(textColor: string): string {

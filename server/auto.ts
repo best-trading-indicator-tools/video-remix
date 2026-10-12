@@ -524,6 +524,7 @@ export async function prepareAutoRemix({
     ...(options.textOverlays ? { textOverlays: structuredClone(options.textOverlays) } : {}),
     ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
     ...(options.watermarkRemoval ? { watermarkRemoval: structuredClone(options.watermarkRemoval) } : {}),
+    captionCorrections: options.captionCorrections,
     ...(options.captionStyle ? { captionStyle: options.captionStyle }
       : anglePreset ? { captionStyle: structuredClone(anglePreset.style) } : {}),
     aspect: options.aspect,

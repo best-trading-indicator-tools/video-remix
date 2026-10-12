@@ -47,6 +47,7 @@ export interface SupportingVisualOptions {
   brollMaxCoverage?: number;
 }
 export interface AutoOptions extends SupportingVisualOptions {
+  captionCorrections?: import('./caption-corrections.js').CaptionCorrection[];
   upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
@@ -129,6 +130,7 @@ export interface AutoCapabilities {
   message?: string;
 }
 export interface RemixSettings extends SupportingVisualOptions {
+  captionCorrections?: import('./caption-corrections.js').CaptionCorrection[];
   /** Free local enlargement; a minimum short edge, without downscaling native footage. */
   upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;

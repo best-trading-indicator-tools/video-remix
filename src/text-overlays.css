@@ -19,6 +19,15 @@
 .canvas-text-object:hover, .canvas-text-object.is-selected, .canvas-text-object:focus-visible { outline-color: var(--accent, #f2c399); }
 .canvas-text-object.is-dragging { cursor: grabbing; }
 .canvas-text-object.is-editing { cursor: text; }
+.canvas-text-resize { position: absolute; top: -8px; right: -8px; width: 16px; height: 16px; min-height: 0; padding: 0; border: 2px solid var(--surface, #15161b); border-radius: 3px; background: var(--accent, #f2c399); cursor: nesw-resize; touch-action: none; z-index: 2; }
+.canvas-text-resize:focus-visible { outline: 2px solid white; outline-offset: 3px; }
+.title-designs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0; }
+.title-designs button { display: grid; gap: 8px; min-width: 0; padding: 12px 8px; border: 1px solid var(--line, #36373d); border-radius: 8px; color: inherit; background: var(--surface, #15161b); cursor: pointer; }
+.title-designs button[aria-pressed="true"] { border-color: var(--accent, #f2c399); background: var(--surface-raised, #25252b); }
+.title-designs button > span { min-height: 40px; display: grid; place-content: center; font-size: 16px; line-height: 1.2; }
+.title-designs small { font: 11px system-ui, sans-serif; color: var(--subtle, #a5a5ae); }
+.title-composer > label { display: grid; gap: 6px; font-size: 12px; }
+.title-composer textarea { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--line, #36373d); border-radius: 6px; color: inherit; background: var(--surface, #15161b); font: inherit; }
 .canvas-text-object .canvas-text-input { display: block; box-sizing: border-box; width: 100%; min-width: 0; min-height: 1.2em; margin: 0; padding: 4px; border: 0; border-radius: 2px; resize: none; line-height: 1.2; color: var(--text, #fff); background: var(--surface-raised, #25252b); caret-color: var(--text, #fff); user-select: text; touch-action: auto; }
 .canvas-text-tools { position: absolute; top: calc(100% + 8px); left: 0; display: flex; gap: 4px; padding: 4px; border: 1px solid var(--line, #36373d); border-radius: 6px; background: var(--surface-raised, #25252b); white-space: nowrap; cursor: default; }
 .canvas-text-tools.above { top: auto; bottom: calc(100% + 8px); }

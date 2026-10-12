@@ -7,6 +7,8 @@ import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
 import OwnFootagePanel, { type FootageTarget } from "./OwnFootagePanel";
 import AutoLengthMode from "./AutoLengthMode";
 import TextOverlaysEditor from "./TextOverlaysEditor";
+import { CaptionAppearance } from './CaptionStyleEditor';
+import CaptionCorrectionsEditor from './CaptionCorrectionsEditor';
 import "./quick-auto.css";
 
 export type AutoView = "quick" | "all";
@@ -90,7 +92,18 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
       </fieldset>
       </>}
-      <TextOverlaysEditor value={options.textOverlays} onChange={textOverlays => onChange({ options: { textOverlays } })}
+      <fieldset className="quick-auto-group" disabled={disabled}>
+        <legend>Captions</legend>
+        <label className="caption-field">Speech captions<select value={options.captions ?? 'auto'} onChange={event => onChange({ options: { captions: event.target.value as AutoOptions['captions'] } })}>
+          <option value="auto">Auto · avoid duplicates</option><option value="add">Add new captions</option><option value="keep">Keep original · add none</option>
+        </select></label>
+        <p className="auto-preferences-note">{options.captions === 'keep' ? 'Existing captions stay in the picture. Styles and corrections apply only to newly added captions.' : 'Generate captions from speech. Auto keeps captions already in the picture; Add new always adds another caption layer.'}</p>
+        {options.captions !== 'keep' && <>
+          <CaptionAppearance value={options.captionStyle} showPreview={false} onChange={captionStyle => onChange({ options: { captionStyle } })} />
+          <CaptionCorrectionsEditor value={options.captionCorrections} scopeDescription={scopeDescription} onChange={captionCorrections => onChange({ options: { captionCorrections } })} />
+        </>}
+      </fieldset>
+      <TextOverlaysEditor compact value={options.textOverlays} onChange={textOverlays => onChange({ options: { textOverlays } })}
         scopeDescription={selectedVideos.length ? scopeDescription : undefined} disabled={disabled} />
       <UpscaleControl value={options.upscale} onChange={upscale => onChange({ options: { upscale } })} />
       {watermarkControls}

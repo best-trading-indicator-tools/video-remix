@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Type } from "lucide-react";
 import CaptionStyleEditor, { NumberControl } from "./CaptionStyleEditor";
-import { MAX_TEXT_OVERLAYS, newTextOverlay, type TextOverlay } from "../shared/text-overlays";
+import { MAX_TEXT_OVERLAYS, TITLE_DESIGNS, titleOverlay, newTextOverlay, type TextOverlay } from "../shared/text-overlays";
+import { CAPTION_FONTS } from '../shared/caption-style';
 import "./text-overlays.css";
 
 function TimeField({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (value: number) => void }) {
@@ -17,15 +18,30 @@ function TimeField({ label, value, min, onChange }: { label: string; value: numb
     onBlur={commit} onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }} /></label>;
 }
 
-export default function TextOverlaysEditor({ value = [], onChange, duration, currentTime = 0, onSeek, disabled = false, scopeDescription }: {
+export default function TextOverlaysEditor({ value = [], onChange, duration, currentTime = 0, onSeek, disabled = false, scopeDescription, compact = false }: {
   value?: TextOverlay[]; onChange: (items: TextOverlay[]) => void; duration?: number; currentTime?: number;
-  onSeek?: (time: number) => void; disabled?: boolean; scopeDescription?: string;
+  onSeek?: (time: number) => void; disabled?: boolean; scopeDescription?: string; compact?: boolean;
 }) {
+  const [title, setTitle] = useState(''), [design, setDesign] = useState<typeof TITLE_DESIGNS[number]['id']>('bold');
   const update = (id: string, patch: Partial<TextOverlay>) => onChange(value.map(item => item.id === id ? { ...item, ...patch } : item));
   return <section className="text-editor" aria-label="Text overlays">
     <header><div><h3><Type size={17} />Text</h3><p>Add words directly over the video, with or without black bands.</p></div></header>
     {scopeDescription && <p className="text-editor-note">{scopeDescription}. Text edits copy all words, timings and styles shown here to this selection.</p>}
     <fieldset disabled={disabled}>
+      <details className="title-composer" open={!value.length}><summary>Ready-made titles</summary>
+        <div className="title-designs" role="group" aria-label="Title designs">
+          {TITLE_DESIGNS.map(preset => <button key={preset.id} type="button" aria-pressed={design === preset.id} onClick={() => setDesign(preset.id)}>
+            <span style={{ fontFamily: CAPTION_FONTS[preset.style.fontFamily].css, color: preset.style.color,
+              ...(preset.id === 'announcement' ? { background: '#f5dcac', borderRadius: 3, padding: 4 } : {}) }}>{preset.sample}</span><small>{preset.name}</small>
+          </button>)}
+        </div>
+        <label>Title words<textarea aria-label="Title words" rows={2} maxLength={500} placeholder="Write a title for the selected videos" value={title} onChange={event => setTitle(event.target.value)} /></label>
+        <button type="button" className="secondary-button text-editor-add" disabled={!title.trim() || value.length >= MAX_TEXT_OVERLAYS} onClick={() => {
+          onChange([...value, titleOverlay(crypto.randomUUID(), design, title.trim(), 0, Math.max(.04, Math.min(3, duration || 3)))]);
+          onSeek?.(0); setTitle('');
+        }}><Plus size={15} />Add title</button>
+        <p className="text-editor-note">Starts at the beginning. Adjust its words, timing, animation or size below.</p>
+      </details>
       {value.map((item, index) => <details className="text-editor-item" key={item.id} open>
         <summary>Text {index + 1} <span>{item.start.toFixed(1)}–{item.end.toFixed(1)}s</span></summary>
         <label>Words<textarea aria-label={`Text ${index + 1} words`} rows={2} maxLength={500} value={item.text} onChange={event => update(item.id, { text: event.target.value })} /></label>
@@ -38,7 +54,7 @@ export default function TextOverlaysEditor({ value = [], onChange, duration, cur
           {onSeek && <button type="button" className="secondary-button" onClick={() => onSeek(item.start)}>Preview at start</button>}
           <button type="button" className="secondary-button" aria-label={`Remove text ${index + 1}`} onClick={() => onChange(value.filter(other => other.id !== item.id))}><Trash2 size={13} />Remove</button>
         </div>
-        <details className="text-editor-appearance" open><summary>Style &amp; position</summary>
+        <details className="text-editor-appearance" open={!compact}><summary>Style, animation &amp; position</summary>
           <CaptionStyleEditor value={item.style} sample={item.text} showHighlight={false} showPreview={false} textMode onChange={style => update(item.id, { style: { ...style, wordHighlight: false } })} />
           <div className="text-position-presets" aria-label={`Text ${index + 1} position presets`}>
             {([['Top', 75], ['Center', 45], ['Bottom', 10]] as const).map(([label, bottomPercent]) => <button type="button" className="secondary-button" key={label} onClick={() => update(item.id, { xPercent: 50, style: { ...item.style, bottomPercent } })}>{label}</button>)}
@@ -53,7 +69,7 @@ export default function TextOverlaysEditor({ value = [], onChange, duration, cur
         const end = Math.min(86400, Math.max(start + .04, Math.min(start + 3, duration || start + 3)));
         onChange([...value, newTextOverlay(crypto.randomUUID(), start, end)]);
       }}><Plus size={15} />Add text</button>
-      <p className="text-editor-note">Times follow the finished video, including added clips. They stay fixed when you change cuts. Each text has its own style; speech captions stay separate.</p>
+      <p className="text-editor-note">Drag text in the preview to move it; select it and drag the corner to resize. Times follow the finished video, including added clips, and stay fixed when cuts change.</p>
     </fieldset>
   </section>;
 }

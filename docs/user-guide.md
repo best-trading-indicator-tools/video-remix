@@ -255,6 +255,38 @@ Use your own footage or footage you have permission to repurpose. Review the res
 
 ### Timed text overlays
 
+**Quick setup → Captions** includes the caption mode, spoken-word highlighting,
+animation and **Bulk caption corrections** directly in the batch workflow. Choose
+**This video**, **Checked videos** or **All videos** before making changes. A caption
+appearance change preserves each target's other caption settings; for example,
+changing animation preserves different fonts and positions across the selection.
+
+Choose **None, Fade, Pop, Slide up, Typewriter, or Word by word**. Fade, Pop and Slide
+up have an adjustable 0.1–1 second entrance/exit duration, shortened to fit brief
+captions. Typewriter reveals characters; Word by word reveals words cumulatively,
+using recognized speech timing when available and estimated timing for imported
+or rewritten captions. Animations are rendered into the MP4; SRT carries text and
+timings only. The style sample animates when enabled; the saved-result timeline
+uses the actual caption clock. Selecting a text object pauses its animation for editing.
+
+**Bulk caption corrections** saves up to 50 literal find-and-replace rules. Enter
+a misspelling and its correction, optionally match case or turn off whole-word
+matching, then choose **Add correction rule**. The complete rule list applies to
+the working selection when captions are exported. Rules run in order, preserve
+timestamps, and update both MP4 captions and downloadable SRT. A blank replacement
+removes matches; empty cues are omitted. Original speech, uploaded SRT files and
+text already baked into the picture stay unchanged. Auto's **Keep original** and
+duplicate-caption protection can intentionally produce no new captions to correct.
+Rules and animation choices persist in Auto/Manual finishing presets. In **Edit this
+result → Captions**, **Find and replace in all captions** previews the match count
+and corrected wording before **Replace all matches**; Undo restores the change.
+
+**Text → Ready-made titles** offers Bold hook, Editorial, Lower third and Announcement.
+Choose a design, enter **Title words**, and click **Add title**. The title starts at
+0 seconds and normally lasts three seconds. Each design supplies a font, placement,
+color and animation that you can customize. Quick mode applies it to the working
+selection and keeps its detailed appearance controls collapsed until needed.
+
 Open **Text → Add text** in Manual (Essentials, Advanced or All controls),
 Auto **Quick setup** or **All settings**, or **Edit this result**. Enter your words and set Start and
 End in seconds. Text appears directly over the picture without adding black bands.
@@ -265,7 +297,7 @@ text list shown in the controls, including words, timing, position and styling,
 to every target. Other settings stay as they are; unchecked videos stay unchanged.
 Choose **This video** for individual text. Workspace **Undo** restores a batch edit.
 
-**Style & position** opens by default with the same font, color, size, emphasis,
+**Style, animation & position** has the same font, color, size, emphasis,
 outline, shadow, spacing and background controls as captions. Position controls
 follow the styling: Top/Center/Bottom presets, horizontal position, distance from
 the bottom and text width. Each text has its own style. **Background** sits
@@ -283,6 +315,11 @@ new line. With a text item focused, arrow keys move it by 1% of the canvas
 Undo step. The side controls stay in sync, and edits follow the same working
 selection in Quick, All settings and Manual. In **Edit this result**, use
 **Live edit** to drag or edit text in the saved draft, including over added clips.
+
+Select text and drag its upper-right corner handle to resize font size and text
+width together. Size is bounded to the supported 12–40 range. Focus the handle
+and use arrow keys for one-unit font changes, or Shift-arrows for four units.
+One finished resize is one Undo step and follows the same working-video selection.
 
 Times refer to the finished video, including inserted clips and outros. They stay
 fixed when you change cuts or playback speed, so review them after changing the

@@ -2,6 +2,7 @@ import { upscaleSchema } from "./upscale.js";
 import { NATURAL_PACING, pacingOptionsSchema } from "./pacing.js";
 import { z } from "zod";
 import { captionStyleSchema } from "./caption-style.js";
+import { captionCorrectionsSchema } from './caption-corrections.js';
 import { blackBandFinishSchema } from "./black-bands.js";
 import { AUDIO_RANGES, AUTO_AUDIO_MODES, MAX_AUDIO_FADE, NEUTRAL_AUDIO, type AudioLookKey } from "./audio.js";
 import { DEFAULT_SETTINGS, DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE } from "./types.js";
@@ -33,6 +34,7 @@ const visuals = {
 const autoSchema = z.object({ aspect, upscale: upscaleSchema.optional(), pacing: pacingOptionsSchema.default(NATURAL_PACING), captions: z.enum(["auto", "add", "keep"]).default("auto"),
   blackBands: blackBandFinishSchema.optional(),
   captionStyle: captionStyleSchema.optional(),
+  captionCorrections: captionCorrectionsSchema.optional(),
   ...visuals,
   audio: z.enum(AUTO_AUDIO_MODES).default("auto"),
 });
@@ -46,6 +48,7 @@ const manualSchema = z.object({ ...framing,
   volume: z.number().min(0).max(2), muted: z.boolean(), mirror: z.boolean(), autoMotion: z.boolean().default(false),
   ...soundLook,
   captionStyle: captionStyleSchema.default({fontSize:20,bottomPercent:100/12}),
+  captionCorrections: captionCorrectionsSchema.optional(),
   automaticCaptions: z.enum(["off", "auto", "add"]).optional(),
 });
 const base = { id: z.string().min(1).max(100), name: z.string().trim().min(1).max(60).refine(value => !/[\u0000-\u001f\u007f]/u.test(value)) };

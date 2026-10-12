@@ -10,6 +10,7 @@ import path from "node:path";
 import { publishingJobs } from './publishing-lock.js';
 import { config, paths } from "./config.js";
 import { geometry, renderVideo, probeMedia } from "./engine.js";
+import { prepareCaptionCorrections } from './caption-corrections.js';
 import { AutoSkipError, prepareAutoRemix, protectFinalAutoCaptions } from "./auto.js";
 import { prepareSupportingVisuals } from "./supporting-plan.js";
 import { prepareManualVisuals } from "./manual-visuals.js";
@@ -342,6 +343,8 @@ async function run(job: StoredJob, controller: AbortController) {
       // Approved short drafts need the same user-controlled revision workflow as Auto exports.
       await captureEditPlan({ job, source, visuals: supportingVisuals, audioPath, subtitlePath, signal: controller.signal });
     }
+    const correction = await prepareCaptionCorrections(job, subtitlePath, workDir);
+    subtitlePath = correction.subtitlePath;
     const ownFootage = await retainFootage(job, controller.signal);
     if (ownFootage.length) {
       const baseDuration = job.editPlan?.outputDuration ?? (job.settings.segments?.reduce((sum, cut) => sum + cut.end - cut.start, 0) ?? (Math.min(job.settings.trimEnd ?? source.duration, source.duration) - job.settings.trimStart)) / job.settings.speed;
@@ -362,7 +365,7 @@ async function run(job: StoredJob, controller: AbortController) {
       input: source.filePath,
       output: job.outputPath,
       source,
-      settings: job.settings,
+      settings: correction.applied ? { ...job.settings, captionCorrections: [] } : job.settings,
       audioPath,
       subtitlePath,
       captionWords,
@@ -407,10 +410,10 @@ async function run(job: StoredJob, controller: AbortController) {
       await saveStore();
       job.finishedReviewReport = await reviewJobFinished(job, source, controller.signal, workDir, captions);
     }
-    if ((job.auto || automaticManual) && subtitlePath) {
+    if (subtitlePath) {
       job.captionPath = path.join(paths.outputs, `${job.id}.srt`);
-      if (job.auto && job.settings.ownFootage?.some(item => item.mode === "insert")) {
-        const baseDuration = job.editPlan!.outputDuration;
+      if (!automaticManual && job.settings.ownFootage?.some(item => item.mode === "insert")) {
+        const baseDuration = job.editPlan?.outputDuration ?? (job.settings.segments?.reduce((sum, cut) => sum + cut.end - cut.start, 0) ?? (Math.min(job.settings.trimEnd ?? source.duration, source.duration) - job.settings.trimStart)) / job.settings.speed;
         await writeFile(job.captionPath, captionCuesSrt(captionsAfterInserts(captions, job.settings.ownFootage, baseDuration, job.settings.fps === "source" ? source.fps : Number(job.settings.fps))), "utf8");
       } else await copyFile(subtitlePath, job.captionPath);
     }

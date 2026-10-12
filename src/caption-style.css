@@ -83,3 +83,15 @@
 .caption-highlight .caption-color input[type="text"] { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 7px; font-size: 13px; }
 .caption-preview-toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--subtle); font-size: 12px; cursor: pointer; }
 .caption-preview-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.caption-corrections { margin: 14px 0; padding: 12px; border: 1px solid var(--line, #36373d); border-radius: 8px; }
+.caption-corrections > summary { cursor: pointer; font-size: 13px; font-weight: 600; }
+.caption-corrections fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.caption-correction-form { display: grid; gap: 10px; font-size: 12px; }
+.caption-correction-form > label { display: grid; gap: 6px; }
+.caption-correction-form input:not([type="checkbox"]) { width: 100%; min-width: 0; box-sizing: border-box; padding: 9px; border: 1px solid var(--line, #36373d); border-radius: 5px; background: var(--surface, #15161b); color: inherit; font: inherit; }
+.caption-correction-flags { display: flex; gap: 12px; flex-wrap: wrap; }
+.caption-correction-flags label { display: flex; gap: 5px; align-items: center; }
+.caption-correction-rule { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; font-size: 12px; overflow-wrap: anywhere; }
+.caption-correction-rule small { display: block; margin-top: 4px; color: var(--subtle, #a5a5ae); }
+.caption-correction-example { padding: 8px; background: var(--surface-raised, #25252b); border-radius: 5px; white-space: pre-wrap; }
+.caption-animation { margin: 12px 0; }

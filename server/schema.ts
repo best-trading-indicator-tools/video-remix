@@ -17,6 +17,7 @@ export const focusPointsWithinCut = (cut: { start: number; end: number; focusTra
 export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) <= MAX_FOCUS_POINTS_TOTAL;
 export { captionStyleSchema } from "../shared/caption-style.js";
 import { captionStyleSchema } from "../shared/caption-style.js";
+import { captionCorrectionsSchema } from '../shared/caption-corrections.js';
 import { textOverlaysSchema } from "../shared/text-overlays.js";
 import { blackBandsSchema } from "../shared/black-bands.js";
 import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
@@ -118,6 +119,7 @@ export const settingsSchema = z
     autoMotion: z.boolean().optional(),
     focalPoint: focalPointSchema.optional(),
     captionStyle: captionStyleSchema.optional(),
+    captionCorrections: captionCorrectionsSchema.optional(),
   })
   .strict();
 export const batchSchema = z
@@ -155,6 +157,7 @@ export const autoOptionsObject = z
     pacing: pacingOptionsSchema.optional(),
     captions: z.enum(["auto", "add", "keep"]).optional(),
     captionStyle: captionStyleSchema.optional(),
+    captionCorrections: captionCorrectionsSchema.optional(),
     ...supportingVisualShape,
     ownFootage: ownFootageSchema.optional(),
     ownFootageSourceId: z.uuid().optional(),

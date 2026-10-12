@@ -5,6 +5,8 @@ import { burnOutputCaptions, probeMedia } from "./engine.js";
 import { captionsSrt } from "./auto-plan.js";
 import { inspectSourceCaptions } from "./source-captions.js";
 import { transcriptionAvailable, transcribeLocal } from "./transcription.js";
+import { correctCaptionCues } from '../shared/caption-corrections.js';
+import { captionCuesSrt, parseCaptionCues } from './edit-plan.js';
 
 export const wantsManualCaptions = (settings: RemixSettings) => settings.automaticCaptions === "auto" || settings.automaticCaptions === "add";
 
@@ -32,8 +34,10 @@ export async function addManualCaptions(options: {
       ? "Original captions were kept. No new captions were added."
       : "Existing captions could not be ruled out. No new captions were added; choose Automatic · add new to override.", detail: inspection.reason };
   }
-  const srt = captionsSrt(transcript);
-  if (!srt.trim()) return { note: "No usable speech was found in the finished soundtrack. No captions were added." };
+  const generated = captionsSrt(transcript);
+  const srt = settings.captionCorrections?.length && generated.trim()
+    ? captionCuesSrt(correctCaptionCues(parseCaptionCues(generated), settings.captionCorrections).captions) : generated;
+  if (!srt.trim()) return { note: generated.trim() ? 'All generated captions were removed by your correction rules. No captions were added.' : "No usable speech was found in the finished soundtrack. No captions were added." };
   const subtitlePath = path.join(workDir, "manual-captions.srt");
   await writeFile(subtitlePath, srt, "utf8");
   onPhase("Adding automatic captions", 88);

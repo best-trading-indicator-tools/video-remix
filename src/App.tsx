@@ -31,7 +31,9 @@ import { shouldShowOnboarding, type TourDestination } from "./onboarding-steps";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { CaptionAppearance, SampleCaptionOverlay } from "./CaptionStyleEditor";
 import PreviewBackground from "./PreviewBackground";
-import { captionStyleSchema } from "../shared/caption-style";
+import { captionStyleSchema, applyCaptionStyleChange } from "../shared/caption-style";
+import { captionCorrectionsSchema } from '../shared/caption-corrections';
+import CaptionCorrectionsEditor from './CaptionCorrectionsEditor';
 import {
   useCallback,
   useEffect,
@@ -153,6 +155,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
+      captionCorrections: captionCorrectionsSchema.safeParse(options?.captionCorrections).success ? options?.captionCorrections : undefined,
       textOverlays: textOverlaysSchema.safeParse(options?.textOverlays).success ? options?.textOverlays : undefined,
       blackBands: blackBandsSchema.safeParse(options?.blackBands).success ? options?.blackBands : undefined,
       upscale: upscaleSchema.safeParse(options?.upscale).success ? options?.upscale : undefined,
@@ -804,6 +807,21 @@ export default function App() {
     videoRef.current.currentTime = liveInterval.start;
     setLiveOutputTime(0);
   }, [liveInterval?.start, liveInterval?.end, manualLive, selected?.id, liveFootage, watermark.editing]);
+  const animatedPreviewText = activePreviewSettings.textOverlays?.some(item => item.style.animation && item.style.animation !== 'none');
+  useEffect(() => {
+    if (!animatedPreviewText || sourcePreview || usingRendered || liveFootage || view !== 'studio') return;
+    let frame = 0, previous = 0;
+    const tick = (now: number) => {
+      const video = videoRef.current;
+      if (video && !video.paused && !video.seeking && now - previous >= 1000 / 30) {
+        setLiveOutputTime(manualLive && liveInterval ? Math.max(0, video.currentTime - liveInterval.start) / settings.speed : video.currentTime);
+        previous = now;
+      }
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [animatedPreviewText, sourcePreview, usingRendered, liveFootage, view, manualLive, liveInterval?.start, settings.speed]);
 
 
   useEffect(() => {
@@ -849,6 +867,7 @@ export default function App() {
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
     rememberScopeChange();
     setSettingsById(current => ({ ...current, ...Object.fromEntries(workingTargets.map(source => [source.id, { ...mergeSourceSettings(current[source.id] || defaultSettings, patch, source.id),
+      ...(patch.captionStyle ? { captionStyle: applyCaptionStyleChange((current[source.id] || defaultSettings).captionStyle, settings.captionStyle, patch.captionStyle) } : {}),
       ...(source.id !== selected?.id ? { watermarkRemoval: current[source.id]?.watermarkRemoval } : {}) }])) }));
     if (!sources.length || futureSettings) setDefaultSettings(current => footageForSource({ ...current, ...patch, watermarkRemoval: undefined }));
   };
@@ -886,7 +905,8 @@ export default function App() {
   const updateScopedAuto = (patch: QuickPatch) => {
     if (sources.length && !workingTargets.length && !futureSettings) { notify("Check videos in the source list to edit and export them.", "info"); return; }
     rememberScopeChange();
-    const merge = (preset: AutoPreset, sourceId: string) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...mergeSourceSettings(preset.options, patch.options || {}, sourceId), watermarkRemoval: preset.options.watermarkRemoval } });
+    const merge = (preset: AutoPreset, sourceId: string) => autoPreset({ ...preset, ...(patch.variants === undefined ? {} : { variants: patch.variants }), options: { ...mergeSourceSettings(preset.options, patch.options || {}, sourceId),
+      ...(patch.options?.captionStyle ? { captionStyle: applyCaptionStyleChange(preset.options.captionStyle, autoOptions.captionStyle, patch.options.captionStyle) } : {}), watermarkRemoval: preset.options.watermarkRemoval } });
     setAutoById(current => ({ ...current, ...Object.fromEntries(workingTargets.map(source => [source.id, merge(current[source.id] || defaultAuto, source.id)])) }));
     if (!sources.length || futureSettings) setDefaultAuto(current => merge(current, ""));
   };
@@ -2479,6 +2499,7 @@ export default function App() {
                           </p>
                           </>}
                           <CaptionAppearance value={settings.captionStyle} showPreview={false} onChange={captionStyle => updateSettings({ captionStyle })} />
+                          <CaptionCorrectionsEditor value={settings.captionCorrections} scopeDescription={scopeDescription} onChange={captionCorrections => updateSettings({ captionCorrections })} />
                           {attachmentError && (
                             <ProblemNotice message={attachmentError} operation="Attach audio or subtitles" />
                           )}

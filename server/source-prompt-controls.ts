@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { blackBandsPatchSchema, applyBlackBandsPatch, blackBandChangeSummary } from '../shared/black-bands.js';
 import { blackBandPromptInstructions, hasUngroundedBlackBandText } from './black-band-prompt.js';
 import { captionStyleSchema } from '../shared/caption-style.js';
+import { captionCorrectionsSchema } from '../shared/caption-corrections.js';
 import { ownFootageSchema, resolveFootagePlacement } from '../shared/own-footage.js';
 import { getVisualSources, VISUAL_SOURCE_LABELS } from '../shared/visual-sources.js';
 import type { RemixSettings, SupportingVisualOptions } from '../shared/types.js';
@@ -21,6 +22,7 @@ export const sourcePromptShape = {
   upscale: upscaleSchema.optional(),
   blackBands: blackBandsPatchSchema.optional(),
   captionStyle: captionStyleSchema.partial().strict().optional(),
+  captionCorrections: captionCorrectionsSchema.optional(),
   visualSources: settingsSchema.shape.visualSources,
   stockVideoType: settingsSchema.shape.stockVideoType,
   brollMatching: settingsSchema.shape.brollMatching,
@@ -34,6 +36,8 @@ Common editing controls in both workspaces:
 ${upscalePromptInstructions}
 blackBands is a sparse object supported in Auto and Manual, including written band text; do not switch workspaces for it. ${blackBandPromptInstructions}
 captionStyle is a sparse object: fontSize 12–40, bottomPercent 5–80 (larger moves UP), fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans); color, outlineColor, backgroundColor six-digit #RRGGBB; bold, italic, uppercase booleans; outlineWidth/shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100; wordHighlight boolean and highlightColor six-digit #RRGGBB highlight each spoken word. Only added captions can be styled.
+captionStyle.animation none/fade/pop/slide/typewriter/words animates added captions; animationDuration 0.1–1 seconds controls fade/pop/slide. words reveals each spoken word using recognition timings when available.
+captionCorrections is the full desired list of up to 50 literal find-and-replace rules: [{find:"misspelling",replace:"correct spelling",wholeWord:true,caseSensitive:false}]. Preserve existing rules when adding. Each find/replace is at most 100 characters, plain single-line text; an empty replacement deletes matches. Apply only explicit user-provided corrections, never invent wording from unavailable speech. These rules affect newly added captions on export, not baked-in text or the source audio. [] clears rules.
 captionStyle.cyrillicMode off/words/all replaces similar-looking Latin letters with Cyrillic for display only, without changing original caption text or speech timings. Enable only when explicitly requested, never for translation or ordinary Cyrillic-language captions. For specific words use cyrillicMode:"words" and cyrillicWords (complete list, at most 50 literal words/phrases of 1–80 characters, no newlines), preserving existing entries when adding more. Match whole words ignoring case. Use "all" only if all caption text was requested; "off" restores original spelling. If no words or scope are supplied, ask which words to change. Do not invent terms or claim platform moderation outcomes.
 visualSources is the complete desired list from pixabay, pexels, hyperframes, remotion, library. [] removes supporting visuals. Preserve selected sources unless removal is requested. For a generic request to add B-roll with no sources selected, choose a configured stock provider from availableStockProviders; if none exists, ask which provider to configure or which uploaded clip to use. HyperFrames and Remotion create supporting animations; library uses uploaded B-roll. brollCount 1–10 is the total requested shot count (default 4); add N more increases the current count by N, or starts at N if visuals were off. brollMaxCoverage 0–100 limits coverage. stockVideoType all/animation; brollMatching tags/ai (stock always uses ai). brollClips is the complete desired list of video references from assets; include library in visualSources when selecting clips. Footage and stock matching are performed during export using the selected speech, never claim to have searched or rendered. Subject-specific stock search independent of the speech is unavailable.
 footage is the complete desired list of uploaded-clip placements, [] removes them: [{asset:'video1',mode:'insert'|'cover',appendToEnd:false,at:0,start:0,end:5,audio:'clip'|'mute',fit:'contain'|'crop'}]. Preserve existing placements when adding. at uses the main edit's clock before inserts. Insert adds duration; cover replaces the picture while main speech continues. appendToEnd:true requires insert and uses the full asset; use at:0,start:0,end:asset.duration. Intervals must fit the asset; cover shots cannot overlap. Only references in the supplied assets catalog may be used. If an asset is missing or ambiguous, request its upload/selection by name. Never invent asset references or use paths/URLs.
@@ -62,7 +66,7 @@ export function sourcePromptContext<T extends SupportingVisualOptions & Pick<Rem
   })) };
 }
 type SharedPatch = z.infer<z.ZodObject<typeof sourcePromptShape>>;
-export function applySourcePrompt<T extends SupportingVisualOptions & Pick<RemixSettings, 'upscale' | 'blackBands' | 'captionStyle' | 'ownFootage'>>(current: T, patch: SharedPatch, assets: PromptAssets): T {
+export function applySourcePrompt<T extends SupportingVisualOptions & Pick<RemixSettings, 'upscale' | 'blackBands' | 'captionStyle' | 'captionCorrections' | 'ownFootage'>>(current: T, patch: SharedPatch, assets: PromptAssets): T {
   const { blackBands, captionStyle, footage, brollClips, ...simple } = patch;
   const next = { ...structuredClone(current), ...simple };
   if (blackBands) next.blackBands = applyBlackBandsPatch(current.blackBands, blackBands);
@@ -87,6 +91,7 @@ export function sourcePromptSummary(before: Parameters<typeof applySourcePrompt>
   const summary: string[] = [];
   if ((before.upscale ?? 'off') !== (after.upscale ?? 'off')) summary.push(upscaleSummary(after.upscale ?? 'off'));
   if (after.blackBands) summary.push(...blackBandChangeSummary(before.blackBands, after.blackBands));
+  if (!same(before.captionCorrections, after.captionCorrections)) summary.push(`Caption correction rules: ${after.captionCorrections?.length ?? 0}.`);
   if (!same(getVisualSources(before), getVisualSources(after))) summary.push(`Supporting visuals: ${getVisualSources(after).map(key => VISUAL_SOURCE_LABELS[key]).join(', ') || 'off'}.`);
   for (const [key, label] of [['brollCount', 'Requested supporting shots'], ['brollMaxCoverage', 'Maximum supporting coverage (%)'], ['brollMatching', 'B-roll matching'], ['stockVideoType', 'Stock video type']] as const)
     if (before[key] !== after[key]) summary.push(`${label}: ${after[key]}.`);
