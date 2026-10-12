@@ -11,7 +11,8 @@ test("caption styling preserves legacy records and round-trips through Auto, man
   assert.equal(captionAssStyle(old), captionAssStyle(DEFAULT_CAPTION_STYLE));
   const tiktokStyles = [false, true].flatMap(bold => [false, true].map(italic => ({ ...DEFAULT_CAPTION_STYLE, fontFamily: 'tiktok-sans' as const, bold, italic })));
   const spellingStyles = (["off", "words", "all"] as const).map(cyrillicMode => ({ ...DEFAULT_CAPTION_STYLE, cyrillicMode, cyrillicWords: ["Sample-12", "Example phrase"] }));
-  for (const style of [...CAPTION_PRESETS.map(preset => preset.style), ...tiktokStyles, ...spellingStyles]) {
+  const smallStyles = [4, 4.5, 8, 11.5].map(fontSize => ({ ...DEFAULT_CAPTION_STYLE, fontSize }));
+  for (const style of [...CAPTION_PRESETS.map(preset => preset.style), ...tiktokStyles, ...spellingStyles, ...smallStyles]) {
     assert.deepEqual(settingsSchema.parse({ ...DEFAULT_SETTINGS, captionStyle: style }).captionStyle, style);
     assert.deepEqual(autoOptionsSchema.parse({ ...DEFAULT_AUTO_OPTIONS, captionStyle: style }).captionStyle, style);
     for (const mode of ["auto", "manual"] as const) {
@@ -29,6 +30,7 @@ test("caption styling rejects unsafe font names, colors, unsupported options and
     { backgroundOpacity: 101 }, { alignment: "top" }, { fontUrl: "https://untrusted.test/font" },
     { cyrillicMode: "translate" }, { cyrillicWords: [""] }, { cyrillicWords: ["a".repeat(81)] },
     { cyrillicWords: Array(51).fill("word") }, { cyrillicWords: ["two\nlines"] },
+    { fontSize: 3.9 }, { fontSize: 40.1 }, { fontSize: NaN },
   ]) assert.equal(captionStyleSchema.safeParse({ ...DEFAULT_CAPTION_STYLE, ...patch }).success, false);
   assert.match(captionAssStyle({ ...DEFAULT_CAPTION_STYLE, color: "#123456" }), /PrimaryColour=&H00563412/u);
 });

@@ -138,8 +138,10 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
       draft = (await call('update_draft', { draftId: draft.id, revision: draft.revision, auto: { textEdits: [{ action: 'add', text: 'Shared title', design: 'bold' }], captionCorrections: [{ find: 'acme', replace: 'ACME' }] } })).draft;
       const titles = draft.items.map(item => item.options!.textOverlays![0]!);
       assert.equal(new Set(titles.map(title => title.id)).size, 3);
-      draft = (await call('update_draft', { draftId: draft.id, revision: draft.revision, sourceIds: ids.slice(0, 2), auto: { textEdits: [{ action: 'update', index: 0, style: { fontSize: 34, animation: 'slide' } }] } })).draft;
-      assert.ok(draft.items.slice(0, 2).every(item => item.options?.textOverlays?.[0]?.style.fontSize === 34));
+      const unchecked = structuredClone(draft.items[2]);
+      draft = (await call('update_draft', { draftId: draft.id, revision: draft.revision, sourceIds: ids.slice(0, 2), auto: { textEdits: [{ action: 'update', index: 0, style: { fontSize: 4, animation: 'slide' } }], captionStyle: { fontSize: 4.5 }, blackBands: { topStyle: { fontPercent: 1 } } } })).draft;
+      assert.ok(draft.items.slice(0, 2).every(item => item.options?.textOverlays?.[0]?.style.fontSize === 4 && item.options?.captionStyle?.fontSize === 4.5 && item.options?.blackBands?.topStyle?.fontPercent === 1));
+      assert.deepEqual(draft.items[2], unchecked);
       assert.deepEqual(draft.items[2]?.options?.textOverlays?.[0], titles[2]);
       const updatedRevision = draft.revision;
       const preset = await call('save_finishing_preset', { draftId: draft.id, sourceId: ids[0], name: 'Caption fixes' });
@@ -151,7 +153,7 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
       draft = (await call('restore_draft', { draftId: draft.id, revision: draft.revision, targetRevision: before.revision })).draft;
       assert.deepEqual(draft.items, before.items);
       draft = (await call('restore_draft', { draftId: draft.id, revision: draft.revision, targetRevision: updatedRevision })).draft;
-      assert.equal(draft.items[0]?.options?.textOverlays?.[0]?.style.fontSize, 34);
+      assert.equal(draft.items[0]?.options?.textOverlays?.[0]?.style.fontSize, 4);
       assert.deepEqual(secondStore.get(draft.id), draft);
     });
     await t.test('render submits one atomic batch and concurrent/repeated calls cannot enqueue duplicates', async () => {

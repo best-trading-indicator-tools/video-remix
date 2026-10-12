@@ -325,9 +325,13 @@ selection in Quick, All settings and Manual. In **Edit this result**, use
 **Live edit** to drag or edit text in the saved draft, including over added clips.
 
 Select text and drag its upper-right corner handle to resize font size and text
-width together. Size is bounded to the supported 12–40 range. Focus the handle
+width together. Size is bounded to the supported 4–40 range. Focus the handle
 and use arrow keys for one-unit font changes, or Shift-arrows for four units.
 One finished resize is one Undo step and follows the same working-video selection.
+
+Caption and text size controls support values down to **4**, with half-unit slider
+steps or an exact typed value. These smaller sizes also work with AI prompts,
+checked/all-video editing, saved results and MCP.
 
 Times refer to the finished video, including inserted clips and outros. They stay
 fixed when you change cuts or playback speed, so review them after changing the
@@ -355,6 +359,7 @@ Speech captions keep their separate controls, so leave the bottom band text blan
 captions occupy that area. Hooks and callouts appear over the video window. Your written
 band text is included even when Auto is set to keep original speech captions. Finishing
 presets save band sizes and styling while retaining each video's own words.
+Top and bottom text sizes adjust independently from **1% to 10%**, in 0.1% steps.
 
 ### Watermark removal
 

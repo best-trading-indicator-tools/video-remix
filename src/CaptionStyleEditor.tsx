@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState, type CSSProperties } from "react";
 import { RotateCcw, Check, ChevronDown, Type } from "lucide-react";
-import { CAPTION_FONTS, CAPTION_PRESETS, DEFAULT_CAPTION_STYLE, captionLines, captionWordStarts, captionStyleSchema, contrastingHighlight, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
+import { CAPTION_FONTS, CAPTION_PRESETS, CAPTION_FONT_SIZE_MIN, CAPTION_FONT_SIZE_MAX, DEFAULT_CAPTION_STYLE, captionLines, captionWordStarts, captionStyleSchema, contrastingHighlight, resolveCaptionStyle, type CaptionStyle } from "../shared/caption-style";
 import { captionDisplayText } from "../shared/caption-text";
 import { TEXT_ANIMATIONS, textMotion, typewriterCount } from '../shared/text-animation';
 import "./caption-style.css";
@@ -210,7 +210,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
       {([['bold', 'Bold'], ['italic', 'Italic'], ['uppercase', 'ALL CAPS']] as const).map(([key, name]) => <button type="button" key={key} aria-pressed={s[key]} onClick={() => patch({ [key]: !s[key] })}>{name}</button>)}
     </div>
     <CyrillicControl style={s} onChange={patch} sample={sample} textMode={textMode} />
-    <NumberControl label={textMode ? "Text font size" : "Caption font size"} value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
+    <NumberControl label={textMode ? "Text font size" : "Caption font size"} value={s.fontSize} min={CAPTION_FONT_SIZE_MIN} max={CAPTION_FONT_SIZE_MAX} step={0.5} onChange={fontSize => patch({ fontSize })} />
     <p className="caption-style-note">Size scales with your export resolution.</p>
     <details className="caption-more" open={textMode}><summary>{textMode ? "Outline, shadow & spacing" : "Outline, shadow, spacing & placement"}</summary>
       <label className="caption-field">Text alignment<select value={s.alignment} onChange={event => patch({ alignment: event.target.value as CaptionStyle["alignment"] })}><option value="left">Left</option><option value="center">Center</option><option value="right">Right</option></select></label>

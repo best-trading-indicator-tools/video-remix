@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { bandTextAppearance, bandTextLayout, DEFAULT_BLACK_BANDS, type BandSide, type BandTextStyle, type BlackBands } from "../shared/black-bands";
+import { bandTextAppearance, bandTextLayout, BAND_FONT_PERCENT_MIN, BAND_FONT_PERCENT_MAX, DEFAULT_BLACK_BANDS, type BandSide, type BandTextStyle, type BlackBands } from "../shared/black-bands";
 import Slider from "./Slider";
 import "./black-bands.css";
 
@@ -47,7 +47,7 @@ function BandTextEditor({ bands, side, onChange }: { bands: BlackBands; side: Ba
     <legend>{label} band text</legend>
     <textarea aria-label={`${label} band text`} rows={2} maxLength={200} value={bands[`${side}Text`]} placeholder={side === "top" ? "Write a headline or caption…" : "Optional second caption…"} onChange={event => onChange({ [`${side}Text`]: event.target.value })} />
     <label className="band-text-color">Text color<input aria-label={`${label} band text color`} type="color" value={appearance.color} onChange={event => updateStyle({ color: event.target.value })} /></label>
-    <Slider label={`${label} text size${appearance.fontPercent === 5.4 ? " · Medium" : ""}`} value={appearance.fontPercent} defaultValue={5.4} min={3} max={10} step={0.1} unit="%" onChange={fontPercent => updateStyle({ fontPercent })} />
+    <Slider label={`${label} text size${appearance.fontPercent === 5.4 ? " · Medium" : ""}`} value={appearance.fontPercent} defaultValue={5.4} min={BAND_FONT_PERCENT_MIN} max={BAND_FONT_PERCENT_MAX} step={0.1} unit="%" onChange={fontPercent => updateStyle({ fontPercent })} />
     <label className="black-bands-toggle"><input type="checkbox" checked={appearance.cyrillic} onChange={event => updateStyle({ cyrillic: event.target.checked })} />
       <span>{label} band Cyrillic lookalikes</span>
     </label>

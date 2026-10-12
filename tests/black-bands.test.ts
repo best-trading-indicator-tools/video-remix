@@ -14,12 +14,17 @@ test("Auto, Manual and saved edit revisions accept bands and reject malformed se
   assert.deepEqual(settingsSchema.parse({ ...DEFAULT_SETTINGS, blackBands: bands }).blackBands, bands);
   assert.deepEqual(autoOptionsSchema.parse({ blackBands: bands }).blackBands, bands);
   assert.deepEqual(editPlanChangesSchema.parse({ revision: 0, framing: { blackBands: bands } }).framing?.blackBands, bands);
+  const small = { ...bands, fontPercent: 1, topStyle: { fontPercent: 1.1 }, bottomStyle: { fontPercent: 1 } };
+  assert.deepEqual(settingsSchema.parse({ ...DEFAULT_SETTINGS, blackBands: small }).blackBands, small);
+  assert.deepEqual(autoOptionsSchema.parse({ blackBands: small }).blackBands, small);
+  assert.deepEqual(editPlanChangesSchema.parse({ revision: 0, framing: { blackBands: small } }).framing?.blackBands, small);
   for (const invalid of [
     { topPercent: 0 }, { bottomPercent: 41 }, { topPercent: 40, bottomPercent: 40 },
     { topPercent: Infinity }, { fontPercent: NaN }, { fit: "blur" },
     { topText: "x".repeat(201) }, { bottomText: "hello\0world" }, { enabled: "yes" },
     { topStyle: { color: "white:shadowx=2" } }, { topStyle: { color: "#fff" } },
     { bottomStyle: { fontPercent: 11 } }, { topStyle: { cyrillic: "true" } }, { topStyle: { unknown: true } },
+    { fontPercent: .9 }, { topStyle: { fontPercent: .9 } },
   ]) {
     assert.equal(settingsSchema.safeParse({ ...DEFAULT_SETTINGS, blackBands: { ...bands, ...invalid } }).success, false);
     assert.equal(autoOptionsSchema.safeParse({ blackBands: { ...bands, ...invalid } }).success, false);
@@ -47,13 +52,14 @@ test("band spelling and appearance are independent, sparse, reversible, and incl
 
 test("band finishing presets preserve each video's words", () => {
   for (const mode of ["auto", "manual"] as const) {
-    const preset = captureFinishingPreset(mode, "Headline", { ...DEFAULT_SETTINGS, blackBands: bands }, "bands");
+    const preset = captureFinishingPreset(mode, "Headline", { ...DEFAULT_SETTINGS, blackBands: { ...bands, fontPercent: 1, topStyle: { fontPercent: 1.5 } } }, "bands");
     if (preset.mode === "shorts") throw new Error("Unexpected preset");
     assert.equal("topText" in preset.settings.blackBands!, false);
     const applied = applyBandFinish({ ...bands, topText: "A different video", bottomText: "Different footer" }, preset.settings.blackBands);
     assert.equal(applied?.topText, "A different video");
     assert.equal(applied?.bottomText, "Different footer");
     assert.equal(applied?.enabled, true);
+    assert.equal(applied?.fontPercent, 1); assert.equal(applied?.topStyle?.fontPercent, 1.5);
     assert.equal(applyBandFinish(undefined, preset.settings.blackBands)?.topText, "");
   }
 });

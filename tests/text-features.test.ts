@@ -16,8 +16,39 @@ import { captionCuesSrt, parseCaptionCues } from '../server/edit-plan.js';
 import { probeMedia, renderVideo, burnOutputCaptions } from '../server/engine.js';
 import { captureFinishingPreset, restoreFinishingPresets } from '../shared/finishing-presets.js';
 import type { StoredJob } from '../server/store.js';
+import { DEFAULT_BLACK_BANDS } from '../shared/black-bands.js';
 
 const correction = (find: string, replace: string, wholeWord = true, caseSensitive = false) => ({ find, replace, wholeWord, caseSensitive });
+
+test('new minimum sizes produce visibly smaller exported captions, independent titles and band text', { timeout: 60000 }, async () => {
+  const exec = promisify(execFile), dir = await mkdtemp(path.join(tmpdir(), 'small-text-'));
+  const ffmpeg = (...args: string[]) => exec('ffmpeg', ['-v', 'error', '-nostdin', '-y', ...args], { encoding: 'buffer', maxBuffer: 8 * 1024 * 1024 });
+  try {
+    const input = path.join(dir, 'source.mp4'), subtitlePath = path.join(dir, 'captions.srt');
+    await ffmpeg('-f', 'lavfi', '-i', 'color=black:s=540x960:r=24:d=1', '-c:v', 'libx264', '-threads', '1', input);
+    await writeFile(subtitlePath, '1\n00:00:00,000 --> 00:00:01,000\nSMALL TEXT\n');
+    const source = await probeMedia(input);
+    for (const mode of ['caption', 'title', 'band'] as const) {
+      const sizes = [];
+      for (const fontSize of [4, 12]) {
+        const output = path.join(dir, `${mode}-${fontSize}.mp4`);
+        const style = { ...DEFAULT_CAPTION_STYLE, fontSize, outlineWidth: 0 };
+        if (mode === 'caption') await burnOutputCaptions({ input, output, subtitlePath, style, workDir: dir, signal: new AbortController().signal });
+        else {
+          const title = { ...titleOverlay(randomUUID(), 'label', 'SMALL TEXT', 0, 1), style };
+          await renderVideo({ input, output, source, settings: { ...DEFAULT_SETTINGS, ...(mode === 'title' ? { textOverlays: [title] } : { blackBands: { ...DEFAULT_BLACK_BANDS, enabled: true, topText: 'SMALL TEXT', topStyle: { fontPercent: fontSize / 4 } } }) }, workDir: dir, signal: new AbortController().signal, onProgress() {} });
+        }
+        const pixels = (await ffmpeg('-ss', '0.5', '-i', output, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1')).stdout;
+        let minX = 540, maxX = -1, minY = 960, maxY = -1;
+        for (let i = 0; i < pixels.length; i += 3) if (pixels[i]! > 80) { const x = i / 3 % 540, y = Math.floor(i / 3 / 540); minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); maxY = Math.max(maxY, y); }
+        assert.ok(maxX > minX && maxY > minY, `${mode} at ${fontSize}: text remains visible`);
+        sizes.push({ width: maxX - minX + 1, height: maxY - minY + 1 });
+      }
+      assert.ok(sizes[0]!.height < sizes[1]!.height * .6, `${mode}: exported text is smaller than the previous minimum`);
+      assert.ok(sizes[0]!.width < sizes[1]!.width * .6, `${mode}: exported text width also shrinks`);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
 
 test('bulk corrections respect Unicode words, case, literal replacement text, deletion and cue timing', () => {
   assert.equal(correctCaptionText('Acme acme ACME Acmeology', [correction('acme', 'ACME')]).text, 'ACME ACME ACME Acmeology');
@@ -56,7 +87,7 @@ test('animation changes preserve each batch target’s font and position; title 
   }
   assert.deepEqual(resizeTextOverlay({ fontSize: 20, widthPercent: 60 }, 100, 0, 200, 80), { fontSize: 30, widthPercent: 90 });
   assert.deepEqual(resizeTextOverlay({ fontSize: 20, widthPercent: 60 }, 50, 0, 100, 40), { fontSize: 30, widthPercent: 90 });
-  assert.deepEqual(resizeTextOverlay({ fontSize: 20, widthPercent: 60 }, -200, 0, 200, 80), { fontSize: 12, widthPercent: 10 });
+  assert.deepEqual(resizeTextOverlay({ fontSize: 20, widthPercent: 60 }, -200, 0, 200, 80), { fontSize: 4, widthPercent: 10 });
 });
 
 test('corrections reach saved plans and SRT exactly once across retries, without modifying uploaded subtitles', async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { Check, Pencil, X } from "lucide-react";
 import { CaptionOverlay } from "./CaptionStyleEditor";
+import { CAPTION_FONT_SIZE_MIN, CAPTION_FONT_SIZE_MAX } from "../shared/caption-style";
 import { moveTextOverlay, resizeTextOverlay, textOverlayLayout, TEXT_LINE_HEIGHT, type TextOverlay, type TextOverlayPosition } from "../shared/text-overlays";
 import "./text-overlays.css";
 
@@ -110,7 +111,7 @@ function CanvasText({ item, index, height, aspect, time, selectOnMount, onCommit
         if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
         event.preventDefault(); event.stopPropagation(); onInteract?.();
         const delta = (event.key === 'ArrowUp' || event.key === 'ArrowRight' ? 1 : -1) * (event.shiftKey ? 4 : 1);
-        onCommit({ fontSize: Math.min(40, Math.max(12, item.style.fontSize + delta)) });
+        onCommit({ fontSize: Math.min(CAPTION_FONT_SIZE_MAX, Math.max(CAPTION_FONT_SIZE_MIN, item.style.fontSize + delta)) });
       }} />}
     {isEditing ? <textarea ref={input} className="canvas-text-input" aria-label={`Edit text ${index + 1} on video`} value={editing} maxLength={500}
       rows={Math.min(6, Math.max(layout.text.split("\n").length, editing.split("\n").length))} spellCheck

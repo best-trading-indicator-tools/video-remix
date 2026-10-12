@@ -3,7 +3,9 @@ import { wrapEditorialText } from "./text-wrap.js";
 import { cyrillicLookalikes } from "./caption-text.js";
 
 const text = z.string().max(200).refine(value => !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value), "Use printable text");
-const fontPercent = z.number().finite().min(3).max(10);
+export const BAND_FONT_PERCENT_MIN = 1;
+export const BAND_FONT_PERCENT_MAX = 10;
+const fontPercent = z.number().finite().min(BAND_FONT_PERCENT_MIN).max(BAND_FONT_PERCENT_MAX);
 export const bandTextStyleSchema = z.object({
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/u).optional(),
   fontPercent: fontPercent.optional(),
@@ -88,7 +90,7 @@ export function bandTextLayout(text: string, width: number, height: number, band
 export const blackBandFinishSchema = z.object({
   enabled: z.boolean(), fit: z.enum(["contain", "crop"]),
   topPercent: z.number().min(10).max(40), bottomPercent: z.number().min(10).max(40),
-  fontPercent: z.number().min(3).max(10),
+  fontPercent,
   topStyle: bandTextStyleSchema.optional(),
   bottomStyle: bandTextStyleSchema.optional(),
 }).refine(value => value.topPercent + value.bottomPercent <= 70);

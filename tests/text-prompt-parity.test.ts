@@ -10,6 +10,7 @@ import { sourcePromptProposal } from '../server/source-prompt-routing.js';
 import { proposePromptEdit } from '../server/prompt-edit.js';
 import { applyEditPlanChanges } from '../server/edit-plan.js';
 import { changesBetweenPlans } from '../server/prompt-routes.js';
+import { DEFAULT_BLACK_BANDS } from '../shared/black-bands.js';
 
 test('titles, resizing, animations and correction rules compile through every prompt mode', async t => {
   const originalKey = process.env.DEEPSEEK_API_KEY;
@@ -24,6 +25,23 @@ test('titles, resizing, animations and correction rules compile through every pr
   const settings = { ...DEFAULT_SETTINGS, textOverlays: [old, other], captionStyle: { fontSize: 19, bottomPercent: 14, color: '#00ff00' } };
   const options = { ...DEFAULT_AUTO_OPTIONS, textOverlays: [old, other] };
   try {
+    await t.test('smaller captions, titles and band text work through source and saved-result prompts', async () => {
+      const blackBands = { ...DEFAULT_BLACK_BANDS, enabled: true, topText: 'Keep headline', bottomText: 'Keep footer' };
+      const patch = { captionStyle: { fontSize: 4 }, textEdits: [{ action: 'update', id: old.id, style: { fontSize: 4.5 } }], blackBands: { topStyle: { fontPercent: 1 } } };
+      reply = { patch };
+      const automatic = await proposeAutoPrompt({ options: { ...options, blackBands }, variants: 1, source, signal, prompt: 'Set captions to size 4, the first title to 4.5 and top band text to 1%' });
+      const manual = await proposeManualPrompt({ settings: { ...settings, blackBands }, source, signal, prompt: 'Set captions to size 4, the first title to 4.5 and top band text to 1%' });
+      const plan: EditPlan = { version: 1, revision: 1, sourceId: randomUUID(), sourceDuration: 30, outputDuration: 30, createdAt: new Date().toISOString(), settings: { ...settings, blackBands }, cuts: [{ start: 0, end: 30 }], captions: [{ id: 'a', start: 1, end: 2, text: 'Keep speech' }], visuals: [], media: [], narration: false };
+      reply = { operations: [{ op: 'caption_style', ...patch.captionStyle }, { op: 'text_overlays', edits: patch.textEdits }, { op: 'black_bands', ...patch.blackBands }] };
+      const saved = await proposePromptEdit({ plan, signal, prompt: 'Set captions to size 4, the first title to 4.5 and top band text to 1%' });
+      for (const next of [automatic.options, manual.settings, applyEditPlanChanges(plan, saved.changes).settings]) {
+        assert.equal(next.captionStyle?.fontSize, 4); assert.equal(next.textOverlays?.[0]?.style.fontSize, 4.5);
+        assert.equal(next.blackBands?.topStyle?.fontPercent, 1); assert.equal(next.blackBands?.bottomText, 'Keep footer');
+        assert.equal(next.textOverlays?.[0]?.text, old.text); assert.deepEqual(next.textOverlays?.[1], other);
+      }
+      assert.match(instructions, /fontSize 4–40/); assert.match(instructions, /fontPercent 1–10/);
+      assert.equal(plan.settings.captionStyle?.fontSize, 19);
+    });
     for (const design of TITLE_DESIGNS) await t.test(`${design.name} is the same design in Quick/Auto and Manual`, async () => {
       reply = { patch: { textEdits: [{ action: 'add', design: design.id, text: 'NEW TITLE', start: 0, end: 3 }] } };
       const automatic = await proposeAutoPrompt({ options, variants: 2, source, signal, prompt: `Add ${design.name} saying NEW TITLE` });

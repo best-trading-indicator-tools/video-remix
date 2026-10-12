@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const CAPTION_FONT_SIZE_MIN = 4;
+export const CAPTION_FONT_SIZE_MAX = 40;
+
 export const CAPTION_FONTS = {
   classic: { label: "Classic sans", family: "DejaVu Sans", css: '"DejaVu Sans", Arial, sans-serif' },
   "tiktok-sans": { label: "TikTok Sans", family: "TikTok Sans 16pt", css: '"Caption TikTok Sans", sans-serif' },
@@ -10,7 +13,7 @@ export const CAPTION_FONTS = {
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/u, "Use a six-digit hex color");
 /** New fields are optional so existing exports and saved presets retain their appearance. */
 export const captionStyleSchema = z.object({
-  fontSize: z.number().finite().min(12).max(40),
+  fontSize: z.number().finite().min(CAPTION_FONT_SIZE_MIN).max(CAPTION_FONT_SIZE_MAX),
   bottomPercent: z.number().finite().min(5).max(80),
   fontFamily: z.enum(["classic", "tiktok-sans", "poppins", "anton", "serif"]).optional(),
   color: color.optional(), bold: z.boolean().optional(), italic: z.boolean().optional(),

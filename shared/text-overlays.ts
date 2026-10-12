@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { captionStyleSchema, DEFAULT_CAPTION_STYLE, resolveCaptionStyle } from "./caption-style.js";
+import { captionStyleSchema, CAPTION_FONT_SIZE_MIN, CAPTION_FONT_SIZE_MAX, DEFAULT_CAPTION_STYLE, resolveCaptionStyle } from "./caption-style.js";
 import { captionDisplayText } from "./caption-text.js";
 import { wrapEditorialText } from "./text-wrap.js";
 
@@ -48,7 +48,7 @@ export function resizeTextOverlay(from: { fontSize: number; widthPercent: number
   if (![dx, dy, boxWidth, boxHeight].every(Number.isFinite) || boxWidth <= 0 || boxHeight <= 0) return from;
   const factor = Math.max(.1, 1 + (Math.abs(dx / boxWidth) > Math.abs(dy / boxHeight) ? dx / boxWidth : dy / boxHeight));
   const round = (n: number) => Math.round(n * 100) / 100;
-  return { fontSize: round(Math.min(40, Math.max(12, from.fontSize * factor))), widthPercent: round(Math.min(90, Math.max(10, from.widthPercent * factor))) };
+  return { fontSize: round(Math.min(CAPTION_FONT_SIZE_MAX, Math.max(CAPTION_FONT_SIZE_MIN, from.fontSize * factor))), widthPercent: round(Math.min(90, Math.max(10, from.widthPercent * factor))) };
 }
 
 export type TextOverlayPosition = { xPercent: number; bottomPercent: number };

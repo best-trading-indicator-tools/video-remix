@@ -3,7 +3,7 @@ import { upscaleSchema, upscaleSummary, upscalePromptInstructions } from '../sha
 import { z } from 'zod';
 import { blackBandsPatchSchema, applyBlackBandsPatch, blackBandChangeSummary } from '../shared/black-bands.js';
 import { blackBandPromptInstructions, hasUngroundedBlackBandText } from './black-band-prompt.js';
-import { captionStyleSchema } from '../shared/caption-style.js';
+import { CAPTION_FONT_SIZE_MIN, CAPTION_FONT_SIZE_MAX, captionStyleSchema } from '../shared/caption-style.js';
 import { textEditsSchema, applyTextEdits, textEditsSummary, textEditInstructions } from '../shared/text-edits.js';
 import { captionCorrectionsSchema } from '../shared/caption-corrections.js';
 import { ownFootageSchema, resolveFootagePlacement } from '../shared/own-footage.js';
@@ -38,7 +38,7 @@ Common editing controls in both workspaces:
 ${textEditInstructions}
 ${upscalePromptInstructions}
 blackBands is a sparse object supported in Auto and Manual, including written band text; do not switch workspaces for it. ${blackBandPromptInstructions}
-captionStyle is a sparse object: fontSize 12–40, bottomPercent 5–80 (larger moves UP), fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans); color, outlineColor, backgroundColor six-digit #RRGGBB; bold, italic, uppercase booleans; outlineWidth/shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100; wordHighlight boolean and highlightColor six-digit #RRGGBB highlight each spoken word. Only added captions can be styled.
+captionStyle is a sparse object: fontSize ${CAPTION_FONT_SIZE_MIN}–${CAPTION_FONT_SIZE_MAX}, bottomPercent 5–80 (larger moves UP), fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans); color, outlineColor, backgroundColor six-digit #RRGGBB; bold, italic, uppercase booleans; outlineWidth/shadow 0–5; letterSpacing 0–4; alignment left/center/right; background none/box; backgroundOpacity 0–100; wordHighlight boolean and highlightColor six-digit #RRGGBB highlight each spoken word. Only added captions can be styled.
 captionStyle.animation none/fade/pop/slide/typewriter/words animates added captions; animationDuration 0.1–1 seconds controls fade/pop/slide. words reveals each spoken word using recognition timings when available.
 captionCorrections is the full desired list of up to 50 literal find-and-replace rules: [{find:"misspelling",replace:"correct spelling",wholeWord:true,caseSensitive:false}]. Preserve existing rules when adding. Each find/replace is at most 100 characters, plain single-line text; an empty replacement deletes matches. Apply only explicit user-provided corrections, never invent wording from unavailable speech. These rules affect newly added captions on export, not baked-in text or the source audio. [] clears rules.
 captionStyle.cyrillicMode off/words/all replaces similar-looking Latin letters with Cyrillic for display only, without changing original caption text or speech timings. Enable only when explicitly requested, never for translation or ordinary Cyrillic-language captions. For specific words use cyrillicMode:"words" and cyrillicWords (complete list, at most 50 literal words/phrases of 1–80 characters, no newlines), preserving existing entries when adding more. Match whole words ignoring case. Use "all" only if all caption text was requested; "off" restores original spelling. If no words or scope are supplied, ask which words to change. Do not invent terms or claim platform moderation outcomes.

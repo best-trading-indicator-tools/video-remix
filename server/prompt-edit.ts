@@ -10,7 +10,7 @@ import { jsonCompletion } from "./ai-json.js";
 import { applyEditPlanChanges } from "./edit-plan.js";
 import { retimeTranscript } from "./auto-plan.js";
 import { focalPointSchema, captionStyleSchema } from "./schema.js";
-import { captionStyleDescription } from "../shared/caption-style.js";
+import { CAPTION_FONT_SIZE_MIN, CAPTION_FONT_SIZE_MAX, captionStyleDescription } from "../shared/caption-style.js";
 import { applyBlackBandsPatch, blackBandsPatchSchema, blackBandChangeSummary } from "../shared/black-bands.js";
 import { blackBandPromptInstructions, hasUngroundedBlackBandText } from "./black-band-prompt.js";
 
@@ -78,7 +78,7 @@ caption_style also accepts animation none/fade/pop/slide/typewriter/words, anima
 {"op":"hook","text":"plain text, at most 120 characters; empty removes heading"}
 {"op":"caption","id":"existing caption ID","text":"optional plain text","start":0,"end":1} (text/start/end each optional; provide at least one)
 {"op":"remove_captions","ids":["existing caption ID"]} or {"op":"remove_captions","ids":"all"}
-{"op":"caption_style","fontSize":20,"bottomPercent":18,"fontFamily":"poppins","color":"#ffffff","bold":true,"italic":false,"uppercase":false,"outlineWidth":1.2,"outlineColor":"#151515","shadow":0,"letterSpacing":0,"alignment":"center","background":"none","backgroundColor":"#10151c","backgroundOpacity":80} (each optional; fontSize 12–40, bottomPercent 5–80 moving UP with larger values; fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans), six-digit hex colors, outlineWidth and shadow 0–5, letterSpacing 0–4, alignment left/center/right, background none/box, backgroundOpacity 0–100; a box replaces the outline. Only added captions can be styled; captions baked into source pixels cannot be restyled.)
+{"op":"caption_style","fontSize":20,"bottomPercent":18,"fontFamily":"poppins","color":"#ffffff","bold":true,"italic":false,"uppercase":false,"outlineWidth":1.2,"outlineColor":"#151515","shadow":0,"letterSpacing":0,"alignment":"center","background":"none","backgroundColor":"#10151c","backgroundOpacity":80} (each optional; fontSize ${CAPTION_FONT_SIZE_MIN}–${CAPTION_FONT_SIZE_MAX}, bottomPercent 5–80 moving UP with larger values; fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans), six-digit hex colors, outlineWidth and shadow 0–5, letterSpacing 0–4, alignment left/center/right, background none/box, backgroundOpacity 0–100; a box replaces the outline. Only added captions can be styled; captions baked into source pixels cannot be restyled.)
 caption_style also accepts cyrillicMode off/words/all and cyrillicWords (complete list of at most 50 literal words/phrases, each 1–80 characters without newlines). This swaps similar-looking Latin letters for Cyrillic only when drawn, preserving caption text and speech timing. Enable only for explicit lookalike requests, never for translation or ordinary Cyrillic-language captions. Specific words use "words" and the requested list; preserve existing entries when adding more. Use "all" only when requested for all caption text and "off" to restore original spelling. If words/scope are missing, ask for them; never invent terms or claim platform moderation outcomes. Use this style operation rather than rewriting individual caption cues for lookalikes.
 {"op":"upscale","target":"off|1080|1440|2160"}. ${upscalePromptInstructions}
 {"op":"framing","fit":"crop|contain|blur","focalPoint":{"x":0.5,"y":0.5}} (each optional; global focalPoint also replaces existing source-cut overrides)
