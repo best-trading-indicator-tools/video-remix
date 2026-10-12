@@ -5,7 +5,8 @@ import { clamp, storyClips, storyTiming, timecode } from '../shared/edit-timelin
 import { focusPointAt } from '../shared/focus';
 import { BlackBandsOverlay, bandEditorialStyle, bandVideoStyle } from './BlackBandsEditor';
 import { CaptionOverlay, activeCaptionWord } from './CaptionStyleEditor';
-import { TextOverlaysPreview } from "./TextOverlaysEditor";
+import { TextOverlaysPreview } from "./TextOverlaysPreview";
+import type { TextOverlay } from "../shared/text-overlays";
 import { DEFAULT_CAPTION_STYLE } from '../shared/caption-style';
 
 /** Supporting picture/audio follows the primary transport without driving its clock. */
@@ -16,10 +17,11 @@ function SyncedMedia({ url, time, rate, audio = false, fit = 'cover' }: { url: s
   return audio ? <audio ref={ref} src={url} onLoadedMetadata={sync} /> : <video ref={ref} className="draft-supporting-picture" src={url} muted playsInline onLoadedMetadata={sync} style={{ objectFit: fit }} />;
 }
 
-export default function TimelinePreview({ plan, job, time, seekToken, rate, onRate, onTime, onSeek, height, fps, onAspect, guide, guideBottom, guideRight }: {
+export default function TimelinePreview({ plan, job, time, seekToken, rate, onRate, onTime, onSeek, height, fps, onAspect, guide, guideBottom, guideRight, onTextChange, textDisabled }: {
   plan: EditPlan; job: RenderJob; time: number; seekToken: number; rate: number; onRate: (rate: number) => void;
   onTime: (time: number) => void; onSeek: (time: number) => void; height: number; fps: number; onAspect: (aspect: number) => void;
   guide: 'off' | 'instagram' | 'tiktok'; guideBottom: number; guideRight: number;
+  onTextChange?: (items: TextOverlay[]) => void; textDisabled?: boolean;
 }) {
   const clips = storyTiming(storyClips(plan, fps), plan.settings.speed), duration = clips.at(-1)?.outputEnd ?? 0;
   const clip = clips.find(item => time < item.outputEnd - 1e-7) ?? clips.at(-1)!;
@@ -90,7 +92,7 @@ export default function TimelinePreview({ plan, job, time, seekToken, rate, onRa
         {primary && plan.settings.hookText && mainTime < plan.settings.hookDuration && <div className="edit-framing-hook" style={bandEditorialStyle(bands, frameHeight, aspect, .08, .054)}>{plan.settings.hookText}</div>}
         {primary && plan.settings.callouts?.filter(item => mainTime >= item.start && mainTime < item.end).map((item, i) => <div key={i} className="edit-framing-callout" style={bandEditorialStyle(bands, frameHeight, aspect, .24, .047)}>{item.text}</div>)}
         {caption && <CaptionOverlay style={plan.settings.captionStyle || DEFAULT_CAPTION_STYLE} height={frameHeight} text={caption.text} activeWord={activeCaptionWord(caption.text, caption.start, caption.end, mainTime, plan.captionWords)} />}
-        <TextOverlaysPreview items={plan.settings.textOverlays} time={time} height={frameHeight} aspect={aspect} />
+        <TextOverlaysPreview items={plan.settings.textOverlays} time={time} height={frameHeight} aspect={aspect} onChange={onTextChange} onInteract={() => onRate(0)} disabled={textDisabled} />
         {guide !== 'off' && <div className={`edit-platform-guide ${guide}`} aria-hidden="true"><span className="guide-top">App header</span><span className="guide-right" style={{ width: `${guideRight}%`, bottom: `${guideBottom}%` }}>Actions</span><span className="guide-bottom" style={{ height: `${guideBottom}%` }}>Post text &amp; navigation</span></div>}
       </div>
     </div>
@@ -102,7 +104,7 @@ export default function TimelinePreview({ plan, job, time, seekToken, rate, onRa
       {!!rate && rate !== 1 && <span>{rate}×</span>}
       <button type="button" aria-label={muted ? 'Unmute preview' : 'Mute preview'} onClick={() => setMuted(!muted)}>{muted ? <VolumeX size={16} /> : <Volume2 size={16} />}</button>
     </div>
-    <p className="draft-preview-note">Live cut preview · Render for final sound, transitions and effects.{plan.settings.watermarkRemoval?.enabled && " Saved watermark removal is applied when rendering."}</p>
+    <p className="draft-preview-note">Live cut preview · Render for final sound, transitions and effects.{onTextChange && !!plan.settings.textOverlays?.length && " Drag text to move it; double-click it to edit the words."}{plan.settings.watermarkRemoval?.enabled && " Saved watermark removal is applied when rendering."}</p>
     {error && <p role="alert">{error}</p>}
   </div>;
 }

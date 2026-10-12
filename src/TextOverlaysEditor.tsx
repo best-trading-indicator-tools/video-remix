@@ -1,18 +1,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Trash2, Type } from "lucide-react";
-import CaptionStyleEditor, { CaptionOverlay, NumberControl } from "./CaptionStyleEditor";
-import { MAX_TEXT_OVERLAYS, TEXT_LINE_HEIGHT, newTextOverlay, textOverlayLayout, type TextOverlay } from "../shared/text-overlays";
+import CaptionStyleEditor, { NumberControl } from "./CaptionStyleEditor";
+import { MAX_TEXT_OVERLAYS, newTextOverlay, type TextOverlay } from "../shared/text-overlays";
 import "./text-overlays.css";
-
-export function TextOverlaysPreview({ items, time, height, aspect }: { items?: TextOverlay[]; time: number; height: number; aspect: number }) {
-  if (!(height > 0 && aspect > 0)) return null;
-  return <>{items?.filter(item => item.text.trim() && time >= item.start && time < item.end).map(item => {
-    const layout = textOverlayLayout(item, height * aspect, height);
-    return <CaptionOverlay key={item.id} style={{ ...item.style, wordHighlight: false }} height={height} text={layout.text} displayed
-      placement={{ left: `${layout.left / (height * aspect) * 100}%`, width: `${layout.width / (height * aspect) * 100}%`, right: "auto", zIndex: 4,
-        whiteSpace: "pre", overflowWrap: "normal", fontSize: item.style.fontSize * height / 288, fontFamily: layout.metrics.css, lineHeight: TEXT_LINE_HEIGHT }} />;
-  })}</>;
-}
 
 function TimeField({ label, value, min, onChange }: { label: string; value: number; min: number; onChange: (value: number) => void }) {
   const [input, setInput] = useState(String(value));

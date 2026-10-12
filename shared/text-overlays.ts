@@ -31,6 +31,14 @@ export const newTextOverlay = (id: string, start = 0, end = start + 3): TextOver
   style: { ...DEFAULT_CAPTION_STYLE, fontFamily: "poppins", bold: true, bottomPercent: 45 },
 });
 
+export type TextOverlayPosition = { xPercent: number; bottomPercent: number };
+/** Pointer distances use the displayed canvas size, independent of export resolution. */
+export function moveTextOverlay(from: TextOverlayPosition, dx: number, dy: number, width: number, height: number): TextOverlayPosition {
+  if (![dx, dy, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return from;
+  const bound = (value: number, min: number, max: number) => Math.round(Math.max(min, Math.min(max, value)) * 100) / 100;
+  return { xPercent: bound(from.xPercent + dx / width * 100, 5, 95), bottomPercent: bound(from.bottomPercent - dy / height * 100, 5, 80) };
+}
+
 /** Preview and export use the same explicit line breaks and safe horizontal bounds. */
 export function textOverlayLayout(item: TextOverlay, width: number, height: number) {
   const style = resolveCaptionStyle(item.style), scale = height / 288;

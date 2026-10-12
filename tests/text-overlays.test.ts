@@ -6,7 +6,7 @@ import { promisify } from "node:util";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { newTextOverlay, textOverlaysSchema, TEXT_FONT_METRICS } from "../shared/text-overlays.js";
+import { moveTextOverlay, newTextOverlay, textOverlaysSchema, TEXT_FONT_METRICS } from "../shared/text-overlays.js";
 import { DEFAULT_SETTINGS, type EditPlan } from "../shared/types.js";
 import { settingsSchema, autoOptionsSchema } from "../server/schema.js";
 import { textOverlaysAss } from "../server/text-overlays.js";
@@ -14,6 +14,15 @@ import { applyEditPlanChanges } from "../server/edit-plan.js";
 import { autoPicturePreview } from "../shared/preview-settings.js";
 import { captureFinishingPreset } from "../shared/finishing-presets.js";
 import { renderVideo, probeMedia } from "../server/engine.js";
+
+test("canvas dragging scales with the displayed frame, reverses the bottom axis and stays within export bounds", () => {
+  const start = { xPercent: 50, bottomPercent: 45 };
+  assert.deepEqual(moveTextOverlay(start, 27, -46.5, 270, 465), { xPercent: 60, bottomPercent: 55 });
+  assert.deepEqual(moveTextOverlay(start, 54, -93, 540, 930), moveTextOverlay(start, 27, -46.5, 270, 465));
+  assert.deepEqual(moveTextOverlay(start, -1000, 1000, 270, 465), { xPercent: 5, bottomPercent: 5 });
+  assert.deepEqual(moveTextOverlay(start, 1000, -1000, 270, 465), { xPercent: 95, bottomPercent: 80 });
+  for (const size of [[0, 465], [270, 0], [NaN, 465], [270, Infinity]]) assert.deepEqual(moveTextOverlay(start, 10, 10, size[0]!, size[1]!), start);
+});
 
 test("preview/export font metrics stay aligned with the bundled font files", async () => {
   const files = { poppins: "Poppins-Regular.ttf", anton: "Anton-Regular.ttf", "tiktok-sans": "TikTokSans16pt-Regular.ttf", serif: "DMSerifDisplay-Regular.ttf" };

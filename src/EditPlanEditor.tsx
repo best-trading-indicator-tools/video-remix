@@ -524,7 +524,8 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
               {previewMode === "export" ? <>
                 <video ref={exportVideo} style={{ height: previewHeight, maxHeight: previewHeight, objectFit: "contain" }} src={`/api/jobs/${job.id}/video`} controls playsInline preload="metadata" aria-label="Current exported video" onLoadedMetadata={event => { event.currentTarget.currentTime = Math.min(reviewTime, event.currentTarget.duration); }} />
                 <p className="draft-preview-note">Saved export · The timeline below is your live edit. Click its ruler to return to editing.</p>
-              </> : <TimelinePreview plan={draft} job={timelineJob} time={reviewTime} seekToken={seekToken} rate={transportRate} onRate={setTransportRate} onTime={setReviewTime} onSeek={seekTimeline} height={previewHeight} fps={timelineFps} onAspect={setKnownOutputAspect} guide={platformGuide} guideBottom={guideBottom} guideRight={guideRight} />}
+              </> : <TimelinePreview plan={draft} job={timelineJob} time={reviewTime} seekToken={seekToken} rate={transportRate} onRate={setTransportRate} onTime={setReviewTime} onSeek={seekTimeline} height={previewHeight} fps={timelineFps} onAspect={setKnownOutputAspect} guide={platformGuide} guideBottom={guideBottom} guideRight={guideRight}
+                onTextChange={textOverlays => updateFraming({ textOverlays })} textDisabled={saving || timelineBusy} />}
             </aside>
             <div className="edit-plan-fields" role="region" aria-label="Edit controls" tabIndex={0} inert={saving || timelineBusy}>
               <div className="edit-inspector-heading"><h3>Inspector</h3><p>Use the timeline to cut and move clips. Open a section here to change their look or text.</p></div>

@@ -272,6 +272,16 @@ own style. **Background** sits alongside the font and text color: choose **None*
 for plain text or **Solid box** to show **Background color** and **Background opacity**.
 Use the color picker or enter a hex color. Speech-caption styling stays separate.
 
+In the **Live preview**, drag a visible text item to move it, or double-click it
+to edit its words directly on the picture. You can also select it and choose
+**Edit text**. Playback pauses while you work. **Done**, Ctrl/⌘ Enter or clicking
+outside saves the words; **Cancel** or Escape discards the edit. Enter inserts a
+new line. With a text item focused, arrow keys move it by 1% of the canvas
+(Shift moves by 5%); Escape cancels an unfinished drag. A finished drag is one
+Undo step. The side controls stay in sync, and edits follow the same working
+selection in Quick, All settings and Manual. In **Edit this result**, use
+**Live edit** to drag or edit text in the saved draft, including over added clips.
+
 Times refer to the finished video, including inserted clips and outros. They stay
 fixed when you change cuts or playback speed, so review them after changing the
 video's length. Text past the export end is clipped; text starting after the end

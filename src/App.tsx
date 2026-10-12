@@ -114,8 +114,9 @@ import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals,
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 import { DEFAULT_AUDIO_SETTINGS } from "../shared/audio";
 import SoundModifiers from "./SoundModifiers";
-import TextOverlaysEditor, { TextOverlaysPreview } from "./TextOverlaysEditor";
-import { textOverlaysSchema } from "../shared/text-overlays";
+import TextOverlaysEditor from "./TextOverlaysEditor";
+import { TextOverlaysPreview } from "./TextOverlaysPreview";
+import { textOverlaysSchema, type TextOverlay } from "../shared/text-overlays";
 import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle } from "./BlackBandsEditor";
 import { blackBandsSchema, DEFAULT_BLACK_BANDS, applyBandFinish } from "../shared/black-bands";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
@@ -904,6 +905,11 @@ export default function App() {
     setAutoById(current => applyAutoFootage(current, defaultAuto, workingTargets.map(source => source.id), ownFootage));
   };
   const updateAuto = (patch: Partial<AutoPreset>) => updateScopedAuto({ ...patch, options: patch.options ? Object.fromEntries(Object.entries(patch.options).filter(([key, value]) => JSON.stringify(value) !== JSON.stringify(autoOptions[key as keyof AutoOptions]))) : undefined });
+  const updatePreviewText = previewIncluded && !starting && !brollBusy ? (textOverlays: TextOverlay[]) => {
+    history.label("Edit text on video");
+    if (mode === "auto") updateScopedAuto({ options: { textOverlays } });
+    else updateSettings({ textOverlays });
+  } : undefined;
   const applyFootageToSelected = (ownFootage: NonNullable<AutoOptions['ownFootage']>) => {
     const targets = workingTargets;
     if (!targets.length || starting || brollBusy) return;
@@ -1649,7 +1655,7 @@ export default function App() {
                   {watermark.editing ? watermark.preview : selected && liveFootage ? <FootageSequencePreview key={`${selected.id}:${mode}`}
                     source={selected} placements={activePreviewSettings.ownFootage!} settings={manualLive ? settings : undefined}
                     aspect={previewAspect} fit={previewFit} bands={liveBands} filter={previewFilter}
-                    captions={sampleCaptions} captionStyle={activePreviewSettings.captionStyle} textOverlays={activePreviewSettings.textOverlays} jump={footageJump} /> : selected ? (
+                    captions={sampleCaptions} captionStyle={activePreviewSettings.captionStyle} textOverlays={activePreviewSettings.textOverlays} onTextChange={updatePreviewText} jump={footageJump} /> : selected ? (
                     <>
                       <div className="preview-label">
                         <span />
@@ -1720,7 +1726,8 @@ export default function App() {
                         )}
                         <BlackBandsOverlay value={liveBands} aspect={previewAspect} />
                         {sampleCaptions && <SampleCaptionOverlay style={activePreviewSettings.captionStyle} height={previewHeight} />}
-                        {!sourcePreview && !usingRendered && <TextOverlaysPreview items={activePreviewSettings.textOverlays} time={liveOutputTime} height={previewHeight} aspect={previewAspect} />}
+                        {!sourcePreview && !usingRendered && <TextOverlaysPreview key={`${selected.id}:${mode}`} items={activePreviewSettings.textOverlays} time={liveOutputTime} height={previewHeight} aspect={previewAspect}
+                          onChange={updatePreviewText} onInteract={() => videoRef.current?.pause()} />}
                       </div>
                       <span className="preview-ratio">
                         {sourcePreview
@@ -1814,6 +1821,7 @@ export default function App() {
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
                           {!watermark.editing && sampleCaptions && " Sample caption text shows the selected style and placement. It is never exported."}
+                          {!watermark.editing && !sourcePreview && !usingRendered && updatePreviewText && !!activePreviewSettings.textOverlays?.length && " Drag text to move it; double-click it to edit the words."}
                           {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Open watermark editor, then Preview removal to check it."}
                         </span>
                       </div>
