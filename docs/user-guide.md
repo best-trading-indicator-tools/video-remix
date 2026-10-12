@@ -248,6 +248,29 @@ would require reconstructing the image behind it and is not part of this feature
 
 Use your own footage or footage you have permission to repurpose. Review the resulting cut and captions before posting. Editing or changing file metadata does **not** guarantee that TikTok, Instagram, or another platform will classify a video as original, recommend it, or permit monetization.
 
+### Timed text overlays
+
+Open **Text → Add text** in Manual (Essentials, Advanced or All controls),
+Auto **All settings**, or **Edit this result**. Enter your words and set Start and
+End in seconds. Text appears directly over the picture without adding black bands.
+
+Open **Style & position** for Top/Center/Bottom presets, horizontal position,
+distance from the bottom, text width, and the same font, color, size, emphasis,
+outline, shadow, spacing and background controls as captions. Each text has its
+own style. Choose **Background → None** for plain text or **Solid box** for a
+colored background with adjustable opacity. Speech-caption styling stays separate.
+
+Times refer to the finished video, including inserted clips and outros. They stay
+fixed when you change cuts or playback speed, so review them after changing the
+video's length. Text past the export end is clipped; text starting after the end
+is not drawn. Add up to 20 text items; overlapping items can appear together.
+
+In **Edit this result**, the **Text** timeline track supports dragging, edge
+trimming and deleting. **Preview at start** jumps to the selected text. Drafts,
+revisions and workspace Undo preserve the text; reusable finishing presets omit
+its words and timings. In Auto, live preview uses the source clock until Auto has
+selected the finished cut; check the export or its editable timeline for exact timing.
+
 ### Black bands and text
 
 **Black bands** has its own always-visible **Auto → Black bands & text** section, above Output preferences and Supporting visuals. It is also available in **Manual → Frame it right**,

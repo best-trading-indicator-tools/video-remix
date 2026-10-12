@@ -7,7 +7,7 @@ import { withTrackBounds } from '../shared/focus';
 import { apiRequest } from './api-client';
 import './edit-timeline.css';
 
-type Item = { id: string; kind: 'caption' | 'visual' | 'hook' | 'cover'; start: number; end: number; label: string; locked?: boolean };
+type Item = { id: string; kind: 'text' | 'caption' | 'visual' | 'hook' | 'cover'; start: number; end: number; label: string; locked?: boolean };
 type Waveform = { peaks: number[]; duration: number; clock: 'source' | 'output' };
 type Gesture = { id: string; x: number; mode: 'move' | 'start' | 'end'; delta: number; boundary: number; moved: boolean };
 const isTyping = (target: EventTarget | null) => target instanceof Element && !!target.closest('input, textarea, select, [contenteditable="true"], video[controls]');
@@ -30,6 +30,7 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
   const clips = storyClips(plan, fps), timed = storyTiming(clips, plan.settings.speed), duration = timed.at(-1)?.outputEnd ?? plan.outputDuration;
   const mainDuration = timed.at(-1)?.mainEnd ?? plan.outputDuration;
   const items: Item[] = [
+    ...(plan.settings.textOverlays ?? []).map(item => ({ ...item, kind: 'text' as const, label: item.text || 'Empty text' })),
     ...plan.captions.map(cue => ({ ...cue, kind: 'caption' as const, label: cue.text })),
     ...plan.visuals.filter(shot => shot.enabled).map(shot => ({ ...shot, kind: 'visual' as const, label: plan.media.find(media => media.id === shot.mediaId)?.name || 'B-roll' })),
     ...(plan.settings.ownFootage ?? []).filter(item => item.mode === 'cover').map(item => ({ id: item.id, kind: 'cover' as const, start: item.at, end: Math.min(mainDuration, item.at + item.end - item.start), label: job.footageAssets?.find(asset => asset.id === item.assetId)?.name || 'Uploaded cover' })),
@@ -78,7 +79,8 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
   const remove = () => run(async () => {
     if (activeClip) { const start = timed.find(clip => selected.includes(clip.id))?.outputStart ?? time; await applyStory(clips.filter(clip => !selected.includes(clip.id)), Math.min(time, start)); }
     else if (active && !active.locked) {
-      if (active.kind === 'caption') onChange({ ...plan, captions: plan.captions.filter(cue => cue.id !== active.id) });
+      if (active.kind === 'text') onChange({ ...plan, settings: { ...plan.settings, textOverlays: plan.settings.textOverlays?.filter(item => item.id !== active.id) } });
+      else if (active.kind === 'caption') onChange({ ...plan, captions: plan.captions.filter(cue => cue.id !== active.id) });
       else if (active.kind === 'visual') onChange({ ...plan, visuals: plan.visuals.filter(shot => shot.id !== active.id) });
       else if (active.kind === 'cover') onChange({ ...plan, settings: { ...plan.settings, ownFootage: plan.settings.ownFootage?.filter(item => item.id !== active.id) } });
       else onChange({ ...plan, settings: { ...plan.settings, hookText: '' } });
@@ -121,6 +123,7 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
     setGesture({ ...current });
   };
   const overlayChange = (item: Item, delta: number, mode: Gesture['mode']) => {
+    if (item.kind === 'text') return shiftTimelineInterval(item, delta, mode, { low: 0, high: duration, minimum: .04 });
     if (item.kind === 'hook') return { start: 0, end: clamp(item.end + delta, .5, Math.min(15, mainDuration)) };
     const others = items.filter(other => other.kind === item.kind && other.id !== item.id);
     const shot = plan.visuals.find(shot => shot.id === item.id), media = plan.media.find(media => media.id === shot?.mediaId);
@@ -135,7 +138,8 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
   };
   const commitOverlay = (item: Item, delta: number, mode: Gesture['mode']) => {
     const timing = overlayChange(item, delta, mode);
-    if (item.kind === 'hook') onChange({ ...plan, settings: { ...plan.settings, hookDuration: timing.end } });
+    if (item.kind === 'text') onChange({ ...plan, settings: { ...plan.settings, textOverlays: plan.settings.textOverlays?.map(text => text.id === item.id ? { ...text, ...timing } : text) } });
+    else if (item.kind === 'hook') onChange({ ...plan, settings: { ...plan.settings, hookDuration: timing.end } });
     else if (item.kind === 'caption') onChange({ ...plan, captions: plan.captions.map(cue => cue.id === item.id ? { ...cue, ...timing } : cue) });
     else if (item.kind === 'cover') onChange({ ...plan, settings: { ...plan.settings, ownFootage: plan.settings.ownFootage?.map(shot => shot.id === item.id ? { ...shot, at: timing.start, end: shot.start + timing.end - timing.start } : shot) } });
     else onChange({ ...plan, visuals: plan.visuals.map(shot => shot.id === item.id ? { ...shot, ...timing } : shot) });
@@ -157,8 +161,10 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
         await trimClip(clip, delta, current.mode as 'start' | 'end');
       } else {
         const item = items.find(item => item.id === current.id)!;
-        const origin = outputTimeAt(clips, plan.settings.speed, item.start);
-        const delta = mainTimeAt(clips, plan.settings.speed, snap(origin + current.delta, [time, ...timed.map(item => item.outputStart)])) - item.start;
+        const anchor = item.kind === 'text' && current.mode === 'end' ? item.end : item.start;
+        const origin = item.kind === 'text' ? anchor : outputTimeAt(clips, plan.settings.speed, anchor);
+        const snapped = snap(origin + current.delta, [time, ...timed.map(item => item.outputStart)]);
+        const delta = (item.kind === 'text' ? snapped : mainTimeAt(clips, plan.settings.speed, snapped)) - anchor;
         commitOverlay(item, delta, current.mode);
       }
     });
@@ -241,12 +247,14 @@ export default function EditTimeline({ jobId, job, plan, time, fps, onSeek, onCh
           {handle(clip.id,title,'start')}<img src={clip.kind === 'cut' ? `/api/sources/${plan.sourceId}/thumbnail` : job.footageAssets?.find(asset => asset.id === clip.footage.assetId)?.thumbnailUrl} alt="" hidden={clip.kind === 'footage'} draggable={false} /><span>{title}<small>{(clip.outputEnd-clip.outputStart).toFixed(2)} s</small></span>{handle(clip.id,title,'end')}
         </div>;
       })}</div>
-      {(['hook','caption','visual'] as const).map(kind => <div key={kind} className={`timeline-lane lane-${kind}`} aria-label={`${kind} track`} onDragOver={event => { if (kind === 'visual' && !disabled) event.preventDefault(); }} onDrop={event => { if (kind !== 'visual' || disabled) return; event.preventDefault(); addShot(event.dataTransfer.getData('application/x-remix-media'), at(event.clientX)); }}>
-        <span className="timeline-lane-label">{{hook:'Title',caption:'Captions',visual:'B-roll / cover'}[kind]}</span>
+      {(['text','hook','caption','visual'] as const).map(kind => <div key={kind} className={`timeline-lane lane-${kind}`} aria-label={`${kind} track`} onDragOver={event => { if (kind === 'visual' && !disabled) event.preventDefault(); }} onDrop={event => { if (kind !== 'visual' || disabled) return; event.preventDefault(); addShot(event.dataTransfer.getData('application/x-remix-media'), at(event.clientX)); }}>
+        <span className="timeline-lane-label">{{text:'Text',hook:'Opening title',caption:'Captions',visual:'B-roll / cover'}[kind]}</span>
         {items.filter(item => item.kind === kind || (kind === 'visual' && item.kind === 'cover')).flatMap(item => {
           const shown = gesture?.id === item.id ? { ...item, ...overlayChange(item,gesture.delta,gesture.mode) } : item;
-          // Inserts interrupt overlays; show only the portions over main footage.
-          return timed.filter(clip => clip.kind === 'cut' && clip.mainEnd > shown.start && clip.mainStart < shown.end).map(clip => {
+          // Free text uses the finished output clock, including inserts and outros.
+          const intervals = item.kind === 'text' ? [{ id: 'output', outputStart: 0, outputEnd: duration, mainStart: 0, mainEnd: duration }]
+            : timed.filter(clip => clip.kind === 'cut' && clip.mainEnd > shown.start && clip.mainStart < shown.end);
+          return intervals.filter(clip => clip.mainEnd > shown.start && clip.mainStart < shown.end).map(clip => {
             const start = clip.outputStart + Math.max(0,shown.start-clip.mainStart), end = clip.outputEnd - Math.max(0,clip.mainEnd-shown.end);
             return <div key={`${item.id}:${clip.id}`} role="button" tabIndex={0} aria-label={item.label} aria-pressed={selected.includes(item.id)} className={`timeline-item ${selected.includes(item.id) ? 'selected' : ''} ${item.locked ? 'locked' : ''}`} style={{ left:`${start/duration*100}%`,width:`${(end-start)/duration*100}%` }} onPointerDown={event => begin(event,item.id,'move')} {...handlers} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); setSelected([item.id]); } }}>
               {item.kind !== 'hook' && handle(item.id,item.label,'start',item.locked)}<span>{item.locked ? '🔒 ' : ''}{item.label}</span>{handle(item.id,item.label,'end',item.locked)}

@@ -5,6 +5,7 @@ import { clamp, storyClips, storyTiming, timecode } from '../shared/edit-timelin
 import { focusPointAt } from '../shared/focus';
 import { BlackBandsOverlay, bandEditorialStyle, bandVideoStyle } from './BlackBandsEditor';
 import { CaptionOverlay, activeCaptionWord } from './CaptionStyleEditor';
+import { TextOverlaysPreview } from "./TextOverlaysEditor";
 import { DEFAULT_CAPTION_STYLE } from '../shared/caption-style';
 
 /** Supporting picture/audio follows the primary transport without driving its clock. */
@@ -89,6 +90,7 @@ export default function TimelinePreview({ plan, job, time, seekToken, rate, onRa
         {primary && plan.settings.hookText && mainTime < plan.settings.hookDuration && <div className="edit-framing-hook" style={bandEditorialStyle(bands, frameHeight, aspect, .08, .054)}>{plan.settings.hookText}</div>}
         {primary && plan.settings.callouts?.filter(item => mainTime >= item.start && mainTime < item.end).map((item, i) => <div key={i} className="edit-framing-callout" style={bandEditorialStyle(bands, frameHeight, aspect, .24, .047)}>{item.text}</div>)}
         {caption && <CaptionOverlay style={plan.settings.captionStyle || DEFAULT_CAPTION_STYLE} height={frameHeight} text={caption.text} activeWord={activeCaptionWord(caption.text, caption.start, caption.end, mainTime, plan.captionWords)} />}
+        <TextOverlaysPreview items={plan.settings.textOverlays} time={time} height={frameHeight} aspect={aspect} />
         {guide !== 'off' && <div className={`edit-platform-guide ${guide}`} aria-hidden="true"><span className="guide-top">App header</span><span className="guide-right" style={{ width: `${guideRight}%`, bottom: `${guideBottom}%` }}>Actions</span><span className="guide-bottom" style={{ height: `${guideBottom}%` }}>Post text &amp; navigation</span></div>}
       </div>
     </div>

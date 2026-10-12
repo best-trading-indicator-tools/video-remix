@@ -4,7 +4,7 @@ import { access, mkdtemp, readFile, writeFile, rm, readdir } from 'node:fs/promi
 import path from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 
 const root = path.resolve(process.argv[2]);
 const executable = path.resolve(process.argv[3]);
@@ -13,6 +13,7 @@ const directory = await mkdtemp(path.join(tmpdir(), 'remix-desktop-smoke-'));
 const runtime = path.join(directory, 'engine'), data = path.join(directory, 'workspace');
 const { prepareRuntime, desktopEnvironment, run } = await import(pathToFileURL(path.join(root, 'desktop/runtime.mjs')).href);
 const { DEFAULT_SETTINGS } = await import(pathToFileURL(path.join(root, 'dist-server/shared/types.js')).href);
+const { newTextOverlay } = await import(pathToFileURL(path.join(root, 'dist-server/shared/text-overlays.js')).href);
 const token = randomBytes(32).toString('hex');
 const env = { ...desktopEnvironment(root, runtime, data, binaries, executable), REMIX_DESKTOP_TOKEN: token,
   DEEPSEEK_API_KEY: '', PIXABAY_API_KEY: '', PEXELS_API_KEY: '', POSTIZ_API_KEY: '' };
@@ -45,7 +46,7 @@ try {
   const uploaded = await fetch(`${base}/api/sources`, { method: 'POST', headers, body: form });
   assert.equal(uploaded.status, 201, await uploaded.clone().text());
   const source = (await uploaded.json()).sources[0];
-  const preview = await fetch(`${base}/api/previews`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: source.id, settings: { ...DEFAULT_SETTINGS, hookText: 'Desktop works', hookDuration: 1 } }) });
+  const preview = await fetch(`${base}/api/previews`, { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ sourceId: source.id, settings: { ...DEFAULT_SETTINGS, hookText: 'Desktop works', hookDuration: 1, textOverlays: [newTextOverlay(randomUUID(), .2, .8)] } }) });
   assert.equal(preview.status, 201, `${await preview.clone().text()}\n${logs}`);
   const rendered = await preview.json(); const video = await fetch(base + rendered.url, { headers });
   assert.equal(video.status, 200); const output = path.join(directory, 'rendered.mp4'); await writeFile(output, Buffer.from(await video.arrayBuffer()));
@@ -76,7 +77,7 @@ try {
       body: JSON.stringify({ sourceId: source.id, settings: { ...DEFAULT_SETTINGS, trimEnd: .3, watermarkRemoval: removal } }) });
     assert.equal(again.status, 201, `${await again.clone().text()}\n${logs}`);
   } finally { clearInterval(poll); }
-  console.log(`Desktop smoke passed: bundled Node ${runtimeInfo.node}, SQLite, FFmpeg, private server, import, text, audio and automatic LaMa install/preview.`);
+  console.log(`Desktop smoke passed: bundled Node ${runtimeInfo.node}, SQLite, FFmpeg, private server, import, timed styled text, audio and automatic LaMa install/preview.`);
 } finally {
   if (child && child.exitCode === null) {
     await new Promise(resolve => {

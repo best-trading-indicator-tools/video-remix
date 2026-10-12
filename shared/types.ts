@@ -7,6 +7,7 @@ import type { EditorialReport } from "./editorial.js";
 import type { EditorialRepairLog, EditorialReviewProgress } from "./editorial-repair.js";
 import type { CaptionStyle } from "./caption-style.js";
 import type { AutoAudioMode } from "./audio.js";
+import type { TextOverlay } from "./text-overlays.js";
 import type { BlackBands } from "./black-bands.js";
 export type { CaptionStyle } from "./caption-style.js";
 export type Aspect = "original" | "9:16" | "1:1" | "4:5" | "16:9";
@@ -49,6 +50,7 @@ export interface AutoOptions extends SupportingVisualOptions {
   upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
+  textOverlays?: TextOverlay[];
   ownFootage?: OwnFootagePlacement[];
   ownFootageSourceId?: string;
   aspect: Aspect;
@@ -131,6 +133,7 @@ export interface RemixSettings extends SupportingVisualOptions {
   upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
   blackBands?: BlackBands;
+  textOverlays?: TextOverlay[];
   ownFootage?: OwnFootagePlacement[];
   ownFootageSourceId?: string;
   speed: number;
@@ -307,6 +310,7 @@ export interface EditPlan {
   narration: boolean;
 }
 export interface EditPlanChanges {
+  textOverlays?: TextOverlay[];
   ownFootage?: OwnFootagePlacement[];
   revision: number;
   refreshBroll?: boolean;

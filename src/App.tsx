@@ -114,6 +114,8 @@ import { getVisualSources, getBrollMatching, hasLibraryVisuals, hasStockVisuals,
 import { MANUAL_LOOKS, applyColorLook, activeColorLook, manualPreviewInterval, manualSequencePreview, manualCropPosition } from "../shared/manual";
 import { DEFAULT_AUDIO_SETTINGS } from "../shared/audio";
 import SoundModifiers from "./SoundModifiers";
+import TextOverlaysEditor, { TextOverlaysPreview } from "./TextOverlaysEditor";
+import { textOverlaysSchema } from "../shared/text-overlays";
 import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle } from "./BlackBandsEditor";
 import { blackBandsSchema, DEFAULT_BLACK_BANDS, applyBandFinish } from "../shared/black-bands";
 import { MAX_ANGLE_VERSIONS } from "../shared/version-angles";
@@ -150,6 +152,7 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
+      textOverlays: textOverlaysSchema.safeParse(options?.textOverlays).success ? options?.textOverlays : undefined,
       blackBands: blackBandsSchema.safeParse(options?.blackBands).success ? options?.blackBands : undefined,
       upscale: upscaleSchema.safeParse(options?.upscale).success ? options?.upscale : undefined,
       watermarkRemoval: watermarkRemovalSchema.safeParse(options?.watermarkRemoval).success ? options?.watermarkRemoval : undefined,
@@ -1223,7 +1226,7 @@ export default function App() {
   const exportSelection = useExportSelection(selectableJobs);
   const manualDefaults = { ...DEFAULT_SETTINGS,
     visualSources: [], supportingVisuals: "off", brollIds: [], brollCount: DEFAULT_BROLL_COUNT,
-    brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE, brollMatching: "tags", stockVideoType: "all", blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
+    brollMaxCoverage: DEFAULT_BROLL_MAX_COVERAGE, brollMatching: "tags", stockVideoType: "all", textOverlays: [], blackBands: DEFAULT_BLACK_BANDS, ...DEFAULT_AUDIO_SETTINGS, automaticCaptions: "off", normalizeAudio: false, autoMotion: false, qualityCleanup: false, focalPoint: { x: 0.5, y: 0.5 }, captionStyle: { fontSize: 20, bottomPercent: 100 / 12 } };
   const adjustedCount = Object.entries(manualDefaults).filter(([key, value]) =>
     JSON.stringify(settings[key as keyof RemixSettings] ?? value) !== JSON.stringify(value),
   ).length + (settings.watermarkRemoval?.enabled ? 1 : 0) + (settings.upscale && settings.upscale !== "off" ? 1 : 0);
@@ -1642,7 +1645,7 @@ export default function App() {
                   {watermark.editing ? watermark.preview : selected && liveFootage ? <FootageSequencePreview key={`${selected.id}:${mode}`}
                     source={selected} placements={activePreviewSettings.ownFootage!} settings={manualLive ? settings : undefined}
                     aspect={previewAspect} fit={previewFit} bands={liveBands} filter={previewFilter}
-                    captions={sampleCaptions} captionStyle={activePreviewSettings.captionStyle} jump={footageJump} /> : selected ? (
+                    captions={sampleCaptions} captionStyle={activePreviewSettings.captionStyle} textOverlays={activePreviewSettings.textOverlays} jump={footageJump} /> : selected ? (
                     <>
                       <div className="preview-label">
                         <span />
@@ -1690,7 +1693,7 @@ export default function App() {
                               const video = event.currentTarget;
                               setLiveOutputTime(Math.max(0, video.currentTime - liveInterval.start) / settings.speed);
                               if (video.currentTime >= liveInterval.end - 0.025 && !video.paused) { video.pause(); video.currentTime = liveInterval.end; }
-                            }
+                            } else setLiveOutputTime(event.currentTarget.currentTime);
                           }}
                           onError={() => {
                             if (usingRendered) { setShowRendered(false); setRenderedPreview(null); setManualPreviewError("This preview is no longer available. Render a fresh sample."); }
@@ -1713,6 +1716,7 @@ export default function App() {
                         )}
                         <BlackBandsOverlay value={liveBands} aspect={previewAspect} />
                         {sampleCaptions && <SampleCaptionOverlay style={activePreviewSettings.captionStyle} height={previewHeight} />}
+                        {!sourcePreview && !usingRendered && <TextOverlaysPreview items={activePreviewSettings.textOverlays} time={liveOutputTime} height={previewHeight} aspect={previewAspect} />}
                       </div>
                       <span className="preview-ratio">
                         {sourcePreview
@@ -1961,6 +1965,7 @@ export default function App() {
                     aria-labelledby={`tab-${tab}`}
                     tabIndex={0}
                   >
+                    {(tab === "essentials" || tab === "advanced" || tab === "all") && <TextOverlaysEditor value={settings.textOverlays} onChange={textOverlays => updateSettings({ textOverlays })} disabled={starting} />}
                     {(tab === "essentials" || tab === "all") && (
                       <>
                         <Section

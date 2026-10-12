@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Maximize, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import type { CaptionStyle, RemixSettings, VideoSource } from '../shared/types';
+import { TextOverlaysPreview } from "./TextOverlaysEditor";
+import type { TextOverlay } from "../shared/text-overlays";
 import type { BlackBands } from '../shared/black-bands';
 import type { OwnFootageAsset, OwnFootagePlacement } from '../shared/own-footage';
 import { buildFootagePreview, footagePreviewPosition } from '../shared/footage-preview';
@@ -15,10 +17,10 @@ import './footage-preview.css';
 export type FootagePreviewJump = { id: string; token: number };
 const clock = (value: number) => `${Math.floor(value / 60)}:${Math.floor(value % 60).toString().padStart(2, '0')}`;
 
-export default function FootageSequencePreview({ source, placements, settings, aspect, fit, bands, filter, captions, captionStyle, jump }: {
+export default function FootageSequencePreview({ source, placements, settings, aspect, fit, bands, filter, captions, captionStyle, textOverlays, jump }: {
   source: VideoSource; placements: OwnFootagePlacement[]; settings?: RemixSettings;
   aspect: number; fit: 'crop' | 'contain' | 'blur'; bands?: BlackBands; filter: string;
-  captions: boolean; captionStyle?: CaptionStyle; jump: FootagePreviewJump | null;
+  captions: boolean; captionStyle?: CaptionStyle; textOverlays?: TextOverlay[]; jump: FootagePreviewJump | null;
 }) {
   const [assets, setAssets] = useState<OwnFootageAsset[]>([]);
   const [loading, setLoading] = useState(true), [loadError, setLoadError] = useState('');
@@ -140,6 +142,7 @@ export default function FootageSequencePreview({ source, placements, settings, a
         onError={() => { stop(); setError('The browser could not play the source audio for this cover shot.'); }} />}
       {segment.kind !== 'insert' && settings?.hookText && baseTime < settings.hookDuration && <div className="hook-preview" style={bands ? { top: `${bands.topPercent + (100 - bands.topPercent - bands.bottomPercent) * 0.08}%` } : undefined}>{settings.hookText}</div>}
       <BlackBandsOverlay value={bands} aspect={aspect} />
+      <TextOverlaysPreview items={textOverlays} time={time} height={height} aspect={aspect} />
       {captions && segment.kind !== 'insert' && <SampleCaptionOverlay style={captionStyle} height={height} />}
     </div>
     <div className="footage-preview-controls">

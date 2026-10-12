@@ -521,6 +521,7 @@ export async function prepareAutoRemix({
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS,
     ...(keepOriginalAudio ? DEFAULT_AUDIO_SETTINGS : {}),
+    ...(options.textOverlays ? { textOverlays: structuredClone(options.textOverlays) } : {}),
     ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
     ...(options.watermarkRemoval ? { watermarkRemoval: structuredClone(options.watermarkRemoval) } : {}),
     ...(options.captionStyle ? { captionStyle: options.captionStyle }
@@ -546,6 +547,7 @@ export async function prepareAutoRemix({
     settings.resolution = "source";
   if (settings.hookText) changes.push(hookRewritten ? "Rewritten hook" : "Spoken hook");
   if (settings.upscale && settings.upscale !== "off") changes.push(`Local Real-ESRGAN AI upscaling to ${settings.upscale}p`);
+  if (settings.textOverlays?.some(item => item.text.trim())) changes.push("Custom timed text");
   if (settings.blackBands?.enabled) changes.push("Black bands with custom text");
   if (settings.watermarkRemoval?.enabled && settings.watermarkRemoval.masks.some(mask => mask.strokes.length)) changes.push("Watermark removal in marked source areas");
   if (settings.callouts?.length) changes.push("Key-point overlays");

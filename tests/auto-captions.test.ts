@@ -1,3 +1,4 @@
+import { newTextOverlay } from "../shared/text-overlays.js";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
@@ -121,12 +122,16 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
 
     await t.test("user-written band text survives keep-original caption mode and saved Auto plans", async () => {
       const bands = { ...DEFAULT_BLACK_BANDS, enabled: true, topText: "My own heading" };
-      const { job, result, workDir } = await prepare(clean, "keep", false, bands);
+      const textOverlays = [newTextOverlay("91ee0394-35a3-4ef3-99f7-24ad451408c2", 1, 3)];
+      const { job, result, workDir } = await prepare(clean, "keep", false, bands, { textOverlays });
+      assert.deepEqual(result.settings.textOverlays, textOverlays);
+      assert.deepEqual(job.editPlan?.settings.textOverlays, textOverlays);
       assert.deepEqual(result.settings.blackBands, bands);
       assert.deepEqual(job.editPlan?.settings.blackBands, bands);
       assert.equal(result.settings.hookText, "");
       await renderInputsFromPlan(job, workDir);
       assert.deepEqual(job.settings.blackBands, bands);
+      assert.deepEqual(job.settings.textOverlays, textOverlays);
     });
 
     await t.test("default Auto detects the original captions and saves a plan with no added text or replacement narration", async () => {

@@ -86,3 +86,5 @@
   .timeline-toolbar button span { display: none; }
   .edit-timeline h3 > span { display: block; margin: 5px 0; }
 }
+
+.lane-text .timeline-item { background: #493662; border-color: #9c79c5; }

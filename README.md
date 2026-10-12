@@ -99,6 +99,7 @@ Version counts are maximums, not a promise of that many distinct usable clips. W
 - Start with **Clean, Punch, Editorial, or Box**, then customize font, size, color, outline, shadow, alignment, spacing, and background.
 - Use bundled **TikTok Sans, Poppins, Anton, and DM Serif** fonts, including supported Cyrillic characters.
 - Highlight each word as it is spoken. Optional **Cyrillic lookalikes** apply a visual spelling effect to selected words or all added caption text; this is not translation.
+- Use **Text → Add text** in Manual or Auto All settings for independent text overlays. Set start/end seconds, position, font, color, outline, shadow and an optional background. In **Edit this result**, drag or trim text on its own timeline track.
 - Add adjustable **black bands above and below the picture**, with separate persistent text, color, size, and spelling controls for each band.
 - Keep the whole picture inside the bands or crop it to fill the available window.
 - Avoid duplicate captions with local OCR detection, keep the source's existing captions, or explicitly request new ones. Text already baked into the source cannot be restyled as an editable caption.

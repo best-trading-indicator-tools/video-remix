@@ -1,4 +1,5 @@
 import { upscaleSchema } from "../shared/upscale.js";
+import { textOverlaysSchema } from "../shared/text-overlays.js";
 import { z } from "zod";
 import { ownFootageSchema } from "../shared/own-footage.js";
 import type { CaptionCue, EditPlan, EditPlanChanges, EditSegment, Transcript } from "../shared/types.js";
@@ -33,6 +34,7 @@ const visualSchema = z.object({
 }).strict().refine(visual => visual.end - visual.start >= 0.5 - 1e-9, "Each supporting shot must last at least 0.5 seconds");
 
 export const editPlanChangesSchema = z.object({
+  textOverlays: textOverlaysSchema.optional(),
   ownFootage: ownFootageSchema.optional(),
   revision: z.number().int().nonnegative(),
   refreshBroll: z.boolean().optional(),
@@ -232,6 +234,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
       return timing ? [{ ...visual, ...timing }] : [];
     });
   }
+  if (changes.textOverlays !== undefined) next.settings.textOverlays = structuredClone(changes.textOverlays);
   if (changes.hookDuration !== undefined) next.settings.hookDuration = changes.hookDuration;
   if (changes.hookText !== undefined) next.settings.hookText = changes.hookText;
   if (changes.framing) Object.assign(next.settings, structuredClone(changes.framing));

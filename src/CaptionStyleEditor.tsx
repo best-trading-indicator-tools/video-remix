@@ -43,29 +43,29 @@ export function activeCaptionWord(text: string, start: number, end: number, time
   return active;
 }
 
-export function CaptionOverlay({ style, height, text, activeWord }: { style?: CaptionStyle; height: number; text: string; activeWord?: number }) {
+export function CaptionOverlay({ style, height, text, activeWord, placement, displayed = false }: { style?: CaptionStyle; height: number; text: string; activeWord?: number; placement?: CSSProperties; displayed?: boolean }) {
   const s = resolveCaptionStyle(style), scale = height / 288;
   const box = s.background === "box";
   const color = s.backgroundColor;
   const background = `rgba(${parseInt(color.slice(1, 3), 16)},${parseInt(color.slice(3, 5), 16)},${parseInt(color.slice(5, 7), 16)},${s.backgroundOpacity / 100})`;
   const lettering: CSSProperties = {
-    fontFamily: CAPTION_FONTS[s.fontFamily].css, fontSize: s.fontSize * scale,
+    fontFamily: placement?.fontFamily ?? CAPTION_FONTS[s.fontFamily].css, fontSize: s.fontSize * scale,
     fontWeight: s.bold ? 700 : 400, fontStyle: s.italic ? "italic" : "normal",
     color: s.color, letterSpacing: s.letterSpacing * scale,
-    WebkitTextStroke: !box && s.outlineWidth ? `${s.outlineWidth * scale}px ${s.outlineColor}` : undefined,
+    WebkitTextStroke: !box && s.outlineWidth ? `${s.outlineWidth * scale * (placement ? 2 : 1)}px ${s.outlineColor}` : undefined,
     textShadow: s.shadow ? `${s.shadow * scale}px ${s.shadow * scale}px 0 #000` : "none",
     ...(box ? { backgroundColor: background, padding: `${3 * scale}px`, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" } : {}),
   };
-  const shown = captionDisplayText(text, s);
+  const shown = displayed ? text : captionDisplayText(text, s);
   let index = 0;
   const words = s.wordHighlight && activeWord !== undefined ? captionLines(shown).map((row, rowIndex) => <Fragment key={rowIndex}>
     {rowIndex > 0 && "\n"}{row.map((word, wordIndex) => { const current = index++; return <Fragment key={wordIndex}>{wordIndex > 0 && " "}
       {current === activeWord ? <span className="caption-word-active" style={{ color: s.highlightColor }}>{word}</span> : word}</Fragment>; })}
   </Fragment>) : shown;
-  return <div className="caption-overlay" style={{ bottom: `${s.bottomPercent}%`, textAlign: s.alignment }}><span style={lettering}>{words}</span></div>;
+  return <div className="caption-overlay" style={{ bottom: `${s.bottomPercent}%`, textAlign: s.alignment, ...placement }}><span style={lettering}>{words}</span></div>;
 }
 
-function NumberControl({ label, value, min, max, step = 1, suffix, onChange }: {
+export function NumberControl({ label, value, min, max, step = 1, suffix, onChange }: {
   label: string; value: number; min: number; max: number; step?: number; suffix?: string; onChange: (value: number) => void;
 }) {
   const [input, setInput] = useState(String(Number(value.toFixed(2))));
@@ -102,7 +102,7 @@ export function SampleCaptionOverlay({ style, height, sample = "Caption style pr
 }
 
 const parseSpellingWords = (text: string) => [...new Set(text.split(/[,\n]/u).map(word => word.trim()).filter(Boolean))];
-function CyrillicControl({ style, onChange, sample }: { style: Required<CaptionStyle>; onChange: (change: Partial<CaptionStyle>) => void; sample: string }) {
+function CyrillicControl({ style, onChange, sample, textMode = false }: { style: Required<CaptionStyle>; onChange: (change: Partial<CaptionStyle>) => void; sample: string; textMode?: boolean }) {
   const savedWords = style.cyrillicWords.join("\n");
   const [input, setInput] = useState(savedWords);
   // Keep separators while typing, but follow a different video's settings or a preset.
@@ -114,11 +114,11 @@ function CyrillicControl({ style, onChange, sample }: { style: Required<CaptionS
       <select value={style.cyrillicMode} onChange={event => onChange({ cyrillicMode: event.target.value as CaptionStyle["cyrillicMode"] })}>
         <option value="off">Off · original spelling</option>
         <option value="words">Only listed words</option>
-        <option value="all">All caption text</option>
+        <option value="all">{textMode ? "All this text" : "All caption text"}</option>
       </select>
     </label>
     {style.cyrillicMode !== "off" && <>
-      <p className="caption-style-note">Swaps similar-looking Latin letters for Cyrillic characters. This does not translate the text. Original captions and speech timings stay saved.</p>
+      <p className="caption-style-note">Swaps similar-looking Latin letters for Cyrillic characters. This does not translate the text. {textMode ? "Your typed text stays editable." : "Original captions and speech timings stay saved."}</p>
       {style.cyrillicMode === "words" && <>
         <label className="caption-field">Words to change
           <textarea value={input} rows={3} maxLength={4050} placeholder={"Sample-12\nExample phrase"} spellCheck={false} aria-invalid={!valid} onChange={event => {
@@ -142,20 +142,20 @@ function CyrillicControl({ style, onChange, sample }: { style: Required<CaptionS
   </div>;
 }
 
-export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true, showPreview = true }: {
-  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean; showPreview?: boolean;
+export default function CaptionStyleEditor({ value, onChange, sample = "Make every word count.", showHighlight = true, showPreview = true, textMode = false }: {
+  value?: CaptionStyle; onChange: (style: CaptionStyle) => void; sample?: string; showHighlight?: boolean; showPreview?: boolean; textMode?: boolean;
 }) {
   const s = resolveCaptionStyle(value);
   const patch = (change: Partial<CaptionStyle>) => onChange({ ...s, ...change });
-  return <section className="caption-styler" aria-label="Caption styling">
-    <header><div><h4>Caption look</h4><p>One style for all added captions.</p></div>
-      <button type="button" className="caption-reset" aria-label="Reset caption style" onClick={() => onChange({ ...DEFAULT_CAPTION_STYLE })}><RotateCcw size={14} />Reset</button></header>
+  return <section className="caption-styler" aria-label={textMode ? "Text styling" : "Caption styling"}>
+    <header><div><h4>{textMode ? "Text look" : "Caption look"}</h4><p>{textMode ? "Style this text independently." : "One style for all added captions."}</p></div>
+      <button type="button" className="caption-reset" aria-label={textMode ? "Reset text style" : "Reset caption style"} onClick={() => onChange({ ...DEFAULT_CAPTION_STYLE, ...(textMode ? { bottomPercent: s.bottomPercent, fontFamily: "poppins" } : {}) })}><RotateCcw size={14} />Reset</button></header>
     {showHighlight && <WordHighlightToggle value={value} onChange={onChange} />}
-    <div className="caption-looks" role="group" aria-label="Caption look presets">
+    <div className="caption-looks" role="group" aria-label={textMode ? "Text look presets" : "Caption look presets"}>
       {CAPTION_PRESETS.map(preset => {
         const selected = Object.entries(preset.style).every(([key, v]) => s[key as keyof CaptionStyle] === v);
         return <button type="button" key={preset.id} aria-pressed={selected} title={preset.description}
-          onClick={() => onChange({ ...s, ...preset.style })}>
+          onClick={() => onChange({ ...s, ...preset.style, ...(textMode ? { bottomPercent: s.bottomPercent } : {}) })}>
           <span className={`caption-look-sample look-${preset.id}`} style={{ fontFamily: CAPTION_FONTS[preset.style.fontFamily!].css, color: preset.style.color }}>Aa</span>
           <span>{preset.name}{selected && <Check size={12} />}</span>
         </button>;
@@ -167,15 +167,15 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
     </div>}
     <div className="caption-style-grid">
       <label className="caption-field">Font family<select value={s.fontFamily} onChange={event => patch({ fontFamily: event.target.value as CaptionStyle["fontFamily"] })}>
-        {Object.entries(CAPTION_FONTS).map(([id, font]) => <option key={id} value={id}>{font.label}</option>)}
+        {Object.entries(CAPTION_FONTS).filter(([id]) => !textMode || id !== "classic").map(([id, font]) => <option key={id} value={id}>{font.label}</option>)}
       </select></label>
       <ColorControl label="Text color" value={s.color} onChange={color => patch({ color })} />
     </div>
-    <div className="caption-emphasis" role="group" aria-label="Caption emphasis">
+    <div className="caption-emphasis" role="group" aria-label={textMode ? "Text emphasis" : "Caption emphasis"}>
       {([['bold', 'Bold'], ['italic', 'Italic'], ['uppercase', 'ALL CAPS']] as const).map(([key, name]) => <button type="button" key={key} aria-pressed={s[key]} onClick={() => patch({ [key]: !s[key] })}>{name}</button>)}
     </div>
-    <CyrillicControl style={s} onChange={patch} sample={sample} />
-    <NumberControl label="Caption font size" value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
+    <CyrillicControl style={s} onChange={patch} sample={sample} textMode={textMode} />
+    <NumberControl label={textMode ? "Text font size" : "Caption font size"} value={s.fontSize} min={12} max={40} onChange={fontSize => patch({ fontSize })} />
     <p className="caption-style-note">Size scales with your export resolution.</p>
     <details className="caption-more"><summary>Outline, background &amp; placement</summary>
       <div className="caption-style-grid">
@@ -192,7 +192,7 @@ export default function CaptionStyleEditor({ value, onChange, sample = "Make eve
       </>}
       <NumberControl label="Shadow" value={s.shadow} min={0} max={5} step={0.1} onChange={shadow => patch({ shadow })} />
       <NumberControl label="Letter spacing" value={s.letterSpacing} min={0} max={4} step={0.1} onChange={letterSpacing => patch({ letterSpacing })} />
-      <NumberControl label="Distance from bottom" value={s.bottomPercent} min={5} max={80} step={0.1} suffix="%" onChange={bottomPercent => patch({ bottomPercent })} />
+      {!textMode && <NumberControl label="Distance from bottom" value={s.bottomPercent} min={5} max={80} step={0.1} suffix="%" onChange={bottomPercent => patch({ bottomPercent })} />}
     </details>
   </section>;
 }

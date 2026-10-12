@@ -240,9 +240,10 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
       selection: media.selection, stock: media.stock, graphicScene: media.graphicScene, reason: item.reason, visualSource: media.visualSource };
   });
   if (job.summary) {
-    const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays/iu.test(change));
+    const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays|Custom timed text/iu.test(change));
     const broll = job.supportingVisuals.filter(item => item.kind === "broll").length;
     const cards = job.supportingVisuals.filter(item => item.kind === "graphic").length;
+    if (plan.settings.textOverlays?.some(item => item.text.trim())) changes.push("Custom timed text");
     if (plan.settings.hookText) changes.push("Edited opening hook");
     if (plan.captions.length) changes.push("Saved captions");
     else if (job.notes?.some(note => /^Captions already visible in the source were kept/u.test(note))) changes.push("Existing captions kept");

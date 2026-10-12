@@ -1,7 +1,8 @@
 {
-  "version": "1.6.0-preview.1",
+  "version": "1.7.0-preview.1",
   "notes": [
-    "Source installs now prepare private Python automatically during npm install or npm ci, with no separate Python or uv installation.",
-    "Local tool setup reuses private Python, supports offline repeat installs, and offers a retry command when the download cannot finish."
+    "Add text over your video with start and end times, position, fonts, colors and optional backgrounds.",
+    "Style each text independently from speech captions and black bands in Auto, Manual and Edit this result.",
+    "Drag and trim text on its own timeline track, with saved drafts, Undo and timing across added clips."
   ]
 }

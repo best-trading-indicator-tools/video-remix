@@ -18,6 +18,7 @@ import { AlertTriangle, ArrowRight, Check, Film, LoaderCircle, LockKeyhole, Lock
 import type { EditPlan, EditPlanChanges, EditPlanVisual, FocalPoint, QualityReport, RenderJob, RemixSettings } from "../shared/types";
 import { DEFAULT_BROLL_COUNT, DEFAULT_BROLL_MAX_COVERAGE, MAX_BROLL_COUNT } from "../shared/types";
 import { textLayoutIssues } from "../shared/framing";
+import TextOverlaysEditor from "./TextOverlaysEditor";
 import BlackBandsEditor, { BlackBandsOverlay, bandVideoStyle } from "./BlackBandsEditor";
 import type { BlackBands } from "../shared/black-bands";
 import { withTrackBounds } from "../shared/focus";
@@ -44,6 +45,7 @@ function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: bool
     if (anchor?.changes.preserveBroll) changes.preserveBroll = true;
   }
   if (differs(plan.settings.ownFootage, draft.settings.ownFootage)) changes.ownFootage = draft.settings.ownFootage || [];
+  if (differs(plan.settings.textOverlays, draft.settings.textOverlays)) changes.textOverlays = draft.settings.textOverlays || [];
   if (plan.settings.hookDuration !== draft.settings.hookDuration) changes.hookDuration = draft.settings.hookDuration;
   if (plan.settings.hookText !== draft.settings.hookText) changes.hookText = draft.settings.hookText;
   if (differs(plan.cuts, draft.cuts)) changes.cuts = draft.cuts;
@@ -559,6 +561,7 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                   {!!layoutIssues.length && <div className="edit-layout-issues" role="status"><strong><AlertTriangle size={14} />Text placement to review</strong><ul>{layoutIssues.map((issue, index) => <li key={`${issue.code}-${index}`}>{issue.message}</li>)}</ul></div>}
                 </fieldset>
               </details>
+              <TextOverlaysEditor value={draft.settings.textOverlays} onChange={textOverlays => setDraft({ ...draft, settings: { ...draft.settings, textOverlays } })} duration={timelineDuration} currentTime={reviewTime} onSeek={seekTimeline} disabled={saving || timelineBusy} />
               <details className="edit-plan-section"><summary>Opening title</summary><fieldset disabled={saving}>
                 <legend className="visually-hidden">Opening hook</legend>
                 <label className="edit-plan-field">Text shown at the start

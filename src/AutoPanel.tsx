@@ -24,6 +24,7 @@ import { MAX_AUTO_VERSIONS, isAutoTargetDuration } from "../shared/types";
 import { ANGLE_NAMES, MAX_ANGLE_VERSIONS, VERSION_ANGLES } from "../shared/version-angles";
 import { AUDIO_LOOKS, audioLookById, isAutoAudioNone } from "../shared/audio";
 import FinishingPresets from "./FinishingPresets";
+import TextOverlaysEditor from "./TextOverlaysEditor";
 import BlackBandsEditor from "./BlackBandsEditor";
 import { applyBandFinish } from "../shared/black-bands";
 import PacingOptions from "./PacingOptions";
@@ -212,6 +213,7 @@ export default function AutoPanel({
           </label>
           <BlackBandsEditor value={options.blackBands} onChange={blackBands => onChange({ ...options, blackBands })} />
         </section>
+        <TextOverlaysEditor value={options.textOverlays} onChange={textOverlays => onChange({ ...options, textOverlays })} disabled={libraryBusy} />
         <UpscaleControl value={options.upscale} onChange={upscale => onChange({ ...options, upscale })} />
         {watermarkControls}
         <OwnFootagePanel key={selectedId || "default"} value={footageValue} scopeDescription={footageScope} onChange={onFootageChange} disabled={footageDisabled || !selectedId}

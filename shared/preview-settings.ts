@@ -10,6 +10,6 @@ export function autoPicturePreview(options: AutoOptions, source?: { width: numbe
     fit: options.blackBands?.enabled ? options.blackBands.fit : Math.abs(sourceAspect - aspect) > 0.12 ? "blur" : "crop",
     upscale: options.upscale, watermarkRemoval: options.watermarkRemoval,
     blackBands: options.blackBands, ownFootage: options.ownFootage, ownFootageSourceId: options.ownFootageSourceId,
-    captionStyle: options.captionStyle,
+    captionStyle: options.captionStyle, textOverlays: options.textOverlays,
   };
 }

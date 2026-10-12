@@ -1,0 +1,28 @@
+.text-editor { min-width: 0; padding: 18px 0; }
+.text-editor h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 15px; }
+.text-editor header p, .text-editor-note { font-size: 12px; line-height: 1.6; color: var(--subtle, #a5a5ae); }
+.text-editor fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+.text-editor-item { border: 1px solid var(--line, #36373d); padding: 14px; border-radius: 9px; margin: 12px 0; }
+.text-editor-item > summary { font-weight: 600; cursor: pointer; margin-bottom: 12px; }
+.text-editor-item > summary span { color: var(--subtle, #a5a5ae); font-size: 11px; font-weight: 400; margin-left: 10px; }
+.text-editor-item > label, .text-editor-times label { display: grid; gap: 7px; font-size: 12px; min-width: 0; }
+.text-editor-item > label textarea, .text-editor-times input { width: 100%; box-sizing: border-box; min-width: 0; padding: 10px; border: 1px solid var(--line, #36373d); border-radius: 6px; background: var(--surface, #15161b); color: inherit; font: inherit; }
+.text-editor-item textarea { resize: vertical; }
+.text-editor-times { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; }
+.text-editor-actions, .text-position-presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.text-editor-appearance > summary { cursor: pointer; padding: 10px 0; font-size: 13px; }
+.text-editor .caption-styler { margin-bottom: 0; }
+.text-editor .caption-number input[type="number"] { min-width: 0; width: 100%; color: inherit; background: var(--surface, #15161b); border: 1px solid var(--line, #36373d); border-radius: 6px; padding: 8px; }
+.text-editor-add { margin-top: 6px; }
+
+@font-face { font-family: "Overlay Poppins"; src: url("/caption-fonts/Poppins-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; ascent-override: 113.5%; descent-override: 62.7%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay Poppins"; src: url("/caption-fonts/Poppins-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; ascent-override: 113.5%; descent-override: 62.7%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay Poppins"; src: url("/caption-fonts/Poppins-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; ascent-override: 113.5%; descent-override: 62.7%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay Poppins"; src: url("/caption-fonts/Poppins-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; ascent-override: 113.5%; descent-override: 62.7%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay Anton"; src: url("/caption-fonts/Anton-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; ascent-override: 140.43%; descent-override: 32.9102%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; ascent-override: 111.8%; descent-override: 24.2%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-Bold.ttf") format("truetype"); font-weight: 700; font-style: normal; font-display: swap; ascent-override: 111.8%; descent-override: 24.2%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-RegularItalic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; ascent-override: 111.8%; descent-override: 24.2%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay TikTok Sans"; src: url("/caption-fonts/TikTokSans16pt-BoldItalic.ttf") format("truetype"); font-weight: 700; font-style: italic; font-display: swap; ascent-override: 111.8%; descent-override: 24.2%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay Serif"; src: url("/caption-fonts/DMSerifDisplay-Regular.ttf") format("truetype"); font-weight: 400; font-style: normal; font-display: swap; ascent-override: 103.6%; descent-override: 33.5%; line-gap-override: 0%; }
+@font-face { font-family: "Overlay Serif"; src: url("/caption-fonts/DMSerifDisplay-Italic.ttf") format("truetype"); font-weight: 400; font-style: italic; font-display: swap; ascent-override: 103.6%; descent-override: 33.5%; line-gap-override: 0%; }

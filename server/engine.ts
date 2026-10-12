@@ -17,6 +17,8 @@ import { fileURLToPath } from "node:url";
 import { captionStyleSchema, captionAssStyle } from "../shared/caption-style.js";
 import { captionDisplayText } from "../shared/caption-text.js";
 import { captionsAss, parseCanonicalSrt } from "./caption-ass.js";
+import { textOverlaysSchema } from "../shared/text-overlays.js";
+import { textOverlaysAss } from "./text-overlays.js";
 import { blackBandsSchema, blackBandGeometry, bandTextAppearance, bandTextLayout } from "../shared/black-bands.js";
 import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
 import { watermarkFilters } from "./watermark-removal.js";
@@ -348,6 +350,7 @@ export async function createThumbnail(
 }
 
 function validateSettings(settings: RemixSettings): void {
+  textOverlaysSchema.parse(settings.textOverlays ?? []);
   const ranges: [keyof RemixSettings, number, number][] = [
     ["speed", 0.5, 2],
     ["volume", 0, 3],
@@ -957,6 +960,14 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     if (options.subtitlePath) {
       const subtitle = await subtitleFilter(options.subtitlePath, s.captionStyle, workDir, temporary, options.captionWords);
       (s.blackBands?.enabled ? decorations : filters).push(subtitle);
+    }
+    if (s.textOverlays?.some(item => item.text.trim() && item.start < exportDuration)) {
+      const filename = `text-${randomUUID()}.ass`;
+      const filePath = path.join(workDir, filename);
+      temporary.push(filePath);
+      await writeFile(filePath, textOverlaysAss(s.textOverlays, canvas.width, canvas.height, exportDuration), "utf8");
+      const fonts = await prepareCaptionFonts(workDir, temporary);
+      decorations.push(`subtitles=filename=${filename}:fontsdir=${fonts}:charenc=UTF-8`);
     }
     if (!footageTimes.inserts.length) filters.push(...decorations);
     const args = [

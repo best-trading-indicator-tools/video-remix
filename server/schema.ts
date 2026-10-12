@@ -17,6 +17,7 @@ export const focusPointsWithinCut = (cut: { start: number; end: number; focusTra
 export const focusPointsWithinBudget = (cuts: { focusTrack?: unknown[] }[]) => cuts.reduce((sum, cut) => sum + (cut.focusTrack?.length ?? 0), 0) <= MAX_FOCUS_POINTS_TOTAL;
 export { captionStyleSchema } from "../shared/caption-style.js";
 import { captionStyleSchema } from "../shared/caption-style.js";
+import { textOverlaysSchema } from "../shared/text-overlays.js";
 import { blackBandsSchema } from "../shared/black-bands.js";
 import { watermarkRemovalSchema } from "../shared/watermark-removal.js";
 const supportingVisualShape = {
@@ -34,6 +35,7 @@ export const settingsSchema = z
     upscale: upscaleSchema.optional(),
     ...supportingVisualShape,
     blackBands: blackBandsSchema.optional(),
+    textOverlays: textOverlaysSchema.optional(),
     watermarkRemoval: watermarkRemovalSchema.optional(),
     ownFootage: ownFootageSchema.optional(),
     ownFootageSourceId: z.uuid().optional(),
@@ -145,6 +147,7 @@ export const autoOptionsObject = z
     upscale: upscaleSchema.optional(),
     watermarkRemoval: watermarkRemovalSchema.optional(),
     blackBands: blackBandsSchema.optional(),
+    textOverlays: textOverlaysSchema.optional(),
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]).default("9:16"),
     targetDuration: z.number().int().min(1).default(45),
     durationMode: z.enum(["full", "excerpt"]).optional(),
