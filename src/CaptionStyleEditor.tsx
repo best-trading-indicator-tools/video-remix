@@ -43,7 +43,7 @@ export function activeCaptionWord(text: string, start: number, end: number, time
   return active;
 }
 
-export function CaptionOverlay({ style, height, text, activeWord, placement, displayed = false }: { style?: CaptionStyle; height: number; text: string; activeWord?: number; placement?: CSSProperties; displayed?: boolean }) {
+export function CaptionOverlay({ style, height, text, activeWord, placement, displayed = false, blockBackground = false }: { style?: CaptionStyle; height: number; text: string; activeWord?: number; placement?: CSSProperties; displayed?: boolean; blockBackground?: boolean }) {
   const s = resolveCaptionStyle(style), scale = height / 288;
   const box = s.background === "box";
   const color = s.backgroundColor;
@@ -54,7 +54,11 @@ export function CaptionOverlay({ style, height, text, activeWord, placement, dis
     color: s.color, letterSpacing: s.letterSpacing * scale,
     WebkitTextStroke: !box && s.outlineWidth ? `${s.outlineWidth * scale * (placement ? 2 : 1)}px ${s.outlineColor}` : undefined,
     textShadow: s.shadow ? `${s.shadow * scale}px ${s.shadow * scale}px 0 #000` : "none",
-    ...(box ? { backgroundColor: background, padding: `${3 * scale}px`, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" } : {}),
+    ...(box ? blockBackground
+      // A single shrink-to-fit block covers every line. Spread adds padding
+      // outside the line boxes without moving the text or its drag anchor.
+      ? { display: "inline-block", verticalAlign: "top", backgroundColor: background, boxShadow: `0 0 0 ${3 * scale}px ${background}` }
+      : { backgroundColor: background, padding: `${3 * scale}px`, boxDecorationBreak: "clone", WebkitBoxDecorationBreak: "clone" } : {}),
   };
   const shown = displayed ? text : captionDisplayText(text, s);
   let index = 0;

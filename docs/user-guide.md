@@ -270,6 +270,7 @@ distance from the bottom, text width, and the same font, color, size, emphasis,
 outline, shadow, spacing and background controls as captions. Each text has its
 own style. **Background** sits alongside the font and text color: choose **None**
 for plain text or **Solid box** to show **Background color** and **Background opacity**.
+The box covers the whole text block with one rectangle, including wrapped lines.
 Use the color picker or enter a hex color. Speech-caption styling stays separate.
 
 In the **Live preview**, drag a visible text item to move it, or double-click it

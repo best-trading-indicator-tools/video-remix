@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { randomUUID } from "node:crypto";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { moveTextOverlay, newTextOverlay, textOverlaysSchema, TEXT_FONT_METRICS } from "../shared/text-overlays.js";
@@ -66,6 +66,47 @@ test("text rejects invalid timing, duplicate identities, control characters and 
   assert.ok(ass.includes("Literal\\\u200bN"));
   assert.ok(ass.includes("Next line"));
   assert.ok(ass.includes("0:00:02.00"), "Text clips at the actual output end");
+});
+
+test("multiline text backgrounds render as one uniformly translucent rectangle without moving the lettering", { timeout: 30000 }, async () => {
+  const exec = promisify(execFile), dir = await mkdtemp(path.join(tmpdir(), "text-background-"));
+  const width = 640, height = 360;
+  const frame = async (item: ReturnType<typeof newTextOverlay>) => {
+    const ass = path.join(dir, "text.ass");
+    await writeFile(ass, textOverlaysAss([item], width, height, 1));
+    return (await exec("ffmpeg", ["-v", "error", "-nostdin", "-f", "lavfi", "-i", `color=black:s=${width}x${height}:r=1:d=1`,
+      "-vf", "format=rgb24,subtitles=filename=text.ass:fontsdir=fonts", "-frames:v", "1", "-f", "rawvideo", "-pix_fmt", "rgb24", "pipe:1"],
+    { cwd: dir, encoding: "buffer", maxBuffer: 4 * 1024 * 1024 })).stdout;
+  };
+  try {
+    await cp(new URL("../public/caption-fonts", import.meta.url), path.join(dir, "fonts"), { recursive: true });
+    for (const [fontFamily, alignment, opacity] of [["poppins", "center", 80], ["anton", "left", 40], ["serif", "right", 80], ["tiktok-sans", "center", 100]] as const) {
+      const item = newTextOverlay(randomUUID()); item.text = "I\nWider text";
+      item.style = { ...item.style, fontFamily, alignment, italic: fontFamily === "serif", background: "box", backgroundColor: "#0000ff", backgroundOpacity: opacity, outlineWidth: 0 };
+      const pixels = await frame(item);
+      let left = width, right = -1, top = height, bottom = -1;
+      const white: number[] = [];
+      for (let i = 0; i < pixels.length; i += 3) {
+        const [r, g, b] = [pixels[i]!, pixels[i + 1]!, pixels[i + 2]!], x = i / 3 % width, y = Math.floor(i / 3 / width);
+        if (b > 70 && r < 20 && g < 20) { left = Math.min(left, x); right = Math.max(right, x); top = Math.min(top, y); bottom = Math.max(bottom, y); }
+        if (Math.min(r, g, b) > 245) white.push(i);
+      }
+      assert.ok(right - left > 70 && bottom - top > 40, `${fontFamily}: background covers both unequal lines`);
+      for (let y = top + 2; y <= bottom - 2; y++) for (const x of [left + 2, right - 2]) {
+        const i = (y * width + x) * 3;
+        // Italic strokes can reach into the padding; account for their white fill.
+        const expectedBlue = pixels[i]! + (255 - pixels[i]!) * opacity / 100;
+        assert.ok(Math.abs(pixels[i]! - pixels[i + 1]!) < 2 && Math.abs(pixels[i + 2]! - expectedBlue) < 4,
+          `${fontFamily}: continuous rectangle with uniform opacity at ${x},${y}`);
+      }
+      const plain = await frame({ ...item, style: { ...item.style, background: "none" } });
+      const plainWhite = Array.from({ length: width * height }, (_, pixel) => pixel * 3).filter(i => Math.min(plain[i]!, plain[i + 1]!, plain[i + 2]!) > 245);
+      assert.ok(white.length > 30);
+      assert.deepEqual(white, plainWhite, `${fontFamily}: adding a box preserves glyph positions`);
+      const transparent = await frame({ ...item, style: { ...item.style, backgroundOpacity: 0 } });
+      assert.deepEqual(transparent, plain, `${fontFamily}: zero opacity leaves no background`);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
 test("export pixels honor independent text styles and output timing across a sped-up source and appended clip", { timeout: 60000 }, async () => {

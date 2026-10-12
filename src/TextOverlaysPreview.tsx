@@ -50,7 +50,7 @@ function CanvasText({ item, index, height, aspect, onCommit, onInteract }: {
     if (Math.hypot(dx, dy) >= 3) current.moved = true;
     return moveTextOverlay(current.from, dx, dy, current.width, current.height);
   };
-  const lettering = <CaptionOverlay style={{ ...shown.style, wordHighlight: false }} height={height} text={layout.text} displayed
+  const lettering = <CaptionOverlay style={{ ...shown.style, wordHighlight: false }} height={height} text={layout.text} displayed blockBackground
     placement={{ ...placement, ...(onCommit ? { position: "relative", left: 0, bottom: 0, width: "100%" } : { zIndex: 4 }) }} />;
   if (!onCommit) return lettering;
   return <div ref={root} className={`canvas-text-object${selected ? " is-selected" : ""}${position ? " is-dragging" : ""}${isEditing ? " is-editing" : ""}`}
