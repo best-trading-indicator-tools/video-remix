@@ -81,3 +81,5 @@
 .caption-highlight-toggle strong { font-size: 13px; font-weight: 650; line-height: 1.4; }
 .caption-highlight-toggle small { font-size: 12px; line-height: 1.4; color: var(--subtle); }
 .caption-highlight .caption-color input[type="text"] { width: 100%; min-width: 0; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 7px; font-size: 13px; }
+.caption-preview-toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--subtle); font-size: 12px; cursor: pointer; }
+.caption-preview-toggle input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }

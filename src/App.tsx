@@ -452,6 +452,7 @@ export default function App() {
   const [publishing, setPublishing] = useState<{ job: RenderJob | null } | null>(null);
   const [editingIssue, setEditingIssue] = useState<FinishedIssue>();
   const [original, setOriginal] = useState(false);
+  const [showCaptionSample, setShowCaptionSample] = useState(false);
   const [footageJump, setFootageJump] = useState<FootagePreviewJump | null>(null);
   const [renderedPreview, setRenderedPreview] = useState<{ id: string; url: string; duration: number; signature: string } | null>(null);
   const [showRendered, setShowRendered] = useState(false);
@@ -550,8 +551,10 @@ export default function App() {
   const usingRendered = !original && showRendered && previewCurrent;
   const manualLive = mode === "manual" && !sourcePreview && !usingRendered;
   const liveFootage = !sourcePreview && !usingRendered && !!activePreviewSettings.ownFootage?.length;
-  const livePreviewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: activePreviewSettings });
-  useEffect(() => setFootageJump(null), [selected?.id, mode, view]);
+  // Watermark changes have their own editor and rendered preview. Keep the user's
+  // Original/Live choice when entering or leaving that editor.
+  const livePreviewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: { ...activePreviewSettings, watermarkRemoval: undefined } });
+  useEffect(() => { setFootageJump(null); setShowCaptionSample(false); }, [selected?.id, mode, view]);
   useEffect(() => {
     setOriginal(false);
     setShowRendered(false);
@@ -1240,9 +1243,10 @@ export default function App() {
     : Number(activePreviewSettings.aspect.split(":")[0]) / Number(activePreviewSettings.aspect.split(":")[1]);
   const previewFit = sourcePreview || usingRendered ? "contain" : liveBands?.fit
     ?? (mode === "auto" ? (Math.abs(sourceAspect - previewAspect) > 0.12 ? "blur" : "crop") : settings.fit);
-  const sampleCaptions = !sourcePreview && !usingRendered && (mode === "auto"
+  const canPreviewCaptions = mode === "auto"
     ? autoOptions.captions !== "keep"
-    : !!settings.subtitleId || (!!settings.automaticCaptions && settings.automaticCaptions !== "off"));
+    : !!settings.subtitleId || (!!settings.automaticCaptions && settings.automaticCaptions !== "off");
+  const sampleCaptions = showCaptionSample && !sourcePreview && !usingRendered && canPreviewCaptions;
   const exportCount =
     mode === "auto"
       ? workingTargets.reduce((total, source) => total + (autoById[source.id] || defaultAuto).variants, 0)
@@ -1790,6 +1794,10 @@ export default function App() {
                         <strong title={selected.name}>{selected.name}</strong>
                         <span>{duration(selected.duration)}</span>
                       </div>
+                      {!watermark.editing && !sourcePreview && !usingRendered && canPreviewCaptions && <label className="caption-preview-toggle">
+                        <input type="checkbox" checked={showCaptionSample} onChange={event => setShowCaptionSample(event.target.checked)} />
+                        Show caption style sample
+                      </label>}
                       <div className="preview-note">
                         <CircleHelp size={12} />
                         <span>
@@ -1805,7 +1813,7 @@ export default function App() {
                             ? "Live format, black bands and text. Auto cuts, generated captions and sound are ready after export."
                             : sequencePreview ? "Live shows the first cut. Render a sample to review the sequence with your effects, text and audio."
                             : "Live framing, black bands, text and basic color. Render a short sample to see every effect and hear the final sound."}
-                          {!watermark.editing && sampleCaptions && " Sample caption text shows the selected style and placement."}
+                          {!watermark.editing && sampleCaptions && " Sample caption text shows the selected style and placement. It is never exported."}
                           {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Open watermark editor, then Preview removal to check it."}
                         </span>
                       </div>

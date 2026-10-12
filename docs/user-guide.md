@@ -240,6 +240,11 @@ and explains the result. Install the matching Tesseract language data for footag
 in languages other than English. Results are cached by source, selected cuts and
 transcript in `data/analysis/source-captions`.
 
+The main Live preview shows a caption-style sample only when you enable
+**Show caption style sample** below the picture. This sample is never exported;
+switching videos or workspaces turns it off. Watermark edits do not enable it or
+switch your Original preview to Live.
+
 For an earlier double-caption export, open **Edit this result → Captions → Remove
 added captions**, then render the revision. This removes only the app's added
 captions; text baked into the source remains. The saved decision survives later
