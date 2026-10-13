@@ -293,6 +293,9 @@ animation and **Bulk caption corrections** directly in the batch workflow. Choos
 **This video**, **Checked videos** or **All videos** before making changes. A caption
 appearance change preserves each target's other caption settings; for example,
 changing animation preserves different fonts and positions across the selection.
+**Keep original · add none** hides caption appearance, animation and correction
+controls. In Manual, those controls appear when automatic captions are enabled or
+an SRT is attached. Your saved caption styling is retained when the controls hide.
 
 Choose **None, Fade, Pop, Slide up, Typewriter, or Word by word**. Fade, Pop and Slide
 up have an adjustable 0.1–1 second entrance/exit duration, shortened to fit brief
@@ -322,13 +325,16 @@ with ACME in all captions.” Review the proposed changes before applying them.
 Titles and correction rules also survive a proposed switch between Auto and Manual.
 All these edits are available through MCP, including selected-video batches.
 
-**Text → Ready-made titles** offers Bold hook, Editorial, Lower third and Announcement.
+**Titles & custom text → Ready-made titles** offers Bold hook, Editorial, Lower third and Announcement.
 Choose a design, enter **Title words**, and click **Add title**. The title starts at
 0 seconds and normally lasts three seconds. Each design supplies a font, placement,
 color and animation that you can customize. Quick mode applies it to the working
 selection and keeps its detailed appearance controls collapsed until needed.
+In Quick, the separate **Titles & custom text** section starts collapsed when no
+text has been added. Open it to add optional titles, independently of speech captions.
+Existing custom text stays available when you choose to keep original captions.
 
-Open **Text → Add text** in Manual (Essentials, Advanced or All controls),
+Open **Titles & custom text → Add text** in Manual (Essentials, Advanced or All controls),
 Auto **Quick setup** or **All settings**, or **Edit this result**. Enter your words and set Start and
 End in seconds. Text appears directly over the picture without adding black bands.
 

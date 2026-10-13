@@ -25,7 +25,9 @@ export default function TextOverlaysEditor({ value = [], onChange, duration, cur
   const [title, setTitle] = useState(''), [design, setDesign] = useState<typeof TITLE_DESIGNS[number]['id']>('bold');
   const update = (id: string, patch: Partial<TextOverlay>) => onChange(value.map(item => item.id === id ? { ...item, ...patch } : item));
   return <section className="text-editor" aria-label="Text overlays">
-    <header><div><h3><Type size={17} />Text</h3><p>Add words directly over the video, with or without black bands.</p></div></header>
+    <details className="text-editor-disclosure" open={!compact || value.length > 0}>
+      <summary><span className="text-editor-heading"><Type size={17} />Titles &amp; custom text</span><span className="text-editor-count">{value.length ? `${value.length} added` : "Optional"}</span></summary>
+    <p className="text-editor-note">Add your own titles and words, separately from speech captions.</p>
     {scopeDescription && <p className="text-editor-note">{scopeDescription}. Text edits copy all words, timings and styles shown here to this selection.</p>}
     <fieldset disabled={disabled}>
       <details className="title-composer" open={!value.length}><summary>Ready-made titles</summary>
@@ -71,5 +73,6 @@ export default function TextOverlaysEditor({ value = [], onChange, duration, cur
       }}><Plus size={15} />Add text</button>
       <p className="text-editor-note">Drag text in the preview to move it; select it and drag the corner to resize. Times follow the finished video, including added clips, and stay fixed when cuts change.</p>
     </fieldset>
+    </details>
   </section>;
 }

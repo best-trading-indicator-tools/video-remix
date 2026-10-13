@@ -2510,8 +2510,10 @@ export default function App() {
                             edited video.
                           </p>
                           </>}
-                          <CaptionAppearance value={settings.captionStyle} showPreview={false} onChange={captionStyle => updateSettings({ captionStyle })} />
-                          <CaptionCorrectionsEditor value={settings.captionCorrections} scopeDescription={scopeDescription} onChange={captionCorrections => updateSettings({ captionCorrections })} />
+                          {canPreviewCaptions && <>
+                            <CaptionAppearance value={settings.captionStyle} showPreview={false} onChange={captionStyle => updateSettings({ captionStyle })} />
+                            <CaptionCorrectionsEditor value={settings.captionCorrections} scopeDescription={scopeDescription} onChange={captionCorrections => updateSettings({ captionCorrections })} />
+                          </>}
                           {attachmentError && (
                             <ProblemNotice message={attachmentError} operation="Attach audio or subtitles" />
                           )}

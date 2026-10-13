@@ -87,7 +87,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         <label className="caption-field">Speech captions<select value={options.captions ?? 'auto'} onChange={event => onChange({ options: { captions: event.target.value as AutoOptions['captions'] } })}>
           <option value="auto">Auto · avoid duplicates</option><option value="add">Add new captions</option><option value="keep">Keep original · add none</option>
         </select></label>
-        <p className="auto-preferences-note">{options.captions === 'keep' ? 'Existing captions stay in the picture. Styles and corrections apply only to newly added captions.' : 'Generate captions from speech. Auto keeps captions already in the picture; Add new always adds another caption layer.'}</p>
+        <p className="auto-preferences-note">{options.captions === 'keep' ? 'No new speech captions will be added. Existing captions stay unchanged.' : 'Generate captions from speech. Auto keeps captions already in the picture; Add new always adds another caption layer.'}</p>
         {options.captions !== 'keep' && <>
           <CaptionAppearance value={options.captionStyle} showPreview={false} onChange={captionStyle => onChange({ options: { captionStyle } })} />
           <CaptionCorrectionsEditor value={options.captionCorrections} scopeDescription={scopeDescription} onChange={captionCorrections => onChange({ options: { captionCorrections } })} />
