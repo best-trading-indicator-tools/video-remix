@@ -249,7 +249,6 @@ The **Downloader** tab is a **free standalone tool**, not part of the core SaaS 
 - See preparation, platform wait countdowns when available, download progress, and cleanup stages. Retry failures or cancel pending work.
 - Download single MP4s, all ready videos, or a selected ZIP. Files remain available for **48 hours**.
 - Choose **Carousel images** for Instagram `/p/` posts and TikTok photo slideshows. Each ZIP contains the original images numbered in slide order; video slides and audio are skipped. Download one post or select several for a ZIP with one folder per post. Up to 100 images and 512 MB per post.
-- The optional **AI download prompt** prepares a reviewable URL list with Undo using your DeepSeek account. Applying a proposal fills the form; **Get images** or **Get video** starts the free download.
 
 Downloader items stay separate from editing sources and exports. Platform access restrictions still apply; login cookies can be configured when needed. [Downloader guide →](docs/user-guide.md#url-downloader--free-extra-tool)
 

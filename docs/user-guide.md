@@ -165,11 +165,7 @@ exported Netscape-format cookies as the video downloader. Instagram may require
 login even for publicly visible posts; put `cookies.txt` in the project/data
 folder or configure `YT_DLP_COOKIES`. Each request uses a disposable cookie copy.
 
-The optional **AI download prompt** uses your configured DeepSeek account to
-prepare a link list from supplied URLs, including choosing particular links
-from a batch. Review the proposal, apply it, then use **Get images**. **Undo**
-restores the previous forms until another manual change or queue submission.
-Ordinary URL downloads require no AI key or credits. Carousel downloads remain
+URL downloads require no AI key or credits. Carousel downloads remain
 a standalone utility; Auto/Quick, Manual and saved video edits are unaffected.
 
 ## Import long recordings

@@ -15,8 +15,6 @@ import { DraftStore } from "../server/mcp/drafts.js";
 import type { ImportSession } from "../shared/imports.js";
 import { socialCarouselLink, parseSocialVideoLinks } from "../shared/social-imports.js";
 import { downloadSocialCarousel } from "../server/carousel-downloads.js";
-import { proposeDownloadPrompt } from "../server/download-prompt.js";
-import type { DownloadDraft } from "../shared/downloads.js";
 
 const instagram = "https://www.instagram.com/p/DeXDaIPFCju/";
 const tiktok = "https://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544";
@@ -32,32 +30,6 @@ test("carousel URLs normalize whole posts, remove img_index and tracking, and re
   for (const link of ["http://instagram.com/p/ABC/", "https://instagram.com:123/p/ABC/", "https://user:pw@instagram.com/p/ABC/",
     "https://instagram.com.attacker.test/p/ABC/", "https://instagram.com/user/", "https://tiktok.com/@user", "https://instagram.com/reel/ABC/", "https://localhost/p/ABC/", "https://youtu.be/BaW_jenozKc"])
     assert.throws(() => socialCarouselLink(link), /Instagram post or TikTok/);
-});
-
-test("download prompts review bulk URLs, preserve the original draft and reject invented URLs", async t => {
-  const previous = process.env.DEEPSEEK_API_KEY; process.env.DEEPSEEK_API_KEY = "test-download-prompt";
-  const current: DownloadDraft = { kind: "carousel", links: [instagram, tiktok], stripMetadata: false };
-  let response: unknown = { draft: { ...current, links: [tiktok] } }, context: any, instructions = "";
-  const mock = t.mock.method(globalThis, "fetch", async (_input, init) => {
-    const body = JSON.parse(String(init?.body)); context = JSON.parse(body.messages[1].content); instructions = body.messages[0].content;
-    return Response.json({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify(response) } }] });
-  });
-  try {
-    const proposal = await proposeDownloadPrompt("Get only the second carousel", current, new AbortController().signal);
-    assert.deepEqual(proposal.draft.links, [tiktok]); assert.deepEqual(current.links, [instagram, tiktok]);
-    assert.deepEqual(context.currentDraft, current); assert.match(instructions, /slide order.*ZIP/s); assert.match(proposal.summary.join(" "), /one ZIP per post/);
-    response = { draft: current, clarification: "Which post?" };
-    assert.deepEqual(await proposeDownloadPrompt("Download that one", current, new AbortController().signal), { draft: current, summary: [], clarification: "Which post?" });
-    response = { draft: { ...current, links: ["https://www.instagram.com/p/Invented/"] } };
-    await assert.rejects(proposeDownloadPrompt("Get the second post", current, new AbortController().signal), /did not supply/);
-    response = { draft: { ...current, links: [instagram], stripMetadata: true } };
-    const switched = await proposeDownloadPrompt(`Get carousel images from ${instagram}`, { kind: "video", links: [], stripMetadata: true }, new AbortController().signal);
-    assert.equal(switched.draft.kind, "carousel"); assert.equal(switched.draft.stripMetadata, false);
-    response = { draft: { ...current, links: ["https://localhost/private"] } };
-    await assert.rejects(proposeDownloadPrompt("Download it", current, new AbortController().signal), /invalid download proposal/);
-    process.env.DEEPSEEK_API_KEY = "";
-    await assert.rejects(proposeDownloadPrompt("Download it", current, new AbortController().signal), /Pasting URLs and downloading stays free/);
-  } finally { mock.mock.restore(); if (previous === undefined) delete process.env.DEEPSEEK_API_KEY; else process.env.DEEPSEEK_API_KEY = previous; }
 });
 
 test("carousel queue, image ZIPs, MCP selection, persistence, failures and cancellation", { timeout: 120_000 }, async t => {
@@ -105,7 +77,11 @@ test("carousel queue, image ZIPs, MCP selection, persistence, failures and cance
       const result = await client!.callTool({ name, arguments: args }); const content = result.content.find(item => item.type === "text"); assert.ok(content?.type === "text"); assert.ok(!result.isError, content.text); return JSON.parse(content.text);
     };
     let ready: ImportSession[] = [];
-    await t.test("MCP downloads both platforms and returns original ordered images with a ZIP per post", async () => {
+    await t.test("standalone downloads expose no AI prompt endpoint or MCP tool", async () => {
+      assert.equal((await post("/api/downloads/prompt", { prompt: "Download these images" })).status, 404);
+      assert.ok(!(await client!.listTools()).tools.some(tool => tool.name === "propose_downloads"));
+    });
+    await t.test("MCP downloads both platforms without AI credentials and returns original ordered images with a ZIP per post", async () => {
       const queued = await call("download_carousels", { links: [instagram, tiktok, `${instagram}?img_index=3`] });
       assert.equal(queued.imports.length, 2);
       ready = await Promise.all(queued.imports.map((item: ImportSession) => wait(item.id, entry => entry.status === "completed" || entry.status === "failed")));

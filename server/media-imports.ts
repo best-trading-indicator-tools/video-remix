@@ -22,8 +22,6 @@ import { serverDiagnostic } from "./diagnostics.js";
 import { availableDiskSpace } from "./disk-space.js";
 import { cleanVideoDownload } from "./engine.js";
 import { ZipArchive } from "archiver";
-import { downloadPromptRequestSchema, proposeDownloadPrompt } from "./download-prompt.js";
-import { PromptEditError } from "./prompt-edit.js";
 
 const TTL = 48 * 60 * 60 * 1000;
 const DISK_RESERVE = 128 * 1024 * 1024;
@@ -401,16 +399,6 @@ function getSession(id: unknown) {
 }
 
 export function installMediaImportRoutes(app: Express) {
-  app.post("/api/downloads/prompt", async (req, res) => {
-    const parsed = downloadPromptRequestSchema.safeParse(req.body);
-    if (!parsed.success) { res.status(400).json({ error: "Check the prompt and current download URLs." }); return; }
-    const controller = new AbortController();
-    const disconnect = () => { if (!res.writableEnded) controller.abort(); };
-    res.on("close", disconnect);
-    try { res.json(await proposeDownloadPrompt(parsed.data.prompt, parsed.data.draft, controller.signal)); }
-    catch (error) { if (!controller.signal.aborted) res.status(error instanceof PromptEditError ? error.status : 502).json({ error: error instanceof PromptEditError ? error.message : "Could not prepare the download proposal." }); }
-    finally { res.off("close", disconnect); }
-  });
   app.get("/api/imports", route(async (_req, res) => {
     res.json({ imports: [...sessions.values()].filter(item => item.purpose !== "download").sort((a, b) => b.createdAt - a.createdAt).map(publicImport) });
   }));

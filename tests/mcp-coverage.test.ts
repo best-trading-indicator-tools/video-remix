@@ -74,7 +74,6 @@ test('MCP workflow tools validate inputs, match app HTTP contracts, and process 
     const batch = { requests: [{ requestId: randomUUID(), channelId: 'fixture-account', content: 'Reviewed post copy', date: '2030-01-01T12:00:00Z', timezone: 'Europe/Paris', settings: { __type: 'instagram', post_type: 'post', is_trial_reel: false, collaborators: [] } }] };
     for (const [name, input, route, method, expected] of [
       ['download_carousels', { links: ['https://www.instagram.com/p/DeXDaIPFCju/', 'https://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544'] }, '/api/downloads', 'POST', { kind: 'carousel', links: ['https://www.instagram.com/p/DeXDaIPFCju/', 'https://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544'] }],
-      ['propose_downloads', { prompt: 'Get images for all these posts', draft: { kind: 'carousel', links: ['https://www.instagram.com/p/DeXDaIPFCju/'], stripMetadata: false } }, '/api/downloads/prompt', 'POST', { prompt: 'Get images for all these posts', draft: { kind: 'carousel', links: ['https://www.instagram.com/p/DeXDaIPFCju/'], stripMetadata: false } }],
       ['get_saved_edit', { jobId }, `/api/jobs/${jobId}/plan`, 'GET', undefined],
       ['preview_saved_edit', { jobId, changes: edits }, `/api/jobs/${jobId}/plan/preview`, 'POST', edits],
       ['prompt_saved_edit', { jobId, revision: 1, prompt: 'Make captions pop', draft: edits }, `/api/jobs/${jobId}/edit-prompt`, 'POST', { revision: 1, prompt: 'Make captions pop', draft: edits }],

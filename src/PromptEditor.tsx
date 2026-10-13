@@ -41,7 +41,6 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
   appliedMessage = "Prompt applied to your draft. Render this revision when ready.",
   undoBlockedMessage = "Your manual changes are newer. Reset changes to return to the saved export.",
   applyLabel = "Apply to draft", loadingMessage = "Working out your changes…",
-  inputLabel = "Describe your edit", suggestLabel = "Suggest edits",
 }: {
   title?: string;
   contextKey: string;
@@ -59,8 +58,6 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
   undoBlockedMessage?: string;
   applyLabel?: string;
   loadingMessage?: string;
-  inputLabel?: string;
-  suggestLabel?: string;
 }) {
   const id = useId();
   const [prompt, setPrompt] = useState("");
@@ -138,7 +135,7 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
       <span className="prompt-editor-icon" aria-hidden="true"><MessageSquareText size={19} /></span>
       <div><h3 id={`${id}-title`}>{title}</h3><p>{description}</p></div>
     </div>
-    <label className="prompt-editor-label" htmlFor={`${id}-input`}>{inputLabel}</label>
+    <label className="prompt-editor-label" htmlFor={`${id}-input`}>Describe your edit</label>
     <div className={`prompt-editor-input${showHint ? " has-hint" : ""}`}>
     <textarea ref={textarea} id={`${id}-input`} rows={3} maxLength={2000} value={prompt} disabled={disabled}
       placeholder={placeholder}
@@ -161,7 +158,7 @@ export default function PromptEditor<T extends ReviewablePrompt = PromptProposal
       {loading ? <button type="button" className="secondary-button" onClick={() => {
         active.current?.abort(); active.current = null; setLoading(false); setNotice("Request cancelled. Your draft is unchanged.");
       }}><X size={14} />Cancel</button> : <button type="button" className="primary-button" disabled={disabled || !prompt.trim()}
-        onClick={() => void suggest()}><ArrowUp size={15} />{suggestLabel}</button>}
+        onClick={() => void suggest()}><ArrowUp size={15} />Suggest edits</button>}
     </div>
     <p id={`${id}-scope`} className="prompt-editor-scope">{scope}</p>
     {loading && <p className="prompt-editor-status" role="status"><LoaderCircle className="spin" size={15} />{loadingMessage}</p>}

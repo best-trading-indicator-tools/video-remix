@@ -5,16 +5,11 @@ import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports
 import { parseSocialVideoLinks } from "../shared/social-imports";
 import { formatFileSize, importRequest, importVideoLinks } from "./import-client";
 import ProblemNotice from "./ProblemNotice";
-import PromptEditor from "./PromptEditor";
-import type { DownloadDraft, DownloadProposal } from "../shared/downloads";
 import "./url-downloader.css";
 
 type DownloaderProps = { health: Health | null; connected: boolean; active: boolean };
-type LinkForm = { links: string; stripMetadata: boolean };
 export default function UrlDownloader(props: DownloaderProps) {
   const [kind, setKind] = useState<"video" | "carousel">("video");
-  const [forms, setForms] = useState<Record<"video" | "carousel", LinkForm>>({ video: { links: "", stripMetadata: true }, carousel: { links: "", stripMetadata: false } });
-  const [undo, setUndo] = useState<{ forms: typeof forms; kind: typeof kind } | null>(null);
   return <div className="url-downloader">
     <div className="downloader-modes" role="tablist" aria-label="Download type">
       <button id="download-video-tab" role="tab" aria-controls="download-video-panel" aria-selected={kind === "video"} tabIndex={kind === "video" ? 0 : -1}
@@ -23,20 +18,15 @@ export default function UrlDownloader(props: DownloaderProps) {
         onKeyDown={event => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { setKind("video"); document.getElementById("download-video-tab")?.focus(); } }} onClick={() => setKind("carousel")}><Images size={17} />Carousel images</button>
     </div>
     {(["video", "carousel"] as const).map(mode => <div key={mode} id={`download-${mode}-panel`} role="tabpanel" aria-labelledby={`download-${mode}-tab`} hidden={kind !== mode}>
-      <DownloadPanel {...props} kind={mode} active={props.active && kind === mode} form={forms[mode]}
-        onFormChange={change => { setForms(current => ({ ...current, [mode]: { ...current[mode], ...change } })); setUndo(null); }}
-        onApply={proposal => { setUndo({ forms, kind }); setForms(current => ({ ...current, [proposal.draft.kind]: { links: proposal.draft.links.join("\n"), stripMetadata: proposal.draft.stripMetadata } })); setKind(proposal.draft.kind); }}
-        canUndo={!!undo} onUndo={() => { if (undo) { setForms(undo.forms); setKind(undo.kind); setUndo(null); } }} />
+      <DownloadPanel {...props} kind={mode} active={props.active && kind === mode} />
     </div>)}
   </div>;
 }
 
-function DownloadPanel({ health, connected, active, kind, form, onFormChange, onApply, canUndo, onUndo }: DownloaderProps & {
-  kind: "video" | "carousel"; form: LinkForm; onFormChange: (change: Partial<LinkForm>) => void;
-  onApply: (proposal: DownloadProposal) => void; canUndo: boolean; onUndo: () => void;
-}) {
+function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { kind: "video" | "carousel" }) {
   const carousel = kind === "carousel";
-  const { links, stripMetadata } = form;
+  const [links, setLinks] = useState("");
+  const [stripMetadata, setStripMetadata] = useState(true);
   const [items, setItems] = useState<ImportSession[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -49,7 +39,6 @@ function DownloadPanel({ health, connected, active, kind, form, onFormChange, on
   const version = useRef(0), submitting = useRef(false), requests = useRef(new Set<string>());
   const selectAll = useRef<HTMLInputElement>(null);
   const batch = parseSocialVideoLinks(links, kind), maximum = health?.maxFiles || DEFAULT_IMPORT_BATCH_SIZE;
-  const draft: DownloadDraft = { kind, links: batch.links, stripMetadata: carousel ? false : stripMetadata };
   const ready = items.filter(item => item.status === "completed" && item.download);
   const selectedReady = ready.filter(item => selected.includes(item.id));
   const zipItems = selectedReady.length ? selectedReady : ready.slice(0, 100);
@@ -85,7 +74,7 @@ function DownloadPanel({ health, connected, active, kind, form, onFormChange, on
       version.current++;
       setItems(current => [...result.imports, ...current.filter(item => !result.imports.some(added => added.id === item.id))]);
       const unresolved = [...batch.invalid.map(item => item.input), ...(result.errors ?? []).map(item => item.name)];
-      onFormChange({ links: unresolved.join("\n") });
+      setLinks(unresolved.join("\n"));
       setNotice(`${result.imports.length} ${carousel ? "carousel" : "video"}${result.imports.length === 1 ? "" : "s"} added.${unresolved.length ? " Links needing attention remain above." : ""}`);
       if (result.errors?.length) setError(result.errors.map(item => `${item.name}: ${item.error}`).join("\n"));
     } catch (error) { setError(error instanceof Error ? error.message : "Could not add these links."); }
@@ -115,26 +104,20 @@ function DownloadPanel({ health, connected, active, kind, form, onFormChange, on
         <label htmlFor={`download-${kind}-links`}>{carousel ? "Carousel links" : "Video links"}</label>
         <textarea id={`download-${kind}-links`} rows={5} value={links} disabled={busy} spellCheck={false}
           placeholder={carousel ? 'https://www.instagram.com/p/DeXDaIPFCju/\nhttps://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544' : 'https://www.youtube.com/shorts/…\nhttps://www.tiktok.com/@creator/video/…\nhttps://www.instagram.com/reel/…'}
-          onChange={event => onFormChange({ links: event.target.value })} aria-describedby={`download-${kind}-help`} />
+          onChange={event => setLinks(event.target.value)} aria-describedby={`download-${kind}-help`} />
         <p id={`download-${kind}-help`} className="downloader-note">{carousel ? `Up to ${maximum} posts per batch. Images only; video slides and audio are skipped.` : "One link per line, or separate links with spaces or commas. Duplicate links in this batch are skipped."}</p>
         {links.trim() && <div className="downloader-link-summary" role="status"><strong>{batch.links.length} valid {batch.links.length === 1 ? "link" : "links"}</strong>
           {batch.duplicates > 0 && <span>{batch.duplicates} duplicate{batch.duplicates === 1 ? "" : "s"} skipped</span>}
           {batch.invalid.length > 0 && <span>{batch.invalid.length} {batch.invalid.length === 1 ? "link needs" : "links need"} attention</span>}</div>}
         {batch.invalid.length > 0 && <ul className="downloader-invalid">{batch.invalid.slice(0, 5).map((item, index) => <li key={index}><strong>{item.input}</strong> — {item.error}</li>)}{batch.invalid.length > 5 && <li>And {batch.invalid.length - 5} more invalid links.</li>}</ul>}
         {batch.links.length > maximum && <p className="downloader-validation" role="alert">Use up to {maximum} links per batch.</p>}
-        <div className="downloader-start">{carousel ? <span className="downloader-note">Original image quality and format</span> : <label className="downloader-clean"><input type="checkbox" checked={stripMetadata} disabled={busy} onChange={event => onFormChange({ stripMetadata: event.target.checked })} />
+        <div className="downloader-start">{carousel ? <span className="downloader-note">Original image quality and format</span> : <label className="downloader-clean"><input type="checkbox" checked={stripMetadata} disabled={busy} onChange={event => setStripMetadata(event.target.checked)} />
           <span><strong>Strip metadata</strong><small>{stripMetadata ? "Remove source tags, chapters and software tags." : "Save the imported file with its original metadata."}</small></span></label>}
           <button className="primary-button" disabled={busy || !connected || !health?.ok || !batch.links.length || batch.links.length > maximum} type="submit">
             {busy ? <LoaderCircle size={17} className="spin" /> : <Download size={17} />}{busy ? "Adding links…" : carousel ? batch.links.length > 1 ? `Get ${batch.links.length} carousels` : "Get images" : batch.links.length > 1 ? `Get ${batch.links.length} videos` : "Get video"}</button></div>
       </form>
       {!carousel && <p className="downloader-note">Full videos with their original audio. Downloads stay on this page; your editing workspace and its importer remain separate.</p>}
     </section>
-    <details className="downloader-prompt"><summary>AI download prompt <span>Optional</span></summary>
-    <PromptEditor<DownloadProposal> title="Prepare a link list" inputLabel="Describe your downloads" suggestLabel="Suggest links" contextKey={JSON.stringify(draft)} description="Uses your DeepSeek account" scope="" placeholder="Describe the posts to download and include their URLs"
-      disabled={busy || !connected || batch.invalid.length > 0 || batch.links.length > maximum} applyLabel="Apply to link list"
-      onSuggest={(prompt, signal) => importRequest("/api/downloads/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt, draft }), signal })}
-      onApply={onApply} onUndo={onUndo} canUndo={canUndo} applied={canUndo} appliedMessage="Link list updated." />
-    </details>
     {notice && <p className="downloader-notice" role="status"><Check size={16} />{notice}</p>}
     {error && <ProblemNotice message={error} operation="Download videos" />}
     {connectionError && <ProblemNotice message={connectionError} operation="Refresh downloads" />}

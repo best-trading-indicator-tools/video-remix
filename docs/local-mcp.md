@@ -104,7 +104,7 @@ it as a client setting.
 | --- | --- |
 | Engine, providers and models | `get_status`, `get_provider_status`, `test_provider`, `get_local_models`, `get_deepseek_balance` |
 | Local sources, footage and SRT/audio | `list_videos`, `list_footage`, `list_attachments`, `import_videos`, `import_footage`, `import_attachment`, `tag_footage`, `remove_media` |
-| Social imports and standalone downloader | `import_links`, `download_videos`, `download_carousels`, `propose_downloads`, `list_imports`, `list_downloads`, `retry_import`, `cancel_import` |
+| Social imports and standalone downloader | `import_links`, `download_videos`, `download_carousels`, `list_imports`, `list_downloads`, `retry_import`, `cancel_import` |
 | Batch editing and prompts | `create_draft`, `get_draft`, `list_drafts`, `clone_draft`, `update_draft`, `append_footage`, `apply_prompt_to_draft`, `get_editing_catalog` |
 | Persistent Undo/Redo | `list_draft_history`, `restore_draft` |
 | Reusable styles | `list_finishing_presets`, `save_finishing_preset`, `apply_finishing_preset`, `remove_finishing_preset` |
@@ -128,10 +128,7 @@ Pass the desired ready IDs to `get_download_links` as `downloadIds`; its
 original images. To download all ready posts, explicitly select their IDs.
 `retry_import` and `cancel_import` use the same IDs.
 
-`propose_downloads` accepts a prompt and current `draft` containing `kind`,
-`links` and `stripMetadata`. It uses DeepSeek to return a reviewable draft or
-clarification without starting downloads. After review, submit its links to
-`download_carousels` or `download_videos`. Direct downloads use no AI credits.
+Downloads require no AI key or credits.
 
 ### Text and caption examples
 
