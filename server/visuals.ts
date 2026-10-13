@@ -8,6 +8,7 @@ import type { FocalPoint, VisualSource } from "../shared/types.js";
 
 /** Local, preselected media on the final edited timeline. Sound is never used. */
 export interface SupportingVisual {
+  playbackSpeed?: number;
   path: string;
   start: number;
   end: number;

@@ -1,3 +1,4 @@
+import PlaybackControls from "./PlaybackControls";
 import UpscaleControl from "./UpscaleControl";
 import { SlidersHorizontal, Zap } from "lucide-react";
 import type { ReactNode } from "react";
@@ -63,8 +64,9 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
         </div>
         {!PLATFORMS.some(platform => platform.aspect === options.aspect) && <p className="auto-preferences-note">Currently: original format, set in All settings.</p>}
       </fieldset>
+      <PlaybackControls value={options} onChange={patch => onChange({ options: patch })} disabled={disabled} />
       <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={durationMode => onChange({ options: { durationMode } })} />
-      {fullLength ? <p className="auto-preferences-note">One export per video, with its original order, pauses and voice. A 15s video stays 15s; a 30s video stays 30s. Inserted footage adds to each video’s length.</p> : <>
+      {fullLength ? <p className="auto-preferences-note">One export per video, with its original order, pauses and voice. Speed changes the export length: 30s at 2× becomes 15s. Inserted footage adds to each video’s length.</p> : <>
       <fieldset className="quick-auto-group">
         <legend>Maximum excerpt length</legend>
         <div className="quick-auto-chips">{LENGTHS.map(seconds =>

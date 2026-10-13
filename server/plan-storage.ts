@@ -1,3 +1,4 @@
+import { playbackSummary } from "../shared/playback.js";
 import { randomUUID } from "node:crypto";
 import { copyFile, link, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -231,7 +232,7 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
   const supportingVisuals: SupportingVisual[] = plan.visuals.filter(item => item.enabled).map(item => {
     const media = plan.media.find(media => media.id === item.mediaId)!;
     return { path: planMediaPath(job, item.mediaId), start: item.start, end: item.end,
-      sourceStart: item.sourceStart, kind: media.kind as "broll" | "graphic", label: media.name, focalPoint: item.focalPoint, visualSource: media.visualSource };
+      sourceStart: item.sourceStart, playbackSpeed: item.playbackSpeed, kind: media.kind as "broll" | "graphic", label: media.name, focalPoint: item.focalPoint, visualSource: media.visualSource };
   });
   job.supportingVisuals = plan.visuals.filter(item => item.enabled).map(item => {
     const media = plan.media.find(media => media.id === item.mediaId)!;
@@ -240,9 +241,10 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
       selection: media.selection, stock: media.stock, graphicScene: media.graphicScene, reason: item.reason, visualSource: media.visualSource };
   });
   if (job.summary) {
-    const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays|Custom timed text/iu.test(change));
+    const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays|Custom timed text|Playback speed:|Flip horizontally:/iu.test(change));
     const broll = job.supportingVisuals.filter(item => item.kind === "broll").length;
     const cards = job.supportingVisuals.filter(item => item.kind === "graphic").length;
+    changes.push(...playbackSummary({}, plan.settings));
     if (plan.settings.textOverlays?.some(item => item.text.trim())) changes.push("Custom timed text");
     if (plan.settings.hookText) changes.push("Edited opening hook");
     if (plan.captions.length) changes.push("Saved captions");

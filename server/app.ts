@@ -649,6 +649,8 @@ export function createApp() {
       id, sourceId: parent.sourceId, sourceName: parent.sourceName, batchId: parent.batchId,
       variant: parent.variant, parentJobId: parent.id,
       auto: parent.auto || parsed.data.refreshBroll ? { ...(parent.auto ?? DEFAULT_AUTO_OPTIONS),
+        ...(parsed.data.framing?.speed !== undefined ? { speed: plan.settings.speed } : {}),
+        ...(parsed.data.framing?.mirror !== undefined ? { mirror: plan.settings.mirror } : {}),
         ...(parsed.data.refreshBroll ? { visualSources: [...new Set([...getVisualSources(parent.auto), ...stockProvidersForEdit(parent.auto)])] } : {}),
         ...(parsed.data.brollCount !== undefined ? { brollCount: parsed.data.brollCount } : {}),
         ...(parsed.data.brollMaxCoverage !== undefined ? { brollMaxCoverage: parsed.data.brollMaxCoverage } : {}),

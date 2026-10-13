@@ -675,6 +675,8 @@ export interface RenderOptions {
   settings: RemixSettings;
   source: MediaInfo;
   audioPath?: string;
+  /** Generated narration follows source speed; uploaded replacement music does not. */
+  narration?: boolean;
   subtitlePath?: string;
   /** Recognized speech on the caption clock, for exact word highlighting. */
   captionWords?: TranscriptWord[];
@@ -1003,7 +1005,10 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
         const local = await localFile(visual.path);
         const media = await probeMedia(local);
         const length = visual.end - visual.start;
-        if ((visual.sourceStart ?? 0) + length > media.duration + 0.05)
+        const rate = visual.playbackSpeed ?? 1;
+        if (!Number.isFinite(rate) || rate < 0.25 || rate > 4) throw new Error("Invalid supporting visual playback speed");
+        const mediaLength = length * rate;
+        if ((visual.sourceStart ?? 0) + mediaLength > media.duration + 0.05)
           throw new Error(
             "Supporting visual is shorter than its selected interval",
           );
@@ -1014,7 +1019,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
           "-ss",
           decimal(visual.sourceStart ?? 0),
           "-t",
-          decimal(length),
+          decimal(mediaLength),
           "-i",
           local,
         );
@@ -1025,7 +1030,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
           ? `scale=${width}:${height}:force_original_aspect_ratio=decrease:force_divisible_by=2,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:color=black`
           : `scale=${width}:${height}:force_original_aspect_ratio=increase:force_divisible_by=2,${supportingCrop}`;
         graph.push(
-          `[${inputIndex}:V:0]trim=duration=${decimal(length)},setpts=PTS-STARTPTS+${decimal(visual.start)}/TB,${fit},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
+          `[${inputIndex}:V:0]trim=duration=${decimal(mediaLength)},setpts=(PTS-STARTPTS)/${decimal(rate)}+${decimal(visual.start)}/TB,${fit},setsar=1,fps=${decimal(fps)},format=yuv420p[cutaway${index}]`,
           `[picture${index}][cutaway${index}]overlay=x=0:y=0:eof_action=pass:repeatlast=0:enable='gte(t,${decimal(visual.start)})*lt(t,${decimal(visual.end)})'[picture${index + 1}]`,
         );
       }
@@ -1041,7 +1046,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
     if (hasAudio) {
       if (!hasInserts) args.push("-map", replacementAudio ? "1:a:0" : "0:a:0");
       const audioFilters = replacementAudio
-        ? ["asetpts=PTS-STARTPTS"]
+        ? ["asetpts=PTS-STARTPTS", ...(options.narration && s.speed !== 1 ? [`atempo=${s.speed}`] : [])]
         : [
             ...(segments
               ? ["aselect=concatdec_select", "aresample=async=1:first_pts=0"]

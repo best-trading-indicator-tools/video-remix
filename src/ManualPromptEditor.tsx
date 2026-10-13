@@ -1,11 +1,8 @@
 import { workspaceHistory, useWorkspaceHistory } from "./workspace-history";
 import { apiRequest } from "./api-client";
 import { useState } from "react";
-import { DEFAULT_SETTINGS, type AutoOptions, type RemixSettings } from "../shared/types";
-import PromptEditor, { type PromptExample, type ReviewablePrompt } from "./PromptEditor";
-
-interface ManualPromptProposal extends ReviewablePrompt { settings: RemixSettings; auto?: { options: AutoOptions; variants: number } }
-
+import { suggestManualBatch, type ManualBatchProposal, type ManualPromptTarget } from "../shared/manual-batch";
+import PromptEditor, { type PromptExample } from "./PromptEditor";
 const examples: PromptExample[] = [
   { label: 'Animated title', prompt: 'Add a Bold hook title saying "YOUR TITLE" for the first 3 seconds, with Pop animation.' },
   { label: 'Caption animation', prompt: 'Make added captions appear word by word.' },
@@ -25,37 +22,29 @@ const examples: PromptExample[] = [
   { label: "Add a title", prompt: "Show the opening title 'Here's the key idea' for 3 seconds." },
 ];
 
-/** Key by source ID so prompts and undo always belong to the selected video. */
-export default function ManualPromptEditor({ sourceId, sourceName, settings, disabled = false, onApply, onSwitchAuto }: {
-  sourceId: string;
-  sourceName: string;
-  settings: RemixSettings;
-  disabled?: boolean;
-  onApply: (settings: RemixSettings) => void;
-  onSwitchAuto: (value: { options: AutoOptions; variants: number }) => void;
+/** Proposals use the same current/checked/all working set as the controls. */
+export default function ManualPromptEditor({ targets, scopeKey, disabled = false, onApply }: {
+  targets: ManualPromptTarget[]; scopeKey: string; disabled?: boolean;
+  onApply: (proposal: ManualBatchProposal) => void;
 }) {
   const history = useWorkspaceHistory();
   const [appliedId, setAppliedId] = useState<number>();
-  const identity = JSON.stringify(settings);
-  const suggest = async (prompt: string, signal: AbortSignal): Promise<ManualPromptProposal> => {
-    return apiRequest<ManualPromptProposal>(`/api/sources/${sourceId}/edit-prompt`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, signal,
-      body: JSON.stringify({ prompt, settings }),
-    });
-  };
-  const apply = (proposal: ManualPromptProposal) => {
-    workspaceHistory.label("Apply prompt to video");
-    if (proposal.auto) { onSwitchAuto(proposal.auto); setAppliedId(history.undoId); return; }
-    const next = structuredClone({ ...DEFAULT_SETTINGS, ...proposal.settings });
-    onApply(next); setAppliedId(history.undoId);
-  };
-
+  const [completed, setCompleted] = useState(0);
   return <div className="manual-prompt-editor">
-    <PromptEditor<ManualPromptProposal> contextKey={`${sourceId}:${identity}`} disabled={disabled} onSuggest={suggest} onApply={apply}
-      examples={examples} placeholder="e.g. Add captions, black bands and 4 B-roll shots"
-      description={`Describe a change for ${sourceName}. Manual prompts apply to this previewed video only.`}
-      scope="AI upscaling, Captions, title designs, text resizing and animation, bulk caption corrections, black bands, B-roll, animations, uploaded footage, cuts, color, sound and output settings. Automatic selection or narration can propose a switch to Auto. Apply changes to this video after reviewing."
-      appliedMessage="Settings applied to this video. Preview or render when ready."
+    {!!targets.length && <details className="auto-prompt-targets"><summary>Prompt targets: {targets.length} video{targets.length === 1 ? '' : 's'}</summary><ul>{targets.map(target => <li key={target.id}>{target.name}</li>)}</ul></details>}
+    <PromptEditor<ManualBatchProposal> contextKey={`${scopeKey}:${JSON.stringify(targets)}`} disabled={disabled || !targets.length}
+      onSuggest={(prompt, signal) => {
+        setCompleted(0);
+        return suggestManualBatch(targets, prompt, signal, (target, text, requestSignal) => apiRequest(`/api/sources/${target.id}/edit-prompt`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, signal: requestSignal, body: JSON.stringify({ prompt: text, settings: target.settings }),
+        }), setCompleted);
+      }} onApply={proposal => { workspaceHistory.label("Apply prompt to videos"); onApply(proposal); setAppliedId(history.undoId); }}
+      examples={examples} placeholder="e.g. Set speed to 1.25x and flip horizontally"
+      description={targets.length ? `Describe changes for ${targets.length === 1 ? targets[0]!.name : `all ${targets.length} target videos`}. Review each proposal before applying.` : 'Check videos in the source list to edit and export them.'}
+      scope="Playback speed, horizontal flip, AI upscaling, captions, titles, animation, black bands, B-roll, uploaded footage, cuts, color, sound and output settings. Each target keeps its unrelated settings. Automatic selection or narration can propose a switch to Auto."
+      applyLabel={`Apply to ${targets.length} video${targets.length === 1 ? '' : 's'}`}
+      loadingMessage={`Preparing proposals: ${completed} of ${targets.length} videos…`}
+      appliedMessage="Settings applied to the target videos. Preview or render when ready."
       undoBlockedMessage="Use workspace Undo to step back through newer edits and this prompt."
       applied={history.isApplied(appliedId)} canUndo={!!appliedId && history.undoId === appliedId} onUndo={() => {
         if (history.undoId === appliedId) { history.undo(); setAppliedId(undefined); }

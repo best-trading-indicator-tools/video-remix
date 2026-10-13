@@ -1,3 +1,4 @@
+import { playbackShape, speedSchema, mirrorSchema } from "../shared/playback.js";
 import { hasStockVisuals } from "../shared/visual-sources.js";
 import { pacingOptionsSchema } from "../shared/pacing.js";
 import { ownFootageSchema, footageForSource } from "../shared/own-footage.js";
@@ -40,7 +41,7 @@ export const settingsSchema = z
     watermarkRemoval: watermarkRemovalSchema.optional(),
     ownFootage: ownFootageSchema.optional(),
     ownFootageSourceId: z.uuid().optional(),
-    speed: n(0.5, 2),
+    speed: speedSchema,
     volume: n(0, 2),
     muted: z.boolean(),
     zoom: n(1, 2),
@@ -55,7 +56,7 @@ export const settingsSchema = z
     blend: n(0, 1),
     frameBlend: n(0, 0.5),
     timeShift: n(-5, 5),
-    mirror: z.boolean(),
+    mirror: mirrorSchema,
     aspect: z.enum(["original", "9:16", "1:1", "4:5", "16:9"]),
     fit: z.enum(["crop", "contain", "blur"]),
     resolution: z.enum(["source", "720", "1080"]),
@@ -146,6 +147,7 @@ export const normalizedSettings = (input: unknown) =>
   });
 export const autoOptionsObject = z
   .object({
+    ...playbackShape,
     upscale: upscaleSchema.optional(),
     watermarkRemoval: watermarkRemovalSchema.optional(),
     blackBands: blackBandsSchema.optional(),

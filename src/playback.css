@@ -1,0 +1,7 @@
+.playback-section { min-width: 0; margin: 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: 9px; }
+.playback-section + .playback-section { margin-top: 12px; }
+.playback-section legend { padding: 0 5px; color: var(--text); font-size: 13px; font-weight: 600; }
+.playback-section .slider-field { margin: 0; }
+.playback-flip-option { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 12px; cursor: pointer; }
+.playback-flip-option input { accent-color: var(--accent); }
+.playback-section:disabled { opacity: .55; }

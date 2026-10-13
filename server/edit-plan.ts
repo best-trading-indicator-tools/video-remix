@@ -1,3 +1,4 @@
+import { playbackShape, retimePlanPlayback } from "../shared/playback.js";
 import { upscaleSchema } from "../shared/upscale.js";
 import { textOverlaysSchema } from "../shared/text-overlays.js";
 import { z } from "zod";
@@ -27,11 +28,12 @@ const visualSchema = z.object({
   start: time,
   end: time,
   sourceStart: time,
+  playbackSpeed: z.number().finite().min(0.25).max(4).optional(),
   enabled: z.boolean(),
   locked: z.boolean(),
   reason: safeText(500).optional(),
   focalPoint: focalPointSchema.optional(),
-}).strict().refine(visual => visual.end - visual.start >= 0.5 - 1e-9, "Each supporting shot must last at least 0.5 seconds");
+}).strict().refine(visual => (visual.end - visual.start) * (visual.playbackSpeed ?? 1) >= 0.5 - 1e-9, "Each supporting shot must contain at least 0.5 seconds of its media");
 
 export const editPlanChangesSchema = z.object({
   textOverlays: textOverlaysSchema.optional(),
@@ -46,7 +48,7 @@ export const editPlanChangesSchema = z.object({
   captions: z.array(captionSchema).max(2000).optional(),
   cuts: cutsSchema.optional(),
   visuals: z.array(visualSchema).max(60).optional(),
-  framing: z.object({ upscale: upscaleSchema.optional(), fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional(), blackBands: blackBandsSchema.optional() }).strict().optional(),
+  framing: z.object({ ...playbackShape, upscale: upscaleSchema.optional(), fit: z.enum(["crop", "contain", "blur"]).optional(), focalPoint: focalPointSchema.optional(), captionStyle: captionStyleSchema.optional(), blackBands: blackBandsSchema.optional() }).strict().optional(),
   correctionSeconds: z.number().finite().min(0).max(86400).optional(),
 }).strict();
 
@@ -198,7 +200,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
     throw new Error("Render your manual footage changes separately before searching for new B-roll.");
   if (changes.revision !== plan.revision) throw new Error("This edit changed since you opened it. Reload the latest revision before saving.");
   if (!Number.isFinite(plan.settings.speed) || plan.settings.speed <= 0) throw new Error("The saved edit has an invalid playback speed");
-  const next = structuredClone(plan);
+  let next = structuredClone(plan);
   if (changes.ownFootage) next.settings.ownFootage = structuredClone(changes.ownFootage);
   let cuts = changes.cuts ?? next.cuts;
   cuts = cuts.map((cut, index) => {
@@ -217,7 +219,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
   cutsSchema.parse(cuts);
   if (cuts.some(cut => cut.end > plan.sourceDuration + epsilon)) throw new Error("Cuts must stay within the original source video");
   const cutsChanged = JSON.stringify(cuts.map(({ start, end }) => ({ start, end }))) !== JSON.stringify(plan.cuts.map(({ start, end }) => ({ start, end })));
-  const duration = cutsChanged ? cutsDuration(cuts) / plan.settings.speed : plan.outputDuration;
+  let duration = cutsChanged ? cutsDuration(cuts) / plan.settings.speed : plan.outputDuration;
   if (!Number.isFinite(duration) || duration <= 0) throw new Error("The edited video must have a positive duration");
   if (plan.narration && cutsChanged && Math.abs(duration - plan.outputDuration) > epsilon)
     throw new Error("Narration audio is locked. Keep the same total cut duration when changing narrated footage.");
@@ -233,6 +235,11 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
       const timing = mappedIntervals(visual, plan.cuts, cuts, plan.settings.speed)[0];
       return timing ? [{ ...visual, ...timing }] : [];
     });
+  }
+  next.outputDuration = duration;
+  if (changes.framing?.speed !== undefined) {
+    next = retimePlanPlayback(next, changes.framing.speed);
+    duration = next.outputDuration;
   }
   if (changes.textOverlays !== undefined) next.settings.textOverlays = structuredClone(changes.textOverlays);
   if (changes.hookDuration !== undefined) next.settings.hookDuration = changes.hookDuration;
@@ -253,6 +260,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
       if (prior.locked && visual.locked && (
         visual.mediaId !== baseline.mediaId || Math.abs(visual.start - baseline.start) > 1e-9 ||
         Math.abs(visual.end - baseline.end) > 1e-9 || Math.abs(visual.sourceStart - baseline.sourceStart) > 1e-9 ||
+        (visual.playbackSpeed ?? 1) !== (baseline.playbackSpeed ?? 1) ||
         JSON.stringify(visual.focalPoint) !== JSON.stringify(baseline.focalPoint)
       )) throw new Error("Unlock this supporting shot before changing its clip or timing");
     }
@@ -265,7 +273,7 @@ export function applyEditPlanChanges(plan: EditPlan, input: EditPlanChanges, sou
     const clip = media.get(visual.mediaId);
     if (!clip || clip.kind === "audio") throw new Error("Choose supporting footage already saved with this edit");
     if (visual.end > duration + epsilon) throw new Error("Supporting shot timing must stay within the edited video");
-    if (visual.sourceStart + visual.end - visual.start > clip.duration + epsilon)
+    if (visual.sourceStart + (visual.end - visual.start) * (visual.playbackSpeed ?? 1) > clip.duration + epsilon)
       throw new Error("Supporting shot timing exceeds the saved clip's duration");
   }
   const enabled = next.visuals.filter(visual => visual.enabled);

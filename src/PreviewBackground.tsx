@@ -1,8 +1,8 @@
 import { useEffect, useRef, type RefObject } from "react";
 
 /** Keep the blurred full-frame picture on the main player's clock. */
-export default function PreviewBackground({ source, videoRef, filter }: {
-  source: string; videoRef: RefObject<HTMLVideoElement | null>; filter: string;
+export default function PreviewBackground({ source, videoRef, filter, mirror = false }: {
+  source: string; videoRef: RefObject<HTMLVideoElement | null>; filter: string; mirror?: boolean;
 }) {
   const backgroundRef = useRef<HTMLVideoElement>(null);
   const sync = () => {
@@ -22,5 +22,5 @@ export default function PreviewBackground({ source, videoRef, filter }: {
     return () => events.forEach(event => player.removeEventListener(event, sync));
   }, [source, videoRef]);
   return <video ref={backgroundRef} className="preview-blur-background" src={source} muted playsInline
-    aria-hidden="true" preload="metadata" onLoadedMetadata={sync} style={{ filter: `${filter === "none" ? "" : filter + " "}blur(20px)` }} />;
+    aria-hidden="true" preload="metadata" onLoadedMetadata={sync} style={{ transform: `scale(${mirror ? -1.12 : 1.12}, 1.12)`, filter: `${filter === "none" ? "" : filter + " "}blur(20px)` }} />;
 }

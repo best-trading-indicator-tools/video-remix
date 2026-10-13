@@ -80,14 +80,14 @@ export default function TimelinePreview({ plan, job, time, seekToken, rate, onRa
   return <div className="draft-viewer">
     <div className="draft-viewer-stage">
       <div ref={frame} className="edit-framing-picture" style={{ aspectRatio: aspect, width: `min(100%, ${height * aspect}px)` }}>
-        {fit === 'blur' && <div className="draft-blur-background"><SyncedMedia url={url} time={start + (time - clip.outputStart) * speed} rate={rate * speed} /></div>}
+        {fit === 'blur' && <div className="draft-blur-background" style={{ transform: primary && plan.settings.mirror ? "scaleX(-1)" : undefined }}><SyncedMedia url={url} time={start + (time - clip.outputStart) * speed} rate={rate * speed} /></div>}
         <video ref={player} className="edit-framing-video" src={url} playsInline preload="auto" muted={muted || !!narration || (primary && plan.settings.muted) || (!primary && clip.footage.audio === 'mute')} aria-label="Timeline video preview"
-          style={{ objectFit: fit === 'crop' ? 'cover' : 'contain', objectPosition, ...bandVideoStyle(bands) }}
+          style={{ objectFit: fit === 'crop' ? 'cover' : 'contain', objectPosition, ...bandVideoStyle(bands), transform: primary && plan.settings.mirror ? 'scaleX(-1)' : undefined }}
           onLoadedMetadata={event => { event.currentTarget.volume = primary ? clamp(plan.settings.volume,0,1) : 1; setSize({ width: event.currentTarget.videoWidth, height: event.currentTarget.videoHeight }); if (event.currentTarget.videoHeight) onAspect(plan.settings.aspect === 'original' ? event.currentTarget.videoWidth / event.currentTarget.videoHeight : aspect); sync(); }}
           onError={() => { setError('This preview clip is unavailable.'); onRate(0); }} />
-        {supporting?.url && visual && <SyncedMedia url={supporting.url} time={visual.sourceStart + mainTime - visual.start} rate={rate} />}
+        {supporting?.url && visual && <SyncedMedia url={supporting.url} time={visual.sourceStart + (mainTime - visual.start) * (visual.playbackSpeed ?? 1)} rate={rate * (visual.playbackSpeed ?? 1)} />}
         {cover && <SyncedMedia url={job.footageAssets?.find(item => item.id === cover.assetId)?.url ?? `/api/broll/${cover.assetId}/video`} time={cover.start + mainTime - cover.at} rate={rate} fit={cover.fit === 'crop' ? 'cover' : 'contain'} />}
-        {narration?.url && !muted && !plan.settings.muted && <SyncedMedia url={narration.url} time={mainTime} rate={rate} audio />}
+        {narration?.url && !muted && !plan.settings.muted && <SyncedMedia url={narration.url} time={mainTime * (plan.narration ? plan.settings.speed : 1)} rate={rate * (plan.narration ? plan.settings.speed : 1)} audio />}
         <BlackBandsOverlay value={bands} aspect={aspect} />
         {primary && plan.settings.hookText && mainTime < plan.settings.hookDuration && <div className="edit-framing-hook" style={bandEditorialStyle(bands, frameHeight, aspect, .08, .054)}>{plan.settings.hookText}</div>}
         {primary && plan.settings.callouts?.filter(item => mainTime >= item.start && mainTime < item.end).map((item, i) => <div key={i} className="edit-framing-callout" style={bandEditorialStyle(bands, frameHeight, aspect, .24, .047)}>{item.text}</div>)}

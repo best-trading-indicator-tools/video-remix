@@ -6,7 +6,7 @@ export function autoPicturePreview(options: AutoOptions, source?: { width: numbe
     : Number(options.aspect.split(":")[0]) / Number(options.aspect.split(":")[1]);
   const sourceAspect = source ? source.width / source.height : aspect;
   return {
-    ...DEFAULT_SETTINGS, aspect: options.aspect,
+    ...DEFAULT_SETTINGS, aspect: options.aspect, speed: options.speed ?? 1, mirror: options.mirror ?? false,
     fit: options.blackBands?.enabled ? options.blackBands.fit : Math.abs(sourceAspect - aspect) > 0.12 ? "blur" : "crop",
     upscale: options.upscale, watermarkRemoval: options.watermarkRemoval,
     blackBands: options.blackBands, ownFootage: options.ownFootage, ownFootageSourceId: options.ownFootageSourceId,

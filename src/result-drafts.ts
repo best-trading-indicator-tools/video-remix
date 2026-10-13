@@ -41,7 +41,12 @@ export class DraftWriter {
       else this.storage.setItem(draftKey(this.id), JSON.stringify({ revision: this.revision, content, savedAt: new Date().toISOString(), token: this.token }));
       this.localSafe = true;
     } catch { this.localSafe = false; }
-    if (content === this.written && !this.running) { this.localSafe = true; return; }
+    if (content === this.written && !this.running) {
+      clearTimeout(this.timer);
+      this.localSafe = true;
+      this.status(content === null ? 'No unsaved changes' : 'Draft saved · editing files protected', false);
+      return;
+    }
     this.status(this.localSafe ? 'Saved in this browser · syncing…' : 'Saving draft…', false);
     clearTimeout(this.timer); this.timer = setTimeout(() => void this.flush(), 400);
   }

@@ -1,3 +1,5 @@
+import PlaybackControls from "./PlaybackControls";
+import { retimePlanPlayback } from "../shared/playback";
 import UpscaleControl from "./UpscaleControl";
 import SourceRecovery, { type SourceStatus } from "./SourceRecovery";
 import { DraftWriter, draftKey as resultDraftKey, parseDraft, type SavedDraft, type DraftBackup, type ResultDraft } from "./result-drafts";
@@ -41,22 +43,25 @@ const draftIdentity = (draft: EditPlan, refreshBroll: boolean, brollCount: numbe
 /** Keep server-retimed media implicit, while preserving later manual corrections. */
 function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: boolean, anchor: PromptDraftAnchor | null): EditPlanChanges {
   const changes: EditPlanChanges = { revision: plan.revision };
+  const retimed = retimePlanPlayback(plan, draft.settings.speed);
   if (refreshBroll) {
     changes.refreshBroll = true;
     if (anchor?.changes.preserveBroll) changes.preserveBroll = true;
   }
   if (differs(plan.settings.ownFootage, draft.settings.ownFootage)) changes.ownFootage = draft.settings.ownFootage || [];
   if (differs(plan.settings.textOverlays, draft.settings.textOverlays)) changes.textOverlays = draft.settings.textOverlays || [];
-  if (plan.settings.hookDuration !== draft.settings.hookDuration) changes.hookDuration = draft.settings.hookDuration;
+  if (retimed.settings.hookDuration !== draft.settings.hookDuration) changes.hookDuration = draft.settings.hookDuration;
   if (plan.settings.hookText !== draft.settings.hookText) changes.hookText = draft.settings.hookText;
   if (differs(plan.cuts, draft.cuts)) changes.cuts = draft.cuts;
   for (const key of ["captions", "visuals"] as const) {
-    if (anchor && !differs(anchor.plan[key], draft[key])) {
+    if (anchor && !differs(retimePlanPlayback(anchor.plan, draft.settings.speed)[key], draft[key])) {
       if (anchor.changes[key] !== undefined) Object.assign(changes, { [key]: draft[key] });
-    } else if (differs(plan[key], draft[key])) Object.assign(changes, { [key]: draft[key] });
+    } else if (differs(retimed[key], draft[key])) Object.assign(changes, { [key]: draft[key] });
   }
   const framing: NonNullable<EditPlanChanges["framing"]> = {};
   if ((plan.settings.upscale ?? "off") !== (draft.settings.upscale ?? "off")) framing.upscale = draft.settings.upscale ?? "off";
+  if (plan.settings.speed !== draft.settings.speed) framing.speed = draft.settings.speed;
+  if (plan.settings.mirror !== draft.settings.mirror) framing.mirror = draft.settings.mirror;
   if (plan.settings.fit !== draft.settings.fit) framing.fit = draft.settings.fit;
   if (differs(plan.settings.focalPoint, draft.settings.focalPoint)) framing.focalPoint = draft.settings.focalPoint;
   if (differs(plan.settings.captionStyle, draft.settings.captionStyle)) framing.captionStyle = draft.settings.captionStyle;
@@ -85,7 +90,7 @@ function validateDraftChanges(plan: EditPlan, draft: EditPlan, changes: EditPlan
     const media = draft.media.find((item) => item.id === visual.mediaId);
     return !media || ![visual.start, visual.end, visual.sourceStart].every(Number.isFinite) ||
       visual.start < 0 || visual.end <= visual.start || visual.end > draft.outputDuration + 0.01 ||
-      visual.sourceStart < 0 || visual.sourceStart + visual.end - visual.start > media.duration + 0.01;
+      visual.sourceStart < 0 || visual.sourceStart + (visual.end - visual.start) * (visual.playbackSpeed ?? 1) > media.duration + 0.01;
   })) throw new Error("Check each B-roll interval: it must fit both the export and the selected clip.");
 }
 
@@ -539,6 +544,11 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                   setTransportRate(0); setReviewTime(0); setSeekToken(value => value + 1);
                 }} />
               </details>
+              <PlaybackControls value={draft.settings} disabled={saving || timelineBusy} onChange={patch => {
+                const next = patch.speed === undefined ? structuredClone(draft) : retimePlanPlayback(draft, patch.speed);
+                if (patch.mirror !== undefined) next.settings.mirror = patch.mirror;
+                setDraft(next); setTransportRate(0); setReviewTime(0); setSeekToken(value => value + 1); setPreviewMode("framing");
+              }} />
               <details className="edit-plan-section edit-framing-section">
                 <summary>Framing &amp; caption placement</summary>
                 <fieldset disabled={saving}>
@@ -659,14 +669,14 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
                     const media = plan.media.find((item) => item.id === visual.mediaId);
                     const length = Math.max(0, visual.end - visual.start);
                     const previewStart = Number.isFinite(visual.sourceStart) ? visual.sourceStart : 0;
-                    const previewEnd = previewStart + length;
+                    const previewEnd = previewStart + length * (visual.playbackSpeed ?? 1);
                     const [aspectWidth, aspectHeight] = plan.settings.aspect === "original" ? [knownOutputAspect || media?.selection?.targetAspect || 16 / 9, 1] : plan.settings.aspect.split(":").map(Number);
                     const previewAspect = aspectWidth! / aspectHeight!;
                     return <article data-review-shot={visual.id} className={`edit-plan-visual ${visual.enabled ? "" : "is-removed"} ${highlightedShot?.id === visual.id ? "review-highlight" : ""}`} key={visual.id}>
                       <div className="edit-plan-visual-heading"><h3><Film size={15} /> Shot {index + 1}</h3>
                         <label className="edit-plan-check"><input type="checkbox" checked={visual.enabled} onChange={(event) => updateVisual(visual.id, { enabled: event.target.checked })} />Include shot</label>
                       </div>
-                      {media?.url && <FootagePreview key={`${media.id}:${previewStart}:${previewEnd}`} url={media.url} label={`Preview shot ${index + 1}`} start={previewStart} end={previewEnd} aspect={previewAspect} focalPoint={visual.focalPoint || CENTER} height={230} />}
+                      {media?.url && <FootagePreview key={`${media.id}:${previewStart}:${previewEnd}`} url={media.url} label={`Preview shot ${index + 1}`} speed={visual.playbackSpeed ?? 1} start={previewStart} end={previewEnd} aspect={previewAspect} focalPoint={visual.focalPoint || CENTER} height={230} />}
                       {media?.kind === "graphic" && media.visualSource && <p className="edit-plan-note">{VISUAL_SOURCE_LABELS[media.visualSource]} · {media.graphicScene ? GRAPHIC_KIND_LABELS[media.graphicScene.kind] : "Animated card"}</p>}
                       <button type="button" className="secondary-button edit-plan-lock" disabled={!visual.enabled} aria-pressed={visual.locked} onClick={() => updateVisual(visual.id, { locked: !visual.locked })}>
                         {visual.locked ? <LockKeyhole size={14} /> : <LockKeyholeOpen size={14} />}{visual.locked ? "Unlock shot to edit" : "Lock this shot"}

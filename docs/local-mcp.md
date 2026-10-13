@@ -43,6 +43,8 @@ client entry. Run `npm run build` after changing MCP code, then restart clients.
   original audio. Append outro.mp4 to both.”
 - “On both videos, add black bands and put BPC157 in medium white Cyrillic text
   in the upper band. Keep the lower band text unchanged.”
+- “Set these videos to 1.25× speed and flip them horizontally. Keep every other setting.”
+- “Restore normal speed on video A and turn off horizontal flip on video B.”
 - “Make these two videos vertical, show me the draft, and export both.”
 - “Check the exports and give me the MP4 download links.”
 - “Show the DeepSeek usage for these exports and my remaining account balance.”
@@ -66,9 +68,22 @@ New Auto drafts keep the complete source, its original framing and audio, and
 make one export per video. Added speech captions, stock visuals, narration,
 pacing and editorial reviews start off. Bands and band text can still be added.
 Choose `durationMode: "excerpt"` explicitly for shorter clips, multiple versions
-or narration. Manual drafts support cuts, speed, color and the normal Manual
-settings. Quick setup and All settings are browser views of the same Auto
-options; the MCP exposes those options directly.
+or narration. Both modes accept independent `speed` (0.5–2, default 1) and
+`mirror` (horizontal flip, default false). For example, `update_draft` with
+`auto: {"speed": 1.25}` changes only speed; `auto: {"mirror": true}` changes only
+orientation. Use `manual` for a Manual draft. Pass `sourceIds` for selected
+videos, or omit it for the whole draft. `restore_draft` undoes either change.
+Manual drafts also support exact cuts, color and the normal Manual settings. Quick setup and All settings are browser views of the same Auto
+options; the MCP exposes those options directly. The browser shows separate
+Video speed and Horizontal flip sections in Quick, All settings, and Manual.
+
+For saved exports, `preview_saved_edit` and `render_saved_edit` accept
+`changes.framing.speed` and `changes.framing.mirror`; `prompt_saved_edit` accepts
+the same edits in plain language. Speed retimes saved captions, callouts,
+supporting shots and generated narration. Source trim timestamps remain fixed;
+added footage, replacement music and explicit text-overlay times keep their
+own timing. Horizontal flip applies to the source picture; added text stays
+readable. `get_export` reports the applied `playback` settings.
 
 Claude or Codex can translate an ordinary request directly into typed draft
 updates. Those updates make no DeepSeek request. `apply_prompt_to_draft` uses the

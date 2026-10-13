@@ -1,3 +1,4 @@
+import { playbackSettings } from "../../shared/playback.js";
 import { textEditsSummary } from '../../shared/text-edits.js';
 import { upscaleSummary } from "../../shared/upscale.js";
 import { randomUUID } from 'node:crypto';
@@ -30,6 +31,7 @@ export class RemixMcpService {
       const settings = item.options ?? item.settings!;
       return { sourceId: item.sourceId, name: item.name, exports: item.variants,
         description: [draft.mode === 'auto' ? `${item.options?.durationMode === 'full' ? 'Full video' : 'Auto excerpt'} · ${settings.aspect}` : `Manual edit · ${settings.aspect}`,
+          `Playback speed: ${settings.speed ?? 1}×; Flip horizontally: ${settings.mirror ? "on" : "off"}.`,
           ...(settings.upscale && settings.upscale !== "off" ? [upscaleSummary(settings.upscale)] : []),
           ...(settings.blackBands ? blackBandChangeSummary(undefined, settings.blackBands) : []),
           ...textEditsSummary([], settings.textOverlays),
@@ -158,7 +160,7 @@ export class RemixMcpService {
   }
   jobSummary(job: RenderJob) {
     return { id: job.id, sourceId: job.sourceId, sourceName: job.sourceName, batchId: job.batchId, status: job.status, phase: job.phase,
-      progress: job.progress, createdAt: job.createdAt, finishedAt: job.finishedAt, error: job.error, summary: job.summary,
+      progress: job.progress, playback: playbackSettings(job.settings), createdAt: job.createdAt, finishedAt: job.finishedAt, error: job.error, summary: job.summary,
       qualityReport: job.qualityReport, editorialReport: job.editorialReport, finishedReviewReport: job.finishedReviewReport, review: job.review, exportName: job.exportName, keptAt: job.keptAt,
       deepseekUsage: job.deepseekUsage, downloadUrl: job.downloadUrl ? `${this.api.baseUrl}${job.downloadUrl}` : undefined,
       captionUrl: job.captionUrl ? `${this.api.baseUrl}${job.captionUrl}` : undefined };

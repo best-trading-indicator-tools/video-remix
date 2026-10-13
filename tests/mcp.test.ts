@@ -104,6 +104,26 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
       assert.equal(draft.items[1]?.options?.blackBands?.topStyle?.cyrillic, true);
       await assert.rejects(call('update_draft', { draftId: draft.id, revision: original.revision, auto: { aspect: '9:16' } }), /changed/);
     });
+    await t.test('speed and flip are discoverable independent bulk settings with durable Undo in both modes', async () => {
+      const catalog = await call('get_editing_catalog'); assert.deepEqual(catalog.playback.speed, { min: .5, max: 2, default: 1 });
+      for (const mode of ['auto', 'manual']) {
+        let value = (await call('create_draft', { sourceIds: ids, mode, [mode]: { speed: .8, mirror: false, aspect: '1:1' } })).draft;
+        const original = structuredClone(value);
+        const review = await call('update_draft', { draftId: value.id, revision: value.revision, sourceIds: ids.slice(0, 2), [mode]: { speed: 1.5 } });
+        value = review.draft;
+        const settings = (item: any) => item.options ?? item.settings;
+        assert.deepEqual(value.items.map((item: any) => settings(item).speed), [1.5, 1.5, .8]);
+        assert.ok(value.items.every((item: any) => settings(item).mirror === false && settings(item).aspect === '1:1'));
+        assert.match(review.summary[0].description.join(' '), /Playback speed: 1.5/);
+        value = (await call('update_draft', { draftId: value.id, revision: value.revision, [mode]: { mirror: true } })).draft;
+        assert.deepEqual(value.items.map((item: any) => settings(item).speed), [1.5, 1.5, .8]);
+        assert.ok(value.items.every((item: any) => settings(item).mirror));
+        assert.deepEqual(secondStore.get(value.id), value);
+        await assert.rejects(call('update_draft', { draftId: value.id, revision: value.revision, [mode]: { speed: 2.1 } }));
+        const restored = (await call('restore_draft', { draftId: value.id, revision: value.revision, targetRevision: original.revision })).draft;
+        assert.deepEqual(restored.items, original.items);
+      }
+    });
     await t.test('invalid values and missing IDs reject the whole draft without touching its revision', async () => {
       const before = structuredClone(draft);
       for (const args of [

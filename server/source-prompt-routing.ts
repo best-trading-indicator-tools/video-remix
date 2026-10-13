@@ -7,7 +7,7 @@ import type { PromptAssets } from './source-prompt-controls.js';
 type Context = { source: { duration: number; width: number; height: number; hasAudio: boolean }; prompt: string; signal: AbortSignal; assets: PromptAssets };
 function sharedOptions(value: AutoOptions | RemixSettings) {
   const { aspect, upscale, blackBands, captionStyle, captionCorrections, textOverlays, ownFootage, visualSources, supportingVisuals, stockVideoType, brollIds, brollMatching, brollCount, brollMaxCoverage } = value;
-  return { aspect, upscale, blackBands, captionStyle, captionCorrections, textOverlays, ownFootage, visualSources, supportingVisuals, stockVideoType, brollIds, brollMatching, brollCount, brollMaxCoverage };
+  return { speed: value.speed ?? 1, mirror: value.mirror ?? false, aspect, upscale, blackBands, captionStyle, captionCorrections, textOverlays, ownFootage, visualSources, supportingVisuals, stockVideoType, brollIds, brollMatching, brollCount, brollMaxCoverage };
 }
 export async function sourcePromptProposal(context: Context, draft: { settings: RemixSettings } | { options: AutoOptions; variants: number }) {
   if ('settings' in draft) {

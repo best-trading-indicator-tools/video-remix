@@ -307,7 +307,7 @@ async function run(job: StoredJob, controller: AbortController) {
         if (mode === "repair" && !savedRepair) {
           const reviewed = await trackEditorialReview(job, EDITORIAL_REPAIR_BUDGET_MS, onProgress => repairEditorialPlan({ plan: job.editPlan!,
             transcript: job.sourceTranscript, sourcePath: source.filePath, signal: controller.signal, onProgress,
-            maxDuration: job.auto!.targetDuration, protectedEdit: Boolean(job.parentJobId) }));
+            maxDuration: job.auto!.targetDuration / job.editPlan!.settings.speed, protectedEdit: Boolean(job.parentJobId) }));
           job.editPlan = reviewed.plan;
           job.editorialReport = reviewed.report;
           job.editorialRepair = reviewed.repairLog;
@@ -367,6 +367,7 @@ async function run(job: StoredJob, controller: AbortController) {
       source,
       settings: correction.applied ? { ...job.settings, captionCorrections: [] } : job.settings,
       audioPath,
+      narration: job.summary?.narration,
       subtitlePath,
       captionWords,
       supportingVisuals,

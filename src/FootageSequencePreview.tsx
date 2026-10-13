@@ -132,7 +132,7 @@ export default function FootageSequencePreview({ source, placements, settings, a
   return <div ref={root} className="footage-live-preview">
     <div className="preview-label"><span />LIVE · FULL SEQUENCE</div>
     <div ref={frame} className={`video-frame${bands ? ' has-black-bands' : ''}`} style={{ width: `min(100%, calc(var(--live-preview-height, 465px) * ${aspect}))`, aspectRatio: aspect }}>
-      {isSource && fit === 'blur' && <PreviewBackground key={position.segmentIndex} source={source.url} videoRef={picture} filter={filter} />}
+      {isSource && fit === 'blur' && <PreviewBackground key={position.segmentIndex} source={source.url} videoRef={picture} filter={filter} mirror={settings?.mirror} />}
       <video key={`${position.segmentIndex}:${url}`} ref={picture} src={url} playsInline preload="auto" aria-label="Main video preview"
         onLoadedMetadata={sync} onEnded={advance} onPlaying={syncAudio} onSeeked={syncAudio} onWaiting={() => sourceAudio.current?.pause()}
         onError={() => { stop(); setError('The browser could not play this clip. Check that the video is still available.'); }}

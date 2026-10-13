@@ -1,6 +1,8 @@
+import PlaybackControls from "./PlaybackControls";
 import BatchProgress from "./BatchProgress";
 import BatchNotifications from "./BatchNotifications";
 import { useWorkspaceState, WorkspaceUndo, useWorkspaceHistory, DesktopHistoryBridge } from "./workspace-history";
+import { playbackSettings, speedSchema } from "../shared/playback";
 import { upscaleSchema } from "../shared/upscale";
 import UpscaleControl from "./UpscaleControl";
 import { DesktopUpdateNotice } from "./DesktopUpdates";
@@ -152,6 +154,8 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
       targetDuration: isAutoTargetDuration(options?.targetDuration)
         ? options!.targetDuration
         : DEFAULT_AUTO_OPTIONS.targetDuration,
+      speed: speedSchema.safeParse(options?.speed).success ? options!.speed : 1,
+      mirror: options?.mirror === true,
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
@@ -553,6 +557,7 @@ export default function App() {
   const previewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: renderedSettings });
   const previewCurrent = renderedPreview?.signature === previewSignature;
   const usingRendered = !original && showRendered && previewCurrent;
+  const liveSpeed = !sourcePreview && !usingRendered ? activePreviewSettings.speed ?? 1 : 1;
   const manualLive = mode === "manual" && !sourcePreview && !usingRendered;
   const liveFootage = !sourcePreview && !usingRendered && !!activePreviewSettings.ownFootage?.length;
   // Watermark changes have their own editor and rendered preview. Keep the user's
@@ -789,11 +794,11 @@ export default function App() {
 
   useEffect(() => {
     if (!videoRef.current) return;
-    videoRef.current.playbackRate = manualLive ? settings.speed : 1;
+    videoRef.current.playbackRate = liveSpeed;
     videoRef.current.volume = manualLive ? Math.min(1, settings.volume) : 1;
     videoRef.current.muted = manualLive && settings.muted;
   }, [
-    settings.speed,
+    liveSpeed,
     settings.volume,
     settings.muted,
     manualLive,
@@ -814,14 +819,14 @@ export default function App() {
     const tick = (now: number) => {
       const video = videoRef.current;
       if (video && !video.paused && !video.seeking && now - previous >= 1000 / 30) {
-        setLiveOutputTime(manualLive && liveInterval ? Math.max(0, video.currentTime - liveInterval.start) / settings.speed : video.currentTime);
+        setLiveOutputTime(manualLive && liveInterval ? Math.max(0, video.currentTime - liveInterval.start) / settings.speed : video.currentTime / liveSpeed);
         previous = now;
       }
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [animatedPreviewText, sourcePreview, usingRendered, liveFootage, view, manualLive, liveInterval?.start, settings.speed]);
+  }, [animatedPreviewText, sourcePreview, usingRendered, liveFootage, view, manualLive, liveInterval?.start, settings.speed, liveSpeed]);
 
 
   useEffect(() => {
@@ -862,6 +867,20 @@ export default function App() {
     };
   }, [previewJob]);
 
+  const switchEditingMode = (next: "auto" | "manual") => {
+    history.label("Switch editing mode");
+    if (mode === "auto" && next === "manual") {
+      setSettingsById(current => ({ ...current, ...Object.fromEntries(sources.map(source => [source.id,
+        { ...(current[source.id] || defaultSettings), ...playbackSettings((autoById[source.id] || defaultAuto).options) }])) }));
+      setDefaultSettings(current => ({ ...current, ...playbackSettings(defaultAuto.options) }));
+    } else if (mode === "manual" && next === "auto") {
+      setAutoById(current => ({ ...current, ...Object.fromEntries(sources.map(source => { const preset = current[source.id] || defaultAuto; return [source.id,
+        { ...preset, options: { ...preset.options, ...playbackSettings(settingsById[source.id] || defaultSettings) } }]; })) }));
+      setDefaultAuto(current => ({ ...current, options: { ...current.options, ...playbackSettings(defaultSettings) } }));
+    }
+    history.navigateOnRedo({ mode: next, sourceId: selected?.id });
+    setMode(next);
+  };
   const updateSettings = (patch: Partial<RemixSettings>) => {
     if (sources.length && !workingTargets.length && !futureSettings) { notify("Check videos in the source list to edit and export them.", "info"); return; }
     if (patch.automaticCaptions === "auto" || patch.automaticCaptions === "add") patch = { ...patch, subtitleId: null };
@@ -1437,7 +1456,7 @@ export default function App() {
                 <button
                   aria-pressed={mode === "auto"}
                   className={mode === "auto" ? "active" : ""}
-                  disabled={brollBusy} onClick={() => setMode("auto")}
+                  disabled={brollBusy} onClick={() => switchEditingMode("auto")}
                 >
                   <Sparkles size={13} />
                   Auto remix
@@ -1445,7 +1464,7 @@ export default function App() {
                 <button
                   aria-pressed={mode === "manual"}
                   className={mode === "manual" ? "active" : ""}
-                  disabled={brollBusy} onClick={() => setMode("manual")}
+                  disabled={brollBusy} onClick={() => switchEditingMode("manual")}
                 >
                   <SlidersHorizontal size={13} />
                   Manual
@@ -1673,7 +1692,7 @@ export default function App() {
                 </p>}
                 <div className={`preview-stage ${selected ? "has-video" : ""}`}>
                   {watermark.editing ? watermark.preview : selected && liveFootage ? <FootageSequencePreview key={`${selected.id}:${mode}`}
-                    source={selected} placements={activePreviewSettings.ownFootage!} settings={manualLive ? settings : undefined}
+                    source={selected} placements={activePreviewSettings.ownFootage!} settings={mode === "manual" ? settings : autoPicturePreview(autoOptions, selected)}
                     aspect={previewAspect} fit={previewFit} bands={liveBands} filter={previewFilter}
                     captions={sampleCaptions} captionStyle={activePreviewSettings.captionStyle} textOverlays={activePreviewSettings.textOverlays} onTextChange={updatePreviewText} jump={footageJump} /> : selected ? (
                     <>
@@ -1689,7 +1708,7 @@ export default function App() {
                           aspectRatio: previewAspect,
                         }}
                       >
-                        {previewFit === "blur" && <PreviewBackground source={selected.url} videoRef={videoRef} filter={previewFilter} />}
+                        {previewFit === "blur" && <PreviewBackground source={selected.url} videoRef={videoRef} filter={previewFilter} mirror={!!activePreviewSettings.mirror} />}
                         <video
                           key={usingRendered ? renderedPreview!.id : selected.id}
                           ref={videoRef}
@@ -1701,7 +1720,7 @@ export default function App() {
                           aria-label="Main video preview"
                           onLoadedMetadata={() => {
                             if (videoRef.current) {
-                              videoRef.current.playbackRate = manualLive ? settings.speed : 1;
+                              videoRef.current.playbackRate = liveSpeed;
                               videoRef.current.volume = manualLive ? Math.min(1, settings.volume) : 1;
                               videoRef.current.muted = manualLive && settings.muted;
                               videoRef.current.currentTime = manualLive ? liveInterval?.start ?? 0 : 0;
@@ -1723,7 +1742,7 @@ export default function App() {
                               const video = event.currentTarget;
                               setLiveOutputTime(Math.max(0, video.currentTime - liveInterval.start) / settings.speed);
                               if (video.currentTime >= liveInterval.end - 0.025 && !video.paused) { video.pause(); video.currentTime = liveInterval.end; }
-                            } else setLiveOutputTime(event.currentTarget.currentTime);
+                            } else setLiveOutputTime(event.currentTarget.currentTime / liveSpeed);
                           }}
                           onError={() => {
                             if (usingRendered) { setShowRendered(false); setRenderedPreview(null); setManualPreviewError("This preview is no longer available. Render a fresh sample."); }
@@ -1734,7 +1753,7 @@ export default function App() {
                             objectPosition: !manualLive || previewFit !== "crop" ? "50% 50%" : manualCropPosition(selected.width, selected.height, previewAspect / (liveBands ? 1 - (liveBands.topPercent + liveBands.bottomPercent) / 100 : 1), sequencePreview?.cuts[0]?.focalPoint ?? settings.focalPoint ?? { x: 0.5, y: 0.5 }),
                             filter: previewFilter,
                             transform: !manualLive
-                              ? "none"
+                              ? (!sourcePreview && !usingRendered && activePreviewSettings.mirror ? "scaleX(-1)" : "none")
                               : `scale(${settings.mirror ? -settings.zoom : settings.zoom}, ${settings.zoom})`,
                             ...bandVideoStyle(liveBands),
                           }}
@@ -1952,10 +1971,16 @@ export default function App() {
                     </span>
                   </div>
                   <p className="manual-working-scope">{scopeDescription}. Only the settings you change are copied.</p>
-                  {selected && <ManualPromptEditor key={`prompt-${selected.id}`} sourceId={selected.id} sourceName={selected.name} settings={settings}
-                    disabled={starting || brollBusy || attachmentBusy !== null || !previewIncluded}
-                    onApply={value => setSettingsById(current => ({ ...current, [selected.id]: { ...value, ownFootageSourceId: selected.id } }))}
-                    onSwitchAuto={value => { setAutoById(current => ({ ...current, [selected.id]: autoPreset({ ...value, options: { ...value.options, ownFootageSourceId: selected.id } }) })); history.navigateOnRedo({ mode: "auto", sourceId: selected.id }); setMode("auto"); setAutoView("all"); notify("Prompt applied in Auto. Review the preferences and start remixing when ready.", "success"); }} />}
+                  <ManualPromptEditor scopeKey={scopeDescription} targets={workingTargets.map(source => ({ id: source.id, name: source.name, settings: settingsById[source.id] || defaultSettings }))}
+                    disabled={starting || brollBusy || attachmentBusy !== null}
+                    onApply={value => {
+                      if (value.clarification || !value.changes.length || value.changes.some(change => !workingTargets.some(source => source.id === change.id))) return;
+                      const automatic = value.changes.every(change => !!change.proposal.auto);
+                      if (automatic) {
+                        setAutoById(current => ({ ...current, ...Object.fromEntries(value.changes.map(({ id, proposal }) => [id, autoPreset({ ...proposal.auto!, options: { ...proposal.auto!.options, ownFootageSourceId: id } })])) }));
+                        history.navigateOnRedo({ mode: "auto", sourceId: selected?.id }); setMode("auto"); setAutoView("all");
+                      } else setSettingsById(current => ({ ...current, ...Object.fromEntries(value.changes.map(({ id, proposal }) => [id, { ...proposal.settings, ownFootageSourceId: id }])) }));
+                    }} />
                   <div
                     className="settings-tabs"
                     role="tablist"
@@ -2004,6 +2029,7 @@ export default function App() {
                     {(tab === "essentials" || tab === "advanced" || tab === "all") && <TextOverlaysEditor value={settings.textOverlays} onChange={textOverlays => updateSettings({ textOverlays })} disabled={starting} />}
                     {(tab === "essentials" || tab === "all") && (
                       <>
+                        <PlaybackControls value={settings} onChange={updateSettings} disabled={starting || brollBusy || !workingTargets.length} />
                         <Section
                           title="Color looks"
                           icon={<WandSparkles size={13} />}
@@ -2086,11 +2112,6 @@ export default function App() {
                             unit="×"
                             onChange={(zoom) => updateSettings({ zoom })}
                           />
-                          <Toggle
-                            label="Mirror horizontally"
-                            value={settings.mirror}
-                            onChange={(mirror) => updateSettings({ mirror })}
-                          />
                           <Toggle label="Clean up video" value={settings.qualityCleanup ?? false} onChange={(qualityCleanup) => updateSettings({ qualityCleanup })} detail="Free cleanup on your computer: reduce noise and sharpen lightly." />
                           <Toggle label="Gentle push-in" value={settings.autoMotion ?? false} onChange={(autoMotion) => updateSettings({ autoMotion })} detail="Slow camera movement. With blur fit, the background moves." />
                           <details className="manual-subsection">
@@ -2104,18 +2125,9 @@ export default function App() {
                           </details>
                         </Section>
                         <Section
-                          title="Pace & sound"
+                          title="Sound"
                           icon={<AudioLines size={14} />}
                         >
-                          <Slider
-                            label="Playback speed"
-                            value={settings.speed}
-                            defaultValue={DEFAULT_SETTINGS.speed}
-                            min={0.5}
-                            max={2}
-                            unit="×"
-                            onChange={(speed) => updateSettings({ speed })}
-                          />
                           <Slider
                             label="Volume"
                             value={settings.volume}

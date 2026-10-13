@@ -47,6 +47,8 @@ export interface SupportingVisualOptions {
   brollMaxCoverage?: number;
 }
 export interface AutoOptions extends SupportingVisualOptions {
+  speed?: number;
+  mirror?: boolean;
   captionCorrections?: import('./caption-corrections.js').CaptionCorrection[];
   upscale?: import("./upscale.js").Upscale;
   watermarkRemoval?: import("./watermark-removal.js").WatermarkRemoval;
@@ -281,6 +283,8 @@ export interface EditPlanMedia {
   stock?: BrollAsset["stock"];
 }
 export interface EditPlanVisual {
+  /** Saved media rate after a playback-speed change. */
+  playbackSpeed?: number;
   id: string;
   mediaId: string;
   start: number;
@@ -327,7 +331,7 @@ export interface EditPlanChanges {
   captions?: CaptionCue[];
   cuts?: EditSegment[];
   visuals?: EditPlanVisual[];
-  framing?: { upscale?: RemixSettings["upscale"]; fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
+  framing?: { speed?: number; mirror?: boolean; upscale?: RemixSettings["upscale"]; fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
   correctionSeconds?: number;
 }
 export interface PromptEditRequest {

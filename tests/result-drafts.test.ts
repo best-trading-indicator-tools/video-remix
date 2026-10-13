@@ -31,6 +31,17 @@ test('network failures retain the newest browser draft and retry with the last s
   writer.schedule('newest'); await writer.flush(); assert.equal(writer.localSafe,true); assert.equal(JSON.parse(storage.data.get(draftKey('job'))!).content,'newest');
   assert.match(statuses.at(-1)!,/Browser backup saved/); fail=false; await writer.flush(); assert.equal(storage.data.size,0);
 });
+test('undo and redo back to the saved draft clears syncing without a redundant write',async()=>{
+  const storage=memory(), statuses:string[]=[];
+  let writes=0;
+  const request=(async()=>{writes++;return {draft:saved};}) as typeof apiRequest;
+  const writer=new DraftWriter('job',1,saved,message=>statuses.push(message),storage,request);
+  writer.schedule('changed playback');
+  assert.match(statuses.at(-1)!,/syncing/);
+  writer.schedule(content); await writer.flush();
+  assert.equal(writes,0); assert.equal(storage.data.size,0); assert.equal(writer.localSafe,true);
+  assert.equal(statuses.at(-1),'Draft saved · editing files protected');
+});
 test('storage and server failure make closing unsafe until a server save succeeds',async()=>{
   let fail=true; const storage={setItem:()=>{throw new Error('quota');},removeItem:()=>{throw new Error('quota');}};
   const request=(async()=>{if(fail)throw new Error('offline');return {draft:saved};}) as typeof apiRequest;

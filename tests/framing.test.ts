@@ -217,7 +217,7 @@ test("invalid focal points and caption settings fail before rendering", async ()
     { focalPoint: { x: "iw;movie=/private/file", y: 0.5 } },
     { focalPoint: null },
     { segments: [{ start: 0, end: 1, focalPoint: { x: 0.5, y: Infinity } }] },
-    { captionStyle: { fontSize: 11, bottomPercent: 10 } },
+    { captionStyle: { fontSize: 3, bottomPercent: 10 } },
     { captionStyle: { fontSize: 41, bottomPercent: 10 } },
     { captionStyle: { fontSize: 20, bottomPercent: 81 } },
     { captionStyle: { fontSize: 20, bottomPercent: 4 } },

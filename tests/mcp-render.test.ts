@@ -43,7 +43,7 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
   try {
     const source1 = path.join(directory, 'first.mp4'), source2 = path.join(directory, 'second.mp4'), outro = path.join(directory, 'outro.mp4');
     for (const [file, color, duration] of [[source1, 'red', 2], [source2, 'red', 2], [outro, 'blue', 1]] as const)
-      await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=${color}:size=320x180:rate=24:duration=${duration}`, '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', file]);
+      await exec('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-y', '-f', 'lavfi', '-i', `color=${color}:size=320x180:rate=24:duration=${duration}${file === outro ? '' : ',drawbox=x=160:y=0:w=160:h=180:color=green:t=fill'}`, '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', file]);
     backend = spawn(process.execPath, ['--import', 'tsx', 'server/index.ts'], { cwd: process.cwd(), env: environment, stdio: ['ignore', 'pipe', 'pipe'] });
     for (const stream of [backend.stdout, backend.stderr]) stream?.on('data', chunk => { log = (log + chunk.toString()).slice(-5000); });
     for (let attempt = 0; ; attempt++) {
@@ -71,6 +71,10 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
     assert.equal((await call(second, 'get_draft', { draftId: draft.id })).draft.title, 'MCP integration batch');
     draft = (await call(second, 'append_footage', { draftId: draft.id, revision: draft.revision, assetId: asset.id, audio: 'mute' })).draft;
     assert.ok(draft.items.every((item: any) => item.options.ownFootageSourceId === item.sourceId));
+    // Set speed for all, then independently flip and speed up one checked video.
+    draft = (await call(second, 'update_draft', { draftId: draft.id, revision: draft.revision, auto: { speed: .5 } })).draft;
+    draft = (await call(second, 'update_draft', { draftId: draft.id, revision: draft.revision, sourceIds: [videos[0].id], auto: { speed: 2, mirror: true } })).draft;
+    assert.equal(draft.items[1].options.speed, .5); assert.equal(draft.items[1].options.mirror ?? false, false);
     const receipt = await call(second, 'render_draft', { draftId: draft.id, revision: draft.revision });
     assert.equal(receipt.jobIds.length, 2);
     assert.deepEqual((await call(second, 'render_draft', { draftId: draft.id, revision: draft.revision })).jobIds, receipt.jobIds);
@@ -85,8 +89,10 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
       const output = path.join(directory, `${jobId}.mp4`);
       await writeFile(output, new Uint8Array(await (await fetch(job.downloadUrl)).arrayBuffer()));
       const metadata = JSON.parse((await exec('ffprobe', ['-v', 'error', '-show_entries', 'stream=width,height:format=duration', '-of', 'json', output])).stdout);
-      assert.ok(Math.abs(Number(metadata.format.duration) - 3) < .12, 'The entire one-second outro must be appended to each two-second source');
+      const speed = job.sourceId === videos[0].id ? 2 : .5;
+      assert.ok(Math.abs(Number(metadata.format.duration) - (2 / speed + 1)) < .12, 'Speed affects the source while the entire outro retains its original duration');
       const plan = await call(second, 'get_saved_edit', { jobId });
+      assert.equal(plan.settings.speed, speed); assert.equal(plan.settings.mirror, speed === 2);
       assert.equal(plan.settings.textOverlays[0].text, 'MCP TITLE');
       assert.equal(plan.settings.textOverlays[0].style.animation, 'pop');
       const changed = await call(second, 'preview_saved_edit', { jobId, changes: { revision: plan.revision, textOverlays: plan.settings.textOverlays.map((text: any) => ({ ...text, style: { ...text.style, fontSize: 30 } })) } });
@@ -99,14 +105,31 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
       await call(second, 'set_export_review', { jobIds: [jobId], review: { verdict: 'accepted-unchanged', notes: 'MCP test' } });
       assert.equal((await call(second, 'get_export_review', { jobId })).review.verdict, 'accepted-unchanged');
       assert.equal(plan.settings.blackBands.topText, 'BPC157'); assert.equal(plan.settings.blackBands.topStyle.cyrillic, true);
-      for (const [time, channel] of [[.5, 0], [2.5, 2]] as const) {
+      for (const [time, channel] of [[.5, speed === 2 ? 1 : 0], [2 / speed + .5, 2]] as const) {
         const video = metadata.streams.find((stream: any) => stream.width);
-        const pixel = (await exec('ffmpeg', ['-v', 'error', '-ss', String(time), '-i', output, '-frames:v', '1', '-vf', `crop=2:2:${Math.floor(video.width / 2)}:${Math.floor(video.height / 2)},scale=1:1`, '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { encoding: 'buffer' })).stdout;
-        assert.ok(pixel[channel]! > 180, 'The main picture is red, and the appended ending is blue');
+        const pixel = (await exec('ffmpeg', ['-v', 'error', '-ss', String(time), '-i', output, '-frames:v', '1', '-vf', `crop=2:2:${Math.floor(video.width / 4)}:${Math.floor(video.height / 2)},scale=1:1`, '-pix_fmt', 'rgb24', '-f', 'rawvideo', 'pipe:1'], { encoding: 'buffer' })).stdout;
+        assert.ok(pixel[channel]! > 90 && pixel[channel]! > pixel[(channel + 2) % 3]! + 45, 'The flipped source is green on the left; the unflipped source is red; the ending stays blue');
       }
     }
     const appJobs = await (await fetch(`${base}/api/jobs`)).json();
     assert.equal(appJobs.jobs.length, 2, 'Both exports are in the ordinary app queue with no duplicate batch');
+    const savedJobId = receipt.jobIds[0];
+    const savedPlan = await call(second, 'get_saved_edit', { jobId: savedJobId });
+    const revision = await call(second, 'render_saved_edit', { jobId: savedJobId, changes: { revision: savedPlan.revision, framing: { speed: 1.25, mirror: false } } });
+    let revised;
+    for (let attempt = 0; attempt < 150; attempt++) {
+      revised = await call(second, 'get_export', { jobId: revision.id });
+      if (revised.status === 'completed') break;
+      assert.ok(['queued', 'processing'].includes(revised.status), JSON.stringify(revised)); await pause(100);
+    }
+    assert.equal(revised.status, 'completed'); assert.deepEqual(revised.playback, { speed: 1.25, mirror: false });
+    const revisedPlan = await call(second, 'get_saved_edit', { jobId: revision.id });
+    assert.equal(revisedPlan.outputDuration, 1.6); assert.equal(revisedPlan.settings.mirror, false);
+    assert.equal(revision.auto.speed, 1.25); assert.equal(revision.auto.mirror, false);
+    const revisedFile = path.join(directory, 'revision.mp4');
+    await writeFile(revisedFile, new Uint8Array(await (await fetch(revised.downloadUrl)).arrayBuffer()));
+    const revisedDuration = Number((await exec('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=nw=1:nk=1', revisedFile])).stdout.trim());
+    assert.ok(Math.abs(revisedDuration - 2.6) < .12, 'The revised source is 1.6 seconds and retains the one-second outro');
     const captionsFile = path.join(directory, 'captions.srt');
     await writeFile(captionsFile, '1\n00:00:00,000 --> 00:00:01,500\nacme hello\n');
     const attachment = await call(second, 'import_attachment', { path: captionsFile, kind: 'subtitle' });
@@ -114,7 +137,7 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
     assert.equal(attachments.attachments[0].id, attachment.id);
     assert.equal('filePath' in attachments.attachments[0], false);
     const manual = (await call(second, 'create_draft', { sourceIds: [videos[0].id], mode: 'manual', manual: {
-      subtitleId: attachment.id, captionCorrections: [{ find: 'acme', replace: 'ACME' }], captionStyle: { animation: 'words' },
+      speed: .5, mirror: true, subtitleId: attachment.id, captionCorrections: [{ find: 'acme', replace: 'ACME' }], captionStyle: { animation: 'words' },
     } })).draft;
     const rendered = await call(second, 'render_draft', { draftId: manual.id, revision: manual.revision });
     let corrected;
@@ -124,6 +147,7 @@ test('stdio MCP imports, shares drafts across clients, appends footage and rende
       assert.ok(['queued', 'processing'].includes(corrected.status), JSON.stringify(corrected)); await pause(100);
     }
     assert.equal(corrected.status, 'completed'); assert.ok(corrected.captionUrl);
+    assert.equal(corrected.playback.speed, .5); assert.equal(corrected.playback.mirror, true);
     assert.match(await (await fetch(corrected.captionUrl)).text(), /ACME hello/);
     await call(second, 'keep_exports', { jobIds: receipt.jobIds });
     const accepted = await call(second, 'get_download_links', { jobIds: receipt.jobIds, accepted: true });

@@ -1,3 +1,4 @@
+import { playbackSettings, playbackSummary, transcriptAtSpeed } from "../shared/playback.js";
 import { applyPacing, suggestPacing } from "../shared/pacing.js";
 import { randomUUID } from "node:crypto";
 import { readFile, rename, writeFile } from "node:fs/promises";
@@ -520,6 +521,7 @@ export async function prepareAutoRemix({
   const anglePreset = anglePlan && angle ? CAPTION_PRESETS.find(preset => preset.id === ANGLE_CAPTION_PRESET[angle]) : undefined;
   const settings: RemixSettings = {
     ...DEFAULT_SETTINGS,
+    ...playbackSettings(options),
     ...(keepOriginalAudio ? DEFAULT_AUDIO_SETTINGS : {}),
     ...(options.textOverlays ? { textOverlays: structuredClone(options.textOverlays) } : {}),
     ...(options.blackBands ? { blackBands: structuredClone(options.blackBands) } : {}),
@@ -586,6 +588,12 @@ export async function prepareAutoRemix({
       notes.push(`Sound: ${choice.name}, chosen because the selected audio showed ${choice.reason}.`);
     }
   }
+  changes.push(...playbackSummary({}, settings));
+  if (settings.speed !== 1) {
+    if (captionTranscript) captionTranscript = transcriptAtSpeed(captionTranscript, settings.speed);
+    settings.callouts = settings.callouts?.map(cue => ({ ...cue, start: cue.start / settings.speed, end: cue.end / settings.speed }));
+    settings.hookDuration = Math.max(0.5, settings.hookDuration / settings.speed);
+  }
   let subtitlePath: string | undefined;
   if (captionTranscript && !keepSourceCaptions) {
     onPhase("Adding timed captions", 61);
@@ -619,7 +627,7 @@ export async function prepareAutoRemix({
       title: hook || `${path.parse(source.name).name} — cut ${job.variant}`,
       changes,
       sourceDuration: source.duration,
-      outputDuration: duration,
+      outputDuration: duration / settings.speed,
       transcriptAvailable: !!captionTranscript?.segments.length,
       usedAI,
       narration: narrated,

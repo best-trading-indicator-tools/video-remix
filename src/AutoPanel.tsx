@@ -1,3 +1,4 @@
+import PlaybackControls from "./PlaybackControls";
 import UpscaleControl from "./UpscaleControl";
 import ProblemNotice from "./ProblemNotice";
 import SupportingVisualsEditor from "./SupportingVisualsEditor";
@@ -191,6 +192,7 @@ export default function AutoPanel({
           )}
         </div>
         {promptEditor}
+        <PlaybackControls value={options} onChange={patch => onChange({ ...options, ...patch })} disabled={footageDisabled} />
         <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={onLengthChange} />
         <section className="auto-layout" aria-labelledby="auto-layout-title">
           <h3 id="auto-layout-title">Black bands &amp; text</h3>

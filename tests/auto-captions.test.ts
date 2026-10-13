@@ -73,6 +73,19 @@ test("Auto preserves existing captions, supports explicit choices, and keeps spe
       return { job, result, workDir, phases };
     };
 
+    await t.test("Auto speed keeps source cuts and retimes generated captions before saving", async () => {
+      for (const speed of [.5, 2]) {
+        const { job, result } = await prepare(clean, "add", false, undefined, { durationMode: "full", speed, mirror: true, audio: "off" });
+        assert.deepEqual(result.settings.segments, [{ start: 0, end: clean.duration }]);
+        assert.equal(result.settings.speed, speed); assert.equal(result.settings.mirror, true);
+        assert.equal(result.summary.outputDuration, clean.duration / speed);
+        assert.equal(result.transcript!.segments[1]!.start, transcript.segments[1]!.start / speed);
+        assert.ok(job.editPlan!.captions.every(cue => cue.end <= clean.duration / speed));
+        assert.equal(job.editPlan!.outputDuration, clean.duration / speed);
+        assert.deepEqual(result.sourceTranscript, transcript);
+      }
+    });
+
     await t.test("Sound None preserves source level, skips all treatment and survives saved revisions", async () => {
       const spaced = await sourceFor(cleanPath, "en", { ...transcript,
         segments: [{ ...transcript.segments[0]!, end: 2.8, words: [

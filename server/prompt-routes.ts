@@ -27,14 +27,16 @@ const manualRequestSchema = z.object({ prompt: z.string().trim().min(1).max(2000
 export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?: Transcript, refreshBroll?: boolean): EditPlanChanges {
   const changes: EditPlanChanges = { revision: base.revision };
   if (differs(base.cuts, next.cuts)) changes.cuts = next.cuts;
-  const retimed = changes.cuts ? applyEditPlanChanges(base, changes, transcript) : base;
+  if (base.settings.speed !== next.settings.speed) changes.framing = { speed: next.settings.speed };
+  const retimed = changes.cuts || changes.framing ? applyEditPlanChanges(base, changes, transcript) : base;
   if (differs(base.settings.ownFootage, next.settings.ownFootage)) changes.ownFootage = next.settings.ownFootage || [];
   if (differs(base.settings.textOverlays, next.settings.textOverlays)) changes.textOverlays = next.settings.textOverlays || [];
+  if (retimed.settings.hookDuration !== next.settings.hookDuration) changes.hookDuration = next.settings.hookDuration;
   if (base.settings.hookText !== next.settings.hookText) changes.hookText = next.settings.hookText;
   if (differs(retimed.captions, next.captions)) changes.captions = next.captions;
   if (differs(retimed.visuals, next.visuals)) changes.visuals = next.visuals;
   const framing: NonNullable<EditPlanChanges["framing"]> = {};
-  for (const key of ["fit", "focalPoint", "captionStyle", "blackBands", "upscale"] as const) {
+  for (const key of ["speed", "mirror", "fit", "focalPoint", "captionStyle", "blackBands", "upscale"] as const) {
     if (differs(base.settings[key], next.settings[key])) Object.assign(framing, { [key]: next.settings[key] });
   }
   if (Object.keys(framing).length) changes.framing = framing;
