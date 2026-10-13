@@ -78,6 +78,17 @@ test("link submission preserves server and network errors and clears their deadl
   assert.equal(signal!.aborted, false);
 });
 
+test("standalone video/image batches use the media endpoint without modifying the supplied links or metadata setting", async t => {
+  const links = [...videoLinks, "https://www.instagram.com/p/Post/?img_index=3", "https://www.tiktok.com/@creator/photo/12345"];
+  t.mock.method(globalThis, "fetch", async (url, init: RequestInit) => {
+    assert.equal(url, "/api/downloads"); assert.equal(init.method, "POST");
+    assert.deepEqual(JSON.parse(init.body as string), { links, kind: "media", stripMetadata: false });
+    return Response.json({ imports: [], errors: [] }, { status: 202 });
+  });
+  await importVideoLinks(links, { kind: "media", stripMetadata: false });
+  assert.equal(links.length, 3); assert.match(links[1]!, /img_index=3$/u);
+});
+
 test("resume identity reads bounded edge samples, including a video larger than 4 GiB", async () => {
   const calls: [number, number | undefined][] = [];
   const large = 40 * 1024 ** 3;

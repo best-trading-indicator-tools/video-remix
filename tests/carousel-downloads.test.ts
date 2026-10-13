@@ -1,11 +1,13 @@
 import assert from "node:assert/strict";
-import { spawn, type ChildProcess } from "node:child_process";
+import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { access, chmod, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { promisify } from "node:util";
 import extract from "extract-zip";
+import sharp from "sharp";
 import { Client } from "@modelcontextprotocol/client";
 import { InMemoryTransport } from "@modelcontextprotocol/server";
 import { createRemixMcpServer } from "../server/mcp/server.js";
@@ -13,12 +15,26 @@ import { RemixMcpService } from "../server/mcp/service.js";
 import { RemixApi } from "../server/mcp/api.js";
 import { DraftStore } from "../server/mcp/drafts.js";
 import type { ImportSession } from "../shared/imports.js";
-import { socialCarouselLink, parseSocialVideoLinks } from "../shared/social-imports.js";
-import { downloadSocialCarousel } from "../server/carousel-downloads.js";
+import { socialCarouselLink, socialMediaLink, parseSocialVideoLinks } from "../shared/social-imports.js";
+import { downloadSocialCarousel, downloadSocialMedia } from "../server/carousel-downloads.js";
 
 const instagram = "https://www.instagram.com/p/DeXDaIPFCju/";
 const tiktok = "https://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544";
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const exec = promisify(execFile);
+
+test("single media URLs retain selected Instagram slides and accept TikTok photos without widening imports", () => {
+  assert.equal(socialMediaLink(`${instagram}?img_index=3&tracking=x`).url, `${instagram}?img_index=3`);
+  assert.equal(socialMediaLink(`${instagram}?img_index=1`).url, instagram);
+  assert.equal(socialMediaLink(tiktok).url, tiktok);
+  assert.equal(socialMediaLink("https://www.instagram.com/reels/MediaVideo/").url, "https://www.instagram.com/reel/MediaVideo/");
+  assert.equal(socialMediaLink("https://youtu.be/BaW_jenozKc").platform, "YouTube");
+  const parsed = parseSocialVideoLinks(`${instagram} ${instagram}?img_index=1 ${instagram}?img_index=3 ${tiktok}`, "media");
+  assert.deepEqual(parsed.links, [instagram, `${instagram}?img_index=3`, tiktok]); assert.equal(parsed.duplicates, 1);
+  assert.equal(parseSocialVideoLinks(tiktok).invalid.length, 1);
+  for (const url of ["https://instagram.com/user/", "https://tiktok.com/@user", "https://localhost/photo/1", "https://instagram.com:123/p/Post/", "https://user:pw@instagram.com/p/Post/", `${instagram}?img_index=0`, `${instagram}?img_index=-1`, `${instagram}?img_index=101`, `${instagram}?img_index=1.5`])
+    assert.throws(() => socialMediaLink(url));
+});
 
 test("carousel URLs normalize whole posts, remove img_index and tracking, and reject profiles or arbitrary websites", () => {
   assert.equal(socialCarouselLink(`${instagram}?img_index=1&`).url, instagram);
@@ -35,9 +51,13 @@ test("carousel URLs normalize whole posts, remove img_index and tracking, and re
 test("carousel queue, image ZIPs, MCP selection, persistence, failures and cancellation", { timeout: 120_000 }, async t => {
   const root = process.cwd(), directory = await mkdtemp(path.join(os.tmpdir(), "remix-carousel-"));
   const binary = path.join(directory, "gallery-fixture.mjs"), data = path.join(directory, "data");
+  const videoBinary = path.join(directory, "video-fixture.mjs");
   const fixture = path.join(root, "tests/fixtures/astronaut.jpg");
   await writeFile(binary, `#!${process.execPath}\n${await readFile(path.join(root, "tests/fixtures/gallery-download.mjs"), "utf8")}`); await chmod(binary, 0o700);
-  const environment = { GALLERY_DL_BIN: binary, REMIX_TEST_CAROUSEL_DIR: directory, REMIX_TEST_CAROUSEL_IMAGE: fixture, YT_DLP_COOKIES: "" };
+  await writeFile(videoBinary, `#!${process.execPath}\n${await readFile(path.join(root, "tests/fixtures/media-video-download.mjs"), "utf8")}`); await chmod(videoBinary, 0o700);
+  for (const format of ["png", "webp", "avif"] as const) await sharp(fixture).resize(160, 160).toFormat(format).toFile(path.join(directory, `fixture.${format}`));
+  await exec("ffmpeg", ["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc2=size=160x90:rate=12:duration=1", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-metadata", "title=SOURCE_METADATA_MARKER", "-shortest", path.join(directory, "fixture.mp4")]);
+  const environment = { GALLERY_DL_BIN: binary, YT_DLP_BIN: videoBinary, REMIX_TEST_CAROUSEL_DIR: directory, REMIX_TEST_CAROUSEL_IMAGE: fixture, YT_DLP_COOKIES: "" };
   const previous = Object.fromEntries(Object.keys(environment).map(key => [key, process.env[key]])); Object.assign(process.env, environment);
   const listener = net.createServer(); await new Promise<void>(resolve => listener.listen(0, "127.0.0.1", resolve));
   const port = (listener.address() as net.AddressInfo).port; await new Promise<void>(resolve => listener.close(() => resolve()));
@@ -105,6 +125,79 @@ test("carousel queue, image ZIPs, MCP selection, persistence, failures and cance
       await stop(); await start();
       assert.equal((await get(ready[0]!.id)).status, "completed"); await unpack(`${base}${ready[0]!.download!.url}`);
       assert.equal((await fetch(`${base}/api/downloads/selected.zip?ids=${ready[0]!.id},${ready[0]!.id}`)).status, 400);
+    });
+    await t.test("single media MCP detects images and videos in a mixed batch, preserving original image formats and selected slides", async () => {
+      const links = [instagram, `${instagram}?img_index=3`, tiktok, "https://vm.tiktok.com/ShortPhoto/", "https://www.tiktok.com/@creator/video/12345",
+        "https://www.instagram.com/p/Png/", "https://www.instagram.com/p/Webp/", "https://www.instagram.com/p/Avif/",
+        "https://www.instagram.com/reel/MediaVideo/", "https://youtu.be/BaW_jenozKc"];
+      const queued = await call("download_media", { links: [...links, `${instagram}?img_index=1`] });
+      assert.equal(queued.imports.length, links.length);
+      const singles: ImportSession[] = await Promise.all(queued.imports.map((item: ImportSession) => wait(item.id, entry => entry.status === "completed" || entry.status === "failed")));
+      for (const [index, item] of singles.entries()) {
+        assert.equal(item.status, "completed", JSON.stringify(item)); assert.equal(item.downloadKind, "media");
+        const image = index < 8;
+        assert.equal(item.download!.mediaType, image ? "image" : "video"); assert.equal(item.stripMetadata, !image);
+        assert.equal(item.download!.imageCount, undefined);
+        const response = await fetch(`${base}${item.download!.url}`); assert.equal(response.status, 200);
+        assert.match(response.headers.get("content-type")!, image ? /^image\//u : /^video\/mp4/u);
+        assert.match(response.headers.get("content-disposition")!, /attachment/);
+        if (image) {
+          const format = path.extname(item.name), original = format === ".jpg" ? fixture : path.join(directory, `fixture${format}`);
+          assert.deepEqual(Buffer.from(await response.arrayBuffer()), await readFile(original));
+          assert.deepEqual(Buffer.from(await (await fetch(`${base}${item.download!.thumbnailUrl}`)).arrayBuffer()), await readFile(original));
+          assert.equal(item.download!.duration, undefined);
+          assert.match(item.name, index === 1 ? /003\.jpg$/u : /001\.(jpg|png|webp|avif)$/u);
+        } else {
+          assert.ok(item.download!.duration! > 0); assert.equal(item.download!.width, 160);
+          assert.equal((await fetch(`${base}${item.download!.thumbnailUrl}`)).status, 200);
+        }
+      }
+      const subset = [singles[1]!, singles[8]!];
+      const selected = await unpack((await call("get_download_links", { downloadIds: subset.map(item => item.id) })).downloadsZip);
+      assert.deepEqual((await readdir(selected)).sort(), subset.map((item, i) => `${String(i + 1).padStart(2, "0")}-${item.name}`));
+      const all = await unpack((await call("get_download_links", { downloadIds: singles.map(item => item.id) })).downloadsZip);
+      assert.equal((await readdir(all)).length, singles.length);
+      await stop(); await start();
+      for (const item of singles) { assert.equal((await get(item.id)).status, "completed"); assert.equal((await fetch(`${base}${item.download!.url}`)).status, 200); }
+      assert.deepEqual((await (await fetch(`${base}/api/sources`)).json()).sources, []);
+      assert.deepEqual((await (await fetch(`${base}/api/jobs`)).json()).jobs, []);
+      const original = await call("download_media", { links: ["https://www.instagram.com/p/MediaVideo/"], stripMetadata: false });
+      const video = await wait(original.imports[0].id, item => item.status === "completed" || item.status === "failed");
+      assert.equal(video.status, "completed", JSON.stringify(video)); assert.equal(video.stripMetadata, false);
+      assert.deepEqual(Buffer.from(await (await fetch(`${base}${video.download!.url}`)).arrayBuffer()), await readFile(path.join(directory, "fixture.mp4")));
+      await rm(path.join(data, "uploads", `${singles[0]!.id}.jpg`)); await stop(); await start();
+      assert.equal((await get(singles[0]!.id)).status, "failed");
+      await call("retry_import", { importId: singles[0]!.id });
+      assert.equal((await wait(singles[0]!.id, item => item.status === "completed")).download!.mediaType, "image");
+    });
+    await t.test("single images retry and recover after restart, while cancellation leaves other downloads alone", async () => {
+      const response = await post("/api/downloads", { kind: "media", links: ["https://www.instagram.com/p/SingleRetry/", "https://www.instagram.com/p/SlowSingle/", "https://localhost/photo/1"] });
+      const queued = await response.json(); assert.equal(response.status, 202); assert.equal(queued.errors.length, 1);
+      const [retry, slow] = queued.imports as ImportSession[];
+      await wait(retry!.id, item => item.status === "failed"); await call("retry_import", { importId: retry!.id });
+      assert.equal((await wait(retry!.id, item => item.status === "completed")).download!.mediaType, "image");
+      await wait(slow!.id, item => item.phase.startsWith("Downloading image")); await call("cancel_import", { importId: slow!.id });
+      assert.equal((await fetch(`${base}/api/imports/${slow!.id}`)).status, 404);
+      await assert.rejects(access(path.join(data, "imports", slow!.id)), { code: "ENOENT" });
+      const pending = await call("download_media", { links: ["https://www.instagram.com/p/SlowSingleRestart/"] });
+      const id = pending.imports[0].id;
+      await wait(id, item => item.phase.startsWith("Downloading image")); await stop(); await start();
+      const image = await wait(id, item => item.status === "completed" || item.status === "failed");
+      assert.equal(image.status, "completed", JSON.stringify(image)); assert.equal(image.download!.mediaType, "image");
+      await call("cancel_import", { importId: id });
+      await assert.rejects(access(path.join(data, "uploads", `${id}.jpg`)), { code: "ENOENT" });
+      assert.equal((await get(ready[0]!.id)).status, "completed");
+    });
+    await t.test("single-file extraction rejects invalid output, missing slides, oversized files and non-post URLs", async () => {
+      for (const [postId, expected] of [["Empty", /No video or image/], ["Private", /requires a login/], ["Unsafe", /invalid or duplicate/], ["Duplicate", /invalid or duplicate/], ["Many", /more than one file/], ["Invalid", /unreadable/], ["Missing", /not fully downloaded/], ["Symlink", /not fully downloaded/]] as const) {
+        if (postId === "Symlink" && process.platform === "win32") continue;
+        const work = await mkdtemp(path.join(directory, "single-runner-"));
+        await assert.rejects(downloadSocialMedia(`https://www.instagram.com/p/${postId}/`, work, { signal: new AbortController().signal, maxBytes: 10_000_000, checkSpace: async () => {}, onProgress: () => {} }), expected);
+      }
+      const work = await mkdtemp(path.join(directory, "single-size-"));
+      await assert.rejects(downloadSocialMedia(instagram, work, { signal: new AbortController().signal, maxBytes: 10, checkSpace: async () => {}, onProgress: () => {} }), /size limit/);
+      assert.equal((await post("/api/downloads", { kind: "media", links: ["https://example.com/image.jpg"] })).status, 400);
+      assert.equal((await post("/api/imports/links", { links: [tiktok] })).status, 400);
     });
     await t.test("partial images never become a ready ZIP, retry retains kind, and cancellation deletes working files", async () => {
       const response = await post("/api/downloads", { kind: "carousel", links: ["https://www.instagram.com/p/Missing/", "https://www.instagram.com/p/Retry/", "https://www.instagram.com/p/Slow/", "https://localhost/private"] });

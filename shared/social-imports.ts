@@ -1,7 +1,7 @@
 export class SocialImportError extends Error {}
 
 /** Accept pasted lists and keep invalid entries available for correction. */
-export function parseSocialVideoLinks(input: string, kind: "video" | "carousel" = "video") {
+export function parseSocialVideoLinks(input: string, kind: "video" | "media" | "carousel" = "video") {
   const links: string[] = [];
   const invalid: { input: string; error: string }[] = [];
   const seen = new Set<string>();
@@ -12,7 +12,7 @@ export function parseSocialVideoLinks(input: string, kind: "video" | "carousel" 
     .split(/\s+/u).map(value => value.replace(/^[,;]+|[,;]+$/gu, "")).filter(Boolean);
   for (const candidate of candidates) {
     try {
-      const { url } = kind === "carousel" ? socialCarouselLink(candidate) : socialVideoLink(candidate);
+      const { url } = (kind === "carousel" ? socialCarouselLink : kind === "media" ? socialMediaLink : socialVideoLink)(candidate);
       const key = url.replace(/\/$/u, "");
       if (seen.has(key)) { duplicates++; continue; }
       seen.add(key);
@@ -22,6 +22,25 @@ export function parseSocialVideoLinks(input: string, kind: "video" | "carousel" 
     }
   }
   return { links, invalid, duplicates };
+}
+
+/** Standalone single-file downloads accept photos without widening video imports. */
+export function socialMediaLink(input: string): { url: string; platform: string } {
+  let link: { url: string; platform: string };
+  try { link = socialVideoLink(input); }
+  catch {
+    try { link = socialCarouselLink(input); }
+    catch { throw new SocialImportError("Paste a direct Instagram or TikTok video/image post, or a YouTube video/Shorts link."); }
+  }
+  if (link.platform === "Instagram" && new URL(link.url).pathname.startsWith("/p/")) {
+    const index = new URL(input.trim()).searchParams.get("img_index");
+    if (index !== null) {
+      if (!/^\d{1,3}$/u.test(index) || Number(index) < 1 || Number(index) > 100)
+        throw new SocialImportError("The Instagram slide index must be between 1 and 100.");
+      if (Number(index) > 1) link.url += `?img_index=${Number(index)}`;
+    }
+  }
+  return link;
 }
 
 /** A carousel is one post, never an account, collection, or arbitrary website. */

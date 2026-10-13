@@ -101,7 +101,7 @@ export function createUploadImport(file: File, identity: string, signal?: AbortS
   }));
 }
 
-export async function importVideoLinks(links: string[], download?: { stripMetadata: boolean; kind?: "video" | "carousel" }): Promise<{
+export async function importVideoLinks(links: string[], download?: { stripMetadata: boolean; kind?: "video" | "media" | "carousel" }): Promise<{
   imports: ImportSession[]; errors?: { name: string; error: string }[];
 }> {
   const controller = new AbortController();

@@ -104,7 +104,7 @@ it as a client setting.
 | --- | --- |
 | Engine, providers and models | `get_status`, `get_provider_status`, `test_provider`, `get_local_models`, `get_deepseek_balance` |
 | Local sources, footage and SRT/audio | `list_videos`, `list_footage`, `list_attachments`, `import_videos`, `import_footage`, `import_attachment`, `tag_footage`, `remove_media` |
-| Social imports and standalone downloader | `import_links`, `download_videos`, `download_carousels`, `list_imports`, `list_downloads`, `retry_import`, `cancel_import` |
+| Social imports and standalone downloader | `import_links`, `download_videos`, `download_media`, `download_carousels`, `list_imports`, `list_downloads`, `retry_import`, `cancel_import` |
 | Batch editing and prompts | `create_draft`, `get_draft`, `list_drafts`, `clone_draft`, `update_draft`, `append_footage`, `apply_prompt_to_draft`, `get_editing_catalog` |
 | Persistent Undo/Redo | `list_draft_history`, `restore_draft` |
 | Reusable styles | `list_finishing_presets`, `save_finishing_preset`, `apply_finishing_preset`, `remove_finishing_preset` |
@@ -117,6 +117,17 @@ it as a client setting.
 | History, projects and measurements | `list_history`, `list_projects`, `set_project`, `get_measurements`, `set_measurements`, `set_publication_records` |
 | Promotion profiles and post copy | `get_publishing`, `save_promotion_profile`, `import_store_profile`, `get_post_draft`, `save_post_draft`, `generate_post_copy` |
 | Explicitly requested scheduling | `schedule_posts`, `refresh_publication`, `cancel_publication`, `resolve_publication` |
+
+### Video and image downloads
+
+Call `download_media` with up to 100 YouTube video or Instagram/TikTok post URLs.
+Each URL produces a single video or original image based on the post content.
+For multi-item posts it saves the first item, or the Instagram `img_index` slide.
+`stripMetadata` defaults to true and applies only to videos. Poll `list_downloads`
+for `downloadKind: "media"`, `download.mediaType` (`video` or `image`), file URLs
+and expiry. Pass selected ready IDs (or all ready IDs) to `get_download_links`
+as `downloadIds` for a mixed video/image ZIP. Existing `download_videos` remains
+video-only. The HTTP equivalent is `POST /api/downloads` with `kind: "media"`.
 
 ### Carousel downloads
 

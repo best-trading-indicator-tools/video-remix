@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, Download, Images, Film, Link2, LoaderCircle, RotateCcw, ShieldCheck, X } from "lucide-react";
+import { Check, Download, Image as ImageIcon, Images, Film, Link2, LoaderCircle, RotateCcw, ShieldCheck, X } from "lucide-react";
 import type { Health } from "../shared/types";
 import { DEFAULT_IMPORT_BATCH_SIZE, type ImportSession } from "../shared/imports";
 import { parseSocialVideoLinks } from "../shared/social-imports";
@@ -9,21 +9,21 @@ import "./url-downloader.css";
 
 type DownloaderProps = { health: Health | null; connected: boolean; active: boolean };
 export default function UrlDownloader(props: DownloaderProps) {
-  const [kind, setKind] = useState<"video" | "carousel">("video");
+  const [kind, setKind] = useState<"media" | "carousel">("media");
   return <div className="url-downloader">
     <div className="downloader-modes" role="tablist" aria-label="Download type">
-      <button id="download-video-tab" role="tab" aria-controls="download-video-panel" aria-selected={kind === "video"} tabIndex={kind === "video" ? 0 : -1}
-        onKeyDown={event => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { setKind("carousel"); document.getElementById("download-carousel-tab")?.focus(); } }} onClick={() => setKind("video")}><Film size={17} />Videos</button>
+      <button id="download-media-tab" role="tab" aria-controls="download-media-panel" aria-selected={kind === "media"} tabIndex={kind === "media" ? 0 : -1}
+        onKeyDown={event => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { setKind("carousel"); document.getElementById("download-carousel-tab")?.focus(); } }} onClick={() => setKind("media")}><Film size={17} />Videos / images</button>
       <button id="download-carousel-tab" role="tab" aria-controls="download-carousel-panel" aria-selected={kind === "carousel"} tabIndex={kind === "carousel" ? 0 : -1}
-        onKeyDown={event => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { setKind("video"); document.getElementById("download-video-tab")?.focus(); } }} onClick={() => setKind("carousel")}><Images size={17} />Carousel images</button>
+        onKeyDown={event => { if (event.key === "ArrowRight" || event.key === "ArrowLeft") { setKind("media"); document.getElementById("download-media-tab")?.focus(); } }} onClick={() => setKind("carousel")}><Images size={17} />Carousel images</button>
     </div>
-    {(["video", "carousel"] as const).map(mode => <div key={mode} id={`download-${mode}-panel`} role="tabpanel" aria-labelledby={`download-${mode}-tab`} hidden={kind !== mode}>
+    {(["media", "carousel"] as const).map(mode => <div key={mode} id={`download-${mode}-panel`} role="tabpanel" aria-labelledby={`download-${mode}-tab`} hidden={kind !== mode}>
       <DownloadPanel {...props} kind={mode} active={props.active && kind === mode} />
     </div>)}
   </div>;
 }
 
-function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { kind: "video" | "carousel" }) {
+function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { kind: "media" | "carousel" }) {
   const carousel = kind === "carousel";
   const [links, setLinks] = useState("");
   const [stripMetadata, setStripMetadata] = useState(true);
@@ -56,7 +56,7 @@ function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { 
       try {
         const result = await importRequest<{ imports: ImportSession[] }>("/api/downloads", { signal: controller.signal });
         if (!controller.signal.aborted && started === version.current) {
-          setItems(result.imports.filter(item => (item.downloadKind || "video") === kind)); setLoaded(true); setConnectionError("");
+          setItems(result.imports.filter(item => carousel ? item.downloadKind === "carousel" : item.downloadKind !== "carousel")); setLoaded(true); setConnectionError("");
           setSelected(current => current.filter(id => result.imports.some(item => item.id === id && item.status === "completed" && item.download)));
         }
       } catch (error) { if (!controller.signal.aborted) setConnectionError(error instanceof Error ? error.message : "Could not refresh downloads."); }
@@ -64,7 +64,7 @@ function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { 
     };
     void poll(); const timer = window.setInterval(() => void poll(), 1500);
     return () => { clearInterval(timer); controller.abort(); };
-  }, [active, kind]);
+  }, [active, carousel]);
 
   const start = async () => {
     if (submitting.current || !batch.links.length || batch.links.length > maximum) return;
@@ -75,7 +75,7 @@ function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { 
       setItems(current => [...result.imports, ...current.filter(item => !result.imports.some(added => added.id === item.id))]);
       const unresolved = [...batch.invalid.map(item => item.input), ...(result.errors ?? []).map(item => item.name)];
       setLinks(unresolved.join("\n"));
-      setNotice(`${result.imports.length} ${carousel ? "carousel" : "video"}${result.imports.length === 1 ? "" : "s"} added.${unresolved.length ? " Links needing attention remain above." : ""}`);
+      setNotice(`${result.imports.length} ${carousel ? "carousel" : "download"}${result.imports.length === 1 ? "" : "s"} added.${unresolved.length ? " Links needing attention remain above." : ""}`);
       if (result.errors?.length) setError(result.errors.map(item => `${item.name}: ${item.error}`).join("\n"));
     } catch (error) { setError(error instanceof Error ? error.message : "Could not add these links."); }
     finally { submitting.current = false; setBusy(false); }
@@ -96,30 +96,29 @@ function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { 
     finally { requests.current.delete(item.id); setPending([...requests.current]); }
   };
 
-  return <section className="url-downloader" aria-label={carousel ? "Carousel downloader" : "Video downloader"}>
+  return <section className="url-downloader" aria-label={carousel ? "Carousel downloader" : "Video and image downloader"}>
     <section className="panel downloader-entry">
-      <div className="downloader-title"><div><span className="eyebrow">EXTRA TOOL</span><h2>{carousel ? "Carousel images" : "Paste links. Save videos."}</h2></div><span className="downloader-free">Free · No AI credits</span></div>
-      <p>{carousel ? "Instagram posts and TikTok photo slideshows. Original images, in slide order, as a ZIP." : `Download from YouTube, YouTube Shorts, TikTok and Instagram. Paste up to ${maximum} video links at once.`}</p>
+      <div className="downloader-title"><div><span className="eyebrow">EXTRA TOOL</span><h2>{carousel ? "Carousel images" : "Videos / images"}</h2></div><span className="downloader-free">Free · No AI credits</span></div>
+      <p>{carousel ? "Instagram posts and TikTok photo slideshows. Original images, in slide order, as a ZIP." : "Videos from YouTube, TikTok and Instagram. Images from Instagram and TikTok, in their original format."}</p>
       <form onSubmit={event => { event.preventDefault(); void start(); }}>
-        <label htmlFor={`download-${kind}-links`}>{carousel ? "Carousel links" : "Video links"}</label>
+        <label htmlFor={`download-${kind}-links`}>{carousel ? "Carousel links" : "Video or image links"}</label>
         <textarea id={`download-${kind}-links`} rows={5} value={links} disabled={busy} spellCheck={false}
-          placeholder={carousel ? 'https://www.instagram.com/p/DeXDaIPFCju/\nhttps://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544' : 'https://www.youtube.com/shorts/…\nhttps://www.tiktok.com/@creator/video/…\nhttps://www.instagram.com/reel/…'}
+          placeholder={carousel ? 'https://www.instagram.com/p/DeXDaIPFCju/\nhttps://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544' : 'https://www.youtube.com/shorts/…\nhttps://www.instagram.com/p/…\nhttps://www.tiktok.com/@creator/photo/…'}
           onChange={event => setLinks(event.target.value)} aria-describedby={`download-${kind}-help`} />
-        <p id={`download-${kind}-help`} className="downloader-note">{carousel ? `Up to ${maximum} posts per batch. Images only; video slides and audio are skipped.` : "One link per line, or separate links with spaces or commas. Duplicate links in this batch are skipped."}</p>
+        <p id={`download-${kind}-help`} className="downloader-note">{carousel ? `Up to ${maximum} posts per batch. Images only; video slides and audio are skipped.` : `Up to ${maximum} links per batch. One file per post; Instagram slide links keep the selected slide.`}</p>
         {links.trim() && <div className="downloader-link-summary" role="status"><strong>{batch.links.length} valid {batch.links.length === 1 ? "link" : "links"}</strong>
           {batch.duplicates > 0 && <span>{batch.duplicates} duplicate{batch.duplicates === 1 ? "" : "s"} skipped</span>}
           {batch.invalid.length > 0 && <span>{batch.invalid.length} {batch.invalid.length === 1 ? "link needs" : "links need"} attention</span>}</div>}
         {batch.invalid.length > 0 && <ul className="downloader-invalid">{batch.invalid.slice(0, 5).map((item, index) => <li key={index}><strong>{item.input}</strong> — {item.error}</li>)}{batch.invalid.length > 5 && <li>And {batch.invalid.length - 5} more invalid links.</li>}</ul>}
         {batch.links.length > maximum && <p className="downloader-validation" role="alert">Use up to {maximum} links per batch.</p>}
         <div className="downloader-start">{carousel ? <span className="downloader-note">Original image quality and format</span> : <label className="downloader-clean"><input type="checkbox" checked={stripMetadata} disabled={busy} onChange={event => setStripMetadata(event.target.checked)} />
-          <span><strong>Strip metadata</strong><small>{stripMetadata ? "Remove source tags, chapters and software tags." : "Save the imported file with its original metadata."}</small></span></label>}
+          <span><strong>Strip video metadata</strong><small>{stripMetadata ? "Remove video tags and chapters. Images stay original." : "Original video metadata and image files."}</small></span></label>}
           <button className="primary-button" disabled={busy || !connected || !health?.ok || !batch.links.length || batch.links.length > maximum} type="submit">
-            {busy ? <LoaderCircle size={17} className="spin" /> : <Download size={17} />}{busy ? "Adding links…" : carousel ? batch.links.length > 1 ? `Get ${batch.links.length} carousels` : "Get images" : batch.links.length > 1 ? `Get ${batch.links.length} videos` : "Get video"}</button></div>
+            {busy ? <LoaderCircle size={17} className="spin" /> : <Download size={17} />}{busy ? "Adding links…" : carousel ? batch.links.length > 1 ? `Get ${batch.links.length} carousels` : "Get images" : batch.links.length > 1 ? `Get ${batch.links.length} files` : "Get file"}</button></div>
       </form>
-      {!carousel && <p className="downloader-note">Full videos with their original audio. Downloads stay on this page; your editing workspace and its importer remain separate.</p>}
     </section>
     {notice && <p className="downloader-notice" role="status"><Check size={16} />{notice}</p>}
-    {error && <ProblemNotice message={error} operation="Download videos" />}
+    {error && <ProblemNotice message={error} operation="Download media" />}
     {connectionError && <ProblemNotice message={connectionError} operation="Refresh downloads" />}
     <section className="panel downloader-results" aria-label="Download queue">
       <div className="downloader-title"><div><h2>Your downloads</h2><p role="status">{ready.length} ready{working ? ` · ${working} in progress` : ""}{failed ? ` · ${failed} need attention` : ""}</p></div>
@@ -129,27 +128,27 @@ function DownloadPanel({ health, connected, active, kind }: DownloaderProps & { 
       {ready.length > 0 && <div className="downloader-selection"><label><input ref={selectAll} type="checkbox" checked={allSelected}
         onChange={event => setSelected(event.target.checked ? ready.slice(0, 100).map(item => item.id) : [])} />{ready.length > 100 ? "Select first 100 ready" : "Select all ready"}</label><span>{selectedReady.length} selected</span>
         {selectedReady.length > 0 && <button className="text-button" onClick={() => setSelected([])}>Clear selection</button>}</div>}
-      {!items.length && <div className="downloader-empty">{carousel ? <Images size={28} /> : <Link2 size={28} />}<h3>{loaded ? carousel ? "No carousel downloads yet" : "Your links become downloads here" : "Loading downloads…"}</h3>{!carousel && <p>Paste a video link above to get started. Each video has its own progress and retry button.</p>}</div>}
+      {!items.length && <div className="downloader-empty">{carousel ? <Images size={28} /> : <Link2 size={28} />}<h3>{loaded ? carousel ? "No carousel downloads yet" : "No downloads yet" : "Loading downloads…"}</h3></div>}
       <div className="downloader-list">{items.map(item => {
-        const isReady = item.status === "completed" && item.download, isPending = pending.includes(item.id);
+        const isReady = item.status === "completed" && item.download, isPending = pending.includes(item.id), image = item.download?.mediaType === "image";
         return <article className={`downloader-card is-${item.status}`} key={item.id} aria-label={item.name}>
           <div className="downloader-card-main">
             <input type="checkbox" aria-label={`Select ${item.name}`} checked={!!isReady && selected.includes(item.id)} disabled={!isReady || (!selected.includes(item.id) && selectedReady.length >= 100)}
               onChange={event => setSelected(current => event.target.checked ? [...current, item.id] : current.filter(id => id !== item.id))} />
             {isReady ? <img className="downloader-thumbnail" src={item.download!.thumbnailUrl} alt="" loading="lazy" /> : <div className="downloader-thumbnail placeholder"><Link2 size={21} /></div>}
             <div className="downloader-details"><h3>{item.name}</h3>{item.remoteUrl && <a className="downloader-source-link" href={item.remoteUrl} target="_blank" rel="noreferrer">{item.remoteUrl}</a>}
-              <div className="downloader-meta">{isReady ? <>{carousel ? <span><Images size={13} />{item.download!.imageCount} images</span> : <><span>{Math.floor(item.download!.duration! / 60)}:{String(Math.floor(item.download!.duration! % 60)).padStart(2, "0")}</span><span>{item.download!.width} × {item.download!.height}</span></>}<span>{formatFileSize(item.download!.size)}</span></> : <span>{item.status === "processing" && <LoaderCircle size={13} className="spin" aria-hidden="true" />}{item.phase}</span>}
-                <span>{carousel ? "Original images" : item.stripMetadata !== false ? <><ShieldCheck size={13} />Metadata {isReady ? "stripped" : "cleanup on"}</> : "Original metadata"}</span></div>
+              <div className="downloader-meta">{isReady ? <>{carousel ? <span><Images size={13} />{item.download!.imageCount} images</span> : image ? <span><ImageIcon size={13} />{item.name.split(".").at(-1)?.toUpperCase()} image</span> : <><span>{Math.floor(item.download!.duration! / 60)}:{String(Math.floor(item.download!.duration! % 60)).padStart(2, "0")}</span><span>{item.download!.width} × {item.download!.height}</span></>}<span>{formatFileSize(item.download!.size)}</span></> : <span>{item.status === "processing" && <LoaderCircle size={13} className="spin" aria-hidden="true" />}{item.phase}</span>}
+                <span>{carousel ? "Original images" : image ? "Original image" : item.stripMetadata !== false ? <><ShieldCheck size={13} />{isReady ? "Metadata stripped" : "Video metadata cleanup on"}</> : "Original metadata"}</span></div>
               {item.status === "processing" && <progress max={100} value={item.progress > 0 ? item.progress : undefined} aria-label={`Download progress for ${item.name}`} />}
             </div>
             <div className="downloader-card-actions">
-              {isReady && <a className="secondary-button" href={item.download!.url} download><Download size={15} />{carousel ? "Download ZIP" : "Download MP4"}</a>}
+              {isReady && <a className="secondary-button" href={item.download!.url} download><Download size={15} />{carousel ? "Download ZIP" : image ? "Download image" : "Download MP4"}</a>}
               {item.status === "failed" && <button className="secondary-button" disabled={isPending || !connected} onClick={() => void act(item, "retry")}><RotateCcw size={15} />Retry</button>}
               <button className="text-button" disabled={isPending} onClick={() => isReady ? setRemoveId(item.id) : void act(item, "remove")}>
                 {isPending ? <LoaderCircle size={15} className="spin" /> : <X size={15} />}{item.status === "processing" ? "Cancel" : "Remove"}</button>
             </div>
           </div>
-          {item.error && <ProblemNotice message={item.error} diagnostic={item.diagnostic} operation="Download video" entityId={item.id} />}
+          {item.error && <ProblemNotice message={item.error} diagnostic={item.diagnostic} operation="Download media" entityId={item.id} />}
           {removeId === item.id && <div className="downloader-remove" role="alert"><span>Remove this saved download from the app? Copies you already downloaded stay on your computer.</span>
             <button className="secondary-button" disabled={isPending} onClick={() => void act(item, "remove")}>Remove download</button><button className="text-button" disabled={isPending} onClick={() => setRemoveId(null)}>Keep it</button></div>}
         </article>;

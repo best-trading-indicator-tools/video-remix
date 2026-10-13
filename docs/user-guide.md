@@ -109,15 +109,19 @@ for the layout rules and browser verification matrix.
 
 ## URL Downloader · free extra tool
 
-Open **Downloader** in the top navigation to save full videos from URLs without
+Open **Downloader** in the top navigation to save videos and images from URLs without
 setting up an edit. This is an additional page: **Workspace → Add videos** keeps
 its existing importer. Downloader files do not become editing sources or exports.
 
+- **Videos / images** detects the post content and saves one MP4 video or original
+  image file (JPEG, PNG, WebP or AVIF). For multi-item posts it saves the first
+  item, or the Instagram slide selected by `img_index`. Use **Carousel images**
+  for every image from a post.
 - Paste up to **100 links per batch** by default, including YouTube videos and
-  **YouTube Shorts**, TikTok videos, and Instagram posts/Reels. Newlines, spaces
-  and commas are supported. Duplicate video links within the batch are skipped;
+  **YouTube Shorts**, TikTok videos/photos, and Instagram posts/Reels. Newlines, spaces
+  and commas are supported. Duplicate links within the batch are skipped;
   invalid links remain available for correction while valid ones can continue.
-- **Strip metadata** is on by default. It removes source tags, chapters and
+- **Strip video metadata** is on by default and never changes image bytes. It removes source tags, chapters and
   software tags while retaining basic playback information. Ordinary H.264/AAC
   MP4s are cleaned without re-encoding their picture or soundtrack. Other codecs
   and videos needing rotation are converted to a compatible MP4. Uncheck it to
@@ -128,14 +132,14 @@ its existing importer. Downloader files do not become editing sources or exports
   Retry a failed download, or cancel pending work.
   Processing continues while the app server runs, including after leaving the
   page. The queue and completed files survive app restarts.
-- Save a single **Download MP4**, **Download all ready** as a ZIP, or select up to
-  **100 ready videos** for a ZIP. Duplicate titles receive unique numbered names.
+- Save a single **Download MP4** or **Download image**, **Download all ready** as a ZIP, or select up to
+  **100 ready files** for a ZIP. Duplicate titles receive unique numbered names.
   Files are available for **48 hours**, and the downloader holds up to 200 items.
   Removing a ready download asks for confirmation and leaves saved computer
   copies and editing sources alone.
 
-The tool uses the same platform downloader, login cookies, file limits and
-network recovery as the workspace URL importer. A platform restriction or login
+The tool uses yt-dlp for YouTube and gallery-dl for Instagram/TikTok content
+detection, with the same login cookies and file limits as the workspace importer. A platform restriction or login
 requirement affects both tools. **How Downloader works** opens its interactive
 help topic.
 
@@ -156,7 +160,7 @@ batch, 100 images and 512 MB per post (or the configured file limit, if lower).
 **Download ZIP** saves one post. Check ready posts for **Download selected**, or
 use **Download all ready** with no selection. The combined ZIP has a numbered
 folder for each post. Retry, cancellation, restart recovery and 48-hour expiry
-work like video downloads. Switching between Videos and Carousel images retains
+work like video downloads. Switching between Videos / images and Carousel images retains
 both forms and their selections without changing editing drafts.
 
 Install or update the image extractor with `npm run setup:imports`, or rerun

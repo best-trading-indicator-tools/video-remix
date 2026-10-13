@@ -2,22 +2,40 @@ import { access, copyFile, readFile, symlink, writeFile } from "node:fs/promises
 import path from "node:path";
 const args = process.argv.slice(2), url = args.at(-1);
 if (!args.includes("--config-ignore") || args.includes("--no-postprocessors") || !args.includes("--Print") || !args.includes("{num:03}.{extension}")) process.exit(9);
+const single = args[args.indexOf("--Print") + 1].includes("remix-media:");
+const prefix = single ? "remix-media:" : "remix-image:";
+const index = single ? Number(args[args.indexOf("--range") + 1]) : 1;
+if (single && (!Number.isInteger(index) || index < 1 || !args.includes("extractor.instagram.videos=merged") || !args.includes("extractor.tiktok.videos=true"))) process.exit(9);
 const cookies = args.indexOf("--cookies");
 if (cookies >= 0) {
   await writeFile("cookie-input.txt", await readFile(args[cookies + 1]));
   await writeFile(args[cookies + 1], "# Netscape HTTP Cookie File\n# changed by extractor\n");
 }
 if (url.includes("Private")) { console.error("Login required"); process.exit(1); }
-if (url.includes("Empty")) process.exit(0);
+if (url.includes("Empty") || index > 3) process.exit(0);
 if (url.includes("Retry")) {
-  const marker = path.join(process.env.REMIX_TEST_CAROUSEL_DIR, "retry-marker");
+  const marker = path.join(process.env.REMIX_TEST_CAROUSEL_DIR, single ? "single-retry-marker" : "retry-marker");
   try { await access(marker); } catch { await writeFile(marker, "1"); console.error("HTTP 429"); process.exit(1); }
 }
 if (url.includes("Slow")) {
   await writeFile("001.jpg.part", "partial");
-  console.log("remix-image:001.jpg");
+  console.log(`${prefix}001.jpg`);
   await new Promise(resolve => setTimeout(resolve, 5000));
-} else console.log("remix-image:001.jpg");
+}
+if (single) {
+  const extension = url.includes("MediaVideo") ? "mp4" : url.includes("Png") ? "png" : url.includes("Webp") ? "webp" : url.includes("Avif") ? "avif" : "jpg";
+  const name = `${String(index).padStart(3, "0")}.${extension}`;
+  if (!url.includes("Slow")) console.log(`${prefix}${name}`);
+  if (url.includes("Unsafe")) { console.log(`${prefix}../private.jpg`); process.exit(0); }
+  if (url.includes("Duplicate")) { console.log(`${prefix}${name}`); process.exit(0); }
+  if (url.includes("Many")) { console.log(`${prefix}002.jpg`); process.exit(0); }
+  if (url.includes("Missing")) process.exit(0);
+  if (url.includes("Invalid")) await writeFile(name, "not an image");
+  else if (url.includes("Symlink")) await symlink(process.env.REMIX_TEST_CAROUSEL_IMAGE, name);
+  else await copyFile(extension === "jpg" ? process.env.REMIX_TEST_CAROUSEL_IMAGE : path.join(process.env.REMIX_TEST_CAROUSEL_DIR, `fixture.${extension}`), name);
+  process.exit(0);
+}
+if (!url.includes("Slow")) console.log("remix-image:001.jpg");
 if (url.includes("Many")) { for (let i = 2; i <= 101; i++) console.log(`remix-image:${String(i).padStart(3, "0")}.jpg`); process.exit(0); }
 if (url.includes("Duplicate")) { console.log("remix-image:001.jpg"); process.exit(0); }
 if (url.includes("Unsafe")) { console.log("remix-image:../private.jpg"); process.exit(0); }

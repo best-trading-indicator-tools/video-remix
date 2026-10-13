@@ -23,10 +23,11 @@ export interface ImportSession {
   diagnostic?: Diagnostic;
   /** Standalone downloads share the queue, but never enter the editing workspace. */
   purpose?: "download";
-  downloadKind?: "video" | "carousel";
+  downloadKind?: "video" | "media" | "carousel";
   remoteUrl?: string;
   stripMetadata?: boolean;
   download?: {
+    mediaType?: "video" | "image";
     url: string;
     thumbnailUrl: string;
     duration?: number;

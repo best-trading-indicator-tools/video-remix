@@ -4,7 +4,7 @@
 
 Remix Studio is a video repurposing app for creators, editors, and teams making content for TikTok, Instagram Reels, YouTube Shorts, and other formats. Import recordings, keep them full length or find shorter moments, add captions and footage, upscale with free local AI, and export ready-to-share MP4s.
 
-Work through the visual editor, describe changes in a prompt, or connect Claude Code, Claude Desktop, or Codex through the local MCP server. The **free standalone URL Downloader** is an extra utility outside the core SaaS editing workflow; it saves videos without creating an editing project.
+Work through the visual editor, describe changes in a prompt, or connect Claude Code, Claude Desktop, or Codex through the local MCP server. The **free standalone URL Downloader** is an extra utility outside the core SaaS editing workflow; it saves videos and images without creating an editing project.
 
 **Current deployment:** a private desktop app or self-hosted installation. Media processing runs on the computer hosting the app, with optional external AI and publishing services. The repository does not include user authentication, customer billing, or tenant isolation for a public SaaS.
 
@@ -25,7 +25,7 @@ Work through the visual editor, describe changes in a prompt, or connect Claude 
 | **AI upscaler** | Enlarge main footage to 1080p, 1440p, or 4K with free local Real-ESRGAN. Apply it individually, in bulk, or through a prompt. |
 | **Local MCP** | Let Claude or Codex import local media, prepare bulk edits, append footage, render, and check results. |
 
-**Free standalone extra:** the [URL Downloader](#download-videos-without-editing) saves full videos from YouTube, YouTube Shorts, TikTok, and Instagram, individually or as a bulk ZIP. It operates separately from the editing workflows above.
+**Free standalone extra:** the [URL Downloader](#download-videos-without-editing) saves videos from YouTube, YouTube Shorts, TikTok, and Instagram, plus Instagram/TikTok images and carousel ZIPs. It operates separately from the editing workflows above.
 
 ## What you can do
 
@@ -241,13 +241,14 @@ Scheduling records persist, show per-account success or failure, and support sta
 
 ### Download videos without editing
 
-The **Downloader** tab is a **free standalone tool**, not part of the core SaaS video-editing workflow. Use it independently to save videos, without creating an editing project or running an AI edit. To import a video into the editing workflow instead, use **Workspace → Add videos**, which supports the same links.
+The **Downloader** tab is a **free standalone tool**, not part of the core SaaS video-editing workflow. Use it independently to save videos and images, without creating an editing project or running an AI edit. To import a video into the editing workflow instead, use **Workspace → Add videos**.
 
 - Paste up to **100 URLs per batch**, including regular YouTube links and **YouTube Shorts**.
-- Keep full videos with their original audio. No AI requests or credits are needed.
-- **Strip metadata is on by default**; switch it off to save the imported file unchanged. Compatible MP4s can be cleaned without re-encoding; other inputs may need conversion.
+- **Videos / images** detects Instagram/TikTok post content and downloads one video or original image. Multi-item posts save the first item, or the Instagram slide selected by `img_index`.
+- Keep full videos with their original audio and images in their original format. No AI requests or credits are needed.
+- **Strip video metadata is on by default**; switch it off to save the downloaded video unchanged. Images are never re-encoded or stripped. Compatible MP4s can be cleaned without re-encoding; other video inputs may need conversion.
 - See preparation, platform wait countdowns when available, download progress, and cleanup stages. Retry failures or cancel pending work.
-- Download single MP4s, all ready videos, or a selected ZIP. Files remain available for **48 hours**.
+- Download single MP4s or images, all ready files, or a selected mixed ZIP. Files remain available for **48 hours**.
 - Choose **Carousel images** for Instagram `/p/` posts and TikTok photo slideshows. Each ZIP contains the original images numbered in slide order; video slides and audio are skipped. Download one post or select several for a ZIP with one folder per post. Up to 100 images and 512 MB per post.
 
 Downloader items stay separate from editing sources and exports. Platform access restrictions still apply; login cookies can be configured when needed. [Downloader guide →](docs/user-guide.md#url-downloader--free-extra-tool)
