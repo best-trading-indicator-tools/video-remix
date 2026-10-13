@@ -82,6 +82,8 @@ export function explainProblem(message: string, status?: number) {
     return rule("PLATFORM_DOWNLOAD_FAILED", "The platform could not provide this video", "Use Retry import or import a local copy with Browse files. If public links keep failing, update platform support with npm run setup:imports.");
   if (/yt-dlp|setup:imports/iu.test(message))
     return rule("LINK_IMPORTER_NOT_READY", "The video-link importer needs attention", "Run npm run setup:imports in the project folder, then retry. Browse files can import a downloaded video instead.");
+  if (/AI upscal(?:ing|er)|setup:upscale|realesr/iu.test(message))
+    return rule("UPSCALE_NOT_READY", "AI video upscaling is not ready", "Run npm run setup:upscale in the project folder, then retry the export. You can also turn AI video upscaler off to export immediately without upscaling.");
   if (/timed out|timeout|took too long|time limit/iu.test(message) || status === 408 || status === 504)
     return rule("REQUEST_TIMEOUT", "The operation took too long", "Check the connection and the import/export queue before trying again: the server may already have accepted the operation. For processing, try a shorter clip.");
   if (/failed to fetch|network.?error|network request|server is running|connection.*(?:lost|engine)|could not connect|upload interrupted/iu.test(message))
