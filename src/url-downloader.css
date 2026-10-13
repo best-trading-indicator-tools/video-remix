@@ -1,7 +1,12 @@
 .url-downloader { display: grid; gap: 20px; padding-bottom: 28px; }
 .downloader-entry, .downloader-results { padding: 24px; min-width: 0; }
 .downloader-title { display: flex; justify-content: space-between; gap: 16px; align-items: center; flex-wrap: wrap; }
-.downloader-title h2 { font-size: 20px; letter-spacing: -.4px; margin: 3px 0 6px; }
+.downloader-title h2 { font-size: 20px; letter-spacing: 0; margin: 3px 0 6px; }
+.downloader-modes { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.downloader-modes button { display: inline-flex; align-items: center; gap: 8px; padding: 12px 16px; background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--subtle); font: inherit; font-size: 14px; cursor: pointer; }
+.downloader-modes button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); }
+.downloader-prompt > summary { cursor: pointer; font-size: 13px; padding: 6px 0; }
+.downloader-prompt > summary span { color: var(--subtle); margin-left: 8px; font-size: 12px; }
 .downloader-entry > p, .downloader-title p { color: var(--subtle); font-size: 13px; margin: 0 0 16px; }
 .downloader-free { color: var(--accent); border: 1px solid var(--line); border-radius: 20px; padding: 6px 12px; font-size: 12px; white-space: nowrap; }
 .downloader-entry form > label { display: block; font-size: 13px; font-weight: 600; margin: 20px 0 8px; }
@@ -24,7 +29,7 @@
 .downloader-empty h3 { color: var(--text); font-size: 16px; margin: 14px 0 5px; }
 .downloader-empty p { font-size: 13px; max-width: 360px; }
 .downloader-list { margin-top: 18px; display: grid; gap: 12px; }
-.downloader-card { padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); min-width: 0; }
+.downloader-card { padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); min-width: 0; }
 .downloader-card-main { display: flex; gap: 14px; align-items: center; min-width: 0; }
 .downloader-thumbnail { width: 86px; height: 68px; object-fit: contain; background: var(--field); border-radius: 6px; flex-shrink: 0; }
 .downloader-thumbnail.placeholder { display: grid; place-items: center; color: var(--subtle); }

@@ -1394,7 +1394,7 @@ export default function App() {
                   : "Shape the frame, dial in your look, and make every version your own."
                 : view === "settings" ? "Manage the API keys used by your workspace."
                 : view === "history" ? "Find previously used excerpts and keep track of the videos you have posted."
-                : view === "downloader" ? "Save videos from links, one at a time or in bulk. Free to use, with no AI credits."
+                : view === "downloader" ? "Videos and carousel images from links, one at a time or in bulk."
                 : "Your renders, all together. Download a single cut or the whole collection."}
             </p>
           </div>

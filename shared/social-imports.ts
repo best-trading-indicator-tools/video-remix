@@ -1,7 +1,7 @@
 export class SocialImportError extends Error {}
 
 /** Accept pasted lists and keep invalid entries available for correction. */
-export function parseSocialVideoLinks(input: string) {
+export function parseSocialVideoLinks(input: string, kind: "video" | "carousel" = "video") {
   const links: string[] = [];
   const invalid: { input: string; error: string }[] = [];
   const seen = new Set<string>();
@@ -12,7 +12,7 @@ export function parseSocialVideoLinks(input: string) {
     .split(/\s+/u).map(value => value.replace(/^[,;]+|[,;]+$/gu, "")).filter(Boolean);
   for (const candidate of candidates) {
     try {
-      const { url } = socialVideoLink(candidate);
+      const { url } = kind === "carousel" ? socialCarouselLink(candidate) : socialVideoLink(candidate);
       const key = url.replace(/\/$/u, "");
       if (seen.has(key)) { duplicates++; continue; }
       seen.add(key);
@@ -22,6 +22,27 @@ export function parseSocialVideoLinks(input: string) {
     }
   }
   return { links, invalid, duplicates };
+}
+
+/** A carousel is one post, never an account, collection, or arbitrary website. */
+export function socialCarouselLink(input: string): { url: string; platform: string } {
+  const invalid = () => new SocialImportError("Paste an Instagram post or TikTok photo/carousel link.");
+  let url: URL;
+  try { url = new URL(input.trim()); } catch { throw invalid(); }
+  if (url.protocol !== "https:" || url.username || url.password || url.port || input.length > 2048) throw invalid();
+  const host = url.hostname.toLowerCase();
+  if (["instagram.com", "www.instagram.com", "m.instagram.com"].includes(host)) {
+    const match = /^\/(?:(?!share\/)[\w.]+\/)?p\/([\w-]+)\/?$/u.exec(url.pathname);
+    if (match) return { platform: "Instagram", url: `https://www.instagram.com/p/${match[1]}/` };
+  }
+  if (["tiktok.com", "www.tiktok.com", "m.tiktok.com"].includes(host)) {
+    const match = /^\/@([\w.-]+)\/(photo|video)\/(\d+)\/?$/u.exec(url.pathname);
+    if (match) return { platform: "TikTok", url: `https://www.tiktok.com/@${match[1]}/${match[2]}/${match[3]}` };
+  }
+  if ((["vm.tiktok.com", "vt.tiktok.com"].includes(host) && /^\/[\w-]+\/?$/u.test(url.pathname)) ||
+      (["tiktok.com", "www.tiktok.com"].includes(host) && /^\/t\/[\w-]+\/?$/u.test(url.pathname)))
+    return { platform: "TikTok", url: `https://${host}${url.pathname.replace(/\/?$/u, "/")}` };
+  throw invalid();
 }
 
 /** Accept video links only, never search queries, profiles, playlists or arbitrary URLs. */

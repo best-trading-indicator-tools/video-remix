@@ -101,7 +101,7 @@ export function createUploadImport(file: File, identity: string, signal?: AbortS
   }));
 }
 
-export async function importVideoLinks(links: string[], download?: { stripMetadata: boolean }): Promise<{
+export async function importVideoLinks(links: string[], download?: { stripMetadata: boolean; kind?: "video" | "carousel" }): Promise<{
   imports: ImportSession[]; errors?: { name: string; error: string }[];
 }> {
   const controller = new AbortController();
@@ -113,7 +113,7 @@ export async function importVideoLinks(links: string[], download?: { stripMetada
   )), 30_000);
   try {
     return await importRequest(endpoint, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links, ...(download ? { stripMetadata: download.stripMetadata } : {}) }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ links, ...(download ? { stripMetadata: download.stripMetadata, ...(download.kind ? { kind: download.kind } : {}) } : {}) }),
       signal: controller.signal,
     });
   } catch (error) {

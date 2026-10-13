@@ -21,7 +21,7 @@ try {
     await run(selected.command, [...selected.args, "-m", "venv", environment]);
   }
   await run(python, ["-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "-r", "requirements-imports.txt"]);
-  console.log("Video link imports are ready. Run this command again to update platform support.");
+  console.log("Video and carousel image downloads are ready. Run this command again to update platform support.");
 } catch (error) {
   console.error(`Link import setup failed: ${error.message}\nRun npm run setup:python to prepare Python, or set PYTHON_BIN to its executable.`);
   process.exitCode = 1;

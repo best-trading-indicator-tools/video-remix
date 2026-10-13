@@ -248,6 +248,8 @@ The **Downloader** tab is a **free standalone tool**, not part of the core SaaS 
 - **Strip metadata is on by default**; switch it off to save the imported file unchanged. Compatible MP4s can be cleaned without re-encoding; other inputs may need conversion.
 - See preparation, platform wait countdowns when available, download progress, and cleanup stages. Retry failures or cancel pending work.
 - Download single MP4s, all ready videos, or a selected ZIP. Files remain available for **48 hours**.
+- Choose **Carousel images** for Instagram `/p/` posts and TikTok photo slideshows. Each ZIP contains the original images numbered in slide order; video slides and audio are skipped. Download one post or select several for a ZIP with one folder per post. Up to 100 images and 512 MB per post.
+- The optional **AI download prompt** prepares a reviewable URL list with Undo using your DeepSeek account. Applying a proposal fills the form; **Get images** or **Get video** starts the free download.
 
 Downloader items stay separate from editing sources and exports. Platform access restrictions still apply; login cookies can be configured when needed. [Downloader guide →](docs/user-guide.md#url-downloader--free-extra-tool)
 
@@ -329,7 +331,7 @@ Open **http://127.0.0.1:8787**; one server serves the frontend and API.
 | --- | --- |
 | `npm run setup:python` | Prepare or repair the private Python runtime (normally done by npm install). |
 | `npm run setup:auto` | Local Whisper transcription, speech captions, and transcript-based editing. |
-| `npm run setup:imports` | yt-dlp for YouTube, Shorts, TikTok, and Instagram links. Run again to update platform support. |
+| `npm run setup:imports` | yt-dlp for videos and gallery-dl for Instagram/TikTok carousel images. Run again to update platform support. |
 | `npm run setup:focus` | Local face detection and speaker-centering support. |
 | `npm run setup:speaker` | Local active-speaker tracking using TalkNet; also prepares face detection. |
 | `npm run setup:watermark` | Preinstall or repair local LaMa; also installs automatically on first use. |

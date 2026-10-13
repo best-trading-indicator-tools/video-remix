@@ -139,6 +139,39 @@ network recovery as the workspace URL importer. A platform restriction or login
 requirement affects both tools. **How Downloader works** opens its interactive
 help topic.
 
+### Carousel images
+
+Choose **Carousel images** in Downloader. Paste Instagram post URLs such as
+`https://www.instagram.com/p/DeXDaIPFCju/?img_index=1` or TikTok photo URLs such as
+`https://www.tiktok.com/@chrissy_dogdiary/photo/7694716604277345544`.
+The whole post is downloaded even when the Instagram URL points to one slide.
+TikTok short share links are supported too.
+
+Each post produces a ZIP of original image files, numbered in slide order
+(`001.jpg`, `002.webp`, etc.). Mixed posts keep image slides and skip videos and
+audio; a video-only post reports that no images were found. An incomplete image
+download fails instead of providing a partial ZIP. Limits are 100 posts per
+batch, 100 images and 512 MB per post (or the configured file limit, if lower).
+
+**Download ZIP** saves one post. Check ready posts for **Download selected**, or
+use **Download all ready** with no selection. The combined ZIP has a numbered
+folder for each post. Retry, cancellation, restart recovery and 48-hour expiry
+work like video downloads. Switching between Videos and Carousel images retains
+both forms and their selections without changing editing drafts.
+
+Install or update the image extractor with `npm run setup:imports`, or rerun
+**Video links** in the desktop local-tools setup. It uses gallery-dl and the same
+exported Netscape-format cookies as the video downloader. Instagram may require
+login even for publicly visible posts; put `cookies.txt` in the project/data
+folder or configure `YT_DLP_COOKIES`. Each request uses a disposable cookie copy.
+
+The optional **AI download prompt** uses your configured DeepSeek account to
+prepare a link list from supplied URLs, including choosing particular links
+from a batch. Review the proposal, apply it, then use **Get images**. **Undo**
+restores the previous forms until another manual change or queue submission.
+Ordinary URL downloads require no AI key or credits. Carousel downloads remain
+a standalone utility; Auto/Quick, Manual and saved video edits are unaffected.
+
 ## Import long recordings
 
 - Import up to **100 videos per batch** by default (`MAX_FILES`, 1–100), with up to **200 source videos** in the workspace. Completed import cards do not occupy unfinished-import slots. If one selected file cannot be queued, the other files continue and its error stays visible beside the uploader.

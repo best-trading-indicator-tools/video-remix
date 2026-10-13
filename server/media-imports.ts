@@ -1,15 +1,17 @@
 import { visualIdentity } from "./visual-identity.js";
 import type { Express, Request, Response } from "express";
 import { randomUUID } from "node:crypto";
+import { setMaxListeners } from "node:events";
 import { createReadStream, createWriteStream } from "node:fs";
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, symlink, writeFile, type FileHandle } from "node:fs/promises";
 import path from "node:path";
-import { Transform } from "node:stream";
+import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { z } from "zod";
 import type { ImportSession } from "../shared/imports.js";
-import { SocialImportError, socialVideoLink } from "../shared/social-imports.js";
+import { SocialImportError, socialVideoLink, socialCarouselLink } from "../shared/social-imports.js";
 import { downloadSocialVideo } from "./social-imports.js";
+import { carouselImageName, downloadSocialCarousel, MAX_CAROUSEL_IMAGES } from "./carousel-downloads.js";
 import { config, paths } from "./config.js";
 import { createThumbnail, probeMedia } from "./engine.js";
 import { fingerprintFile } from "./history.js";
@@ -20,6 +22,8 @@ import { serverDiagnostic } from "./diagnostics.js";
 import { availableDiskSpace } from "./disk-space.js";
 import { cleanVideoDownload } from "./engine.js";
 import { ZipArchive } from "archiver";
+import { downloadPromptRequestSchema, proposeDownloadPrompt } from "./download-prompt.js";
+import { PromptEditError } from "./prompt-edit.js";
 
 const TTL = 48 * 60 * 60 * 1000;
 const DISK_RESERVE = 128 * 1024 * 1024;
@@ -40,7 +44,9 @@ const storedSchema = z.object({
   diagnostic: diagnosticSchema.optional(),
   remoteUrl: z.string().max(2048).optional(),
   purpose: z.literal("download").optional(), stripMetadata: z.boolean().optional(),
-  downloadInfo: z.object({ duration: z.number().positive(), width: z.number().positive(), height: z.number().positive(), size: z.number().positive() }).optional(),
+  downloadKind: z.enum(["video", "carousel"]).optional(),
+  carouselImages: z.array(z.object({ name: z.string().regex(carouselImageName), size: z.number().int().positive() }).strict()).min(1).max(MAX_CAROUSEL_IMAGES).optional(),
+  downloadInfo: z.object({ duration: z.number().positive().optional(), width: z.number().positive().optional(), height: z.number().positive().optional(), size: z.number().positive(), imageCount: z.number().int().positive().max(MAX_CAROUSEL_IMAGES).optional() }).optional(),
 }).strict().refine(item => item.kind === "remote" ? !!item.remoteUrl : item.size > 0);
 type StoredImport = z.infer<typeof storedSchema>;
 
@@ -64,7 +70,10 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 const folder = (id: string) => path.join(paths.imports, id);
 const mediaPath = (item: StoredImport) => path.join(paths.uploads, `${item.id}${path.extname(item.name).toLowerCase()}`);
 const thumbnailPath = (id: string) => path.join(paths.thumbnails, `${id}.jpg`);
-const readyDownloadPath = (item: StoredImport) => item.stripMetadata !== false ? path.join(folder(item.id), "ready.mp4") : mediaPath(item);
+const readyDownloadPath = (item: StoredImport) => item.downloadKind === "carousel" ? path.join(folder(item.id), "ready.zip") : item.stripMetadata !== false ? path.join(folder(item.id), "ready.mp4") : mediaPath(item);
+const carouselPath = (item: StoredImport, name: string) => path.join(folder(item.id), "images", name);
+const downloadName = (item: StoredImport) => item.downloadKind === "carousel"
+  ? item.name.replace(/[^a-zA-Z0-9_.-]/gu, "_").slice(0, 180) : cleanName(item.name);
 function cleanName(input: string) {
   const name = path.basename(input.replaceAll("\\", "/")).replace(/[\u0000-\u001f\u007f]/gu, "").slice(0, 180);
   if (!extensions.has(path.extname(name).toLowerCase()))
@@ -96,7 +105,7 @@ function publicImport(item: StoredImport): ImportSession {
     ...(source ? { source: publicSource(source) } : {}), ...(item.error ? { error: item.error } : {}),
     ...(item.error ? { diagnostic: item.diagnostic || serverDiagnostic(item.error, { id: `import-${item.id}-${item.updatedAt}`, entityId: item.id,
       occurredAt: new Date(item.updatedAt).toISOString(), operation: "Import video" }) } : {}),
-    ...(item.purpose === "download" ? { purpose: item.purpose, remoteUrl: item.remoteUrl, stripMetadata: item.stripMetadata !== false,
+    ...(item.purpose === "download" ? { purpose: item.purpose, remoteUrl: item.remoteUrl, stripMetadata: item.stripMetadata !== false, downloadKind: item.downloadKind || "video",
       ...(item.status === "completed" && item.downloadInfo ? { download: { ...item.downloadInfo,
         url: `/api/downloads/${item.id}/file`, thumbnailUrl: `/api/downloads/${item.id}/thumbnail`,
         expiresAt: new Date(item.updatedAt + TTL).toISOString() } } : {}),
@@ -141,7 +150,7 @@ function ensureCapacity(purpose?: "download") {
   if (unfinished >= config.maxFiles) throw new ImportError(429, `There are already ${config.maxFiles} unfinished imports. Finish or cancel an unused import before adding more.`);
   if (purpose === "download") {
     if ([...sessions.values()].filter(item => item.purpose === "download").length >= 200)
-      throw new ImportError(429, "Your downloader has 200 videos. Remove a download before adding more.");
+      throw new ImportError(429, "Your downloader has 200 posts. Remove a download before adding more.");
   } else if (state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
 }
 async function discard(item: StoredImport) {
@@ -163,6 +172,39 @@ async function cleanup() {
 async function processImport(item: StoredImport, signal: AbortSignal) {
   let published = false;
   try {
+    if (item.downloadKind === "carousel") {
+      const directory = path.join(folder(item.id), "download");
+      await rm(directory, { recursive: true, force: true });
+      await mkdir(directory, { recursive: true });
+      try {
+        item.phase = "Reading carousel images"; item.progress = 0; await persist(item);
+        const result = await downloadSocialCarousel(item.remoteUrl!, directory, {
+          signal, maxBytes: config.maxLargeFileSize, checkSpace: () => requireSpace(),
+          onProgress: (phase, progress) => { item.phase = phase; item.progress = progress; },
+        });
+        signal.throwIfAborted();
+        await rm(path.join(folder(item.id), "images"), { recursive: true, force: true });
+        await mkdir(path.join(folder(item.id), "images"));
+        for (const image of result.images) await rename(path.join(directory, image.name), carouselPath(item, image.name));
+        item.phase = "Preparing image ZIP"; item.progress = 90; await persist(item);
+        await requireSpace(result.size);
+        const archive = new ZipArchive({ zlib: { level: 0 } });
+        const output = pipeline(archive, createWriteStream(readyDownloadPath(item)), { signal });
+        try {
+          for (const image of result.images) archive.file(carouselPath(item, image.name), { name: image.name });
+          await Promise.all([archive.finalize(), output]);
+        } catch (error) { archive.abort(); await output.catch(() => {}); throw error; }
+        const size = (await stat(readyDownloadPath(item))).size;
+        await exclusive(async () => {
+          signal.throwIfAborted();
+          item.name = result.name; item.size = result.size; item.offset = result.size;
+          item.carouselImages = result.images; item.downloadInfo = { size, imageCount: result.images.length };
+          item.status = "completed"; item.phase = "Ready to download"; item.progress = 100; item.updatedAt = Date.now();
+          delete item.error; delete item.diagnostic; await persist(item);
+        });
+      } finally { await rm(directory, { recursive: true, force: true }); }
+      return;
+    }
     if (item.kind === "remote" && !item.size) {
       item.phase = `Reading video details from ${socialVideoLink(item.remoteUrl!).platform}`; item.progress = 0;
       await persist(item);
@@ -286,15 +328,23 @@ export async function initMediaImports() {
     if (!entry.isDirectory() || !uuid.test(entry.name)) continue;
     try {
       const item = storedSchema.parse(JSON.parse(await readFile(path.join(folder(entry.name), "session.json"), "utf8")));
-      if (item.id !== entry.name || cleanName(item.name) !== item.name || item.offset > item.size) continue;
-      if (item.kind === "remote") socialVideoLink(item.remoteUrl!);
+      if (item.id !== entry.name || (item.downloadKind === "carousel" ? downloadName(item) !== item.name || !item.name.endsWith(".zip") : cleanName(item.name) !== item.name) || item.offset > item.size) continue;
+      if (item.downloadKind === "carousel" && (item.purpose !== "download" || item.kind !== "remote")) continue;
+      if (item.kind === "remote") (item.downloadKind === "carousel" ? socialCarouselLink : socialVideoLink)(item.remoteUrl!);
       sessions.set(item.id, item);
       if (item.purpose === "download" && item.status === "completed") {
         const ready = await lstat(readyDownloadPath(item));
         if (!item.downloadInfo || !ready.isFile() || ready.size !== item.downloadInfo.size) throw new Error("Download missing");
+        if (item.downloadKind === "carousel") {
+          if (!item.carouselImages?.length || item.downloadInfo.imageCount !== item.carouselImages.length) throw new Error("Images missing");
+          for (const image of item.carouselImages) {
+            const info = await lstat(carouselPath(item, image.name));
+            if (!info.isFile() || info.size !== image.size) throw new Error("Image missing");
+          }
+        }
       } else if (state.sources.some(source => source.id === item.id)) {
         item.status = "completed"; item.phase = "Ready to edit"; item.progress = 100;
-      } else if (item.status !== "completed" && !(item.kind === "remote" && !item.size)) {
+      } else if (item.status !== "completed" && item.downloadKind !== "carousel" && !(item.kind === "remote" && !item.size)) {
         const info = await lstat(mediaPath(item));
         if (item.kind !== "local") {
           if (!info.isFile()) throw new Error("Upload is not an ordinary file");
@@ -351,6 +401,16 @@ function getSession(id: unknown) {
 }
 
 export function installMediaImportRoutes(app: Express) {
+  app.post("/api/downloads/prompt", async (req, res) => {
+    const parsed = downloadPromptRequestSchema.safeParse(req.body);
+    if (!parsed.success) { res.status(400).json({ error: "Check the prompt and current download URLs." }); return; }
+    const controller = new AbortController();
+    const disconnect = () => { if (!res.writableEnded) controller.abort(); };
+    res.on("close", disconnect);
+    try { res.json(await proposeDownloadPrompt(parsed.data.prompt, parsed.data.draft, controller.signal)); }
+    catch (error) { if (!controller.signal.aborted) res.status(error instanceof PromptEditError ? error.status : 502).json({ error: error instanceof PromptEditError ? error.message : "Could not prepare the download proposal." }); }
+    finally { res.off("close", disconnect); }
+  });
   app.get("/api/imports", route(async (_req, res) => {
     res.json({ imports: [...sessions.values()].filter(item => item.purpose !== "download").sort((a, b) => b.createdAt - a.createdAt).map(publicImport) });
   }));
@@ -360,36 +420,55 @@ export function installMediaImportRoutes(app: Express) {
   const downloadable = (id: unknown) => {
     const item = getSession(id);
     if (item.purpose !== "download") throw new ImportError(404, "Download not found.");
-    if (item.status !== "completed" || !item.downloadInfo) throw new ImportError(409, "This video is not ready to download yet.");
+    if (item.status !== "completed" || !item.downloadInfo) throw new ImportError(409, "This post is not ready to download yet.");
     return item;
   };
   app.get("/api/downloads/selected.zip", route(async (req, res) => {
     const parsed = z.array(z.uuid()).min(1).max(100).refine(ids => new Set(ids).size === ids.length)
       .safeParse(typeof req.query.ids === "string" ? req.query.ids.split(",") : []);
-    if (!parsed.success) throw new ImportError(400, "Select 1–100 ready videos to download as a ZIP.");
+    if (!parsed.success) throw new ImportError(400, "Select 1–100 ready posts to download as a ZIP.");
     const items = parsed.data.map(downloadable);
-    const handles: FileHandle[] = [];
+    const files = items.flatMap((item, index) => item.downloadKind === "carousel"
+      ? item.carouselImages!.map(image => ({ file: carouselPath(item, image.name), name: `${String(index + 1).padStart(2, "0")}-${downloadName(item).replace(/\.zip$/u, "")}/${image.name}` }))
+      : [{ file: readyDownloadPath(item), name: `${String(index + 1).padStart(2, "0")}-${downloadName(item)}` }]);
     const archive = new ZipArchive({ zlib: { level: 0 } });
+    const controller = new AbortController();
+    setMaxListeners(files.length + 2, controller.signal);
+    res.on("close", () => { controller.abort(); archive.abort(); });
     try {
-      // Open every file before headers; cleanup cannot turn a selected ZIP into a partial success.
-      for (const item of items) handles.push(await openRegularUpload(readyDownloadPath(item)));
+      // Preflight before headers, then open lazily: 100 carousels can contain
+      // thousands of images, exceeding the process's open-file limit.
+      for (const file of files) {
+        controller.signal.throwIfAborted();
+        const handle = await openRegularUpload(file.file); await handle.close();
+      }
       archive.on("error", error => res.destroy(error)); archive.on("warning", error => res.destroy(error));
-      res.on("close", () => { archive.abort(); for (const handle of handles) void handle.close().catch(() => {}); });
       res.attachment("remix-downloads.zip"); archive.pipe(res);
-      items.forEach((item, index) => archive.append(handles[index]!.createReadStream(), { name: `${String(index + 1).padStart(2, "0")}-${cleanName(item.name)}` }));
+      for (const file of files) {
+        const stream = Readable.from((async function* () {
+          controller.signal.throwIfAborted();
+          const handle = await openRegularUpload(file.file);
+          try { controller.signal.throwIfAborted(); yield* handle.createReadStream(); }
+          finally { await handle.close().catch(() => {}); }
+        })(), { objectMode: false, signal: controller.signal });
+        stream.on("error", error => res.destroy(error));
+        archive.append(stream, { name: file.name });
+      }
       await archive.finalize();
     } catch (error) {
-      archive.abort(); await Promise.allSettled(handles.map(handle => handle.close())); throw error;
+      controller.abort(); archive.abort(); throw error;
     }
   }));
   app.get("/api/downloads/:id/file", route(async (req, res) => {
     const item = downloadable(req.params.id), handle = await openRegularUpload(readyDownloadPath(item));
-    res.attachment(cleanName(item.name)); res.setHeader("Content-Length", (await handle.stat()).size);
+    res.attachment(downloadName(item)); res.setHeader("Content-Length", (await handle.stat()).size);
     await pipeline(handle.createReadStream(), res);
   }));
   app.get("/api/downloads/:id/thumbnail", route(async (req, res) => {
     const item = downloadable(req.params.id);
-    res.type("image/jpeg"); await pipeline(createReadStream(thumbnailPath(item.id)), res);
+    const firstImage = item.downloadKind === "carousel" ? item.carouselImages![0]! : undefined;
+    const handle = await openRegularUpload(firstImage ? carouselPath(item, firstImage.name) : thumbnailPath(item.id));
+    res.type(firstImage ? path.extname(firstImage.name) : "image/jpeg"); await pipeline(handle.createReadStream(), res);
   }));
   app.get("/api/imports/:id", route(async (req, res) => { res.json(publicImport(getSession(req.params.id))); }));
   app.post("/api/imports", route(async (req, res) => {
@@ -452,22 +531,23 @@ export function installMediaImportRoutes(app: Express) {
   app.post(["/api/imports/links", "/api/downloads"], route(async (req, res) => {
     const standalone = req.path === "/api/downloads";
     const fields = { links: z.array(z.string().min(1).max(2048)).min(1).max(config.maxFiles) };
-    const parsed = (standalone ? z.object({ ...fields, stripMetadata: z.boolean().default(true) }).strict() : z.object(fields).strict()).safeParse(req.body);
-    if (!parsed.success) throw new ImportError(400, `Enter 1–${config.maxFiles} TikTok, Instagram or YouTube video links, one per line.`);
+    const parsed = (standalone ? z.object({ ...fields, stripMetadata: z.boolean().default(true), kind: z.enum(["video", "carousel"]).default("video") }).strict() : z.object(fields).strict()).safeParse(req.body);
+    if (!parsed.success) throw new ImportError(400, `Enter 1–${config.maxFiles} supported video or carousel links, one per line.`);
     const imports: ImportSession[] = [];
     const errors: { name: string; error: string }[] = [];
     const seenLinks = new Set<string>();
+    const carousel = standalone && "kind" in parsed.data && parsed.data.kind === "carousel";
     for (const candidate of parsed.data.links) {
       try {
-        const link = socialVideoLink(candidate);
+        const link = (carousel ? socialCarouselLink : socialVideoLink)(candidate);
         if (standalone && seenLinks.has(link.url)) continue;
         seenLinks.add(link.url);
         const item = await exclusive(async () => {
           ensureCapacity(standalone ? "download" : undefined);
           await requireSpace();
           const now = Date.now();
-          const value: StoredImport = { id: randomUUID(), name: `${link.platform} video.mp4`, size: 0, offset: 0, kind: "remote",
-            ...(standalone ? { purpose: "download" as const, stripMetadata: "stripMetadata" in parsed.data ? parsed.data.stripMetadata as boolean : true } : {}),
+          const value: StoredImport = { id: randomUUID(), name: carousel ? `${link.platform}-images.zip` : `${link.platform} video.mp4`, size: 0, offset: 0, kind: "remote",
+            ...(standalone ? { purpose: "download" as const, downloadKind: carousel ? "carousel" as const : "video" as const, stripMetadata: carousel ? false : "stripMetadata" in parsed.data ? parsed.data.stripMetadata as boolean : true } : {}),
             remoteUrl: link.url, status: "processing", phase: `Waiting to download from ${link.platform}`, progress: 0, createdAt: now, updatedAt: now };
           await persist(value);
           sessions.set(value.id, value);
@@ -483,20 +563,23 @@ export function installMediaImportRoutes(app: Express) {
     const item = await exclusive(async () => {
       const previous = getSession(req.params.id);
       if (previous.kind !== "remote" || previous.status !== "failed" || active.has(previous.id) || cancelled.has(previous.id) || state.sources.some(source => source.id === previous.id))
-        throw new ImportError(409, "Only failed video link imports can be retried. Refresh the import status and try again.");
+        throw new ImportError(409, "Only failed link imports can be retried. Refresh the import status and try again.");
       if (previous.purpose !== "download" && state.sources.length >= 200) throw new ImportError(429, "Your workspace has 200 videos. Remove an unused source before importing another.");
-      const link = socialVideoLink(previous.remoteUrl!);
+      const link = (previous.downloadKind === "carousel" ? socialCarouselLink : socialVideoLink)(previous.remoteUrl!);
       await requireSpace();
       // A failed preparation can leave downloaded media behind. Restart from
       // the saved URL under the same session id, with no duplicate source.
       await rm(mediaPath(previous), { force: true });
       await rm(thumbnailPath(previous.id), { force: true });
       await rm(path.join(folder(previous.id), "ready.mp4"), { force: true });
+      await rm(path.join(folder(previous.id), "ready.zip"), { force: true });
+      await rm(path.join(folder(previous.id), "images"), { recursive: true, force: true });
       const next: StoredImport = { ...previous, size: 0, offset: 0, status: "processing", progress: 0,
         phase: `Waiting to retry download from ${link.platform}`, updatedAt: Math.max(Date.now(), previous.updatedAt + 1) };
       delete next.error;
       delete next.diagnostic;
       delete next.downloadInfo;
+      delete next.carouselImages;
       await persist(next);
       sessions.set(next.id, next);
       return next;

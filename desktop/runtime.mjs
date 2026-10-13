@@ -3,7 +3,7 @@ import { access, cp, mkdir, readFile, readdir, writeFile } from 'node:fs/promise
 import path from 'node:path';
 
 export const components = [
-  { id: 'imports', name: 'Video links', description: 'Import video URLs and use the free Downloader.', script: 'setup-imports.mjs', recommended: true },
+  { id: 'imports', name: 'Video links', description: 'Download video URLs and Instagram/TikTok carousel images.', script: 'setup-imports.mjs', recommended: true },
   { id: 'speech', name: 'Local captions & transcription', description: 'Recognize speech on this computer. Downloads the speech model once.', script: 'setup-auto.mjs', recommended: true },
   { id: 'upscale', name: 'Free AI upscaler', description: 'Real-ESRGAN for 1080p to 4K. Larger download; GPU acceleration when supported.', script: 'setup-upscale.mjs', recommended: true },
   { id: 'ocr', name: 'Detect existing captions', description: 'English and French OCR models. Helps avoid adding captions over existing ones.', recommended: false },

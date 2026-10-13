@@ -13,7 +13,7 @@ async function downloader() {
   return "yt-dlp";
 }
 
-async function prepareCookies(directory: string): Promise<string | undefined> {
+export async function prepareCookies(directory: string): Promise<string | undefined> {
   const configured = process.env.YT_DLP_COOKIES?.trim();
   const candidates = configured ? [path.resolve(configured)]
     : [path.resolve("cookies.txt"), path.resolve(process.env.DATA_DIR || "data", "cookies.txt")];
