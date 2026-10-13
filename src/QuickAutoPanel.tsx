@@ -29,7 +29,6 @@ const PLATFORMS: { aspect: AutoOptions["aspect"]; name: string; detail: string }
   { aspect: "1:1", name: "Square posts", detail: "Square · 1:1" },
   { aspect: "16:9", name: "YouTube & landscape", detail: "Wide · 16:9" },
 ];
-const LENGTHS = [15, 30, 45, 60, 90];
 const VERSION_MODES = [
   { mode: "moments", name: "A different moment", detail: "Each clip uses new footage from the video." },
   { mode: "angles", name: "New angles on one moment", detail: "Conclusion first, question first, then key points." },
@@ -66,17 +65,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
       </fieldset>
       <PlaybackControls value={options} onChange={patch => onChange({ options: patch })} disabled={disabled} />
       <AutoLengthMode value={options.durationMode} mixed={mixedLength} onChange={durationMode => onChange({ options: { durationMode } })} />
-      {fullLength ? <p className="auto-preferences-note">One export per video, with its original order, pauses and voice. Speed changes the export length: 30s at 2× becomes 15s. Inserted footage adds to each video’s length.</p> : <>
-      <fieldset className="quick-auto-group">
-        <legend>Maximum excerpt length</legend>
-        <div className="quick-auto-chips">{LENGTHS.map(seconds =>
-          <label key={seconds} className="quick-auto-chip">
-            <input type="radio" name="quick-auto-length" checked={options.targetDuration === seconds} onChange={() => onChange({ options: { targetDuration: seconds } })} />
-            <span>{seconds}s</span>
-          </label>)}
-        </div>
-        <p className="auto-preferences-note">{LENGTHS.includes(options.targetDuration) ? "Limits the selected part of the original, not the final export. Inserted footage adds time." : `Up to ${options.targetDuration}s of the original, set in All settings. Inserted footage adds time.`}</p>
-      </fieldset>
+      {fullLength ? <p className="auto-preferences-note">One export per video, with its original order, pauses and voice. Speed changes the export length: 30s at 2× becomes 15s. Inserted footage adds to each video’s length.</p> :
       <fieldset className="quick-auto-group">
         <legend>How many clips per video?</legend>
         <div className="quick-auto-stepper">
@@ -92,8 +81,7 @@ export default function QuickAutoPanel({ options, variants, mixed, mixedLength, 
           </label>)}
         </div>
         {angles && <p className="auto-preferences-note">Up to {MAX_ANGLE_VERSIONS} clips per video, one per angle, in the original voice.</p>}
-      </fieldset>
-      </>}
+      </fieldset>}
       <fieldset className="quick-auto-group" disabled={disabled}>
         <legend>Captions</legend>
         <label className="caption-field">Speech captions<select value={options.captions ?? 'auto'} onChange={event => onChange({ options: { captions: event.target.value as AutoOptions['captions'] } })}>

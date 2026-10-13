@@ -12,7 +12,7 @@ export default function AutoLengthMode({ value, mixed = false, onChange }: {
       </label>
       <label className="quick-auto-option">
         <input type="radio" name="auto-length-mode" checked={!mixed && value !== 'full'} onChange={() => onChange('excerpt')} />
-        <span><strong>Let Auto choose a shorter clip</strong><small>Choose a maximum. Auto can keep less.</small></span>
+        <span><strong>Let Auto choose a shorter clip</strong><small>Auto selects a shorter moment from your video.</small></span>
       </label>
     </div>
     {mixed && <p className="auto-preferences-note">Choose a length option to apply it to every video in the current settings scope.</p>}

@@ -83,7 +83,7 @@ export const TOUR_STEPS: readonly TourStep[] = [
   { id: "quick-setup", chapter: "Auto", title: "Set up your batch", target: ".quick-auto", destination: autoQuick,
     description: "Quick setup is the everyday Auto panel. Its choices and exports follow the Working on N videos bar, just like All settings and Manual. Future imports have their own checkbox.",
     options: [["Keep the full video", "Each source keeps its own length, original order, pauses and voice. Added footage adds time. No length or version count is needed."],
-      ["Shorter clips", "Choose a maximum excerpt length and how many clips each video gets. Auto can select less than the maximum; inserted footage adds time."],
+      ["Shorter clips", "Let Auto select a shorter moment, then choose how many clips each video gets and what changes between versions."],
       ["All settings", "Open All settings to adjust captions, black bands, pacing and sound, and save your look as a style."]],
   },
   { id: "auto-scope", chapter: "Auto", title: "Choose which videos to edit and export", target: ".working-selection", destination: autoAll,

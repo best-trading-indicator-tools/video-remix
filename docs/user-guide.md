@@ -207,9 +207,9 @@ Full video makes one export per source, keeping all its footage in order, includ
 A 15-second source stays 15 seconds and a 30-second source stays 30 seconds in the same batch.
 Your added footage adds time: appending a 17-second clip to a 50-second original makes a 67-second export.
 Captions, framing, sound and supporting visuals still follow your preferences; editorial review checks without recutting.
-Shorter clips let you choose a **maximum excerpt length** (15–90 seconds), **how many
-clips per video**, and **what changes between versions**. Auto can select less than the maximum;
-inserted footage adds time beyond that limit. Existing saved setups retain excerpt selection until you choose full video.
+For shorter clips, Quick lets you choose **how many clips per video** and **what changes
+between versions**. Auto selects the moment. The optional **maximum excerpt length**
+control is available in **All settings**. Existing saved setups retain excerpt selection until you choose full video.
 **All settings** in the
 panel header exposes every Auto control with the same settings scope; your choice
 of view is remembered.
