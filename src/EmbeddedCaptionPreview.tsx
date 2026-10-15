@@ -12,6 +12,7 @@ export default function EmbeddedCaptionPreview({ sourceId, plan, disabled }: { s
     return () => { request.current?.abort(); };
   }, [signature]);
   const render = async () => {
+    if (request.current) return;
     const controller = new AbortController(); request.current = controller; setBusy(true); setError('');
     try {
       const result = await apiRequest<{ url: string }>('/api/previews', {
@@ -22,9 +23,14 @@ export default function EmbeddedCaptionPreview({ sourceId, plan, disabled }: { s
     } catch (error) { if (!controller.signal.aborted) setError(error instanceof Error ? error.message : 'Preview failed.'); }
     finally { if (request.current === controller) { request.current = null; setBusy(false); } }
   };
+  useEffect(() => {
+    if (!plan.settings.mirror || !plan.settings.preserveEmbeddedText || disabled) return;
+    const timer = window.setTimeout(() => { void render(); }, 1200);
+    return () => { window.clearTimeout(timer); request.current?.abort(); };
+  }, [signature, disabled]);
   if (!plan.settings.mirror || !plan.settings.preserveEmbeddedText) return null;
   return <div className="embedded-caption-preview">
-    <p className="field-hint">Render a five-second source picture sample to check embedded captions and area edges. The timeline shows the uncorrected flip. Saved speech captions, narration and supporting shots appear in the full export.</p>
+    <p className="field-hint">A five-second source picture sample is prepared automatically to check fixed captions and area edges. The timeline shows the uncorrected flip. Saved speech captions, narration and supporting shots appear in the full export.</p>
     <button type="button" className="secondary-button" disabled={disabled} onClick={() => busy ? request.current?.abort() : void render()}>{busy ? 'Cancel caption preview' : 'Preview readable captions'}</button>
     {busy && <p role="status">Preparing caption sample…</p>}
     {error && <p role="alert">{error}</p>}

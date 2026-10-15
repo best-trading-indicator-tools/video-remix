@@ -4,7 +4,7 @@ import type { EditPlan, Transcript } from './types.js';
 
 export const speedSchema = z.number().finite().min(0.5).max(2)
   .describe('Video playback speed: 0.5 to 2; 1 is normal. Original audio follows speed with preserved pitch.');
-export const mirrorSchema = z.boolean().describe('Flip the source picture horizontally. Added text stays readable.');
+export const mirrorSchema = z.boolean().describe('Flip the source picture horizontally, including text already in the video. Text added in the editor stays readable. Use preserveEmbeddedText for fixed caption areas.');
 export const playbackShape = { speed: speedSchema.optional(), mirror: mirrorSchema.optional(), ...embeddedTextShape };
 export type Playback = { speed?: number; mirror?: boolean; preserveEmbeddedText?: boolean; embeddedTextRegions?: EmbeddedTextRegion[] };
 export const playbackSettings = (value: Playback) => ({ speed: value.speed ?? 1, mirror: value.mirror ?? false,
@@ -17,7 +17,7 @@ export function playbackSummary(before: Playback, after: Playback): string[] {
     ...(JSON.stringify(before.embeddedTextRegions ?? []) !== JSON.stringify(after.embeddedTextRegions ?? []) ? [`Embedded caption areas: ${after.embeddedTextRegions?.length ? `${after.embeddedTextRegions.length} manual` : 'automatic detection'}.`] : []),
   ];
 }
-export const playbackInstructions = 'speed: 0.5–2 (1 normal, 0.5 half speed, 2 double speed); mirror: boolean (flip horizontally, true to flip, false to restore). Speed changes source playback and its audio with preserved pitch, not source trim timestamps. Added footage and replacement music keep their own playback speed. Added text remains readable when flipping. Unspecified speed and mirror mean 1 and false. Only change requested fields. ' + embeddedTextInstructions;
+export const playbackInstructions = 'speed: 0.5–2 (1 normal, 0.5 half speed, 2 double speed); mirror: boolean (flip horizontally, true to flip, false to restore). Speed changes source playback and its audio with preserved pitch, not source trim timestamps. Added footage and replacement music keep their own playback speed. Flipping also mirrors text already in the source unless fixed-area preservation is enabled. Text added in the editor remains readable when flipping. Unspecified speed and mirror mean 1 and false. Only change requested fields. ' + embeddedTextInstructions;
 export function transcriptAtSpeed(transcript: Transcript, speed: number): Transcript {
   return { ...transcript, duration: transcript.duration / speed, segments: transcript.segments.map(segment => ({
     ...segment, start: segment.start / speed, end: segment.end / speed,

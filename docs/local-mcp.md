@@ -96,7 +96,9 @@ work regardless of language; automatic detection currently uses English OCR.
 This counter-flips the original pixels inside each caption area before flipping
 the source. It keeps the lettering, styling and timing, but also changes the
 background inside the area, so seams can appear. It does not erase or redraw
-text and cannot reliably handle moving or angled lettering. Use `preview_draft`
+text and cannot reliably handle moving or angled lettering, entire app screens,
+or every label in a screen recording. Ordinary `mirror:true` also mirrors existing
+source text unless this correction is enabled. Use `preview_draft`
 with `draftId`, current `revision` and one `sourceId` to render the first five
 seconds and inspect the result; repeat for each bulk target. Auto previews show
 source picture settings before final Auto selection. A detection failure asks

@@ -34,6 +34,7 @@ import { shouldShowOnboarding, type TourDestination } from "./onboarding-steps";
 import OwnFootagePanel from "./OwnFootagePanel";
 import { CaptionAppearance, SampleCaptionOverlay } from "./CaptionStyleEditor";
 import PreviewBackground from "./PreviewBackground";
+import PreviewTransport from "./PreviewTransport";
 import { captionStyleSchema, applyCaptionStyleChange } from "../shared/caption-style";
 import { captionCorrectionsSchema } from '../shared/caption-corrections';
 import CaptionCorrectionsEditor from './CaptionCorrectionsEditor';
@@ -490,6 +491,7 @@ export default function App() {
   const audioInput = useRef<HTMLInputElement>(null);
   const subtitleInput = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const previewPlayerRef = useRef<HTMLDivElement>(null);
   const previewFrameRef = useRef<HTMLDivElement>(null);
   const [previewHeight, setPreviewHeight] = useState(465);
   const selected =
@@ -624,7 +626,8 @@ export default function App() {
     }
   };
   useEffect(() => {
-    if (!selected || !upscaledPreview || previewCurrent || !engineReady || view !== "studio" || watermark.editing || mode === "shorts") return;
+    if (!selected || !(upscaledPreview || readablePreview) || !engineReady || view !== "studio" || watermark.editing || mode === "shorts") return;
+    if (previewCurrent) { setShowRendered(true); return; }
     // Wait for a pause in editing; reuse the server's sample cache for unchanged settings.
     const timer = window.setTimeout(() => { void renderManualPreview(true); }, 1200);
     return () => { window.clearTimeout(timer); previewRequest.current?.abort(); };
@@ -1702,8 +1705,9 @@ export default function App() {
                     <>
                       <div className="preview-label">
                         <span />
-                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? upscaledPreview ? "AI UPSCALED · RENDERED SAMPLE" : "RENDERED SAMPLE" : previewBusy && upscaledPreview ? "PREPARING AI PREVIEW · SHOWING SOURCE" : manualLive && sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
+                        {sourcePreview ? "ORIGINAL FOOTAGE" : usingRendered ? upscaledPreview ? "AI UPSCALED · RENDERED SAMPLE" : "RENDERED SAMPLE" : readablePreview ? previewBusy ? "PREPARING TEXT CORRECTION · LIVE IS UNCORRECTED" : "LIVE · TEXT CORRECTION NOT SHOWN" : previewBusy && upscaledPreview ? "PREPARING AI PREVIEW · SHOWING SOURCE" : manualLive && sequencePreview ? "LIVE · FIRST CUT" : "LIVE PREVIEW"}
                       </div>
+                      <div ref={previewPlayerRef} className="main-preview-player">
                       <div
                         ref={previewFrameRef}
                         className={`video-frame ${liveBands ? "has-black-bands" : ""}`}
@@ -1718,7 +1722,6 @@ export default function App() {
                           ref={videoRef}
                           src={usingRendered ? renderedPreview!.url : selected.url}
                           poster={usingRendered ? undefined : selected.thumbnailUrl}
-                          controls
                           playsInline
                           preload="metadata"
                           aria-label="Main video preview"
@@ -1771,6 +1774,9 @@ export default function App() {
                         {sampleCaptions && <SampleCaptionOverlay style={activePreviewSettings.captionStyle} height={previewHeight} />}
                         {!sourcePreview && !usingRendered && <TextOverlaysPreview key={`${selected.id}:${mode}`} items={activePreviewSettings.textOverlays} time={liveOutputTime} height={previewHeight} aspect={previewAspect}
                           onChange={updatePreviewText} onInteract={() => videoRef.current?.pause()} />}
+                      </div>
+                      <PreviewTransport videoRef={videoRef} fullscreenRef={previewPlayerRef} mediaKey={`${selected.id}:${mode}:${sourcePreview}:${usingRendered ? renderedPreview!.id : 'live'}`}
+                        interval={manualLive ? liveInterval : null} speed={liveSpeed} onError={setManualPreviewError} />
                       </div>
                       <span className="preview-ratio">
                         {sourcePreview

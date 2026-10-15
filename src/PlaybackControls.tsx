@@ -51,12 +51,12 @@ export default function PlaybackControls({ value, onChange, disabled = false }: 
       <label className="playback-flip-option"><input type="checkbox" checked={value.mirror ?? false} onChange={event => onChange({ mirror: event.target.checked })} />
         <span>Flip horizontally</span>
       </label>
-      <p className="field-hint">Mirror the source picture. Added text stays readable.</p>
+      <p className="field-hint">Mirrors the whole picture, including text already in the video. Text added in the editor stays readable.</p>
       {value.mirror && <div className="embedded-caption-controls">
         <label className="playback-flip-option"><input type="checkbox" checked={value.preserveEmbeddedText ?? false} onChange={event => onChange({ preserveEmbeddedText: event.target.checked })} />
           <span>Keep embedded captions readable</span>
         </label>
-        <p className="field-hint">For text already in the video. Keeps the original lettering by correcting fixed caption areas. The background inside each area also changes; edges can be visible. Check a rendered preview before exporting.</p>
+        <p className="field-hint">For fixed captions or titles already in the video. Enable to prepare a corrected five-second sample. Each area’s background also flips; check for visible edges. This cannot reliably keep an entire app screen or moving text readable.</p>
         {value.preserveEmbeddedText && <CaptionAreas regions={value.embeddedTextRegions ?? []} onChange={embeddedTextRegions => onChange({ embeddedTextRegions })} />}
       </div>}
     </fieldset>

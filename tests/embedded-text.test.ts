@@ -47,6 +47,7 @@ test('AI proposals apply readable-caption settings, show summaries and current a
       const result = await sourcePromptProposal(request, draft), settings = 'settings' in result ? result.settings : result.options;
       assert.equal(settings.preserveEmbeddedText, true); assert.equal(settings.mirror, true); assert.deepEqual(settings.embeddedTextRegions, regions);
       assert.deepEqual(context.currentSettings.embeddedTextRegions, regions); assert.match(instructions, /never invent coordinates/);
+      assert.match(instructions, /Do not promise to preserve an entire app screen/);
       assert.match(result.summary.join(' '), /Keep embedded captions readable/);
       reply = [{ patch: { embeddedTextRegions: [] } }];
       const reset = await sourcePromptProposal({ ...request, prompt: 'Use automatic caption areas' }, draft);
