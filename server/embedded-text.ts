@@ -54,8 +54,15 @@ export async function detectEmbeddedText(input: string, cuts: EditSegment[], sig
   const directory = await mkdtemp(path.join(os.tmpdir(), 'remix-readable-captions-'));
   try {
     const availableCommand = ocrCommand(['--list-langs']);
-    const available = await runLocal(availableCommand.binary, availableCommand.args, { signal: budget, timeout: 5000 });
-    if (!`${available.stdout}\n${available.stderr}`.split(/\r?\n/u).some(line => line.trim() === 'eng'))
+    let availableStdout = '';
+    try {
+      const available = await runLocal(availableCommand.binary, availableCommand.args, { signal: budget, timeout: 5000 });
+      availableStdout = `${available.stdout}\n${available.stderr}`;
+    } catch {
+      signal.throwIfAborted();
+      throw new EmbeddedTextError('Automatic caption areas need Tesseract OCR to be installed and available on your system. Choose manual caption areas or install Tesseract OCR to preview and export.');
+    }
+    if (!availableStdout.split(/\r?\n/u).some(line => line.trim() === 'eng'))
       throw new EmbeddedTextError('Automatic caption areas need the local English OCR model. Choose manual caption areas instead.');
     const samples: Box[][] = [];
     for (const [index, time] of captionSampleTimes(cuts).entries()) {
