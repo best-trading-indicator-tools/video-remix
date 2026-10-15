@@ -1,3 +1,4 @@
+import EmbeddedCaptionPreview from "./EmbeddedCaptionPreview";
 import PlaybackControls from "./PlaybackControls";
 import { retimePlanPlayback } from "../shared/playback";
 import UpscaleControl from "./UpscaleControl";
@@ -62,6 +63,8 @@ function collectDraftChanges(plan: EditPlan, draft: EditPlan, refreshBroll: bool
   if ((plan.settings.upscale ?? "off") !== (draft.settings.upscale ?? "off")) framing.upscale = draft.settings.upscale ?? "off";
   if (plan.settings.speed !== draft.settings.speed) framing.speed = draft.settings.speed;
   if (plan.settings.mirror !== draft.settings.mirror) framing.mirror = draft.settings.mirror;
+  if (!!plan.settings.preserveEmbeddedText !== !!draft.settings.preserveEmbeddedText) framing.preserveEmbeddedText = !!draft.settings.preserveEmbeddedText;
+  if (differs(plan.settings.embeddedTextRegions ?? [], draft.settings.embeddedTextRegions ?? [])) framing.embeddedTextRegions = draft.settings.embeddedTextRegions ?? [];
   if (plan.settings.fit !== draft.settings.fit) framing.fit = draft.settings.fit;
   if (differs(plan.settings.focalPoint, draft.settings.focalPoint)) framing.focalPoint = draft.settings.focalPoint;
   if (differs(plan.settings.captionStyle, draft.settings.captionStyle)) framing.captionStyle = draft.settings.captionStyle;
@@ -546,9 +549,10 @@ export default function EditPlanEditor({ job, onClose, onCreated, initialIssue, 
               </details>
               <PlaybackControls value={draft.settings} disabled={saving || timelineBusy} onChange={patch => {
                 const next = patch.speed === undefined ? structuredClone(draft) : retimePlanPlayback(draft, patch.speed);
-                if (patch.mirror !== undefined) next.settings.mirror = patch.mirror;
+                Object.assign(next.settings, patch);
                 setDraft(next); setTransportRate(0); setReviewTime(0); setSeekToken(value => value + 1); setPreviewMode("framing");
               }} />
+              <EmbeddedCaptionPreview sourceId={job.sourceId} plan={draft} disabled={saving || timelineBusy} />
               <details className="edit-plan-section edit-framing-section">
                 <summary>Framing &amp; caption placement</summary>
                 <fieldset disabled={saving}>

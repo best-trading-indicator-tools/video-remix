@@ -1,3 +1,4 @@
+import { embeddedTextRegionsSchema } from "../shared/embedded-text";
 import PlaybackControls from "./PlaybackControls";
 import BatchProgress from "./BatchProgress";
 import BatchNotifications from "./BatchNotifications";
@@ -156,6 +157,8 @@ function autoPreset(value?: Partial<AutoPreset>): AutoPreset {
         : DEFAULT_AUTO_OPTIONS.targetDuration,
       speed: speedSchema.safeParse(options?.speed).success ? options!.speed : 1,
       mirror: options?.mirror === true,
+      preserveEmbeddedText: options?.preserveEmbeddedText === true,
+      embeddedTextRegions: embeddedTextRegionsSchema.safeParse(options?.embeddedTextRegions).success ? options?.embeddedTextRegions : undefined,
       narration: options?.narration === true,
       captions: options?.captions === "add" || options?.captions === "keep" ? options.captions : "auto",
       captionStyle: captionStyleSchema.safeParse(options?.captionStyle).success ? options?.captionStyle : undefined,
@@ -553,6 +556,7 @@ export default function App() {
   const engineReady = connected && !!health?.ffmpeg && !!health?.ffprobe;
   const activePreviewSettings = mode === "auto" ? autoOptions : settings;
   const renderedSettings = mode === "auto" ? autoPicturePreview(autoOptions, selected) : settings;
+  const readablePreview = !!activePreviewSettings.mirror && !!activePreviewSettings.preserveEmbeddedText;
   const upscaledPreview = !!activePreviewSettings.upscale && activePreviewSettings.upscale !== "off";
   const previewSignature = JSON.stringify({ sourceId: selected?.id, mode, settings: renderedSettings });
   const previewCurrent = renderedPreview?.signature === previewSignature;
@@ -1864,12 +1868,13 @@ export default function App() {
                           {!watermark.editing && activePreviewSettings.watermarkRemoval?.enabled && " Watermark removal appears in the cleaned sample and exports; use Open watermark editor, then Preview removal to check it."}
                         </span>
                       </div>
-                      {(mode === "manual" || upscaledPreview) && !watermark.editing && <>
+                      {(mode === "manual" || upscaledPreview || readablePreview) && !watermark.editing && <>
                         <div className="manual-preview-actions">
                           <p>{previewBusy ? upscaledPreview ? "Preparing the AI-upscaled preview locally… CPU rendering can take several minutes." : "Rendering a short sample on your machine…" : usingRendered ? `${renderedPreview!.duration.toFixed(1)}s from the start of ${mode === "auto" ? "this source" : "this edit"}` : upscaledPreview ? previewCurrent ? "Your AI sample is ready. Choose AI upscaled above to view it." : "The AI result appears here when ready. Original and Live show the source picture." : "Review the first five seconds before exporting."}</p>
-                          {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || (mode === "manual" && !liveInterval)} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />{upscaledPreview ? "Refresh AI preview" : "Render 5s preview"}</button>}
+                          {previewBusy ? <button className="secondary-button" onClick={() => previewRequest.current?.abort()}><X size={14} />Cancel preview</button> : <button className="secondary-button" disabled={!engineReady || (mode === "manual" && !liveInterval)} onClick={() => void renderManualPreview()}><MonitorPlay size={14} />{upscaledPreview ? "Refresh AI preview" : readablePreview ? "Preview readable captions" : "Render 5s preview"}</button>}
                         </div>
                       </>}
+                      {readablePreview && !watermark.editing && <p className="field-hint">Embedded caption correction appears in the rendered sample and export. Check the lettering and area edges; Live shows the uncorrected flip.</p>}
                       {manualPreviewError && <ProblemNotice message={manualPreviewError} operation="Preview video" />}
                     </>
                   ) : (

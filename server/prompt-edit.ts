@@ -82,7 +82,7 @@ caption_style also accepts animation none/fade/pop/slide/typewriter/words, anima
 {"op":"remove_captions","ids":["existing caption ID"]} or {"op":"remove_captions","ids":"all"}
 {"op":"caption_style","fontSize":20,"bottomPercent":18,"fontFamily":"poppins","color":"#ffffff","bold":true,"italic":false,"uppercase":false,"outlineWidth":1.2,"outlineColor":"#151515","shadow":0,"letterSpacing":0,"alignment":"center","background":"none","backgroundColor":"#10151c","backgroundOpacity":80} (each optional; fontSize ${CAPTION_FONT_SIZE_MIN}–${CAPTION_FONT_SIZE_MAX}, bottomPercent 5–80 moving UP with larger values; fontFamily classic/tiktok-sans/poppins/anton/serif (tiktok-sans is TikTok Sans), six-digit hex colors, outlineWidth and shadow 0–5, letterSpacing 0–4, alignment left/center/right, background none/box, backgroundOpacity 0–100; a box replaces the outline. Only added captions can be styled; captions baked into source pixels cannot be restyled.)
 caption_style also accepts cyrillicMode off/words/all and cyrillicWords (complete list of at most 50 literal words/phrases, each 1–80 characters without newlines). This swaps similar-looking Latin letters for Cyrillic only when drawn, preserving caption text and speech timing. Enable only for explicit lookalike requests, never for translation or ordinary Cyrillic-language captions. Specific words use "words" and the requested list; preserve existing entries when adding more. Use "all" only when requested for all caption text and "off" to restore original spelling. If words/scope are missing, ask for them; never invent terms or claim platform moderation outcomes. Use this style operation rather than rewriting individual caption cues for lookalikes.
-{"op":"playback","speed":1.25,"mirror":true} (speed and mirror each optional). ${playbackInstructions} Saved captions, callouts and supporting shots follow the new speed; custom text and added footage keep their explicit output-clock times.
+{"op":"playback","speed":1.25,"mirror":true} (speed, mirror, preserveEmbeddedText and embeddedTextRegions each optional). ${playbackInstructions} Saved captions, callouts and supporting shots follow the new speed; custom text and added footage keep their explicit output-clock times.
 {"op":"upscale","target":"off|1080|1440|2160"}. ${upscalePromptInstructions}
 {"op":"framing","fit":"crop|contain|blur","focalPoint":{"x":0.5,"y":0.5}} (each optional; global focalPoint also replaces existing source-cut overrides)
 {"op":"black_bands","enabled":true,"topText":"BPC157","topStyle":{"cyrillic":true,"color":"#ffffff","fontPercent":5.4}} (all fields except op optional; at least one change). ${blackBandPromptInstructions}
@@ -109,7 +109,7 @@ function contextFor(plan: EditPlan, canRefreshBroll: boolean, sourceTranscript?:
     throw new PromptEditError(413, "This edit has too much selected speech for one prompt. Use the manual editor for this edit.");
   const context = {
     revision: plan.revision, outputDuration: plan.outputDuration, sourceDuration: plan.sourceDuration,
-    playbackSpeed: plan.settings.speed, mirror: plan.settings.mirror, narrationLocked: plan.narration, canRefreshBroll, pendingBrollCount,
+    playbackSpeed: plan.settings.speed, mirror: plan.settings.mirror, preserveEmbeddedText: plan.settings.preserveEmbeddedText ?? false, embeddedTextRegions: plan.settings.embeddedTextRegions ?? [], narrationLocked: plan.narration, canRefreshBroll, pendingBrollCount,
     hook: plan.settings.hookText, fit: plan.settings.fit, focalPoint: plan.settings.focalPoint ?? { x: 0.5, y: 0.5 },
     captionStyle: plan.settings.captionStyle ?? { fontSize: 20, bottomPercent: 100 * 24 / 288 },
     textOverlays: plan.settings.textOverlays,
@@ -220,6 +220,8 @@ function compile(plan: EditPlan, operations: Operation[], sourceTranscript: Tran
   if (changes.framing) {
     if (changes.framing.speed === plan.settings.speed) delete changes.framing.speed;
     if (changes.framing.mirror === plan.settings.mirror) delete changes.framing.mirror;
+    if ((changes.framing.preserveEmbeddedText ?? false) === (plan.settings.preserveEmbeddedText ?? false)) delete changes.framing.preserveEmbeddedText;
+    if (same(changes.framing.embeddedTextRegions ?? [], plan.settings.embeddedTextRegions ?? [])) delete changes.framing.embeddedTextRegions;
     if ((changes.framing.upscale ?? "off") === (plan.settings.upscale ?? "off")) delete changes.framing.upscale;
     if (changes.framing.fit === plan.settings.fit) delete changes.framing.fit;
     if (same(changes.framing.focalPoint, plan.settings.focalPoint ?? { x: 0.5, y: 0.5 })) delete changes.framing.focalPoint;

@@ -254,3 +254,6 @@ export async function inspectSourceCaptions({ source, cuts, transcript, signal, 
     if (directory) await rm(directory, { recursive: true, force: true }).catch(() => undefined);
   }
 }
+
+// Shared bounded OCR primitives; preserving embedded text never rewrites recognized words.
+export { readLines as readCaptionLines, sampleTimes as captionSampleTimes, ocrCommand };

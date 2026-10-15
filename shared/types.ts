@@ -47,6 +47,8 @@ export interface SupportingVisualOptions {
   brollMaxCoverage?: number;
 }
 export interface AutoOptions extends SupportingVisualOptions {
+  preserveEmbeddedText?: boolean;
+  embeddedTextRegions?: import("./embedded-text.js").EmbeddedTextRegion[];
   speed?: number;
   mirror?: boolean;
   captionCorrections?: import('./caption-corrections.js').CaptionCorrection[];
@@ -156,6 +158,8 @@ export interface RemixSettings extends SupportingVisualOptions {
   frameBlend: number;
   timeShift: number;
   mirror: boolean;
+  preserveEmbeddedText?: boolean;
+  embeddedTextRegions?: import("./embedded-text.js").EmbeddedTextRegion[];
   aspect: Aspect;
   fit: "crop" | "contain" | "blur";
   resolution: "source" | "720" | "1080";
@@ -331,7 +335,7 @@ export interface EditPlanChanges {
   captions?: CaptionCue[];
   cuts?: EditSegment[];
   visuals?: EditPlanVisual[];
-  framing?: { speed?: number; mirror?: boolean; upscale?: RemixSettings["upscale"]; fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
+  framing?: { preserveEmbeddedText?: boolean; embeddedTextRegions?: import("./embedded-text.js").EmbeddedTextRegion[]; speed?: number; mirror?: boolean; upscale?: RemixSettings["upscale"]; fit?: RemixSettings["fit"]; focalPoint?: FocalPoint; captionStyle?: CaptionStyle; blackBands?: BlackBands };
   correctionSeconds?: number;
 }
 export interface PromptEditRequest {
@@ -438,6 +442,7 @@ export type JobStatus =
   "queued" | "processing" | "completed" | "failed" | "cancelled" | "skipped";
 export interface DraftReview { summary: string; contribution: string; approvedAt: string }
 export interface RenderJob {
+  embeddedText?: { method: "automatic" | "manual"; regions: import("./embedded-text.js").EmbeddedTextRegion[] };
   timing?: import("./processing-time.js").ProcessingTiming;
   deepseekUsage?: import("./deepseek-usage.js").DeepSeekUsage;
   project?: string;

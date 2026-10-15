@@ -1,3 +1,4 @@
+import { EmbeddedTextError, type EmbeddedTextReport } from "./embedded-text.js";
 import { UpscaleError } from "./upscale.js";
 import type { Express } from "express";
 import { createHash, randomUUID } from "node:crypto";
@@ -81,6 +82,7 @@ export function manualPreviewSettings(settings: RemixSettings, source: MediaInfo
 }
 
 interface Preview {
+  embeddedText?: EmbeddedTextReport;
   id: string;
   key: string;
   duration: number;
@@ -150,14 +152,16 @@ export function installManualPreviewRoutes(app: Express) {
       if (controller.signal.aborted) throw new Error("Preview cancelled");
       const key = createHash("sha256").update(JSON.stringify({ settings, files })).digest("hex");
       const cached = [...previews.values()].find(item => item.key === key);
-      if (cached) return res.status(201).json({ id: cached.id, url: `/api/previews/${cached.id}/video`, duration: cached.duration });
+      if (cached) return res.status(201).json({ id: cached.id, url: `/api/previews/${cached.id}/video`, duration: cached.duration, embeddedText: cached.embeddedText });
       // Setup has its own bounded download budget; it must not consume render time.
       await preflightWatermarkRemoval(bounded.settings.watermarkRemoval, bounded.source.width, bounded.source.height, source.duration, controller.signal);
       timeout = setTimeout(() => { timedOut = true; controller.abort(); }, renderTimeout);
       timeout.unref();
       const folder = path.join(directory, id);
       const output = path.join(folder, "preview.mp4");
+      let embeddedText: EmbeddedTextReport | undefined;
       await renderVideo({
+        onEmbeddedText: report => { embeddedText = report; },
         ownFootage, maximumOutputDuration: 5,
         input: source.filePath, output, settings: bounded.settings, source: bounded.source,
         audioPath: audio?.filePath, subtitlePath: subtitle?.filePath,
@@ -169,14 +173,14 @@ export function installManualPreviewRoutes(app: Express) {
         throw new PreviewError(422, "This preview exceeded its size limit. Try a shorter interval.");
       if (controller.signal.aborted) throw new Error("Preview cancelled");
       await rm(path.join(folder, "work"), { recursive: true, force: true });
-      previews.set(id, { id, key, duration: bounded.duration, createdAt: Date.now() });
-      return res.status(201).json({ id, url: `/api/previews/${id}/video`, duration: bounded.duration });
+      previews.set(id, { id, key, duration: bounded.duration, createdAt: Date.now(), embeddedText });
+      return res.status(201).json({ id, url: `/api/previews/${id}/video`, duration: bounded.duration, embeddedText });
     } catch (error) {
       await discard(id).catch(() => undefined);
       if (res.destroyed) return;
       if (timedOut) return res.status(504).json({ error: "The preview took too long. Try a shorter interval or simpler effects." });
       if (error instanceof PreviewError || error instanceof ImportError) return res.status(error.status).json({ error: error.message });
-      if (error instanceof WatermarkRemovalError || error instanceof LamaError || error instanceof UpscaleError) return res.status(422).json({ error: error.message });
+      if (error instanceof EmbeddedTextError || error instanceof WatermarkRemovalError || error instanceof LamaError || error instanceof UpscaleError) return res.status(422).json({ error: error.message });
       if ((error as NodeJS.ErrnoException).code === "ENOENT")
         return res.status(404).json({ error: "A selected media file is no longer available. Upload it again." });
       console.error("Manual preview failed:", error);

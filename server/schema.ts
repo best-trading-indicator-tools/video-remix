@@ -1,3 +1,4 @@
+import { embeddedTextShape } from "../shared/embedded-text.js";
 import { playbackShape, speedSchema, mirrorSchema } from "../shared/playback.js";
 import { hasStockVisuals } from "../shared/visual-sources.js";
 import { pacingOptionsSchema } from "../shared/pacing.js";
@@ -41,6 +42,7 @@ export const settingsSchema = z
     watermarkRemoval: watermarkRemovalSchema.optional(),
     ownFootage: ownFootageSchema.optional(),
     ownFootageSourceId: z.uuid().optional(),
+    ...embeddedTextShape,
     speed: speedSchema,
     volume: n(0, 2),
     muted: z.boolean(),

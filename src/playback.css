@@ -5,3 +5,12 @@
 .playback-flip-option { display: flex; align-items: center; gap: 9px; color: var(--text); font-size: 12px; cursor: pointer; }
 .playback-flip-option input { accent-color: var(--accent); }
 .playback-section:disabled { opacity: .55; }
+.embedded-caption-controls { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border, #343941); }
+.embedded-caption-areas { margin-top: .8rem; }
+.embedded-caption-areas summary { cursor: pointer; }
+.embedded-caption-areas select { width: 100%; margin: .4rem 0; }
+.embedded-caption-region { margin: 1rem 0; }
+.embedded-caption-coordinates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; margin-top: .6rem; }
+.embedded-caption-coordinates label { display: grid; gap: .3rem; font-size: .8rem; }
+.embedded-caption-coordinates input { width: 100%; min-width: 0; }
+.embedded-caption-buttons { display: flex; flex-wrap: wrap; gap: .5rem; }

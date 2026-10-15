@@ -358,7 +358,9 @@ async function run(job: StoredJob, controller: AbortController) {
     }
     if (automaticManual) job.phase = "Preparing the soundtrack for automatic captions";
     await saveStore();
+    delete job.embeddedText;
     await renderVideo({
+      onEmbeddedText: report => { job.embeddedText = report; },
       onPhase: phase => { job.phase = phase; if (job.timing) observePhase(job.timing, phase); },
       onWorkProgress: (stage, progress) => { if (job.timing) observeWork(job.timing, stage, progress); },
       ownFootage,

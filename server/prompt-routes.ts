@@ -36,7 +36,7 @@ export function changesBetweenPlans(base: EditPlan, next: EditPlan, transcript?:
   if (differs(retimed.captions, next.captions)) changes.captions = next.captions;
   if (differs(retimed.visuals, next.visuals)) changes.visuals = next.visuals;
   const framing: NonNullable<EditPlanChanges["framing"]> = {};
-  for (const key of ["speed", "mirror", "fit", "focalPoint", "captionStyle", "blackBands", "upscale"] as const) {
+  for (const key of ["speed", "mirror", "preserveEmbeddedText", "embeddedTextRegions", "fit", "focalPoint", "captionStyle", "blackBands", "upscale"] as const) {
     if (differs(base.settings[key], next.settings[key])) Object.assign(framing, { [key]: next.settings[key] });
   }
   if (Object.keys(framing).length) changes.framing = framing;

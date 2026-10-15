@@ -85,6 +85,33 @@ added footage, replacement music and explicit text-overlay times keep their
 own timing. Horizontal flip applies to the source picture; added text stays
 readable. `get_export` reports the applied `playback` settings.
 
+To keep fixed text already burned into the source readable when flipping, set
+`preserveEmbeddedText: true` alongside `mirror: true` in either mode. An empty
+`embeddedTextRegions: []` uses local OCR to find stationary caption areas.
+Alternatively, supply up to four non-overlapping `{x,y,width,height}` rectangles
+in normalized **original-picture** coordinates. Each area must fit in the frame,
+be at most 35% high, and together cover at most 35% of the picture. Manual areas
+work regardless of language; automatic detection currently uses English OCR.
+
+This counter-flips the original pixels inside each caption area before flipping
+the source. It keeps the lettering, styling and timing, but also changes the
+background inside the area, so seams can appear. It does not erase or redraw
+text and cannot reliably handle moving or angled lettering. Use `preview_draft`
+with `draftId`, current `revision` and one `sourceId` to render the first five
+seconds and inspect the result; repeat for each bulk target. Auto previews show
+source picture settings before final Auto selection. A detection failure asks
+for manual areas rather than silently exporting mirrored text.
+
+Saved edits accept the same two fields inside `changes.framing`. For a picture
+sample, pass the resulting plan settings to `preview_manual`, with
+`segments: plan.cuts`, `trimStart: 0`, `trimEnd: null`, `timeShift: 0`, and
+`audioId: null`, `subtitleId: null`. Saved generated captions, narration and
+supporting shots are reviewed in the full export. Preview responses and
+`get_export` include an `embeddedText` report with the actual automatic/manual
+areas used. The `playback` report includes the saved feature settings even when
+mirror is off. Sparse updates preserve each target's own caption areas; reset
+those explicitly with `[]` when desired. Draft history and Undo include them.
+
 Claude or Codex can translate an ordinary request directly into typed draft
 updates. Those updates make no DeepSeek request. `apply_prompt_to_draft` uses the
 app's DeepSeek prompt feature when requested, with the configured API key and

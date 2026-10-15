@@ -241,7 +241,7 @@ export async function renderInputsFromPlan(job: StoredJob, workDir: string) {
       selection: media.selection, stock: media.stock, graphicScene: media.graphicScene, reason: item.reason, visualSource: media.visualSource };
   });
   if (job.summary) {
-    const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays|Custom timed text|Playback speed:|Flip horizontally:/iu.test(change));
+    const changes = job.summary.changes.filter(change => !/B-roll cutaway|animated card|captions|hook|Key-point overlays|Custom timed text|Playback speed:|Flip horizontally:|Embedded caption areas:/iu.test(change));
     const broll = job.supportingVisuals.filter(item => item.kind === "broll").length;
     const cards = job.supportingVisuals.filter(item => item.kind === "graphic").length;
     changes.push(...playbackSummary({}, plan.settings));

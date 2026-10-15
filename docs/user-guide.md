@@ -1486,3 +1486,12 @@ Exports show the collection position, current processing stage, finished count, 
 The first export may show only a stage estimate. AI planning and searches vary; stalled work or an exceeded prediction returns to measuring instead of displaying a misleading countdown. The app reports the current phase throughout.
 
 Click **Notify me when finished** in Exports to opt into system alerts for collections that take at least a minute. Browsers ask permission only after this click. Keep the app/tab open; this does not install a background notification service. An in-app completion notice remains available, including counts for failed, cancelled, or skipped videos. On unsigned macOS builds or systems that reject desktop notifications, Remix Studio also tries a Dock/taskbar signal. OS notification settings and Do Not Disturb can affect visibility.
+
+
+### Readable embedded captions when flipping
+
+In **Horizontal flip**, enable **Flip horizontally**, then **Keep embedded captions readable**. This is for fixed text already in the video; titles and speech captions added by the editor already stay readable. Available in Quick, All settings, Manual and saved-result editing, including prompts and checked/all-video edits.
+
+Choose **Preview readable captions** to inspect a rendered five-second sample. Live still shows the uncorrected flip. Automatic detection finds stationary caption areas using local English OCR. If it misses the text, open **Caption areas**, choose **Manual areas**, enter left/top/width/height percentages in the original unflipped picture, and **Apply areas**. Include the entire line and outline. Preview each target when applying to multiple videos; positions may differ.
+
+The correction keeps original caption pixels, wording and timing. It also corrects the background within each area, which can leave visible edges. It does not erase or rewrite text. Moving or angled text is not supported, and cropping can still cut text out of the picture. Review the full export before using it; the sample covers only its opening. Saved-result samples show the source picture before saved narration, generated speech captions and supporting shots. Turning flip off retains the correction settings for later.

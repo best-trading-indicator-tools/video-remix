@@ -1,3 +1,4 @@
+import { embeddedTextInstructions } from '../shared/embedded-text.js';
 import { hasUngroundedTextEdits } from '../shared/text-edits.js';
 import { sourcePromptShape, sourcePromptInstructions, applySourcePrompt, sourcePromptSummary, sourcePromptContext, promptAssetCatalog, attachmentFromRef, hasUngroundedBandText, EMPTY_PROMPT_ASSETS, type PromptAssets } from "./source-prompt-controls.js";
 import { stockProvidersForEdit } from "./stock-broll.js";
@@ -50,7 +51,8 @@ focalPoint {"x":0.5,"y":0.5}, each coordinate 0–1 (left/top 0, center 0.5, rig
 For a simple trim, provide trimStart/trimEnd only. The compiler removes existing segments and resets an inherited timeShift to 0 to honor those source timestamps. For explicit source sequences, provide segments only, not trimStart/trimEnd; sequence selection resets inherited timeShift to 0. timeShift moves the complete trim window while preserving its duration and clamps at the source edges; it does not work with segments. Never combine nonzero timeShift with segments. Global focalPoint replaces existing per-cut crop overrides. Do not restate unchanged fields or reset other filters.
 No speech or transcript is available during this proposal. You cannot invent or rewrite a heading from the video; only use exact heading text explicitly supplied by the user, or remove it with an empty string. Caption style affects imported or automatic captions. You may enable automaticCaptions, but cannot invent, rewrite or translate caption text without explicit user-provided find-and-replace correction rules. audioAttachment and subtitleAttachment accept a supplied asset reference or null to remove the attachment. To remove ALL added captions use automaticCaptions:off and subtitleAttachment:null. Selecting an SRT file turns automatic captions off. Audio replacement uses an uploaded track; it loops if shorter than the video. callouts accepts up to 5 {text,start,end} overlays on the output clock; text must be literally supplied by the user. [] removes them. You cannot invent media, clone voices, change metadata/device identity, stripMetadata, apply custom LUTs, perform subject tracking or publish from this draft. For automatic speech selection, pacing, multiple versions or replacement narration, return patch:{} and switchTo:"auto" with no clarification so the application can prepare a complete Auto proposal. The user will review the workspace switch. Use this only when the entire request can be completed in Auto; contradictory combinations still need clarification. AI upscaling uses the upscale control described below; qualityCleanup is separate local cleanup and resolution alone is ordinary resizing.
 If any part is unsupported, ambiguous, or would require speech/video analysis, return patch:{} plus clarification. Never partially fulfill mixed requests. For 'make it better' ask which changes; for specific aesthetic requests such as 'slightly warmer with less saturation', propose restrained changes. If the requested settings already match, return patch:{}. Never claim anything is rendered, saved, published or applied. No media URLs, file paths or attachment IDs. Write clarification in the request's language.
-${sourcePromptInstructions}`;
+${sourcePromptInstructions}
+${embeddedTextInstructions}`;
 
 function effective(settings: RemixSettings, source: Source) {
   if (settings.segments) {
@@ -132,7 +134,8 @@ function compile(settings: RemixSettings, patch: Patch, source: Source, assets: 
       summary.push(`${label}: ${display(proposed)}${suffix}.`);
     }
   }
-  const booleanLabels = { muted: "Mute audio", mirror: "Flip horizontally", normalizeAudio: "Audio normalization", qualityCleanup: "Local video cleanup", autoMotion: "Gentle camera motion", smoothCuts: "Smooth audio cuts" } as const;
+  if (!same(next.embeddedTextRegions ?? [], settings.embeddedTextRegions ?? [])) summary.push(`Embedded caption areas: ${next.embeddedTextRegions?.length ? `${next.embeddedTextRegions.length} manual` : "automatic detection"}.`);
+  const booleanLabels = { preserveEmbeddedText: "Keep embedded captions readable (when flipped)", muted: "Mute audio", mirror: "Flip horizontally", normalizeAudio: "Audio normalization", qualityCleanup: "Local video cleanup", autoMotion: "Gentle camera motion", smoothCuts: "Smooth audio cuts" } as const;
   for (const [key, label] of Object.entries(booleanLabels)) {
     const field = key as keyof typeof booleanLabels;
     if (Boolean(next[field]) !== Boolean(settings[field])) summary.push(`${label}: ${next[field] ? "on" : "off"}.`);

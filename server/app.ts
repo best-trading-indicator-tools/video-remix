@@ -651,6 +651,8 @@ export function createApp() {
       auto: parent.auto || parsed.data.refreshBroll ? { ...(parent.auto ?? DEFAULT_AUTO_OPTIONS),
         ...(parsed.data.framing?.speed !== undefined ? { speed: plan.settings.speed } : {}),
         ...(parsed.data.framing?.mirror !== undefined ? { mirror: plan.settings.mirror } : {}),
+        ...(parsed.data.framing?.preserveEmbeddedText !== undefined ? { preserveEmbeddedText: plan.settings.preserveEmbeddedText } : {}),
+        ...(parsed.data.framing?.embeddedTextRegions !== undefined ? { embeddedTextRegions: plan.settings.embeddedTextRegions } : {}),
         ...(parsed.data.refreshBroll ? { visualSources: [...new Set([...getVisualSources(parent.auto), ...stockProvidersForEdit(parent.auto)])] } : {}),
         ...(parsed.data.brollCount !== undefined ? { brollCount: parsed.data.brollCount } : {}),
         ...(parsed.data.brollMaxCoverage !== undefined ? { brollMaxCoverage: parsed.data.brollMaxCoverage } : {}),

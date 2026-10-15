@@ -118,6 +118,15 @@ test('local MCP tools preserve per-video drafts, validate batches and never dupl
         value = (await call('update_draft', { draftId: value.id, revision: value.revision, [mode]: { mirror: true } })).draft;
         assert.deepEqual(value.items.map((item: any) => settings(item).speed), [1.5, 1.5, .8]);
         assert.ok(value.items.every((item: any) => settings(item).mirror));
+        const regions = [{ x: .1, y: .7, width: .8, height: .15 }];
+        value = (await call('update_draft', { draftId: value.id, revision: value.revision, sourceIds: [ids[0]], [mode]: { embeddedTextRegions: regions } })).draft;
+        const untouched = structuredClone(value.items[2]);
+        value = (await call('update_draft', { draftId: value.id, revision: value.revision, sourceIds: ids.slice(0, 2), [mode]: { preserveEmbeddedText: true } })).draft;
+        assert.deepEqual(settings(value.items[0]).embeddedTextRegions, regions);
+        assert.equal(settings(value.items[1]).embeddedTextRegions, undefined);
+        assert.deepEqual(value.items[2], untouched);
+        assert.ok(value.items.slice(0, 2).every((item: any) => settings(item).preserveEmbeddedText));
+        await assert.rejects(call('update_draft', { draftId: value.id, revision: value.revision, [mode]: { embeddedTextRegions: [{ x: .9, y: .9, width: .5, height: .2 }] } }));
         assert.deepEqual(secondStore.get(value.id), value);
         await assert.rejects(call('update_draft', { draftId: value.id, revision: value.revision, [mode]: { speed: 2.1 } }));
         const restored = (await call('restore_draft', { draftId: value.id, revision: value.revision, targetRevision: original.revision })).draft;

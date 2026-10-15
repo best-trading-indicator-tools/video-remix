@@ -1,3 +1,5 @@
+import { embeddedTextRegionsSchema } from "../shared/embedded-text.js";
+import { embeddedTextFilters, readableCaptionReport, type EmbeddedTextReport } from "./embedded-text.js";
 import { spawn } from "node:child_process";
 import { MAX_FOCUS_POINTS_TOTAL, validFocusTrack } from "../shared/focus.js";
 import { randomUUID } from "node:crypto";
@@ -351,6 +353,8 @@ export async function createThumbnail(
 }
 
 function validateSettings(settings: RemixSettings): void {
+  embeddedTextRegionsSchema.parse(settings.embeddedTextRegions ?? []);
+  if (settings.preserveEmbeddedText !== undefined && typeof settings.preserveEmbeddedText !== "boolean") throw new Error("Keep embedded captions readable must be on or off");
   textOverlaysSchema.parse(settings.textOverlays ?? []);
   captionCorrectionsSchema.parse(settings.captionCorrections ?? []);
   const ranges: [keyof RemixSettings, number, number][] = [
@@ -668,6 +672,7 @@ export async function burnOutputCaptions(options: { input: string; output: strin
 export interface RenderOptions {
   onWorkProgress?: (stage: "upscale" | "render", progress: number) => void;
   onPhase?: (phase: string) => void;
+  onEmbeddedText?: (report: EmbeddedTextReport) => void;
   maximumOutputDuration?: number;
   ownFootage?: ResolvedFootage[];
   input: string;
@@ -799,6 +804,8 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
       `scale=${even(source.width)}:${even(source.height)}:flags=bicubic`,
       "setsar=1",
     ];
+    const captionAreas = await readableCaptionReport(s, input, segments ?? [{ start, end: start + clipLength }], signal, options.onPhase);
+    if (captionAreas) options.onEmbeddedText?.(captionAreas);
     let renderProgressBase = 0;
     const filters = [
       ...sourceFilters,
@@ -808,6 +815,7 @@ export async function renderVideo(options: RenderOptions): Promise<void> {
             duration: Math.min(duration, options.maximumOutputDuration ?? duration),
             onPhase: options.onPhase,
             onProgress: progress => { renderProgressBase = aiUpscale ? 30 : 75; options.onProgress(progress * renderProgressBase / 100); } } }),
+      ...embeddedTextFilters(captionAreas?.regions ?? [], even(source.width), even(source.height)),
       // Clean the selected source pixels before scaling; no external service.
       ...(s.qualityCleanup ? ["hqdn3d=2:2:4:4", "unsharp=5:5:0.15:5:5:0"] : []),
     ];
